@@ -3,16 +3,19 @@ package codegen
 import (
 	"fmt"
 	"go/format"
-	"rugby/ast"
 	"strings"
+
+	"rugby/ast"
 )
 
 type Generator struct {
-	buf strings.Builder
+	buf    strings.Builder
+	indent int
+	vars   map[string]bool // track declared variables
 }
 
 func New() *Generator {
-	return &Generator{}
+	return &Generator{vars: make(map[string]bool)}
 }
 
 func (g *Generator) Generate(program *ast.Program) (string, error) {
@@ -43,27 +46,119 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	return string(formatted), nil
 }
 
+func (g *Generator) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("\t")
+	}
+}
+
 func (g *Generator) genStatement(stmt ast.Statement) {
 	switch s := stmt.(type) {
 	case *ast.FuncDecl:
 		g.genFuncDecl(s)
 	case *ast.ExprStmt:
-		g.genExprStmt(s)
+		g.writeIndent()
+		g.genExpr(s.Expr)
+		g.buf.WriteString("\n")
+	case *ast.AssignStmt:
+		g.genAssignStmt(s)
+	case *ast.IfStmt:
+		g.genIfStmt(s)
+	case *ast.WhileStmt:
+		g.genWhileStmt(s)
+	case *ast.ReturnStmt:
+		g.genReturnStmt(s)
 	}
 }
 
 func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
+	g.vars = make(map[string]bool) // reset vars for each function
 	g.buf.WriteString(fmt.Sprintf("func %s() {\n", fn.Name))
+	g.indent++
 	for _, stmt := range fn.Body {
-		g.buf.WriteString("\t")
 		g.genStatement(stmt)
-		g.buf.WriteString("\n")
 	}
+	g.indent--
 	g.buf.WriteString("}\n")
 }
 
-func (g *Generator) genExprStmt(stmt *ast.ExprStmt) {
-	g.genExpr(stmt.Expr)
+func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
+	g.writeIndent()
+	g.buf.WriteString(s.Name)
+	if g.vars[s.Name] {
+		g.buf.WriteString(" = ")
+	} else {
+		g.buf.WriteString(" := ")
+		g.vars[s.Name] = true
+	}
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+}
+
+func (g *Generator) genIfStmt(s *ast.IfStmt) {
+	g.writeIndent()
+	g.buf.WriteString("if ")
+	g.genExpr(s.Cond)
+	g.buf.WriteString(" {\n")
+
+	g.indent++
+	for _, stmt := range s.Then {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	for _, elsif := range s.ElseIfs {
+		g.writeIndent()
+		g.buf.WriteString("} else if ")
+		g.genExpr(elsif.Cond)
+		g.buf.WriteString(" {\n")
+
+		g.indent++
+		for _, stmt := range elsif.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	if len(s.Else) > 0 {
+		g.writeIndent()
+		g.buf.WriteString("} else {\n")
+
+		g.indent++
+		for _, stmt := range s.Else {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genWhileStmt(s *ast.WhileStmt) {
+	g.writeIndent()
+	g.buf.WriteString("for ")
+	g.genExpr(s.Cond)
+	g.buf.WriteString(" {\n")
+
+	g.indent++
+	for _, stmt := range s.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
+	g.writeIndent()
+	g.buf.WriteString("return")
+	if s.Value != nil {
+		g.buf.WriteString(" ")
+		g.genExpr(s.Value)
+	}
+	g.buf.WriteString("\n")
 }
 
 func (g *Generator) genExpr(expr ast.Expression) {
@@ -72,9 +167,38 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genCallExpr(e)
 	case *ast.StringLit:
 		g.buf.WriteString(fmt.Sprintf("%q", e.Value))
+	case *ast.IntLit:
+		g.buf.WriteString(fmt.Sprintf("%d", e.Value))
+	case *ast.FloatLit:
+		g.buf.WriteString(fmt.Sprintf("%g", e.Value))
+	case *ast.BoolLit:
+		if e.Value {
+			g.buf.WriteString("true")
+		} else {
+			g.buf.WriteString("false")
+		}
 	case *ast.Ident:
 		g.buf.WriteString(e.Name)
+	case *ast.BinaryExpr:
+		g.genBinaryExpr(e)
+	case *ast.UnaryExpr:
+		g.genUnaryExpr(e)
 	}
+}
+
+func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
+	g.buf.WriteString("(")
+	g.genExpr(e.Left)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(e.Op)
+	g.buf.WriteString(" ")
+	g.genExpr(e.Right)
+	g.buf.WriteString(")")
+}
+
+func (g *Generator) genUnaryExpr(e *ast.UnaryExpr) {
+	g.buf.WriteString(e.Op)
+	g.genExpr(e.Expr)
 }
 
 func (g *Generator) genCallExpr(call *ast.CallExpr) {

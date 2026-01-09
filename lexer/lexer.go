@@ -59,6 +59,50 @@ func (l *Lexer) NextToken() token.Token {
 	case '#':
 		l.skipComment()
 		return l.NextToken()
+	case '+':
+		tok = l.newToken(token.PLUS, "+")
+	case '-':
+		tok = l.newToken(token.MINUS, "-")
+	case '*':
+		tok = l.newToken(token.STAR, "*")
+	case '/':
+		tok = l.newToken(token.SLASH, "/")
+	case '%':
+		tok = l.newToken(token.PERCENT, "%")
+	case '(':
+		tok = l.newToken(token.LPAREN, "(")
+	case ')':
+		tok = l.newToken(token.RPAREN, ")")
+	case ',':
+		tok = l.newToken(token.COMMA, ",")
+	case '=':
+		if l.peekChar() == '=' {
+			l.readChar()
+			tok = l.newToken(token.EQ, "==")
+		} else {
+			tok = l.newToken(token.ASSIGN, "=")
+		}
+	case '!':
+		if l.peekChar() == '=' {
+			l.readChar()
+			tok = l.newToken(token.NE, "!=")
+		} else {
+			tok = l.newToken(token.NOT, "!")
+		}
+	case '<':
+		if l.peekChar() == '=' {
+			l.readChar()
+			tok = l.newToken(token.LE, "<=")
+		} else {
+			tok = l.newToken(token.LT, "<")
+		}
+	case '>':
+		if l.peekChar() == '=' {
+			l.readChar()
+			tok = l.newToken(token.GE, ">=")
+		} else {
+			tok = l.newToken(token.GT, ">")
+		}
 	case 0:
 		tok.Literal = ""
 		tok.Type = token.EOF
@@ -67,6 +111,9 @@ func (l *Lexer) NextToken() token.Token {
 			tok.Literal = l.readIdentifier()
 			tok.Type = token.LookupIdent(tok.Literal)
 			return tok
+		}
+		if isDigit(l.ch) {
+			return l.readNumber()
 		}
 		tok = l.newToken(token.ILLEGAL, string(l.ch))
 	}
@@ -96,6 +143,29 @@ func (l *Lexer) readString() string {
 	str := l.input[pos:l.pos]
 	l.readChar() // skip closing quote
 	return str
+}
+
+func (l *Lexer) readNumber() token.Token {
+	pos := l.pos
+	isFloat := false
+
+	for isDigit(l.ch) {
+		l.readChar()
+	}
+
+	if l.ch == '.' && isDigit(l.peekChar()) {
+		isFloat = true
+		l.readChar() // consume '.'
+		for isDigit(l.ch) {
+			l.readChar()
+		}
+	}
+
+	literal := l.input[pos:l.pos]
+	if isFloat {
+		return token.Token{Type: token.FLOAT, Literal: literal, Line: l.line, Column: l.column}
+	}
+	return token.Token{Type: token.INT, Literal: literal, Line: l.line, Column: l.column}
 }
 
 func (l *Lexer) skipWhitespace() {
