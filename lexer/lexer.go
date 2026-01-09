@@ -13,6 +13,35 @@ type Lexer struct {
 	column  int
 }
 
+// LexerState holds lexer state for save/restore
+type LexerState struct {
+	pos     int
+	readPos int
+	ch      byte
+	line    int
+	column  int
+}
+
+// SaveState returns the current lexer state
+func (l *Lexer) SaveState() LexerState {
+	return LexerState{
+		pos:     l.pos,
+		readPos: l.readPos,
+		ch:      l.ch,
+		line:    l.line,
+		column:  l.column,
+	}
+}
+
+// RestoreState restores a previously saved lexer state
+func (l *Lexer) RestoreState(s LexerState) {
+	l.pos = s.pos
+	l.readPos = s.readPos
+	l.ch = s.ch
+	l.line = s.line
+	l.column = s.column
+}
+
 func New(input string) *Lexer {
 	l := &Lexer{input: input, line: 1, column: 0}
 	l.readChar()
@@ -92,6 +121,8 @@ func (l *Lexer) NextToken() token.Token {
 		tok = l.newToken(token.RBRACE, "}")
 	case '|':
 		tok = l.newToken(token.PIPE, "|")
+	case '@':
+		tok = l.newToken(token.AT, "@")
 	case '=':
 		if l.peekChar() == '=' {
 			l.readChar()

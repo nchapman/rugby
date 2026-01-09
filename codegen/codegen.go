@@ -66,6 +66,7 @@ type Generator struct {
 	indent       int
 	vars         map[string]bool // track declared variables
 	needsRuntime bool            // track if rugby/runtime import is needed
+	currentClass string          // current class being generated (for instance vars)
 }
 
 func New() *Generator {
@@ -141,6 +142,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.buf.WriteString("\n")
 	case *ast.AssignStmt:
 		g.genAssignStmt(s)
+	case *ast.InstanceVarAssign:
+		g.genInstanceVarAssign(s)
 	case *ast.IfStmt:
 		g.genIfStmt(s)
 	case *ast.WhileStmt:
@@ -197,20 +200,77 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 
 func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	className := cls.Name
+	g.currentClass = className
 
-	// Emit struct definition (empty for Phase A - fields added in Phase B)
-	g.buf.WriteString(fmt.Sprintf("type %s struct {", className))
-	if cls.Parent != "" {
-		g.buf.WriteString("\n\t")
-		g.buf.WriteString(cls.Parent)
-		g.buf.WriteString("\n")
+	// Emit struct definition
+	hasContent := cls.Parent != "" || len(cls.Fields) > 0
+	if hasContent {
+		g.buf.WriteString(fmt.Sprintf("type %s struct {\n", className))
+		if cls.Parent != "" {
+			g.buf.WriteString("\t")
+			g.buf.WriteString(cls.Parent)
+			g.buf.WriteString("\n")
+		}
+		for _, field := range cls.Fields {
+			g.buf.WriteString(fmt.Sprintf("\t%s interface{}\n", field.Name))
+		}
+		g.buf.WriteString("}\n\n")
+	} else {
+		g.buf.WriteString(fmt.Sprintf("type %s struct{}\n\n", className))
 	}
-	g.buf.WriteString("}\n\n")
 
-	// Emit methods
+	// Emit constructor if initialize exists
 	for _, method := range cls.Methods {
-		g.genMethodDecl(className, method)
+		if method.Name == "initialize" {
+			g.genConstructor(className, method)
+			break
+		}
 	}
+
+	// Emit methods (skip initialize - it's the constructor)
+	for _, method := range cls.Methods {
+		if method.Name != "initialize" {
+			g.genMethodDecl(className, method)
+		}
+	}
+
+	g.currentClass = ""
+}
+
+func (g *Generator) genConstructor(className string, method *ast.MethodDecl) {
+	g.vars = make(map[string]bool)
+
+	// Mark parameters as declared variables
+	for _, param := range method.Params {
+		g.vars[param.Name] = true
+	}
+
+	// Receiver name for field assignments
+	recv := receiverName(className)
+
+	// Constructor: func NewClassName(params) *ClassName
+	g.buf.WriteString(fmt.Sprintf("func New%s(", className))
+	for i, param := range method.Params {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+	}
+	g.buf.WriteString(fmt.Sprintf(") *%s {\n", className))
+
+	// Create instance
+	g.buf.WriteString(fmt.Sprintf("\t%s := &%s{}\n", recv, className))
+
+	// Generate body (instance var assignments become field sets)
+	g.indent++
+	for _, stmt := range method.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	// Return instance
+	g.buf.WriteString(fmt.Sprintf("\treturn %s\n", recv))
+	g.buf.WriteString("}\n\n")
 }
 
 func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
@@ -222,13 +282,13 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	}
 
 	// Receiver name: first letter of class, lowercase
-	receiverName := strings.ToLower(className[:1])
+	recv := receiverName(className)
 
 	// Method name: convert snake_case to CamelCase
 	methodName := snakeToCamel(method.Name)
 
-	// Generate method signature: func (r ClassName) MethodName(params) returns
-	g.buf.WriteString(fmt.Sprintf("func (%s %s) %s(", receiverName, className, methodName))
+	// Generate method signature with pointer receiver: func (r *ClassName) MethodName(params) returns
+	g.buf.WriteString(fmt.Sprintf("func (%s *%s) %s(", recv, className, methodName))
 	for i, param := range method.Params {
 		if i > 0 {
 			g.buf.WriteString(", ")
@@ -260,6 +320,18 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	}
 	g.indent--
 	g.buf.WriteString("}\n\n")
+}
+
+func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
+	g.writeIndent()
+	if g.currentClass != "" {
+		recv := receiverName(g.currentClass)
+		g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, s.Name))
+	} else {
+		g.buf.WriteString(fmt.Sprintf("/* @%s outside class */ ", s.Name))
+	}
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
 }
 
 func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
@@ -378,6 +450,13 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		} else {
 			g.buf.WriteString(e.Name)
 		}
+	case *ast.InstanceVar:
+		if g.currentClass != "" {
+			recv := receiverName(g.currentClass)
+			g.buf.WriteString(fmt.Sprintf("%s.%s", recv, e.Name))
+		} else {
+			g.buf.WriteString(fmt.Sprintf("/* @%s outside class */", e.Name))
+		}
 	case *ast.BinaryExpr:
 		g.genBinaryExpr(e)
 	case *ast.UnaryExpr:
@@ -456,6 +535,22 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		// Don't transform local function names - they stay as defined
 		g.buf.WriteString(funcName)
 	case *ast.SelectorExpr:
+		// Check for ClassName.new() constructor call
+		if fn.Sel == "new" {
+			if ident, ok := fn.X.(*ast.Ident); ok {
+				// Rewrite User.new(args) to NewUser(args)
+				g.buf.WriteString(fmt.Sprintf("New%s", ident.Name))
+				g.buf.WriteString("(")
+				for i, arg := range call.Args {
+					if i > 0 {
+						g.buf.WriteString(", ")
+					}
+					g.genExpr(arg)
+				}
+				g.buf.WriteString(")")
+				return
+			}
+		}
 		// Method/package call like http.Get or resp.Body.Close
 		// snake_case transformation only applies here (Go interop)
 		g.genSelectorExpr(fn)
@@ -854,6 +949,15 @@ func (g *Generator) genDeferStmt(s *ast.DeferStmt) {
 	g.buf.WriteString("defer ")
 	g.genCallExpr(s.Call)
 	g.buf.WriteString("\n")
+}
+
+// receiverName returns the Go receiver variable name for a class.
+// Uses the first letter lowercased, or "x" for empty/invalid input.
+func receiverName(className string) string {
+	if len(className) == 0 {
+		return "x"
+	}
+	return strings.ToLower(className[:1])
 }
 
 // snakeToCamel converts snake_case to CamelCase for Go interop

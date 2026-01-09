@@ -44,6 +44,7 @@ const (
 	HASHROCKET TokenType = "=>"
 	DOT        TokenType = "."
 	PIPE       TokenType = "|"
+	AT         TokenType = "@"
 
 	// Keywords
 	IMPORT TokenType = "IMPORT"

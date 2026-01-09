@@ -231,11 +231,17 @@ func (d *DeferStmt) stmtNode() {}
 type ClassDecl struct {
 	Name    string        // class name (e.g., "User")
 	Parent  string        // embedded type, empty if none (for Phase C)
+	Fields  []*FieldDecl  // fields inferred from initialize
 	Methods []*MethodDecl // methods defined in class
 }
 
 func (c *ClassDecl) node()     {}
 func (c *ClassDecl) stmtNode() {}
+
+// FieldDecl represents a struct field (inferred from @var in initialize)
+type FieldDecl struct {
+	Name string // field name (without @)
+}
 
 // MethodDecl represents a method definition within a class
 type MethodDecl struct {
@@ -247,3 +253,20 @@ type MethodDecl struct {
 
 func (m *MethodDecl) node()     {}
 func (m *MethodDecl) stmtNode() {}
+
+// InstanceVar represents an instance variable reference (@name)
+type InstanceVar struct {
+	Name string // variable name without @
+}
+
+func (i *InstanceVar) node()     {}
+func (i *InstanceVar) exprNode() {}
+
+// InstanceVarAssign represents @name = value
+type InstanceVarAssign struct {
+	Name  string     // variable name without @
+	Value Expression
+}
+
+func (i *InstanceVarAssign) node()     {}
+func (i *InstanceVarAssign) stmtNode() {}

@@ -793,7 +793,7 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `type User struct{}`)
-	assertContains(t, output, `func (u User) Greet()`)
+	assertContains(t, output, `func (u *User) Greet()`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
@@ -810,7 +810,7 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `type Calculator struct{}`)
-	assertContains(t, output, `func (c Calculator) Add(a interface{}, b interface{}) int`)
+	assertContains(t, output, `func (c *Calculator) Add(a interface{}, b interface{}) int`)
 	assertContains(t, output, `return (a + b)`)
 }
 
@@ -826,7 +826,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func (u User) GetName() string`)
+	assertContains(t, output, `func (u *User) GetName() string`)
 }
 
 func TestClassWithMultipleMethods(t *testing.T) {
@@ -846,8 +846,8 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `type Counter struct{}`)
-	assertContains(t, output, `func (c Counter) Inc()`)
-	assertContains(t, output, `func (c Counter) Dec()`)
+	assertContains(t, output, `func (c *Counter) Inc()`)
+	assertContains(t, output, `func (c *Counter) Dec()`)
 }
 
 func TestClassWithEmbedding(t *testing.T) {
@@ -864,5 +864,83 @@ end`
 
 	assertContains(t, output, `type Service struct {`)
 	assertContains(t, output, "Logger")
-	assertContains(t, output, `func (s Service) Run()`)
+	assertContains(t, output, `func (s *Service) Run()`)
+}
+
+func TestClassWithInstanceVariables(t *testing.T) {
+	input := `class User
+  def initialize(name, age)
+    @name = name
+    @age = age
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `type User struct {`)
+	assertContains(t, output, `name interface{}`)
+	assertContains(t, output, `age interface{}`)
+	assertContains(t, output, `func NewUser(name interface{}, age interface{}) *User`)
+	assertContains(t, output, `u := &User{}`)
+	assertContains(t, output, `u.name = name`)
+	assertContains(t, output, `u.age = age`)
+	assertContains(t, output, `return u`)
+}
+
+func TestClassMethodAccessingInstanceVar(t *testing.T) {
+	input := `class User
+  def initialize(name)
+    @name = name
+  end
+
+  def get_name -> String
+    return @name
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func (u *User) GetName() string`)
+	assertContains(t, output, `return u.name`)
+}
+
+func TestClassNewSyntax(t *testing.T) {
+	input := `class User
+  def initialize(name)
+    @name = name
+  end
+end
+
+def main
+  user = User.new("Alice")
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func NewUser(name interface{}) *User`)
+	assertContains(t, output, `user := NewUser("Alice")`)
+}
+
+func TestClassNewWithMultipleArgs(t *testing.T) {
+	input := `class Point
+  def initialize(x, y)
+    @x = x
+    @y = y
+  end
+end
+
+def main
+  p = Point.new(10, 20)
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func NewPoint(x interface{}, y interface{}) *Point`)
+	assertContains(t, output, `p := NewPoint(10, 20)`)
 }

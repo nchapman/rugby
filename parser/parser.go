@@ -81,6 +81,26 @@ func (p *Parser) peekPrecedence() int {
 	return LOWEST
 }
 
+// peekTokenAfterIs checks if the token immediately after peekToken matches the given type.
+// Used for three-token lookahead patterns like @name = expr.
+func (p *Parser) peekTokenAfterIs(t token.TokenType) bool {
+	// Save lexer state and parser tokens
+	lexerState := p.l.SaveState()
+	savedCur := p.curToken
+	savedPeek := p.peekToken
+
+	// Advance to see the token after peekToken
+	p.nextToken()
+	p.nextToken()
+	result := p.curToken.Type == t
+
+	// Restore lexer state and parser tokens
+	p.l.RestoreState(lexerState)
+	p.curToken = savedCur
+	p.peekToken = savedPeek
+	return result
+}
+
 func (p *Parser) curPrecedence() int {
 	if p, ok := precedences[p.curToken.Type]; ok {
 		return p
@@ -343,7 +363,32 @@ func (p *Parser) parseClassDecl() *ast.ClassDecl {
 	}
 	p.nextToken() // consume 'end'
 
+	// Extract fields from initialize method
+	for _, method := range cls.Methods {
+		if method.Name == "initialize" {
+			cls.Fields = extractFields(method)
+			break
+		}
+	}
+
 	return cls
+}
+
+// extractFields extracts field declarations from instance variable assignments in a method
+func extractFields(method *ast.MethodDecl) []*ast.FieldDecl {
+	seen := make(map[string]bool)
+	var fields []*ast.FieldDecl
+
+	for _, stmt := range method.Body {
+		if assign, ok := stmt.(*ast.InstanceVarAssign); ok {
+			if !seen[assign.Name] {
+				seen[assign.Name] = true
+				fields = append(fields, &ast.FieldDecl{Name: assign.Name})
+			}
+		}
+	}
+
+	return fields
 }
 
 func (p *Parser) parseMethodDecl() *ast.MethodDecl {
@@ -499,6 +544,13 @@ func (p *Parser) parseStatement() ast.Statement {
 		if p.peekTokenIs(token.ASSIGN) {
 			return p.parseAssignStmt()
 		}
+	case token.AT:
+		// Check if this is assignment: @name = expr
+		// Pattern: AT IDENT ASSIGN
+		if p.peekTokenIs(token.IDENT) && p.peekTokenAfterIs(token.ASSIGN) {
+			return p.parseInstanceVarAssign()
+		}
+		// Otherwise fall through to expression parsing
 	}
 
 	// Default: expression statement
@@ -808,6 +860,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseMapLiteral()
 	case token.MINUS, token.NOT:
 		left = p.parsePrefixExpr()
+	case token.AT:
+		left = p.parseInstanceVar()
 	default:
 		return nil
 	}
@@ -1153,4 +1207,45 @@ func (p *Parser) parseDeferStmt() *ast.DeferStmt {
 	p.skipNewlines()
 
 	return &ast.DeferStmt{Call: call}
+}
+
+func (p *Parser) parseInstanceVar() ast.Expression {
+	p.nextToken() // consume '@'
+	if !p.curTokenIs(token.IDENT) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected identifier after '@'",
+			p.curToken.Line))
+		return nil
+	}
+	name := p.curToken.Literal
+	return &ast.InstanceVar{Name: name}
+}
+
+func (p *Parser) parseInstanceVarAssign() *ast.InstanceVarAssign {
+	p.nextToken() // consume '@'
+	if !p.curTokenIs(token.IDENT) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected identifier after '@'",
+			p.curToken.Line))
+		return nil
+	}
+	name := p.curToken.Literal
+	p.nextToken() // consume identifier
+
+	if !p.curTokenIs(token.ASSIGN) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected '=' after instance variable",
+			p.curToken.Line))
+		return nil
+	}
+	p.nextToken() // consume '='
+
+	value := p.parseExpression(LOWEST)
+
+	// Check for block after expression
+	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
+		value = p.parseBlockCall(value)
+	}
+
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	return &ast.InstanceVarAssign{Name: name, Value: value}
 }

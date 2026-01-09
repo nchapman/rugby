@@ -1553,3 +1553,103 @@ end`
 		t.Error("expected error for duplicate parameter name, got none")
 	}
 }
+
+func TestClassWithInitialize(t *testing.T) {
+	input := `class User
+  def initialize(name, age)
+    @name = name
+    @age = age
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+
+	if cls.Name != "User" {
+		t.Errorf("expected class name 'User', got %q", cls.Name)
+	}
+
+	if len(cls.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(cls.Fields))
+	}
+
+	if cls.Fields[0].Name != "name" {
+		t.Errorf("expected first field 'name', got %q", cls.Fields[0].Name)
+	}
+
+	if cls.Fields[1].Name != "age" {
+		t.Errorf("expected second field 'age', got %q", cls.Fields[1].Name)
+	}
+}
+
+func TestInstanceVariableAssignment(t *testing.T) {
+	input := `class User
+  def initialize(name)
+    @name = name
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+	method := cls.Methods[0]
+
+	if len(method.Body) != 1 {
+		t.Fatalf("expected 1 statement in body, got %d", len(method.Body))
+	}
+
+	assign, ok := method.Body[0].(*ast.InstanceVarAssign)
+	if !ok {
+		t.Fatalf("expected InstanceVarAssign, got %T", method.Body[0])
+	}
+
+	if assign.Name != "name" {
+		t.Errorf("expected var name 'name', got %q", assign.Name)
+	}
+}
+
+func TestInstanceVariableReference(t *testing.T) {
+	input := `class User
+  def initialize(name)
+    @name = name
+  end
+
+  def get_name
+    @name
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+
+	// get_name method should reference @name
+	getNameMethod := cls.Methods[1]
+	if len(getNameMethod.Body) != 1 {
+		t.Fatalf("expected 1 statement in get_name body, got %d", len(getNameMethod.Body))
+	}
+
+	exprStmt, ok := getNameMethod.Body[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", getNameMethod.Body[0])
+	}
+
+	ivar, ok := exprStmt.Expr.(*ast.InstanceVar)
+	if !ok {
+		t.Fatalf("expected InstanceVar, got %T", exprStmt.Expr)
+	}
+
+	if ivar.Name != "name" {
+		t.Errorf("expected instance var 'name', got %q", ivar.Name)
+	}
+}
