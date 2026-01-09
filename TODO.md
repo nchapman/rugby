@@ -112,9 +112,12 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] `Clamp(int, int, int) int`
 
 ### Global/Kernel functions (`runtime/io.go`)
+- [x] `Puts(args...)` - print with newline (like Ruby puts)
+- [x] `Print(args...)` - print without newline
 - [x] `P(args...)` - debug print with %#v formatting
 - [x] `Gets()` - read line from stdin
 - [x] `GetsWithPrompt(prompt)` - print prompt, read line
+- [x] `Exit(code)` - terminate program
 - [x] `Sleep(seconds)` - pause execution (float seconds)
 - [x] `SleepMs(ms)` - pause execution (int milliseconds)
 - [x] `RandInt(n)` - random int [0, n)

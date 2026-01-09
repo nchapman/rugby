@@ -748,21 +748,20 @@ sum := runtime.Reduce(evens, 0, func(acc, n int) int { return acc + n })
 
 ### 11.9 Global functions (kernel)
 
-Rugby provides top-level functions similar to Ruby's Kernel methods. These are available without qualification.
+Rugby provides top-level functions similar to Ruby's Kernel methods. These are available without qualification and compile to `runtime.*` calls.
 
-**I/O (inlined to fmt):**
-* `puts(args...)` → `fmt.Println(args...)` - print with newline
-* `print(args...)` → `fmt.Print(args...)` - print without newline
-* `p(args...)` → debug print with inspect (uses `runtime.P`)
-
-**Program control:**
-* `exit(code)` → `os.Exit(code)` (inlined)
-* `exit` → `os.Exit(0)` (inlined)
-* `sleep(seconds)` → `runtime.Sleep(seconds)` - pause execution
-* `panic(msg)` → `panic(msg)` (Go builtin)
+**I/O:**
+* `puts(args...)` → `runtime.Puts(args...)` - print with newline
+* `print(args...)` → `runtime.Print(args...)` - print without newline
+* `p(args...)` → `runtime.P(args...)` - debug print with inspect
 
 **Input:**
 * `gets` → `runtime.Gets()` - read line from stdin
+
+**Program control:**
+* `exit(code)` → `runtime.Exit(code)` - exit with status code
+* `exit` → `runtime.Exit(0)` - exit successfully
+* `sleep(seconds)` → `runtime.Sleep(seconds)` - pause execution
 
 **Utilities:**
 * `rand(n)` → `runtime.RandInt(n)` - random int [0, n)
@@ -770,7 +769,7 @@ Rugby provides top-level functions similar to Ruby's Kernel methods. These are a
 
 ### 11.10 Import generation
 
-The compiler automatically adds `import "rugby/runtime"` when runtime functions are used. If only inlined operations are used, no import is added.
+The compiler automatically adds `import "rugby/runtime"` when any runtime functions are used. All kernel functions and stdlib methods go through the runtime package for consistency.
 
 ---
 

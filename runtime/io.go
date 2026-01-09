@@ -11,6 +11,22 @@ import (
 // stdinScanner is reused across Gets() calls to avoid losing buffered input.
 var stdinScanner = bufio.NewScanner(os.Stdin)
 
+// Puts prints values to stdout, each followed by a newline.
+// Ruby: puts
+func Puts(args ...any) {
+	for _, arg := range args {
+		fmt.Println(arg)
+	}
+}
+
+// Print prints values to stdout without a trailing newline.
+// Ruby: print
+func Print(args ...any) {
+	for _, arg := range args {
+		fmt.Print(arg)
+	}
+}
+
 // P prints values with debug formatting (like Ruby's p).
 // Shows type information and quotes strings.
 // Ruby: p value
@@ -39,6 +55,12 @@ func Gets() string {
 func GetsWithPrompt(prompt string) string {
 	fmt.Print(prompt)
 	return Gets()
+}
+
+// Exit terminates the program with the given status code.
+// Ruby: exit(code)
+func Exit(code int) {
+	os.Exit(code)
 }
 
 // Sleep pauses execution for the given number of seconds.

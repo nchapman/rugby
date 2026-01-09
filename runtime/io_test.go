@@ -1,6 +1,9 @@
 package runtime
 
 import (
+	"bytes"
+	"io"
+	"os"
 	"testing"
 )
 
@@ -69,5 +72,65 @@ func TestSleep(t *testing.T) {
 	SleepMs(1)
 }
 
-// P and Gets are harder to test without mocking stdin/stdout
-// They're simple wrappers so we trust them
+// captureStdout captures stdout during fn execution
+func captureStdout(fn func()) string {
+	old := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	fn()
+
+	w.Close()
+	os.Stdout = old
+
+	var buf bytes.Buffer
+	io.Copy(&buf, r)
+	return buf.String()
+}
+
+func TestPuts(t *testing.T) {
+	out := captureStdout(func() {
+		Puts("hello")
+	})
+	if out != "hello\n" {
+		t.Errorf("Puts: got %q, want %q", out, "hello\n")
+	}
+
+	// Multiple args - each gets its own line
+	out = captureStdout(func() {
+		Puts("a", "b", "c")
+	})
+	if out != "a\nb\nc\n" {
+		t.Errorf("Puts multiple: got %q, want %q", out, "a\nb\nc\n")
+	}
+}
+
+func TestPrint(t *testing.T) {
+	out := captureStdout(func() {
+		Print("hello")
+	})
+	if out != "hello" {
+		t.Errorf("Print: got %q, want %q", out, "hello")
+	}
+
+	// Multiple args - no separators
+	out = captureStdout(func() {
+		Print("a", "b", "c")
+	})
+	if out != "abc" {
+		t.Errorf("Print multiple: got %q, want %q", out, "abc")
+	}
+}
+
+func TestP(t *testing.T) {
+	out := captureStdout(func() {
+		P("hello", 42, true)
+	})
+	expected := "\"hello\" 42 true\n"
+	if out != expected {
+		t.Errorf("P: got %q, want %q", out, expected)
+	}
+}
+
+// Exit is not tested as it terminates the program
+// Gets is not tested as it requires stdin mocking
