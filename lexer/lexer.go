@@ -1,0 +1,119 @@
+package lexer
+
+import (
+	"rugby/token"
+)
+
+type Lexer struct {
+	input   string
+	pos     int  // current position in input
+	readPos int  // next position to read
+	ch      byte // current char
+	line    int
+	column  int
+}
+
+func New(input string) *Lexer {
+	l := &Lexer{input: input, line: 1, column: 0}
+	l.readChar()
+	return l
+}
+
+func (l *Lexer) readChar() {
+	if l.readPos >= len(l.input) {
+		l.ch = 0
+	} else {
+		l.ch = l.input[l.readPos]
+	}
+	l.pos = l.readPos
+	l.readPos++
+	l.column++
+}
+
+func (l *Lexer) peekChar() byte {
+	if l.readPos >= len(l.input) {
+		return 0
+	}
+	return l.input[l.readPos]
+}
+
+func (l *Lexer) NextToken() token.Token {
+	var tok token.Token
+
+	l.skipWhitespace()
+
+	tok.Line = l.line
+	tok.Column = l.column
+
+	switch l.ch {
+	case '\n':
+		tok = l.newToken(token.NEWLINE, string(l.ch))
+		l.line++
+		l.column = 0
+	case '"':
+		tok.Type = token.STRING
+		tok.Literal = l.readString()
+		tok.Line = l.line
+		tok.Column = l.column
+		return tok
+	case '#':
+		l.skipComment()
+		return l.NextToken()
+	case 0:
+		tok.Literal = ""
+		tok.Type = token.EOF
+	default:
+		if isLetter(l.ch) {
+			tok.Literal = l.readIdentifier()
+			tok.Type = token.LookupIdent(tok.Literal)
+			return tok
+		}
+		tok = l.newToken(token.ILLEGAL, string(l.ch))
+	}
+
+	l.readChar()
+	return tok
+}
+
+func (l *Lexer) newToken(tokenType token.TokenType, literal string) token.Token {
+	return token.Token{Type: tokenType, Literal: literal, Line: l.line, Column: l.column}
+}
+
+func (l *Lexer) readIdentifier() string {
+	pos := l.pos
+	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' || l.ch == '/' {
+		l.readChar()
+	}
+	return l.input[pos:l.pos]
+}
+
+func (l *Lexer) readString() string {
+	l.readChar() // skip opening quote
+	pos := l.pos
+	for l.ch != '"' && l.ch != 0 {
+		l.readChar()
+	}
+	str := l.input[pos:l.pos]
+	l.readChar() // skip closing quote
+	return str
+}
+
+func (l *Lexer) skipWhitespace() {
+	for l.ch == ' ' || l.ch == '\t' || l.ch == '\r' {
+		l.readChar()
+	}
+}
+
+func (l *Lexer) skipComment() {
+	for l.ch != '\n' && l.ch != 0 {
+		l.readChar()
+	}
+}
+
+func isLetter(ch byte) bool {
+	return 'a' <= ch && ch <= 'z' || 'A' <= ch && ch <= 'Z'
+}
+
+func isDigit(ch byte) bool {
+	return '0' <= ch && ch <= '9'
+}
