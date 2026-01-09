@@ -53,6 +53,14 @@ do ... end   # preferred
 "interpolation: #{name}"  # compiles to fmt.Sprintf or concat
 ```
 
+String interpolation rules:
+* Any expression is allowed inside `#{}`
+* Non-string types use `fmt.Sprintf` with `%v` formatting
+* Examples:
+  * `"count: #{items.length}"` - method call
+  * `"sum: #{a + b}"` - arithmetic
+  * `"user: #{user.to_s}"` - explicit conversion
+
 ---
 
 ## 4. Types
@@ -117,7 +125,15 @@ if n, ok := strconv.Atoi(s); ok {
 }
 ```
 
-`nil` exists only as the "empty" value for `T?` (and reference types). No implicit nil for non-optional value types.
+**Reference types:** For reference types (pointers, slices, maps, interfaces), `T?` is **disallowed** in MVP. These types already have `nil` semantics in Go.
+
+Examples:
+* `Int?` → valid (`(int, bool)`)
+* `String?` → valid (`(string, bool)`)
+* `*User?` → **compile error** (use `*User` which can already be nil)
+* `Array[Int]?` → **compile error** (use `[]int` which can already be nil)
+
+`nil` is reserved for direct use with reference types only.
 
 ---
 
@@ -174,6 +190,26 @@ end
 
 Compiles to `for i, v := range arr { ... }`
 
+Note: Rugby uses `|value, index|` order (Ruby convention), but this is swapped to match Go's `index, value` in compilation.
+
+**Map iteration:**
+
+```ruby
+map.each do |k, v|
+  puts "#{k}: #{v}"
+end
+```
+
+Compiles to `for k, v := range map { ... }`
+
+### 5.4 Blocks
+
+**MVP scope:** Blocks (`do...end` or `{...}`) are **only** allowed with iteration methods (`each`, `each_with_index`, `map`). They are **not** first-class values or closures.
+
+Blocks compile to **inline code** (not function literals). Captured variables follow Go closure semantics (capture by reference).
+
+Future: Full closure support may be added post-MVP.
+
 ---
 
 ## 6. Functions
@@ -206,7 +242,37 @@ def parse_int(s) -> (Int, Bool)
 end
 ```
 
-### 6.3 Errors
+### 6.3 Return statements
+
+Rugby supports both explicit and implicit returns:
+
+**Implicit return:** The last expression in a function is returned:
+
+```ruby
+def add(a, b)
+  a + b  # returned
+end
+```
+
+**Explicit return:** Use `return` for early exit or clarity:
+
+```ruby
+def find_user(id) -> User?
+  return nil if id < 0  # early return
+  users[id]             # implicit return
+end
+```
+
+Multiple return values:
+
+```ruby
+def parse(s) -> (Int, Bool)
+  return 0, false if s.empty?
+  s.to_i, true
+end
+```
+
+### 6.4 Errors
 
 Rugby adopts Go error patterns. Surface `error` directly:
 
@@ -247,12 +313,33 @@ end
 * `@name`/`@age` become struct fields (unexported by default)
 * If `pub`, fields are exported
 
+### 7.2.1 Instance variable type inference
+
+Instance variable types are **inferred from `initialize` only** (MVP):
+
+```ruby
+class User
+  def initialize(name : String, age : Int)
+    @name = name  # @name inferred as String
+    @age = age    # @age inferred as Int
+  end
+end
+```
+
+Rules:
+* All instance variables must be assigned in `initialize`
+* Using `@var` before assignment in `initialize` is a compile error
+* Types are inferred from the assigned expression
+* Optional: explicit type annotations on instance variables (post-MVP)
+
 ### 7.3 Constructors
 
 * `initialize` generates a constructor function
 * `User.new(...)` rewrites to constructor call
 * If class is `pub`: `NewUser(...) *User`
 * If internal: `newUser(...) *User`
+
+**Note:** Constructors always return pointers (`*T`) for consistency. This allows mutation methods (`!`) to work without reassignment.
 
 ### 7.4 Methods and receivers
 
@@ -291,6 +378,7 @@ type Service struct { Logger }
 
 * `<` means embedding only (not inheritance)
 * No `super` in MVP
+* Multiple embedding not supported in MVP (single embed only)
 
 ### 7.7 No inheritance
 
@@ -313,6 +401,12 @@ Compiles to:
 ```go
 type Speaker interface { Speak() string }
 ```
+
+**Important:** Interface methods are **implicitly exported** (uppercase in Go). This is required for cross-package interface satisfaction in Go.
+
+* `def speak` in an interface → `Speak()` in Go
+* Interfaces should be marked `pub` to be usable from other packages
+* Methods use the exported name transformation regardless of `pub`
 
 ### 8.2 Structural conformance
 
