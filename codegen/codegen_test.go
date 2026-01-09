@@ -9,9 +9,7 @@ import (
 )
 
 func TestGenerateHello(t *testing.T) {
-	input := `import fmt
-
-def main
+	input := `def main
   puts "hello"
 end`
 
@@ -19,15 +17,13 @@ end`
 
 	assertContains(t, output, `package main`)
 	assertContains(t, output, `import`)
-	assertContains(t, output, `"fmt"`)
+	assertContains(t, output, `"rugby/runtime"`)
 	assertContains(t, output, `func main()`)
-	assertContains(t, output, `fmt.Println("hello")`)
+	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
 func TestGenerateArithmetic(t *testing.T) {
-	input := `import fmt
-
-def main
+	input := `def main
   x = 2 + 3 * 4
   puts x
 end`
@@ -36,13 +32,11 @@ end`
 
 	assertContains(t, output, `x :=`)
 	assertContains(t, output, `(2 + (3 * 4))`)
-	assertContains(t, output, `fmt.Println(x)`)
+	assertContains(t, output, `runtime.Puts(x)`)
 }
 
 func TestGenerateIfElse(t *testing.T) {
-	input := `import fmt
-
-def main
+	input := `def main
   x = 5
   if x > 3
     puts "big"
@@ -55,14 +49,12 @@ end`
 
 	assertContains(t, output, `if x > 3 {`)
 	assertContains(t, output, `} else {`)
-	assertContains(t, output, `fmt.Println("big")`)
-	assertContains(t, output, `fmt.Println("small")`)
+	assertContains(t, output, `runtime.Puts("big")`)
+	assertContains(t, output, `runtime.Puts("small")`)
 }
 
 func TestGenerateWhile(t *testing.T) {
-	input := `import fmt
-
-def main
+	input := `def main
   i = 0
   while i < 5
     puts i
@@ -74,13 +66,12 @@ end`
 
 	assertContains(t, output, `i := 0`)
 	assertContains(t, output, `for i < 5 {`)
+	assertContains(t, output, `runtime.Puts(i)`)
 	assertContains(t, output, `i = (i + 1)`)
 }
 
 func TestGenerateComparison(t *testing.T) {
-	input := `import fmt
-
-def main
+	input := `def main
   x = 5 == 5
   y = 3 != 4
   z = 1 < 2 and 3 > 2
@@ -94,9 +85,7 @@ end`
 }
 
 func TestGenerateBoolean(t *testing.T) {
-	input := `import fmt
-
-def main
+	input := `def main
   x = true
   y = false
   z = not x
@@ -349,15 +338,13 @@ end`
 }
 
 func TestGenerateArrayAsArg(t *testing.T) {
-	input := `import fmt
-
-def main
+	input := `def main
   puts([1, 2, 3])
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `fmt.Println([]interface{}{1, 2, 3})`)
+	assertContains(t, output, `runtime.Puts([]interface{}{1, 2, 3})`)
 }
 
 func TestGenerateNestedArray(t *testing.T) {
@@ -431,9 +418,7 @@ end`
 }
 
 func TestGenerateEachBlock(t *testing.T) {
-	input := `import fmt
-
-def main
+	input := `def main
   arr.each do |x|
     puts x
   end
@@ -442,13 +427,11 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `for _, x := range arr {`)
-	assertContains(t, output, `fmt.Println(x)`)
+	assertContains(t, output, `runtime.Puts(x)`)
 }
 
 func TestGenerateEachWithIndex(t *testing.T) {
-	input := `import fmt
-
-def main
+	input := `def main
   arr.each_with_index do |v, i|
     puts v
   end
@@ -458,7 +441,7 @@ end`
 
 	// Rugby |value, index| is swapped to Go's index, value order
 	assertContains(t, output, `for i, v := range arr {`)
-	assertContains(t, output, `fmt.Println(v)`)
+	assertContains(t, output, `runtime.Puts(v)`)
 }
 
 func TestGenerateMapBlock(t *testing.T) {
@@ -470,10 +453,9 @@ end`
 
 	output := compile(t, input)
 
-	// Map generates an IIFE that builds a result slice
-	assertContains(t, output, `func() []interface{}`)
-	assertContains(t, output, `for _, x := range arr`)
-	assertContains(t, output, `result = append(result,`)
+	// Map generates runtime.Map() call with function literal
+	assertContains(t, output, `runtime.Map(arr, func(x interface{}) interface{}`)
+	assertContains(t, output, `return (x * 2)`)
 }
 
 func TestBlockWithNoParams(t *testing.T) {
@@ -487,6 +469,7 @@ end`
 
 	// Block with no params should use _ for range variable
 	assertContains(t, output, `for _, _ := range items`)
+	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
 func TestBlockOnMethodCall(t *testing.T) {
@@ -499,12 +482,11 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `for _, x := range get_items()`)
+	assertContains(t, output, `runtime.Puts(x)`)
 }
 
 func TestNestedBlocks(t *testing.T) {
-	input := `import fmt
-
-def main
+	input := `def main
   matrix.each do |row|
     row.each do |x|
       puts x
@@ -516,5 +498,82 @@ end`
 
 	assertContains(t, output, `for _, row := range matrix`)
 	assertContains(t, output, `for _, x := range row`)
-	assertContains(t, output, `fmt.Println(x)`)
+	assertContains(t, output, `runtime.Puts(x)`)
+}
+
+func TestSelectBlock(t *testing.T) {
+	input := `def main
+  evens = nums.select do |n|
+    n % 2 == 0
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.Select(nums, func(n interface{}) bool`)
+	assertContains(t, output, `((n % 2) == 0)`)
+}
+
+func TestRejectBlock(t *testing.T) {
+	input := `def main
+  odds = nums.reject do |n|
+    n % 2 == 0
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.Reject(nums, func(n interface{}) bool`)
+	assertContains(t, output, `((n % 2) == 0)`)
+}
+
+func TestReduceBlock(t *testing.T) {
+	input := `def main
+  sum = nums.reduce(0) do |acc, n|
+    acc + n
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.Reduce(nums, 0, func(acc interface{}, n interface{}) interface{}`)
+	assertContains(t, output, `return (acc + n)`)
+}
+
+func TestFindBlock(t *testing.T) {
+	input := `def main
+  first_even = nums.find do |n|
+    n % 2 == 0
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.Find(nums, func(n interface{}) bool`)
+	assertContains(t, output, `((n % 2) == 0)`)
+}
+
+func TestKernelFunctions(t *testing.T) {
+	input := `def main
+  puts "hello"
+  print "world"
+  p x
+  name = gets
+  exit(1)
+  sleep(2)
+  n = rand(10)
+  f = rand
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `"rugby/runtime"`)
+	assertContains(t, output, `runtime.Puts("hello")`)
+	assertContains(t, output, `runtime.Print("world")`)
+	assertContains(t, output, `runtime.P(x)`)
+	assertContains(t, output, `name := runtime.Gets()`)
+	assertContains(t, output, `runtime.Exit(1)`)
+	assertContains(t, output, `runtime.Sleep(2)`)
+	assertContains(t, output, `n := runtime.RandInt(10)`)
+	assertContains(t, output, `f := runtime.RandFloat()`)
 }

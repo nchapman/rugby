@@ -125,11 +125,13 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] `RandRange(min, max)` - random int [min, max]
 
 ### Codegen updates
-- [ ] Update `map` to use `runtime.Map()` instead of IIFE
-- [ ] Add `select`/`filter` block codegen → `runtime.Select()`
-- [ ] Add `reject` block codegen → `runtime.Reject()`
-- [ ] Add `reduce` block codegen → `runtime.Reduce()`
-- [ ] Add `find` block codegen → `runtime.Find()`
+- [x] Update `map` to use `runtime.Map()` instead of IIFE
+- [x] Add `select`/`filter` block codegen → `runtime.Select()`
+- [x] Add `reject` block codegen → `runtime.Reject()`
+- [x] Add `reduce` block codegen → `runtime.Reduce()`
+- [x] Add `find` block codegen → `runtime.Find()`
+- [x] Add kernel functions codegen (`puts`, `print`, `p`, `gets`, `exit`, `sleep`, `rand`)
+- [x] Auto-import `rugby/runtime` when runtime functions are used
 - [ ] Add predicate methods: `any?`, `all?`, `none?`
 - [ ] Inline simple methods: `length`, `empty?`, `even?`, `odd?`, etc.
 - [ ] Add `times`, `upto`, `downto` integer iteration
