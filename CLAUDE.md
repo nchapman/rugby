@@ -47,3 +47,4 @@ See `spec.md` for the full Rugby language specification. Key points:
 
 ## Rules
 * Commit messages should be concise and never include stats (number of files, changes, etc) or attribution to claude or claude code.
+* Always add tests for new features (lexer, parser, and codegen tests as appropriate).
