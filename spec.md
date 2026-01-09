@@ -1,12 +1,12 @@
-Below is a shareable **Rugby MVP Language Spec (v0.1)** aimed at “Ruby-like syntax, Go-like semantics” with **first-class Go interop** and **no metaprogramming**.
-
----
-
 # Rugby Language Spec (MVP v0.1)
 
 **Goal:** Ruby-ish surface syntax that compiles to idiomatic Go and makes using Go libraries feel native.
 
-## 0. Non-Goals (Hard No’s)
+Rugby is **compiled**, **static**, and **predictable**.
+
+---
+
+## 1. Non-Goals
 
 Rugby **must not** support:
 
@@ -16,86 +16,71 @@ Rugby **must not** support:
 * Runtime modification of methods, fields, or modules
 * Implicit global mutation beyond normal variables
 
-Rugby is **compiled**, **static**, and **predictable**.
-
 ---
 
-## 1. Execution & Compilation Model
+## 2. Compilation Model
 
-* Rugby compiles to **Go source** (one or more `.go` files), then uses `go build`.
+* Rugby compiles to **Go source** (one or more `.go` files), then uses `go build`
 * Output should be **idiomatic** Go:
-
   * structs + methods
   * interfaces
   * package-level functions
   * standard error handling patterns
-* The compiler may generate helper functions/types (prelude), but should keep them small and transparent.
+* The compiler may generate helper functions/types (prelude), but should keep them small and transparent
+* Compilation must be deterministic
 
 ---
 
-## 2. Files, Modules, Imports
+## 3. Lexical Structure
 
-### 2.1 File-to-package mapping
-
-* Each Rugby file belongs to a module (Go package).
-* Default package name = module name; configurable via build config.
-
-### 2.2 Imports
-
-Syntax:
+### 3.1 Comments
 
 ```ruby
-import net/http
-import encoding/json as json
+# single line comment
 ```
 
-Rules:
+### 3.2 Blocks
 
-* `import a/b` maps to Go `import "a/b"`.
-* Optional alias: `import a/b as x` maps to Go `import x "a/b"`.
+```ruby
+do ... end   # preferred
+{ ... }      # alternative
+```
 
-Name resolution:
+### 3.3 Strings
 
-* Referencing imported package members:
-
-  * Prefer **Go-exported names as-is**: `http.Get`, `json.Marshal`
-  * Optional ergonomic aliasing is allowed (see 8.2), but must resolve to the correct Go identifier at compile-time.
-
----
-
-## 3. Lexical & Basic Syntax
-
-* Comments: `# ...` line comments
-* Blocks: `do ... end` or `{ ... }` (compiler can support one first; recommended: `do/end`)
-* Strings:
-
-  * `"..."` normal string
-  * interpolation allowed: `"hi #{name}"` => `fmt.Sprintf` rewrite (or compile-time concat when trivial)
+```ruby
+"normal string"
+"interpolation: #{name}"  # compiles to fmt.Sprintf or concat
+```
 
 ---
 
-## 4. Types & Type Inference
+## 4. Types
 
 Rugby is statically typed with inference.
 
 ### 4.1 Primitive types
 
-* `Int` -> Go `int`
-* `Int64` -> Go `int64`
-* `Float` -> Go `float64`
-* `Bool` -> Go `bool`
-* `String` -> Go `string`
-* `Bytes` -> Go `[]byte`
+| Rugby    | Go        |
+|----------|-----------|
+| `Int`    | `int`     |
+| `Int64`  | `int64`   |
+| `Float`  | `float64` |
+| `Bool`   | `bool`    |
+| `String` | `string`  |
+| `Bytes`  | `[]byte`  |
 
 ### 4.2 Composite types
 
-* `Array[T]` -> `[]T`
-* `Map[K, V]` -> `map[K]V`
-* `T?` (optional) -> (see 6)
+| Rugby        | Go          |
+|--------------|-------------|
+| `Array[T]`   | `[]T`       |
+| `Map[K, V]`  | `map[K]V`   |
+| `T?`         | `(T, bool)` |
 
-### 4.3 Annotations
+### 4.3 Type annotations
 
-Optional annotation syntax:
+Optional—infer when omitted:
 
 ```ruby
 x : Int = 3
@@ -104,19 +89,44 @@ def add(a : Int, b : Int) -> Int
 end
 ```
 
-Inference:
+If inference fails, compiler error with location.
 
-* If omitted, infer types from literals and usage.
-* If inference fails, compiler error with location.
+### 4.4 Optionals (`T?`)
+
+Representation (MVP): `T?` compiles to `(T, bool)`.
+
+```ruby
+n = s.to_i?  # Int?
+```
+
+Compiles to: `n, ok := strconv.Atoi(s)`
+
+Using in conditionals—`if x` where `x` is `T?` means "present":
+
+```ruby
+if (n = s.to_i?)
+  puts n + 1
+end
+```
+
+Compiles to:
+
+```go
+if n, ok := strconv.Atoi(s); ok {
+    fmt.Println(n + 1)
+}
+```
+
+`nil` exists only as the "empty" value for `T?` (and reference types). No implicit nil for non-optional value types.
 
 ---
 
-## 5. Variables, Assignment, Control Flow
+## 5. Variables & Control Flow
 
 ### 5.1 Variables
 
-* `x = expr` declares (if new) or assigns (if existing).
-* Shadowing: allowed in nested scopes; discouraged but permitted with clear rules.
+* `x = expr` declares (if new) or assigns (if existing)
+* Shadowing allowed in nested scopes
 
 ### 5.2 Conditionals
 
@@ -134,27 +144,7 @@ Compiles to Go `if/else if/else`.
 
 ### 5.3 Loops
 
-* Range iteration:
-
-```ruby
-arr.each do |v|
-  ...
-end
-```
-
-Compiles to `for _, v := range arr { ... }`
-
-* Indexed iteration:
-
-```ruby
-arr.each_with_index do |v, i|
-  ...
-end
-```
-
-Compiles to `for i, v := range arr { ... }`
-
-* While (optional for MVP):
+**While:**
 
 ```ruby
 while cond
@@ -164,61 +154,31 @@ end
 
 Compiles to `for cond { ... }`
 
----
-
-## 6. Optionals (`T?`) and “truthy” rules
-
-Rugby supports **Optionals** as a first-class compile-time feature.
-
-### 6.1 Representation
-
-Preferred Go lowering:
-
-* `T?` compiles to `(T, bool)` in returns and temporaries
-* Or a generated `Option[T]` struct if generics are allowed in target Go version
-  MVP recommendation: `(T, bool)` (Go-idiomatic).
-
-### 6.2 Optional-producing conversions
-
-Example:
+**Each (range iteration):**
 
 ```ruby
-n = s.to_i?  # Int?
-```
-
-Compiles to:
-
-* `n, ok := strconv.Atoi(s)`
-
-### 6.3 Using optionals in conditionals
-
-Rule: `if x` where `x` is `T?` means “present”.
-Example:
-
-```ruby
-if (n = s.to_i?)
-  puts n + 1
+arr.each do |v|
+  ...
 end
 ```
 
-Compiles to:
+Compiles to `for _, v := range arr { ... }`
 
-```go
-if n, ok := strconv.Atoi(s); ok {
-  fmt.Println(n + 1)
-}
+**Each with index:**
+
+```ruby
+arr.each_with_index do |v, i|
+  ...
+end
 ```
 
-### 6.4 `nil`
-
-* `nil` exists only as the “empty” value for `T?` (and reference types if needed).
-* No implicit nil for non-optional value types.
+Compiles to `for i, v := range arr { ... }`
 
 ---
 
-## 7. Functions
+## 6. Functions
 
-### 7.1 Defining functions
+### 6.1 Definition
 
 ```ruby
 def add(a, b)
@@ -226,11 +186,19 @@ def add(a, b)
 end
 ```
 
-Compiles to Go `func add(a T, b T) T { ... }` with inferred types.
+Compiles to `func add(a T, b T) T { ... }` with inferred types.
 
-### 7.2 Multiple returns (Go-style)
+### 6.2 Return types
 
-Rugby allows:
+Single return:
+
+```ruby
+def add(a, b) -> Int
+  a + b
+end
+```
+
+Multiple returns (Go-style):
 
 ```ruby
 def parse_int(s) -> (Int, Bool)
@@ -238,17 +206,9 @@ def parse_int(s) -> (Int, Bool)
 end
 ```
 
-Compiles to:
+### 6.3 Errors
 
-```go
-func parseInt(s string) (int, bool) { ... }
-```
-
-### 7.3 Errors (Go-native)
-
-Rugby adopts Go error patterns explicitly.
-
-Option A (MVP-friendly): surface Go’s `error` directly:
+Rugby adopts Go error patterns. Surface `error` directly:
 
 ```ruby
 def read(path : String) -> (Bytes, error)
@@ -256,61 +216,13 @@ def read(path : String) -> (Bytes, error)
 end
 ```
 
-Optional sugar allowed (later):
-
-* `try` / `?` operators, but only if they lower to explicit error checks. (Not required for MVP.)
+Optional sugar (`try`/`?`) may come later, but must lower to explicit error checks.
 
 ---
 
-## 8. Go Interop (Top Priority)
+## 7. Classes
 
-### 8.1 Calling Go functions
-
-* Rugby calls Go packages with dot syntax:
-
-  * `http.Get(url)` -> `http.Get(url)`
-* If Rugby uses snake_case, it must resolve:
-
-  * `io.read_all` -> `io.ReadAll` (compile-time mapping)
-
-### 8.2 Identifier mapping (optional feature)
-
-Allow calling Go exported identifiers using Ruby-ish names:
-
-* `read_all` maps to `ReadAll`
-* `new_request` maps to `NewRequest`
-  Rules:
-* Only for imported Go packages/types
-* Mapping is **compile-time only**
-* Compiler error if ambiguous
-
-### 8.3 Struct fields and methods from Go
-
-* `resp.Body` allowed as-is.
-* Optional: `resp.body` maps to `resp.Body` only for Go types (compile-time).
-  Recommend for “feels native”: allow both, prefer keeping Go casing in docs.
-
-### 8.4 Defer
-
-Rugby:
-
-```ruby
-defer resp.Body.Close
-```
-
-Compiles to:
-
-```go
-defer resp.Body.Close()
-```
-
-Rule: `defer <callable>` must compile to `defer f()`.
-
----
-
-## 9. Classes (Ruby surface, Go core)
-
-### 9.1 Definition
+### 7.1 Definition
 
 ```ruby
 class User
@@ -329,38 +241,39 @@ class User
 end
 ```
 
-### 9.2 Lowering
+### 7.2 Go lowering
 
-* `class User` -> `type User struct { name string; age int }`
-* `@name`/`@age` become struct fields
+* `class User` → `type User struct { name string; age int }`
+* `@name`/`@age` become struct fields (unexported by default)
+* If `pub`, fields are exported
 
-  * default: unexported (`name`, `age`)
-  * if Rugby supports `pub`, compile to exported fields (`Name`, `Age`)
+### 7.3 Constructors
 
-### 9.3 Construction
+* `initialize` generates a constructor function
+* `User.new(...)` rewrites to constructor call
+* If class is `pub`: `NewUser(...) *User`
+* If internal: `newUser(...) *User`
 
-* `initialize` lowers to `NewUser(...) *User` (constructor function)
-* `User.new(...)` rewrites to `NewUser(...)`
+### 7.4 Methods and receivers
 
-### 9.4 Methods and receivers
+* `def method` → value receiver (default)
+* `def method!` → pointer receiver
+* Compiler may upgrade to pointer receiver if mutation detected
 
-* `def method` -> method with **value receiver** by default
-* `def method!` -> method with **pointer receiver**
-* Compiler may upgrade value receiver to pointer receiver if mutation detected.
+### 7.5 Methods with `!`
 
-Naming:
+```ruby
+def inc!
+  @n += 1
+end
+```
 
-* `birthday!` cannot exist in Go identifier; compiler emits `Birthday` (or `BirthdayBang`).
-  Recommended rule:
-* Strip `!` and use pointer receiver; resolve name conflicts by suffixing `Bang`.
+* `!` is stripped from Go name
+* Method uses pointer receiver
+* `def inc!` → `func (c *Counter) inc()`
+* `pub def inc!` → `func (c *Counter) Inc()`
 
-### 9.5 No inheritance (in Ruby sense)
-
-Rugby does **not** support Ruby inheritance semantics.
-
-### 9.6 Embedding (Go composition) via `<`
-
-Rugby:
+### 7.6 Embedding (composition)
 
 ```ruby
 class Service < Logger
@@ -370,23 +283,24 @@ class Service < Logger
 end
 ```
 
-Meaning: **embed** `Logger` in `Service`.
-Go:
+Compiles to:
 
 ```go
 type Service struct { Logger }
 ```
 
-Rules:
+* `<` means embedding only (not inheritance)
+* No `super` in MVP
 
-* `<` is embedding only.
-* No `super` in MVP.
+### 7.7 No inheritance
+
+Rugby does **not** support Ruby inheritance semantics.
 
 ---
 
-## 10. Interfaces (Go-native polymorphism)
+## 8. Interfaces
 
-### 10.1 Declaring interfaces
+### 8.1 Declaration
 
 ```ruby
 interface Speaker
@@ -400,339 +314,217 @@ Compiles to:
 type Speaker interface { Speak() string }
 ```
 
-### 10.2 Structural conformance
+### 8.2 Structural conformance
 
-* A class/struct satisfies an interface if it has required methods (like Go).
-* No `implements` keyword required.
-
----
-
-## 11. Collections & Common Methods (Minimal Prelude)
-
-Provide a tiny standard prelude that lowers to Go loops/calls.
-
-MVP collection ops:
-
-* `arr.each { |x| ... }` -> range loop
-* `arr.map { |x| ... }` -> allocate + range loop
-* `arr.compact` for `T?` arrays -> filter present values
-* `s.to_i?` -> `strconv.Atoi`
-
-Keep it small; prefer adding features only when they map cleanly to Go.
+* A class satisfies an interface if it has the required methods (like Go)
+* No `implements` keyword required
 
 ---
 
-## 12. Visibility & Packaging
+## 9. Visibility & Naming
 
-Optional for MVP:
-
-* `pub` for exported names:
-
-```ruby
-pub class User
-  pub def greet -> String
-    ...
-  end
-end
-```
-
-Compiles to exported Go identifiers.
-
-If omitted:
-
-* classes/types can be exported by file/module rule or config.
-
----
-
-## 13. Determinism & Diagnostics
-
-* Compilation must be deterministic.
-* Type errors and unresolved identifiers are compile-time errors.
-* Interop mapping errors (e.g., `io.read_all` not found) must show:
-
-  * Rugby source span
-  * intended Go package/type
-  * suggested candidates (`ReadAll`)
-
----
-
-## 14. MVP Deliverables (Recommended)
-
-1. Parser + AST for:
-
-   * imports
-   * defs
-   * classes w/ initialize + methods
-   * if/else
-   * each blocks
-2. Type inference:
-
-   * locals, params, returns
-   * optional `T?` inference
-3. Go emitter:
-
-   * generates `.go` files + prelude
-   * preserves readable formatting
-4. Go interop resolver:
-
-   * package member resolution
-   * optional snake_case mapping for Go identifiers
-
-## Additions
-
-## Export & Naming
-
-This section defines how Rugby names map to Go names and how `pub` controls what is visible to other Go packages.
-
----
-
-## 1. Core principle (read this first)
+### 9.1 Core principle
 
 **Inside a Rugby module, everything is usable.**
 
-The `pub` keyword exists **only** to control what becomes visible when the compiled Go package is imported by *other* Go (or Rugby) modules.
+The `pub` keyword controls what becomes visible when the compiled Go package is imported by other Go (or Rugby) modules.
 
-> `pub` does **not** affect visibility inside the same Rugby module.
+* `pub` = export to Go (uppercase in output)
+* no `pub` = internal to package (lowercase in output)
 
-There is no Ruby-style `private` / `public` in MVP.
+There is no Ruby-style `private`/`public`.
 
----
+### 9.2 What can be `pub`
 
-## 2. What `pub` means
-
-* `pub` = **export this symbol to Go**
-* no `pub` = **internal to the Go package**
-
-That’s it. One rule.
-
----
-
-## 3. What can be marked `pub`
-
-### 3.1 Functions
+**Functions:**
 
 ```ruby
-def helper(x : Int) -> Int
+def helper(x : Int) -> Int    # internal
   x * 2
 end
 
-pub def double(x : Int) -> Int
+pub def double(x : Int) -> Int  # exported
   helper(x)
 end
 ```
 
-* `double` is visible to Go
-* `helper` is not
-* both are usable inside the same Rugby module
-
----
-
-### 3.2 Classes
-
-```ruby
-class Counter
-  def initialize(start : Int = 0)
-    @n = start
-  end
-
-  def inc!
-    @n += 1
-  end
-end
-```
-
-* This class is usable inside Rugby
-* It is **not** usable from Go
-
-To export it:
+**Classes:**
 
 ```ruby
 pub class Counter
-  def initialize(start : Int = 0)
-    @n = start
-  end
-
   pub def inc!
     @n += 1
   end
 end
 ```
 
-Rules:
-
-* A class must be `pub` to be usable from Go
+* Class must be `pub` to be usable from Go
 * Methods intended for Go must also be `pub`
+* `pub def` inside non-`pub` class is a compile error
 
----
-
-### 3.3 Interfaces
+**Interfaces:**
 
 ```ruby
 pub interface Greeter
-  pub def greet(name : String) -> String
+  def greet(name : String) -> String
 end
 ```
 
-* Interfaces meant for Go **must** be `pub`
-* All interface methods must be `pub`
+### 9.3 Rugby naming conventions
 
----
-
-## 4. Naming rules in Rugby source
-
-These are **style rules**, not visibility rules.
+These are **style rules**, not visibility rules:
 
 * Types (`class`, `interface`) → `CamelCase`
 * Functions, methods, variables → `snake_case`
-* Capitalization in Rugby **never controls visibility**
+* Capitalization in Rugby **never** controls visibility
 
-Examples:
+### 9.4 Go name generation
 
-```ruby
-class HttpServer
-end
+Rugby names are rewritten to idiomatic Go names:
 
-def parse_json
-end
-```
+| Rugby source | pub? | Go output |
+|--------------|------|-----------|
+| `def parse_json` | no | `parseJSON` |
+| `pub def parse_json` | yes | `ParseJSON` |
+| `def user_id` | no | `userID` |
+| `pub def user_id` | yes | `UserID` |
 
----
-
-## 5. Go name generation
-
-Rugby names are rewritten to idiomatic Go names.
-
-### 5.1 Exported (`pub`) names
-
-* `snake_case` → `CamelCase`
-* Acronyms preserved (`id` → `ID`, `http` → `HTTP`)
-
-Examples:
-
-* `pub def parse_json` → `ParseJSON`
-* `pub def user_id` → `UserID`
-
-### 5.2 Internal (non-`pub`) names
-
-* `snake_case` → `camelCase`
-* Acronyms preserved
-
-Examples:
-
-* `def parse_json` → `parseJSON`
-* `def user_id` → `userID`
-
-### 5.3 Acronym list
+### 9.5 Acronym list
 
 To keep output Go-idiomatic, the compiler uses an acronym table.
 
-**Default MVP acronyms (lowercase keys):**
+**Default MVP acronyms:**
 
-* `id`, `url`, `uri`, `http`, `https`, `json`, `xml`, `api`, `uuid`, `ip`, `tcp`, `udp`, `sql`, `tls`, `ssh`, `cpu`, `gpu`
+`id`, `url`, `uri`, `http`, `https`, `json`, `xml`, `api`, `uuid`, `ip`, `tcp`, `udp`, `sql`, `tls`, `ssh`, `cpu`, `gpu`
 
 Rules:
 
 * Exported: `id` → `ID`, `http` → `HTTP`
-* Unexported: first-part acronym `http_*` → `http*`, later-part acronym `*_id` → `*ID`
+* Unexported: first-part acronym `http_*` → `http*`, later-part `*_id` → `*ID`
 
-The list should be configurable via compiler config later, but hardcoded is fine for MVP.
+Configurable via compiler config later; hardcoded for MVP.
 
-### 5.4 Name collision rules
+### 9.6 Name collision rules
 
-Collisions can occur when different Rugby identifiers normalize to the same Go identifier.
+Collisions occur when different Rugby identifiers normalize to the same Go identifier:
 
-Examples:
+* `foo_bar` and `foo__bar`
+* `inc` and `inc!`
 
-* `foo_bar` and `foo__bar` (empty segment removal)
-* `parse_json` and `parse_JSON` (if you normalize case)
-* `inc` and `inc!` (after dropping `!`)
+**Rule:** Collisions are compile-time errors showing:
 
-**Rule (MVP):**
+* Both Rugby names and locations
+* The resulting Go name
+* Suggested fix
 
-Collisions are **compile-time errors** with a clear message showing:
+### 9.7 Reserved words
 
-* the two Rugby names and their locations
-* the resulting Go name they collide on
-* a suggested fix (rename one of them)
+If a Go identifier would be a keyword (`type`, `var`, `func`) or conflict with generated names (`main`, `init`, `NewTypeName`):
 
-(You can later add automatic disambiguation, but errors keep APIs intentional.)
-
-### 5.5 Reserved words
-
-If a normalized Go identifier would be a Go keyword (`type`, `var`, `func`, etc.) or would conflict with required generated names (`main`, `init`, `NewTypeName`), the compiler must:
-
-* either error, or
-* apply a deterministic escape (MVP recommendation: **escape** by suffixing `_` for internal names only)
-
-**MVP recommended behavior:**
-
-* For **public API (`pub`)**: error (force explicit rename)
-* For **internal**: escape with trailing `_` (e.g. `type` → `type_`)
+* **`pub`**: compile error (force rename)
+* **internal**: escape with trailing `_` (e.g., `type` → `type_`)
 
 ---
 
-## 6. Methods with `!`
+## 10. Go Interop
 
-If a method ends in `!`:
+### 10.1 Imports
 
 ```ruby
-def inc!
-  @n += 1
-end
+import net/http
+import encoding/json as json
+```
+
+* `import a/b` → Go `import "a/b"`
+* `import a/b as x` → Go `import x "a/b"`
+
+### 10.2 Calling Go functions
+
+Rugby calls Go packages with dot syntax:
+
+```ruby
+http.Get(url)
+json.Marshal(data)
+```
+
+Snake_case maps to CamelCase for Go interop:
+
+```ruby
+io.read_all(r)  # compiles to io.ReadAll(r)
 ```
 
 Rules:
 
-* `!` is removed in Go name
-* Method uses a **pointer receiver**
-* Exported if and only if marked `pub`
+* Only for imported Go packages/types
+* Mapping is compile-time only
+* Compiler error if ambiguous
 
-Examples:
+### 10.3 Struct fields and methods
 
-* `def inc!` → `func (c *Counter) inc()`
-* `pub def inc!` → `func (c *Counter) Inc()`
+* `resp.Body` allowed as-is
+* Optional: `resp.body` → `resp.Body` for Go types
 
----
-
-## 7. Constructors
-
-* `initialize` generates a constructor
-* If the class is `pub`, the constructor is `NewTypeName`
-* Otherwise it is internal
-
-Example:
+### 10.4 Defer
 
 ```ruby
-pub class Counter
-  def initialize(n : Int)
-    @n = n
-  end
-end
+defer resp.Body.Close
 ```
 
-→
+Compiles to:
 
 ```go
-func NewCounter(n int) *Counter
+defer resp.Body.Close()
 ```
 
----
-
-## 8. Simple restriction (compiler-enforced)
-
-To avoid useless exports:
-
-* ❌ `pub def` inside a non-`pub` class is an error
-
-Reason: Go callers cannot name the type anyway.
+Rule: `defer <callable>` compiles to `defer f()`.
 
 ---
 
-## 9. Summary (one screen)
+## 11. Collections (Prelude)
 
-* Everything is usable inside a Rugby module
-* `pub` only controls Go export
-* Capitalization in Rugby has no visibility meaning
-* Types are `CamelCase`, functions are `snake_case`
-* Exported Go names are `CamelCase`
-* Internal Go names are `camelCase`
+Minimal standard prelude that lowers to Go:
+
+* `arr.each { |x| ... }` → range loop
+* `arr.map { |x| ... }` → allocate + range loop
+* `arr.compact` for `T?` arrays → filter present values
+* `s.to_i?` → `strconv.Atoi`
+
+Keep it small; only add features that map cleanly to Go.
+
+---
+
+## 12. Diagnostics
+
+* Type errors and unresolved identifiers are compile-time errors
+* Interop mapping errors (e.g., `io.read_all` not found) must show:
+  * Rugby source span
+  * Intended Go package/type
+  * Suggested candidates (`ReadAll`)
+
+---
+
+## 13. MVP Scope
+
+### Parser + AST
+
+* imports
+* defs (functions)
+* classes with initialize + methods
+* if/else/elsif
+* while loops
+* each blocks
+
+### Type inference
+
+* locals, params, returns
+* optional `T?` inference
+
+### Go emitter
+
+* generates `.go` files + prelude
+* preserves readable formatting
+
+### Go interop resolver
+
+* package member resolution
+* snake_case → CamelCase mapping
