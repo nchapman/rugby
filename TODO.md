@@ -73,7 +73,8 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 ### Setup
 - [x] Create `runtime/` directory structure
 - [x] Set up Go module for runtime package
-- [ ] Add runtime import generation to codegen (auto-import when used)
+- [x] Add runtime import generation to codegen (auto-import when used)
+- [x] Support `?` and `!` suffixes in method names (lexer)
 
 ### Array methods (`runtime/array.go`)
 - [x] `Select[T]([]T, func(T) bool) []T` - filter elements
