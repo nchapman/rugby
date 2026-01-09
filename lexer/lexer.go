@@ -62,7 +62,12 @@ func (l *Lexer) NextToken() token.Token {
 	case '+':
 		tok = l.newToken(token.PLUS, "+")
 	case '-':
-		tok = l.newToken(token.MINUS, "-")
+		if l.peekChar() == '>' {
+			l.readChar()
+			tok = l.newToken(token.ARROW, "->")
+		} else {
+			tok = l.newToken(token.MINUS, "-")
+		}
 	case '*':
 		tok = l.newToken(token.STAR, "*")
 	case '/':

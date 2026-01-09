@@ -302,6 +302,33 @@ end`
 	}
 }
 
+func TestReturnType(t *testing.T) {
+	tests := []struct {
+		input      string
+		returnType string
+	}{
+		{"def foo\nend", ""},
+		{"def foo()\nend", ""},
+		{"def foo() -> Int\nend", "Int"},
+		{"def foo(a, b) -> String\nend", "String"},
+		{"def foo(x) -> Bool\nend", "Bool"},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		fn := program.Declarations[0].(*ast.FuncDecl)
+
+		if fn.ReturnType != tt.returnType {
+			t.Errorf("input %q: expected return type %q, got %q",
+				tt.input, tt.returnType, fn.ReturnType)
+		}
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {

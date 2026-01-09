@@ -202,6 +202,18 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 		p.nextToken() // consume ')'
 	}
 
+	// Parse optional return type: -> Type
+	if p.curTokenIs(token.ARROW) {
+		p.nextToken() // consume '->'
+		if !p.curTokenIs(token.IDENT) {
+			p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after ->",
+				p.curToken.Line))
+			return nil
+		}
+		fn.ReturnType = p.curToken.Literal
+		p.nextToken()
+	}
+
 	p.skipNewlines()
 
 	// Parse body until 'end'

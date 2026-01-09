@@ -87,7 +87,15 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 		}
 		g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
 	}
-	g.buf.WriteString(") {\n")
+	g.buf.WriteString(")")
+
+	// Generate return type if specified
+	if fn.ReturnType != "" {
+		g.buf.WriteString(" ")
+		g.buf.WriteString(mapType(fn.ReturnType))
+	}
+
+	g.buf.WriteString(" {\n")
 
 	g.indent++
 	for _, stmt := range fn.Body {
@@ -233,4 +241,20 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		g.genExpr(arg)
 	}
 	g.buf.WriteString(")")
+}
+
+// mapType converts Rugby type names to Go type names
+func mapType(rubyType string) string {
+	switch rubyType {
+	case "Int":
+		return "int"
+	case "Float":
+		return "float64"
+	case "String":
+		return "string"
+	case "Bool":
+		return "bool"
+	default:
+		return rubyType // pass through unknown types (e.g., user-defined)
+	}
 }

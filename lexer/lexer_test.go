@@ -57,7 +57,7 @@ end
 }
 
 func TestOperators(t *testing.T) {
-	input := `+ - * / % == != < > <= >= = ( ) ,`
+	input := `+ - * / % == != < > <= >= = ( ) , ->`
 
 	tests := []struct {
 		expectedType    token.TokenType
@@ -78,6 +78,7 @@ func TestOperators(t *testing.T) {
 		{token.LPAREN, "("},
 		{token.RPAREN, ")"},
 		{token.COMMA, ","},
+		{token.ARROW, "->"},
 		{token.EOF, ""},
 	}
 

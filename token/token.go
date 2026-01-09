@@ -36,6 +36,7 @@ const (
 	LPAREN TokenType = "("
 	RPAREN TokenType = ")"
 	COMMA  TokenType = ","
+	ARROW  TokenType = "->"
 
 	// Keywords
 	IMPORT TokenType = "IMPORT"

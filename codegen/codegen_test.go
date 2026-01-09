@@ -137,6 +137,25 @@ end`
 	assertContains(t, output, `func main()`)
 }
 
+func TestGenerateReturnType(t *testing.T) {
+	input := `def add(a, b) -> Int
+  return 42
+end
+
+def greet() -> String
+  return "hello"
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func add(a interface{}, b interface{}) int`)
+	assertContains(t, output, `func greet() string`)
+	assertContains(t, output, `func main()`)
+}
+
 func TestVariableReassignment(t *testing.T) {
 	input := `def main
   x = 1
