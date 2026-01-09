@@ -1347,3 +1347,85 @@ end`
 	// With parameters, to_s becomes toS (normal snake_case conversion)
 	assertContains(t, output, `func (u *User) toS(format string) {`)
 }
+
+func TestStringInterpolation(t *testing.T) {
+	input := `def main
+  name = "world"
+  x = "hello #{name}"
+end`
+
+	output := compile(t, input)
+
+	// Should generate fmt.Sprintf
+	assertContains(t, output, `fmt.Sprintf("hello %v", name)`)
+	// Should import fmt
+	assertContains(t, output, `"fmt"`)
+}
+
+func TestStringInterpolationWithExpression(t *testing.T) {
+	input := `def main
+  x = "sum: #{1 + 2}"
+end`
+
+	output := compile(t, input)
+
+	// Should generate fmt.Sprintf with expression
+	assertContains(t, output, `fmt.Sprintf("sum: %v", (1 + 2))`)
+}
+
+func TestStringInterpolationMultiple(t *testing.T) {
+	input := `def main
+  a = "foo"
+  b = "bar"
+  x = "#{a} and #{b}"
+end`
+
+	output := compile(t, input)
+
+	// Should generate fmt.Sprintf with multiple args
+	assertContains(t, output, `fmt.Sprintf("%v and %v", a, b)`)
+}
+
+func TestStringInterpolationWithInstanceVar(t *testing.T) {
+	input := `class User
+  def initialize(name : String)
+    @name = name
+  end
+
+  def to_s
+    return "User: #{@name}"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should generate fmt.Sprintf with instance var
+	assertContains(t, output, `fmt.Sprintf("User: %v", u.name)`)
+}
+
+func TestPlainStringNoInterpolation(t *testing.T) {
+	input := `def main
+  x = "hello world"
+end`
+
+	output := compile(t, input)
+
+	// Plain string should remain as literal, no fmt.Sprintf
+	assertContains(t, output, `x := "hello world"`)
+	// Should NOT import fmt for plain strings (unless other code needs it)
+}
+
+func TestStringInterpolationWithPercent(t *testing.T) {
+	input := `def main
+  name = "test"
+  x = "100% of #{name}"
+end`
+
+	output := compile(t, input)
+
+	// Percent should be escaped as %% for fmt.Sprintf
+	assertContains(t, output, `fmt.Sprintf("100%% of %v", name)`)
+}

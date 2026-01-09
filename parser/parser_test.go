@@ -2062,3 +2062,101 @@ end`
 		t.Errorf("expected ident name 'self', got %q", ident.Name)
 	}
 }
+
+func TestStringInterpolation(t *testing.T) {
+	input := `def main
+  name = "world"
+  x = "hello #{name}"
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	if len(fn.Body) != 2 {
+		t.Fatalf("expected 2 statements, got %d", len(fn.Body))
+	}
+
+	// Second statement should assign an interpolated string
+	assignStmt, ok := fn.Body[1].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[1])
+	}
+
+	interpStr, ok := assignStmt.Value.(*ast.InterpolatedString)
+	if !ok {
+		t.Fatalf("expected InterpolatedString, got %T", assignStmt.Value)
+	}
+
+	if len(interpStr.Parts) != 2 {
+		t.Fatalf("expected 2 parts, got %d", len(interpStr.Parts))
+	}
+
+	// First part should be string "hello "
+	part1, ok := interpStr.Parts[0].(string)
+	if !ok || part1 != "hello " {
+		t.Errorf("expected part 1 to be string 'hello ', got %T: %v", interpStr.Parts[0], interpStr.Parts[0])
+	}
+
+	// Second part should be Ident "name"
+	part2, ok := interpStr.Parts[1].(*ast.Ident)
+	if !ok || part2.Name != "name" {
+		t.Errorf("expected part 2 to be Ident 'name', got %T: %v", interpStr.Parts[1], interpStr.Parts[1])
+	}
+}
+
+func TestStringInterpolationWithExpression(t *testing.T) {
+	input := `def main
+  x = "sum: #{1 + 2}"
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assignStmt := fn.Body[0].(*ast.AssignStmt)
+	interpStr, ok := assignStmt.Value.(*ast.InterpolatedString)
+	if !ok {
+		t.Fatalf("expected InterpolatedString, got %T", assignStmt.Value)
+	}
+
+	if len(interpStr.Parts) != 2 {
+		t.Fatalf("expected 2 parts, got %d", len(interpStr.Parts))
+	}
+
+	// First part should be string "sum: "
+	part1, ok := interpStr.Parts[0].(string)
+	if !ok || part1 != "sum: " {
+		t.Errorf("expected part 1 to be 'sum: ', got %v", interpStr.Parts[0])
+	}
+
+	// Second part should be a BinaryExpr
+	_, ok = interpStr.Parts[1].(*ast.BinaryExpr)
+	if !ok {
+		t.Errorf("expected part 2 to be BinaryExpr, got %T", interpStr.Parts[1])
+	}
+}
+
+func TestPlainStringNotInterpolated(t *testing.T) {
+	input := `def main
+  x = "hello world"
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assignStmt := fn.Body[0].(*ast.AssignStmt)
+
+	// Plain string should still be StringLit
+	_, ok := assignStmt.Value.(*ast.StringLit)
+	if !ok {
+		t.Fatalf("expected StringLit for plain string, got %T", assignStmt.Value)
+	}
+}

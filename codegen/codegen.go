@@ -67,6 +67,7 @@ type Generator struct {
 	vars         map[string]bool   // track declared variables
 	imports      map[string]bool   // track import aliases for Go interop detection
 	needsRuntime bool              // track if rugby/runtime import is needed
+	needsFmt     bool              // track if fmt import is needed (string interpolation)
 	currentClass string            // current class being generated (for instance vars)
 }
 
@@ -110,7 +111,8 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 
 	// Collect all imports
 	needsRuntimeImport := g.needsRuntime && !userImports["rugby/runtime"]
-	hasImports := len(program.Imports) > 0 || needsRuntimeImport
+	needsFmtImport := g.needsFmt && !userImports["fmt"]
+	hasImports := len(program.Imports) > 0 || needsRuntimeImport || needsFmtImport
 	if hasImports {
 		out.WriteString("import (\n")
 		// User-specified imports
@@ -122,6 +124,9 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 			}
 		}
 		// Auto-imports (only if not already imported by user)
+		if needsFmtImport {
+			out.WriteString("\t\"fmt\"\n")
+		}
 		if needsRuntimeImport {
 			out.WriteString("\t\"rugby/runtime\"\n")
 		}
@@ -522,6 +527,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genSelectorExpr(e)
 	case *ast.StringLit:
 		g.buf.WriteString(fmt.Sprintf("%q", e.Value))
+	case *ast.InterpolatedString:
+		g.genInterpolatedString(e)
 	case *ast.IntLit:
 		g.buf.WriteString(fmt.Sprintf("%d", e.Value))
 	case *ast.FloatLit:
@@ -580,6 +587,37 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 func (g *Generator) genUnaryExpr(e *ast.UnaryExpr) {
 	g.buf.WriteString(e.Op)
 	g.genExpr(e.Expr)
+}
+
+func (g *Generator) genInterpolatedString(s *ast.InterpolatedString) {
+	g.needsFmt = true
+
+	// Build format string and collect expressions
+	var formatParts []string
+	var exprs []ast.Expression
+
+	for _, part := range s.Parts {
+		switch p := part.(type) {
+		case string:
+			// Escape % for fmt.Sprintf
+			escaped := strings.ReplaceAll(p, "%", "%%")
+			formatParts = append(formatParts, escaped)
+		case ast.Expression:
+			formatParts = append(formatParts, "%v")
+			exprs = append(exprs, p)
+		}
+	}
+
+	formatStr := strings.Join(formatParts, "")
+
+	// Generate fmt.Sprintf call
+	g.buf.WriteString("fmt.Sprintf(")
+	g.buf.WriteString(fmt.Sprintf("%q", formatStr))
+	for _, expr := range exprs {
+		g.buf.WriteString(", ")
+		g.genExpr(expr)
+	}
+	g.buf.WriteString(")")
 }
 
 func (g *Generator) genArrayLit(arr *ast.ArrayLit) {

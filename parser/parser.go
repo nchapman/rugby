@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"rugby/ast"
 	"rugby/lexer"
@@ -1057,7 +1058,86 @@ func (p *Parser) parseFloatLiteral() ast.Expression {
 }
 
 func (p *Parser) parseStringLiteral() ast.Expression {
-	return &ast.StringLit{Value: p.curToken.Literal}
+	value := p.curToken.Literal
+
+	// Check if string contains interpolation
+	if !strings.Contains(value, "#{") {
+		return &ast.StringLit{Value: value}
+	}
+
+	// Parse interpolated string
+	return p.parseInterpolatedString(value)
+}
+
+func (p *Parser) parseInterpolatedString(value string) ast.Expression {
+	var parts []interface{}
+	i := 0
+
+	for i < len(value) {
+		// Look for #{
+		hashIdx := strings.Index(value[i:], "#{")
+		if hashIdx == -1 {
+			// No more interpolations, add remaining string
+			if i < len(value) {
+				parts = append(parts, value[i:])
+			}
+			break
+		}
+
+		// Add string part before #{
+		if hashIdx > 0 {
+			parts = append(parts, value[i:i+hashIdx])
+		}
+
+		// Find matching } using brace counting.
+		// NOTE: This doesn't handle braces inside string literals within the expression.
+		// e.g., "#{format("{}")}" will fail. Use a variable for complex expressions.
+		exprStart := i + hashIdx + 2 // skip #{
+		braceCount := 1
+		exprEnd := exprStart
+
+		for exprEnd < len(value) && braceCount > 0 {
+			if value[exprEnd] == '{' {
+				braceCount++
+			} else if value[exprEnd] == '}' {
+				braceCount--
+			}
+			exprEnd++
+		}
+
+		if braceCount != 0 {
+			p.errors = append(p.errors, "unterminated string interpolation")
+			return &ast.StringLit{Value: value}
+		}
+
+		// Extract expression content (excluding the closing })
+		exprContent := value[exprStart : exprEnd-1]
+
+		// Parse the expression
+		exprLexer := lexer.New(exprContent)
+		exprParser := New(exprLexer)
+		expr := exprParser.parseExpression(LOWEST)
+
+		if len(exprParser.errors) > 0 {
+			p.errors = append(p.errors, exprParser.errors...)
+			return &ast.StringLit{Value: value}
+		}
+
+		if expr != nil {
+			parts = append(parts, expr)
+		}
+
+		i = exprEnd
+	}
+
+	// If only one part and it's a string, return StringLit
+	if len(parts) == 1 {
+		if s, ok := parts[0].(string); ok {
+			return &ast.StringLit{Value: s}
+		}
+	}
+
+	return &ast.InterpolatedString{Parts: parts}
 }
 
 func (p *Parser) parseBoolLiteral() ast.Expression {

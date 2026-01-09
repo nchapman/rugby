@@ -95,6 +95,15 @@ type StringLit struct {
 func (s *StringLit) node()     {}
 func (s *StringLit) exprNode() {}
 
+// InterpolatedString represents a string with embedded expressions: "hello #{name}"
+// Parts alternate between string literals (string) and expressions (Expression)
+type InterpolatedString struct {
+	Parts []interface{} // string or Expression
+}
+
+func (i *InterpolatedString) node()     {}
+func (i *InterpolatedString) exprNode() {}
+
 // Ident represents an identifier
 type Ident struct {
 	Name string

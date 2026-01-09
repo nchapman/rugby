@@ -206,7 +206,7 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [ ] `pub` keyword for exports - enables proper name casing
 
 ## Phase 9: Strings & Polish
-- [ ] String interpolation (`"hi #{name}"`) - any expression, uses `fmt.Sprintf`
+- [x] String interpolation (`"hi #{name}"`) - any expression, uses `fmt.Sprintf`
 - [ ] Comments in more positions (currently only full-line comments)
 - [ ] Better error messages with source locations
 - [ ] Multi-file compilation
