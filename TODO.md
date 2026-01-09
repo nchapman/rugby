@@ -146,12 +146,40 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] Embedding via `<` (`class Service < Logger`) - single parent only for MVP
 - [ ] Pointer receiver methods (`def mutate!`) - explicit `!` suffix convention
 
-## Phase 7: Types & Optionals
-- [ ] Type annotations (`x : Int = 5`)
-- [ ] Parameter type annotations (`def foo(x : String)`)
-- [ ] Optional type (`T?`) - value types only; compiles to `(T, bool)`
-- [ ] `nil` literal - for reference types only
-- [ ] Optional unwrapping in conditionals (`if (x = maybe_val?)`)
+## Phase 7: Type Annotations
+**Goal:** Add explicit type annotations following Go's philosophy.
+
+### Lexer
+- [ ] Add COLON token (`:`)
+
+### Parser
+- [ ] Parse variable type annotations: `x : Int = 5`
+- [ ] Parse parameter type annotations: `def foo(x : String, y : Int)`
+- [ ] Update Param AST node to include optional Type field
+- [ ] Update AssignStmt AST node to include optional Type field
+
+### Codegen
+- [ ] Generate typed variable declarations: `x : Int = 5` → `var x int = 5`
+- [ ] Generate typed function parameters: `def foo(x : Int)` → `func foo(x int)`
+- [ ] Infer instance variable types from initialize parameter types
+  - Currently: `@name` → `name interface{}`
+  - With types: `def initialize(name : String)` + `@name = name` → `name string`
+- [ ] Keep `interface{}` default when no type annotation provided
+
+### Type mappings (already exist in mapType function)
+- Rugby → Go: Int→int, String→string, Bool→bool, Float→float64, etc.
+
+### Testing
+- [ ] Lexer tests for COLON token
+- [ ] Parser tests for type annotations
+- [ ] Codegen tests for typed variables, parameters, and instance variables
+- [ ] Verify untyped code still works (backward compatibility)
+
+### Deferred to later phases:
+- Optional types (`T?`) - complex, needs careful design
+- Generic type parameters (`Array[T]`, `Map[K,V]`)
+- `nil` literal handling
+- Type inference engine
 
 ## Phase 8: Interfaces & Visibility
 - [ ] Interface definitions (`interface Speaker`) - methods implicitly exported

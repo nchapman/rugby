@@ -88,18 +88,48 @@ Rugby is statically typed with inference.
 
 ### 4.3 Type annotations
 
-Optional—infer when omitted:
+Rugby follows Go's philosophy: rely on Go's type inference where possible.
+
+**Variables:** Type annotations are optional. Without annotation, Go infers from the assignment:
 
 ```ruby
-x : Int = 3
+x = 5           # x := 5 (Go infers int)
+y : Int64 = 5   # var y int64 = 5 (explicit type)
+```
+
+**Function parameters:** Type annotations are optional. Without annotation, parameters default to `interface{}`:
+
+```ruby
+# Untyped - uses interface{}
+def add(a, b)
+  a + b
+end
+# → func add(a interface{}, b interface{}) { ... }
+
+# Typed parameters
 def add(a : Int, b : Int) -> Int
   a + b
 end
+# → func add(a int, b int) int { return a + b }
 ```
 
-If inference fails, compiler error with location.
+**Instance variables:** Types are inferred from `initialize` parameter types:
+
+```ruby
+class User
+  def initialize(name : String, age : Int)
+    @name = name   # @name is string
+    @age = age     # @age is int
+  end
+end
+# → type User struct { name string; age int }
+```
+
+**Type checking:** Rugby does not perform type checking. Type mismatches are caught by the Go compiler.
 
 ### 4.4 Optionals (`T?`)
+
+**Status:** Planned for future phase (after basic type annotations).
 
 Representation (MVP): `T?` compiles to `(T, bool)`.
 
