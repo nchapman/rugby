@@ -24,10 +24,21 @@ Features in implementation order, building incrementally.
 - [x] Function calls with arguments (`add(1, 2)`)
 
 ## Phase 4: Go Interop
-- [ ] Method calls with dot syntax (`http.Get(url)`)
-- [ ] Import aliases (`import encoding/json as json`)
-- [ ] snake_case to CamelCase mapping (`read_all` -> `ReadAll`)
-- [ ] Defer (`defer f.Close`)
+- [x] Method calls with dot syntax (`http.Get(url)`)
+- [x] Import aliases (`import encoding/json as json`)
+- [x] snake_case to CamelCase mapping (`read_all` -> `ReadAll`)
+- [x] Defer (`defer f.Close`)
+
+**Note on snake_case transformation (see spec.md Section 5):**
+Currently, snake_case → PascalCase only applies to selector calls (Go interop).
+Local function names are passed through as-is. Full behavior once `pub` is implemented:
+- Selector calls (`io.read_all`) → PascalCase (`io.ReadAll`) - Go exports are always uppercase
+- `pub def parse_json` → `func ParseJSON()` - exported
+- `def parse_json` → `func parseJSON()` - internal (camelCase)
+- Acronym handling (5.3): `id` → `ID`, `http` → `HTTP`, etc.
+- Name collision detection (5.4): compile-time errors for collisions
+- Reserved word escaping (5.5): suffix `_` for internal, error for `pub`
+This requires `pub` keyword support (Phase 8) to be fully correct.
 
 ## Phase 5: Collections
 - [ ] Array literals (`[1, 2, 3]`)

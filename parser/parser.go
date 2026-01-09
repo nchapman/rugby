@@ -21,6 +21,7 @@ const (
 	PRODUCT      // *, /, %
 	PREFIX       // -x, not x
 	CALL         // f(x)
+	MEMBER       // x.y (highest)
 )
 
 var precedences = map[token.TokenType]int{
@@ -38,6 +39,7 @@ var precedences = map[token.TokenType]int{
 	token.SLASH:   PRODUCT,
 	token.PERCENT: PRODUCT,
 	token.LPAREN:  CALL,
+	token.DOT:     MEMBER,
 }
 
 type Parser struct {
@@ -131,6 +133,18 @@ func (p *Parser) parseImport() *ast.ImportDecl {
 
 	imp := &ast.ImportDecl{Path: p.curToken.Literal}
 	p.nextToken()
+
+	// Check for optional alias: import foo/bar as baz
+	if p.curTokenIs(token.AS) {
+		p.nextToken() // consume 'as'
+		if !p.curTokenIs(token.IDENT) {
+			p.errors = append(p.errors, fmt.Sprintf("line %d: expected alias name after 'as'",
+				p.curToken.Line))
+			return nil
+		}
+		imp.Alias = p.curToken.Literal
+		p.nextToken()
+	}
 
 	return imp
 }
@@ -281,6 +295,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseWhileStmt()
 	case token.RETURN:
 		return p.parseReturnStmt()
+	case token.DEFER:
+		return p.parseDeferStmt()
 	case token.IDENT:
 		// Check for assignment: ident = expr
 		if p.peekTokenIs(token.ASSIGN) {
@@ -466,6 +482,9 @@ infixLoop:
 			token.AND, token.OR:
 			p.nextToken()
 			left = p.parseInfixExpr(left)
+		case token.DOT:
+			p.nextToken()
+			left = p.parseSelectorExpr(left)
 		case token.LPAREN:
 			p.nextToken()
 			left = p.parseCallExprWithParens(left)
@@ -482,7 +501,7 @@ infixLoop:
 			p.peekTokenIs(token.LPAREN) {
 			p.nextToken()
 			arg := p.parseExpression(LOWEST)
-			return &ast.CallExpr{Func: ident.Name, Args: []ast.Expression{arg}}
+			return &ast.CallExpr{Func: ident, Args: []ast.Expression{arg}}
 		}
 	}
 
@@ -495,15 +514,7 @@ func (p *Parser) parseIdent() ast.Expression {
 
 func (p *Parser) parseCallExprWithParens(fn ast.Expression) ast.Expression {
 	// curToken is '('
-	call := &ast.CallExpr{}
-
-	// Get function name from identifier
-	if ident, ok := fn.(*ast.Ident); ok {
-		call.Func = ident.Name
-	} else {
-		p.errors = append(p.errors, "expected identifier before (")
-		return nil
-	}
+	call := &ast.CallExpr{Func: fn}
 
 	p.nextToken() // move past '(' to first arg or ')'
 
@@ -598,4 +609,56 @@ func (p *Parser) parseInfixExpr(left ast.Expression) ast.Expression {
 	right := p.parseExpression(precedence)
 
 	return &ast.BinaryExpr{Left: left, Op: op, Right: right}
+}
+
+func (p *Parser) parseSelectorExpr(x ast.Expression) ast.Expression {
+	// curToken is '.'
+	p.nextToken() // move past '.' to the selector
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected identifier after '.'",
+			p.curToken.Line))
+		return nil
+	}
+
+	return &ast.SelectorExpr{
+		X:   x,
+		Sel: p.curToken.Literal,
+	}
+}
+
+func (p *Parser) parseDeferStmt() *ast.DeferStmt {
+	deferLine := p.curToken.Line
+	p.nextToken() // consume 'defer'
+
+	// Parse the expression that should be a call
+	expr := p.parseExpression(LOWEST)
+	if expr == nil {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected expression after defer",
+			deferLine))
+		return nil
+	}
+
+	// The expression must be a call or a selector (which we'll convert to a call)
+	var call *ast.CallExpr
+
+	switch e := expr.(type) {
+	case *ast.CallExpr:
+		call = e
+	case *ast.SelectorExpr:
+		// defer resp.Body.Close becomes defer resp.Body.Close()
+		call = &ast.CallExpr{Func: e, Args: nil}
+	case *ast.Ident:
+		// defer close becomes defer close()
+		call = &ast.CallExpr{Func: e, Args: nil}
+	default:
+		p.errors = append(p.errors, fmt.Sprintf("line %d: defer requires a callable expression",
+			deferLine))
+		return nil
+	}
+
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	return &ast.DeferStmt{Call: call}
 }

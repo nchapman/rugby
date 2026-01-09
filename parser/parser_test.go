@@ -179,8 +179,12 @@ end`
 		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
 	}
 
-	if call.Func != "puts" {
-		t.Errorf("expected func 'puts', got %q", call.Func)
+	ident, ok := call.Func.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident for func, got %T", call.Func)
+	}
+	if ident.Name != "puts" {
+		t.Errorf("expected func 'puts', got %q", ident.Name)
 	}
 
 	if len(call.Args) != 1 {
@@ -421,5 +425,185 @@ func exprString(expr ast.Expression) string {
 		return "(" + exprString(e.Left) + " " + e.Op + " " + exprString(e.Right) + ")"
 	default:
 		return "?"
+	}
+}
+
+func TestImportAlias(t *testing.T) {
+	input := `import encoding/json as json
+import net/http
+
+def main
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Imports) != 2 {
+		t.Fatalf("expected 2 imports, got %d", len(program.Imports))
+	}
+
+	// First import has alias
+	if program.Imports[0].Path != "encoding/json" {
+		t.Errorf("expected path 'encoding/json', got %q", program.Imports[0].Path)
+	}
+	if program.Imports[0].Alias != "json" {
+		t.Errorf("expected alias 'json', got %q", program.Imports[0].Alias)
+	}
+
+	// Second import has no alias
+	if program.Imports[1].Path != "net/http" {
+		t.Errorf("expected path 'net/http', got %q", program.Imports[1].Path)
+	}
+	if program.Imports[1].Alias != "" {
+		t.Errorf("expected no alias, got %q", program.Imports[1].Alias)
+	}
+}
+
+func TestSelectorExpression(t *testing.T) {
+	input := `def main
+  x = resp.Body
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+
+	sel, ok := assign.Value.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected SelectorExpr, got %T", assign.Value)
+	}
+
+	ident, ok := sel.X.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident for X, got %T", sel.X)
+	}
+	if ident.Name != "resp" {
+		t.Errorf("expected X 'resp', got %q", ident.Name)
+	}
+	if sel.Sel != "Body" {
+		t.Errorf("expected Sel 'Body', got %q", sel.Sel)
+	}
+}
+
+func TestChainedSelector(t *testing.T) {
+	input := `def main
+  x = resp.Body.Close
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+
+	// resp.Body.Close
+	outer, ok := assign.Value.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected SelectorExpr, got %T", assign.Value)
+	}
+	if outer.Sel != "Close" {
+		t.Errorf("expected outer Sel 'Close', got %q", outer.Sel)
+	}
+
+	inner, ok := outer.X.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected inner SelectorExpr, got %T", outer.X)
+	}
+	if inner.Sel != "Body" {
+		t.Errorf("expected inner Sel 'Body', got %q", inner.Sel)
+	}
+}
+
+func TestSelectorCall(t *testing.T) {
+	input := `def main
+  http.Get("http://example.com")
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	exprStmt := fn.Body[0].(*ast.ExprStmt)
+
+	call, ok := exprStmt.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+	}
+
+	sel, ok := call.Func.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected SelectorExpr as Func, got %T", call.Func)
+	}
+
+	ident, ok := sel.X.(*ast.Ident)
+	if !ok || ident.Name != "http" {
+		t.Errorf("expected 'http', got %v", sel.X)
+	}
+	if sel.Sel != "Get" {
+		t.Errorf("expected 'Get', got %q", sel.Sel)
+	}
+
+	if len(call.Args) != 1 {
+		t.Errorf("expected 1 arg, got %d", len(call.Args))
+	}
+}
+
+func TestDeferStatement(t *testing.T) {
+	input := `def main
+  defer resp.Body.Close
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+
+	deferStmt, ok := fn.Body[0].(*ast.DeferStmt)
+	if !ok {
+		t.Fatalf("expected DeferStmt, got %T", fn.Body[0])
+	}
+
+	if deferStmt.Call == nil {
+		t.Fatal("expected Call in DeferStmt, got nil")
+	}
+
+	// The call should have a SelectorExpr as its function
+	sel, ok := deferStmt.Call.Func.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected SelectorExpr in call, got %T", deferStmt.Call.Func)
+	}
+
+	if sel.Sel != "Close" {
+		t.Errorf("expected 'Close', got %q", sel.Sel)
+	}
+}
+
+func TestDeferWithParens(t *testing.T) {
+	input := `def main
+  defer file.Close()
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	deferStmt := fn.Body[0].(*ast.DeferStmt)
+
+	if deferStmt.Call == nil {
+		t.Fatal("expected Call in DeferStmt")
 	}
 }

@@ -60,12 +60,21 @@ func (e *ExprStmt) stmtNode() {}
 
 // CallExpr represents a function call
 type CallExpr struct {
-	Func string
+	Func Expression
 	Args []Expression
 }
 
 func (c *CallExpr) node()     {}
 func (c *CallExpr) exprNode() {}
+
+// SelectorExpr represents a selector expression like x.Y or a.b.c
+type SelectorExpr struct {
+	X   Expression // the expression before the dot
+	Sel string     // the selected identifier
+}
+
+func (s *SelectorExpr) node()     {}
+func (s *SelectorExpr) exprNode() {}
 
 // StringLit represents a string literal
 type StringLit struct {
@@ -168,3 +177,11 @@ type ReturnStmt struct {
 
 func (r *ReturnStmt) node()     {}
 func (r *ReturnStmt) stmtNode() {}
+
+// DeferStmt represents a defer statement
+type DeferStmt struct {
+	Call *CallExpr
+}
+
+func (d *DeferStmt) node()     {}
+func (d *DeferStmt) stmtNode() {}

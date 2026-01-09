@@ -100,7 +100,7 @@ func TestOperators(t *testing.T) {
 }
 
 func TestKeywords(t *testing.T) {
-	input := `if elsif else while return true false and or not end def import`
+	input := `if elsif else while return true false and or not end def import as defer`
 
 	tests := []struct {
 		expectedType    token.TokenType
@@ -119,6 +119,8 @@ func TestKeywords(t *testing.T) {
 		{token.END, "end"},
 		{token.DEF, "def"},
 		{token.IMPORT, "import"},
+		{token.AS, "as"},
+		{token.DEFER, "defer"},
 		{token.EOF, ""},
 	}
 
@@ -185,6 +187,100 @@ y = 10`
 		{token.IDENT, "y"},
 		{token.ASSIGN, "="},
 		{token.INT, "10"},
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
+				i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}
+
+func TestDotToken(t *testing.T) {
+	input := `http.Get`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.IDENT, "http"},
+		{token.DOT, "."},
+		{token.IDENT, "Get"},
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
+				i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}
+
+func TestImportAliasSyntax(t *testing.T) {
+	input := `import encoding/json as json`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.IMPORT, "import"},
+		{token.IDENT, "encoding/json"},
+		{token.AS, "as"},
+		{token.IDENT, "json"},
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
+				i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}
+
+func TestDeferSyntax(t *testing.T) {
+	input := `defer resp.Body.Close`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.DEFER, "defer"},
+		{token.IDENT, "resp"},
+		{token.DOT, "."},
+		{token.IDENT, "Body"},
+		{token.DOT, "."},
+		{token.IDENT, "Close"},
 		{token.EOF, ""},
 	}
 

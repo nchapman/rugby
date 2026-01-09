@@ -220,3 +220,100 @@ func assertContains(t *testing.T, output, substr string) {
 		t.Errorf("expected output to contain %q, got:\n%s", substr, output)
 	}
 }
+
+func TestGenerateImportAlias(t *testing.T) {
+	input := `import encoding/json as json
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `json "encoding/json"`)
+}
+
+func TestGenerateSelectorExpr(t *testing.T) {
+	input := `import net/http
+
+def main
+  http.Get("http://example.com")
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `http.Get("http://example.com")`)
+}
+
+func TestGenerateChainedSelector(t *testing.T) {
+	input := `def main
+  x = resp.Body
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `resp.Body`)
+}
+
+func TestGenerateSnakeCaseMapping(t *testing.T) {
+	input := `import io
+
+def main
+  io.read_all(r)
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `io.ReadAll(r)`)
+}
+
+func TestGenerateDefer(t *testing.T) {
+	input := `def main
+  defer resp.Body.Close
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `defer resp.Body.Close()`)
+}
+
+func TestGenerateDeferWithParens(t *testing.T) {
+	input := `def main
+  defer file.Close()
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `defer file.Close()`)
+}
+
+func TestGenerateDeferSimple(t *testing.T) {
+	input := `def main
+  defer cleanup
+end`
+
+	output := compile(t, input)
+
+	// Local function names are not transformed (no pub support yet)
+	assertContains(t, output, `defer cleanup()`)
+}
+
+func TestSnakeToCamelConversion(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"read_all", "ReadAll"},
+		{"new_request", "NewRequest"},
+		{"close", "Close"},
+		{"get", "Get"},
+		{"read_file", "ReadFile"},
+		{"http_server_error", "HttpServerError"},
+	}
+
+	for _, tt := range tests {
+		got := snakeToCamel(tt.input)
+		if got != tt.expected {
+			t.Errorf("snakeToCamel(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}

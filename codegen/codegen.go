@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/format"
 	"strings"
+	"unicode"
 
 	"rugby/ast"
 )
@@ -26,7 +27,11 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	if len(program.Imports) > 0 {
 		g.buf.WriteString("import (\n")
 		for _, imp := range program.Imports {
-			g.buf.WriteString(fmt.Sprintf("\t%q\n", imp.Path))
+			if imp.Alias != "" {
+				g.buf.WriteString(fmt.Sprintf("\t%s %q\n", imp.Alias, imp.Path))
+			} else {
+				g.buf.WriteString(fmt.Sprintf("\t%q\n", imp.Path))
+			}
 		}
 		g.buf.WriteString(")\n\n")
 	}
@@ -68,6 +73,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genWhileStmt(s)
 	case *ast.ReturnStmt:
 		g.genReturnStmt(s)
+	case *ast.DeferStmt:
+		g.genDeferStmt(s)
 	}
 }
 
@@ -202,6 +209,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 	switch e := expr.(type) {
 	case *ast.CallExpr:
 		g.genCallExpr(e)
+	case *ast.SelectorExpr:
+		g.genSelectorExpr(e)
 	case *ast.StringLit:
 		g.buf.WriteString(fmt.Sprintf("%q", e.Value))
 	case *ast.IntLit:
@@ -239,14 +248,26 @@ func (g *Generator) genUnaryExpr(e *ast.UnaryExpr) {
 }
 
 func (g *Generator) genCallExpr(call *ast.CallExpr) {
-	// Map Rugby builtins to Go
-	funcName := call.Func
-	switch funcName {
-	case "puts":
-		funcName = "fmt.Println"
+	// Generate the function expression
+	switch fn := call.Func.(type) {
+	case *ast.Ident:
+		// Simple function call - check for builtins
+		funcName := fn.Name
+		switch funcName {
+		case "puts":
+			funcName = "fmt.Println"
+		}
+		// Don't transform local function names - they stay as defined
+		g.buf.WriteString(funcName)
+	case *ast.SelectorExpr:
+		// Method/package call like http.Get or resp.Body.Close
+		// snake_case transformation only applies here (Go interop)
+		g.genSelectorExpr(fn)
+	default:
+		// Fallback for other expressions
+		g.genExpr(call.Func)
 	}
 
-	g.buf.WriteString(funcName)
 	g.buf.WriteString("(")
 	for i, arg := range call.Args {
 		if i > 0 {
@@ -255,6 +276,46 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		g.genExpr(arg)
 	}
 	g.buf.WriteString(")")
+}
+
+func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
+	g.genExpr(sel.X)
+	g.buf.WriteString(".")
+	// Apply snake_case to CamelCase mapping
+	g.buf.WriteString(snakeToCamel(sel.Sel))
+}
+
+func (g *Generator) genDeferStmt(s *ast.DeferStmt) {
+	g.writeIndent()
+	g.buf.WriteString("defer ")
+	g.genCallExpr(s.Call)
+	g.buf.WriteString("\n")
+}
+
+// snakeToCamel converts snake_case to CamelCase for Go interop
+// Examples: read_all -> ReadAll, new_request -> NewRequest
+func snakeToCamel(s string) string {
+	if s == "" {
+		return s
+	}
+
+	var result strings.Builder
+	capitalizeNext := true
+
+	for _, r := range s {
+		if r == '_' {
+			capitalizeNext = true
+			continue
+		}
+		if capitalizeNext {
+			result.WriteRune(unicode.ToUpper(r))
+			capitalizeNext = false
+		} else {
+			result.WriteRune(r)
+		}
+	}
+
+	return result.String()
 }
 
 // mapType converts Rugby type names to Go type names

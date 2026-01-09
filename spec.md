@@ -477,3 +477,262 @@ If omitted:
 
    * package member resolution
    * optional snake_case mapping for Go identifiers
+
+## Additions
+
+## Export & Naming
+
+This section defines how Rugby names map to Go names and how `pub` controls what is visible to other Go packages.
+
+---
+
+## 1. Core principle (read this first)
+
+**Inside a Rugby module, everything is usable.**
+
+The `pub` keyword exists **only** to control what becomes visible when the compiled Go package is imported by *other* Go (or Rugby) modules.
+
+> `pub` does **not** affect visibility inside the same Rugby module.
+
+There is no Ruby-style `private` / `public` in MVP.
+
+---
+
+## 2. What `pub` means
+
+* `pub` = **export this symbol to Go**
+* no `pub` = **internal to the Go package**
+
+That’s it. One rule.
+
+---
+
+## 3. What can be marked `pub`
+
+### 3.1 Functions
+
+```ruby
+def helper(x : Int) -> Int
+  x * 2
+end
+
+pub def double(x : Int) -> Int
+  helper(x)
+end
+```
+
+* `double` is visible to Go
+* `helper` is not
+* both are usable inside the same Rugby module
+
+---
+
+### 3.2 Classes
+
+```ruby
+class Counter
+  def initialize(start : Int = 0)
+    @n = start
+  end
+
+  def inc!
+    @n += 1
+  end
+end
+```
+
+* This class is usable inside Rugby
+* It is **not** usable from Go
+
+To export it:
+
+```ruby
+pub class Counter
+  def initialize(start : Int = 0)
+    @n = start
+  end
+
+  pub def inc!
+    @n += 1
+  end
+end
+```
+
+Rules:
+
+* A class must be `pub` to be usable from Go
+* Methods intended for Go must also be `pub`
+
+---
+
+### 3.3 Interfaces
+
+```ruby
+pub interface Greeter
+  pub def greet(name : String) -> String
+end
+```
+
+* Interfaces meant for Go **must** be `pub`
+* All interface methods must be `pub`
+
+---
+
+## 4. Naming rules in Rugby source
+
+These are **style rules**, not visibility rules.
+
+* Types (`class`, `interface`) → `CamelCase`
+* Functions, methods, variables → `snake_case`
+* Capitalization in Rugby **never controls visibility**
+
+Examples:
+
+```ruby
+class HttpServer
+end
+
+def parse_json
+end
+```
+
+---
+
+## 5. Go name generation
+
+Rugby names are rewritten to idiomatic Go names.
+
+### 5.1 Exported (`pub`) names
+
+* `snake_case` → `CamelCase`
+* Acronyms preserved (`id` → `ID`, `http` → `HTTP`)
+
+Examples:
+
+* `pub def parse_json` → `ParseJSON`
+* `pub def user_id` → `UserID`
+
+### 5.2 Internal (non-`pub`) names
+
+* `snake_case` → `camelCase`
+* Acronyms preserved
+
+Examples:
+
+* `def parse_json` → `parseJSON`
+* `def user_id` → `userID`
+
+### 5.3 Acronym list
+
+To keep output Go-idiomatic, the compiler uses an acronym table.
+
+**Default MVP acronyms (lowercase keys):**
+
+* `id`, `url`, `uri`, `http`, `https`, `json`, `xml`, `api`, `uuid`, `ip`, `tcp`, `udp`, `sql`, `tls`, `ssh`, `cpu`, `gpu`
+
+Rules:
+
+* Exported: `id` → `ID`, `http` → `HTTP`
+* Unexported: first-part acronym `http_*` → `http*`, later-part acronym `*_id` → `*ID`
+
+The list should be configurable via compiler config later, but hardcoded is fine for MVP.
+
+### 5.4 Name collision rules
+
+Collisions can occur when different Rugby identifiers normalize to the same Go identifier.
+
+Examples:
+
+* `foo_bar` and `foo__bar` (empty segment removal)
+* `parse_json` and `parse_JSON` (if you normalize case)
+* `inc` and `inc!` (after dropping `!`)
+
+**Rule (MVP):**
+
+Collisions are **compile-time errors** with a clear message showing:
+
+* the two Rugby names and their locations
+* the resulting Go name they collide on
+* a suggested fix (rename one of them)
+
+(You can later add automatic disambiguation, but errors keep APIs intentional.)
+
+### 5.5 Reserved words
+
+If a normalized Go identifier would be a Go keyword (`type`, `var`, `func`, etc.) or would conflict with required generated names (`main`, `init`, `NewTypeName`), the compiler must:
+
+* either error, or
+* apply a deterministic escape (MVP recommendation: **escape** by suffixing `_` for internal names only)
+
+**MVP recommended behavior:**
+
+* For **public API (`pub`)**: error (force explicit rename)
+* For **internal**: escape with trailing `_` (e.g. `type` → `type_`)
+
+---
+
+## 6. Methods with `!`
+
+If a method ends in `!`:
+
+```ruby
+def inc!
+  @n += 1
+end
+```
+
+Rules:
+
+* `!` is removed in Go name
+* Method uses a **pointer receiver**
+* Exported if and only if marked `pub`
+
+Examples:
+
+* `def inc!` → `func (c *Counter) inc()`
+* `pub def inc!` → `func (c *Counter) Inc()`
+
+---
+
+## 7. Constructors
+
+* `initialize` generates a constructor
+* If the class is `pub`, the constructor is `NewTypeName`
+* Otherwise it is internal
+
+Example:
+
+```ruby
+pub class Counter
+  def initialize(n : Int)
+    @n = n
+  end
+end
+```
+
+→
+
+```go
+func NewCounter(n int) *Counter
+```
+
+---
+
+## 8. Simple restriction (compiler-enforced)
+
+To avoid useless exports:
+
+* ❌ `pub def` inside a non-`pub` class is an error
+
+Reason: Go callers cannot name the type anyway.
+
+---
+
+## 9. Summary (one screen)
+
+* Everything is usable inside a Rugby module
+* `pub` only controls Go export
+* Capitalization in Rugby has no visibility meaning
+* Types are `CamelCase`, functions are `snake_case`
+* Exported Go names are `CamelCase`
+* Internal Go names are `camelCase`

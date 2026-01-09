@@ -37,6 +37,7 @@ const (
 	RPAREN TokenType = ")"
 	COMMA  TokenType = ","
 	ARROW  TokenType = "->"
+	DOT    TokenType = "."
 
 	// Keywords
 	IMPORT TokenType = "IMPORT"
@@ -52,6 +53,8 @@ const (
 	AND    TokenType = "AND"
 	OR     TokenType = "OR"
 	NOT    TokenType = "NOT"
+	AS     TokenType = "AS"
+	DEFER  TokenType = "DEFER"
 )
 
 type Token struct {
@@ -75,6 +78,8 @@ var keywords = map[string]TokenType{
 	"and":    AND,
 	"or":     OR,
 	"not":    NOT,
+	"as":     AS,
+	"defer":  DEFER,
 }
 
 func LookupIdent(ident string) TokenType {

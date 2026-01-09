@@ -80,6 +80,8 @@ func (l *Lexer) NextToken() token.Token {
 		tok = l.newToken(token.RPAREN, ")")
 	case ',':
 		tok = l.newToken(token.COMMA, ",")
+	case '.':
+		tok = l.newToken(token.DOT, ".")
 	case '=':
 		if l.peekChar() == '=' {
 			l.readChar()
