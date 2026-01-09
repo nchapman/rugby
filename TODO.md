@@ -2,6 +2,15 @@
 
 Features in implementation order, building incrementally.
 
+**Recent spec updates (see spec.md):**
+- Return statements (6.3): explicit + implicit returns
+- Block semantics (5.4): iteration-only for MVP, not closures
+- Instance variables (7.2.1): types inferred from `initialize`
+- Optionals (4.4): `T?` restricted to value types only
+- Interface methods (8.1): implicitly exported
+- String interpolation (3.3): any expression allowed
+- Map iteration (5.3): `map.each do |k, v|`
+
 ## Phase 1: Core Expressions
 - [x] Integer literals and arithmetic (`+`, `-`, `*`, `/`, `%`)
 - [x] Float literals
@@ -29,15 +38,15 @@ Features in implementation order, building incrementally.
 - [x] snake_case to CamelCase mapping (`read_all` -> `ReadAll`)
 - [x] Defer (`defer f.Close`)
 
-**Note on snake_case transformation (see spec.md Section 5):**
+**Note on snake_case transformation (see spec.md Section 9.4):**
 Currently, snake_case → PascalCase only applies to selector calls (Go interop).
 Local function names are passed through as-is. Full behavior once `pub` is implemented:
 - Selector calls (`io.read_all`) → PascalCase (`io.ReadAll`) - Go exports are always uppercase
 - `pub def parse_json` → `func ParseJSON()` - exported
 - `def parse_json` → `func parseJSON()` - internal (camelCase)
-- Acronym handling (5.3): `id` → `ID`, `http` → `HTTP`, etc.
-- Name collision detection (5.4): compile-time errors for collisions
-- Reserved word escaping (5.5): suffix `_` for internal, error for `pub`
+- Acronym handling (spec 9.5): `id` → `ID`, `http` → `HTTP`, etc.
+- Name collision detection (spec 9.6): compile-time errors for collisions
+- Reserved word escaping (spec 9.7): suffix `_` for internal, error for `pub`
 This requires `pub` keyword support (Phase 8) to be fully correct.
 
 ## Phase 5: Collections
@@ -51,27 +60,27 @@ This requires `pub` keyword support (Phase 8) to be fully correct.
 
 ## Phase 6: Classes
 - [ ] Class definition (`class User ... end`)
-- [ ] Instance variables (`@name`)
-- [ ] Constructor (`def initialize`)
+- [ ] Instance variables (`@name`) - types inferred from `initialize`
+- [ ] Constructor (`def initialize`) - generates `New*` functions
 - [ ] `Class.new(...)` syntax
-- [ ] Methods with receivers
+- [ ] Methods with receivers (value receiver default)
 - [ ] Pointer receiver methods (`def mutate!`)
-- [ ] Embedding via `<` (`class Service < Logger`)
+- [ ] Embedding via `<` (`class Service < Logger`) - single parent only for MVP
 
 ## Phase 7: Types & Optionals
 - [ ] Type annotations (`x : Int = 5`)
 - [ ] Parameter type annotations (`def foo(x : String)`)
-- [ ] Optional type (`T?`)
-- [ ] `nil` literal
+- [ ] Optional type (`T?`) - value types only; compiles to `(T, bool)`
+- [ ] `nil` literal - for reference types only
 - [ ] Optional unwrapping in conditionals (`if (x = maybe_val?)`)
 
 ## Phase 8: Interfaces & Visibility
-- [ ] Interface definitions (`interface Speaker`)
+- [ ] Interface definitions (`interface Speaker`) - methods implicitly exported
 - [ ] Structural conformance checking
-- [ ] `pub` keyword for exports
+- [ ] `pub` keyword for exports - enables proper name casing
 
 ## Phase 9: Strings & Polish
-- [ ] String interpolation (`"hi #{name}"`)
-- [ ] Comments in more positions
+- [ ] String interpolation (`"hi #{name}"`) - any expression, uses `fmt.Sprintf`
+- [ ] Comments in more positions (currently only full-line comments)
 - [ ] Better error messages with source locations
 - [ ] Multi-file compilation
