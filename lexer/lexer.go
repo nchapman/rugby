@@ -123,6 +123,8 @@ func (l *Lexer) NextToken() token.Token {
 		tok = l.newToken(token.PIPE, "|")
 	case '@':
 		tok = l.newToken(token.AT, "@")
+	case ':':
+		tok = l.newToken(token.COLON, ":")
 	case '=':
 		if l.peekChar() == '=' {
 			l.readChar()

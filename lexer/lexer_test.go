@@ -459,3 +459,75 @@ func TestInstanceVariableToken(t *testing.T) {
 		}
 	}
 }
+
+func TestColonToken(t *testing.T) {
+	input := `x : Int = 5`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.IDENT, "x"},
+		{token.COLON, ":"},
+		{token.IDENT, "Int"},
+		{token.ASSIGN, "="},
+		{token.INT, "5"},
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
+				i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}
+
+func TestTypedParameterTokens(t *testing.T) {
+	input := `def add(a : Int, b : Int) -> Int`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.DEF, "def"},
+		{token.IDENT, "add"},
+		{token.LPAREN, "("},
+		{token.IDENT, "a"},
+		{token.COLON, ":"},
+		{token.IDENT, "Int"},
+		{token.COMMA, ","},
+		{token.IDENT, "b"},
+		{token.COLON, ":"},
+		{token.IDENT, "Int"},
+		{token.RPAREN, ")"},
+		{token.ARROW, "->"},
+		{token.IDENT, "Int"},
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
+				i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}

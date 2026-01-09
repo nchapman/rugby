@@ -174,6 +174,38 @@ func (p *Parser) parseImport() *ast.ImportDecl {
 	return imp
 }
 
+// parseTypedParam parses a parameter with optional type annotation: name or name : Type
+func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
+	if !p.curTokenIs(token.IDENT) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name",
+			p.curToken.Line))
+		return nil
+	}
+	name := p.curToken.Literal
+	if seen[name] {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate parameter name %q",
+			p.curToken.Line, name))
+		return nil
+	}
+	seen[name] = true
+	p.nextToken() // consume identifier
+
+	// Check for optional type annotation: name : Type
+	var paramType string
+	if p.curTokenIs(token.COLON) {
+		p.nextToken() // consume ':'
+		if !p.curTokenIs(token.IDENT) {
+			p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after ':'",
+				p.curToken.Line))
+			return nil
+		}
+		paramType = p.curToken.Literal
+		p.nextToken() // consume type
+	}
+
+	return &ast.Param{Name: name, Type: paramType}
+}
+
 func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 	p.nextToken() // consume 'def'
 
@@ -194,20 +226,11 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 		// Parse parameters until ')'
 		if !p.curTokenIs(token.RPAREN) {
 			// First parameter
-			if !p.curTokenIs(token.IDENT) {
-				p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name",
-					p.curToken.Line))
+			param := p.parseTypedParam(seen)
+			if param == nil {
 				return nil
 			}
-			name := p.curToken.Literal
-			if seen[name] {
-				p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate parameter name %q",
-					p.curToken.Line, name))
-				return nil
-			}
-			seen[name] = true
-			fn.Params = append(fn.Params, &ast.Param{Name: name})
-			p.nextToken()
+			fn.Params = append(fn.Params, param)
 
 			// Additional parameters
 			for p.curTokenIs(token.COMMA) {
@@ -216,20 +239,11 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 				if p.curTokenIs(token.RPAREN) {
 					break
 				}
-				if !p.curTokenIs(token.IDENT) {
-					p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name after comma",
-						p.curToken.Line))
+				param := p.parseTypedParam(seen)
+				if param == nil {
 					return nil
 				}
-				name := p.curToken.Literal
-				if seen[name] {
-					p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate parameter name %q",
-						p.curToken.Line, name))
-					return nil
-				}
-				seen[name] = true
-				fn.Params = append(fn.Params, &ast.Param{Name: name})
-				p.nextToken()
+				fn.Params = append(fn.Params, param)
 			}
 		}
 
@@ -374,16 +388,35 @@ func (p *Parser) parseClassDecl() *ast.ClassDecl {
 	return cls
 }
 
-// extractFields extracts field declarations from instance variable assignments in a method
+// extractFields extracts field declarations from instance variable assignments in a method.
+// It infers field types from typed parameters when @field = param_name.
 func extractFields(method *ast.MethodDecl) []*ast.FieldDecl {
 	seen := make(map[string]bool)
 	var fields []*ast.FieldDecl
+
+	// Build a map of parameter names to their types
+	paramTypes := make(map[string]string)
+	for _, param := range method.Params {
+		if param.Type != "" {
+			paramTypes[param.Name] = param.Type
+		}
+	}
 
 	for _, stmt := range method.Body {
 		if assign, ok := stmt.(*ast.InstanceVarAssign); ok {
 			if !seen[assign.Name] {
 				seen[assign.Name] = true
-				fields = append(fields, &ast.FieldDecl{Name: assign.Name})
+
+				// Infer type from assignment source
+				fieldType := ""
+				if ident, ok := assign.Value.(*ast.Ident); ok {
+					// If assigned from a parameter, use its type
+					if pt, ok := paramTypes[ident.Name]; ok {
+						fieldType = pt
+					}
+				}
+
+				fields = append(fields, &ast.FieldDecl{Name: assign.Name, Type: fieldType})
 			}
 		}
 	}
@@ -411,20 +444,11 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 		// Parse parameters until ')'
 		if !p.curTokenIs(token.RPAREN) {
 			// First parameter
-			if !p.curTokenIs(token.IDENT) {
-				p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name",
-					p.curToken.Line))
+			param := p.parseTypedParam(seen)
+			if param == nil {
 				return nil
 			}
-			name := p.curToken.Literal
-			if seen[name] {
-				p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate parameter name %q",
-					p.curToken.Line, name))
-				return nil
-			}
-			seen[name] = true
-			method.Params = append(method.Params, &ast.Param{Name: name})
-			p.nextToken()
+			method.Params = append(method.Params, param)
 
 			// Additional parameters
 			for p.curTokenIs(token.COMMA) {
@@ -433,20 +457,11 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 				if p.curTokenIs(token.RPAREN) {
 					break
 				}
-				if !p.curTokenIs(token.IDENT) {
-					p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name after comma",
-						p.curToken.Line))
+				param := p.parseTypedParam(seen)
+				if param == nil {
 					return nil
 				}
-				name := p.curToken.Literal
-				if seen[name] {
-					p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate parameter name %q",
-						p.curToken.Line, name))
-					return nil
-				}
-				seen[name] = true
-				method.Params = append(method.Params, &ast.Param{Name: name})
-				p.nextToken()
+				method.Params = append(method.Params, param)
 			}
 		}
 
@@ -540,8 +555,8 @@ func (p *Parser) parseStatement() ast.Statement {
 	case token.DEFER:
 		return p.parseDeferStmt()
 	case token.IDENT:
-		// Check for assignment: ident = expr
-		if p.peekTokenIs(token.ASSIGN) {
+		// Check for assignment: ident = expr or ident : Type = expr
+		if p.peekTokenIs(token.ASSIGN) || p.peekTokenIs(token.COLON) {
 			return p.parseAssignStmt()
 		}
 	case token.AT:
@@ -698,6 +713,25 @@ func (p *Parser) skipTo(terminator token.TokenType) {
 func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	name := p.curToken.Literal
 	p.nextToken() // consume ident
+
+	// Check for optional type annotation: x : Type = value
+	var typeAnnotation string
+	if p.curTokenIs(token.COLON) {
+		p.nextToken() // consume ':'
+		if !p.curTokenIs(token.IDENT) {
+			p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after ':'",
+				p.curToken.Line))
+			return nil
+		}
+		typeAnnotation = p.curToken.Literal
+		p.nextToken() // consume type
+	}
+
+	if !p.curTokenIs(token.ASSIGN) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected '=' in assignment",
+			p.curToken.Line))
+		return nil
+	}
 	p.nextToken() // consume '='
 
 	value := p.parseExpression(LOWEST)
@@ -710,7 +744,7 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	p.nextToken() // move past expression
 	p.skipNewlines()
 
-	return &ast.AssignStmt{Name: name, Value: value}
+	return &ast.AssignStmt{Name: name, Type: typeAnnotation, Value: value}
 }
 
 func (p *Parser) parseIfStmt() *ast.IfStmt {

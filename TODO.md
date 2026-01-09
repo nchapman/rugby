@@ -150,30 +150,30 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 **Goal:** Add explicit type annotations following Go's philosophy.
 
 ### Lexer
-- [ ] Add COLON token (`:`)
+- [x] Add COLON token (`:`)
 
 ### Parser
-- [ ] Parse variable type annotations: `x : Int = 5`
-- [ ] Parse parameter type annotations: `def foo(x : String, y : Int)`
-- [ ] Update Param AST node to include optional Type field
-- [ ] Update AssignStmt AST node to include optional Type field
+- [x] Parse variable type annotations: `x : Int = 5`
+- [x] Parse parameter type annotations: `def foo(x : String, y : Int)`
+- [x] Update Param AST node to include optional Type field
+- [x] Update AssignStmt AST node to include optional Type field
 
 ### Codegen
-- [ ] Generate typed variable declarations: `x : Int = 5` → `var x int = 5`
-- [ ] Generate typed function parameters: `def foo(x : Int)` → `func foo(x int)`
-- [ ] Infer instance variable types from initialize parameter types
-  - Currently: `@name` → `name interface{}`
-  - With types: `def initialize(name : String)` + `@name = name` → `name string`
-- [ ] Keep `interface{}` default when no type annotation provided
+- [x] Generate typed variable declarations: `x : Int = 5` → `var x int = 5`
+- [x] Generate typed function parameters: `def foo(x : Int)` → `func foo(x int)`
+- [x] Infer instance variable types from initialize parameter types
+  - Previously: `@name` → `name interface{}`
+  - Now: `def initialize(name : String)` + `@name = name` → `name string`
+- [x] Keep `interface{}` default when no type annotation provided
 
 ### Type mappings (already exist in mapType function)
 - Rugby → Go: Int→int, String→string, Bool→bool, Float→float64, etc.
 
 ### Testing
-- [ ] Lexer tests for COLON token
-- [ ] Parser tests for type annotations
-- [ ] Codegen tests for typed variables, parameters, and instance variables
-- [ ] Verify untyped code still works (backward compatibility)
+- [x] Lexer tests for COLON token
+- [x] Parser tests for type annotations
+- [x] Codegen tests for typed variables, parameters, and instance variables
+- [x] Verify untyped code still works (backward compatibility)
 
 ### Deferred to later phases:
 - Optional types (`T?`) - complex, needs careful design

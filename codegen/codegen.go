@@ -169,7 +169,11 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 		if i > 0 {
 			g.buf.WriteString(", ")
 		}
-		g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+		if param.Type != "" {
+			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, mapType(param.Type)))
+		} else {
+			g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+		}
 	}
 	g.buf.WriteString(")")
 
@@ -212,7 +216,11 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			g.buf.WriteString("\n")
 		}
 		for _, field := range cls.Fields {
-			g.buf.WriteString(fmt.Sprintf("\t%s interface{}\n", field.Name))
+			if field.Type != "" {
+				g.buf.WriteString(fmt.Sprintf("\t%s %s\n", field.Name, mapType(field.Type)))
+			} else {
+				g.buf.WriteString(fmt.Sprintf("\t%s interface{}\n", field.Name))
+			}
 		}
 		g.buf.WriteString("}\n\n")
 	} else {
@@ -254,7 +262,11 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl) {
 		if i > 0 {
 			g.buf.WriteString(", ")
 		}
-		g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+		if param.Type != "" {
+			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, mapType(param.Type)))
+		} else {
+			g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+		}
 	}
 	g.buf.WriteString(fmt.Sprintf(") *%s {\n", className))
 
@@ -293,7 +305,11 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		if i > 0 {
 			g.buf.WriteString(", ")
 		}
-		g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+		if param.Type != "" {
+			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, mapType(param.Type)))
+		} else {
+			g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+		}
 	}
 	g.buf.WriteString(")")
 
@@ -336,10 +352,17 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 
 func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 	g.writeIndent()
-	g.buf.WriteString(s.Name)
-	if g.vars[s.Name] {
+	if s.Type != "" && !g.vars[s.Name] {
+		// Typed declaration: var x int = value
+		g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
+		g.vars[s.Name] = true
+	} else if g.vars[s.Name] {
+		// Reassignment: x = value
+		g.buf.WriteString(s.Name)
 		g.buf.WriteString(" = ")
 	} else {
+		// Untyped declaration: x := value
+		g.buf.WriteString(s.Name)
 		g.buf.WriteString(" := ")
 		g.vars[s.Name] = true
 	}

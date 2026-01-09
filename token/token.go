@@ -45,6 +45,7 @@ const (
 	DOT        TokenType = "."
 	PIPE       TokenType = "|"
 	AT         TokenType = "@"
+	COLON      TokenType = ":"
 
 	// Keywords
 	IMPORT TokenType = "IMPORT"

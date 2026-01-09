@@ -944,3 +944,107 @@ end`
 	assertContains(t, output, `func NewPoint(x interface{}, y interface{}) *Point`)
 	assertContains(t, output, `p := NewPoint(10, 20)`)
 }
+
+func TestGenerateTypedVariable(t *testing.T) {
+	input := `def main
+  x : Int = 5
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `var x int = 5`)
+}
+
+func TestGenerateTypedParams(t *testing.T) {
+	input := `def add(a : Int, b : Int) -> Int
+  return a
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func add(a int, b int) int`)
+}
+
+func TestGenerateMixedParams(t *testing.T) {
+	input := `def foo(a : Int, b, c : String)
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func foo(a int, b interface{}, c string)`)
+}
+
+func TestGenerateTypedInstanceVars(t *testing.T) {
+	input := `class User
+  def initialize(name : String, age : Int)
+    @name = name
+    @age = age
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Check struct fields have inferred types
+	assertContains(t, output, `name string`)
+	assertContains(t, output, `age int`)
+	// Check constructor has typed params
+	assertContains(t, output, `func NewUser(name string, age int) *User`)
+}
+
+func TestGenerateTypedMethodParams(t *testing.T) {
+	input := `class Calculator
+  def initialize
+  end
+
+  def add(a : Int, b : Int) -> Int
+    return a
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func (c *Calculator) Add(a int, b int) int`)
+}
+
+func TestGenerateUntypedStillWorks(t *testing.T) {
+	input := `def add(a, b)
+  return a
+end
+
+def main
+  x = 5
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func add(a interface{}, b interface{})`)
+	assertContains(t, output, `x := 5`)
+}
+
+func TestGenerateTypedReassignment(t *testing.T) {
+	input := `def main
+  x : Int = 5
+  x = 10
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `var x int = 5`)
+	// Second assignment should use = not :=
+	if strings.Count(output, "var x int") != 1 {
+		t.Errorf("expected exactly 1 'var x int', got output:\n%s", output)
+	}
+	assertContains(t, output, `x = 10`)
+}

@@ -1653,3 +1653,239 @@ end`
 		t.Errorf("expected instance var 'name', got %q", ivar.Name)
 	}
 }
+
+func TestTypedAssignment(t *testing.T) {
+	input := `def main
+  x : Int = 5
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	if len(fn.Body) != 1 {
+		t.Fatalf("expected 1 statement in body, got %d", len(fn.Body))
+	}
+
+	assign, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
+
+	if assign.Name != "x" {
+		t.Errorf("expected name 'x', got %q", assign.Name)
+	}
+
+	if assign.Type != "Int" {
+		t.Errorf("expected type 'Int', got %q", assign.Type)
+	}
+
+	intLit, ok := assign.Value.(*ast.IntLit)
+	if !ok {
+		t.Fatalf("expected IntLit, got %T", assign.Value)
+	}
+
+	if intLit.Value != 5 {
+		t.Errorf("expected value 5, got %d", intLit.Value)
+	}
+}
+
+func TestTypedFunctionParams(t *testing.T) {
+	input := `def add(a : Int, b : Int) -> Int
+  return a
+end
+
+def main
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	if fn.Name != "add" {
+		t.Errorf("expected function name 'add', got %q", fn.Name)
+	}
+
+	if len(fn.Params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(fn.Params))
+	}
+
+	if fn.Params[0].Name != "a" {
+		t.Errorf("expected param name 'a', got %q", fn.Params[0].Name)
+	}
+	if fn.Params[0].Type != "Int" {
+		t.Errorf("expected param type 'Int', got %q", fn.Params[0].Type)
+	}
+
+	if fn.Params[1].Name != "b" {
+		t.Errorf("expected param name 'b', got %q", fn.Params[1].Name)
+	}
+	if fn.Params[1].Type != "Int" {
+		t.Errorf("expected param type 'Int', got %q", fn.Params[1].Type)
+	}
+}
+
+func TestMixedTypedUntypedParams(t *testing.T) {
+	input := `def foo(a : Int, b, c : String)
+end
+
+def main
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	if len(fn.Params) != 3 {
+		t.Fatalf("expected 3 params, got %d", len(fn.Params))
+	}
+
+	// a : Int
+	if fn.Params[0].Name != "a" || fn.Params[0].Type != "Int" {
+		t.Errorf("param 0: expected a:Int, got %s:%s", fn.Params[0].Name, fn.Params[0].Type)
+	}
+
+	// b (untyped)
+	if fn.Params[1].Name != "b" || fn.Params[1].Type != "" {
+		t.Errorf("param 1: expected b:(empty), got %s:%s", fn.Params[1].Name, fn.Params[1].Type)
+	}
+
+	// c : String
+	if fn.Params[2].Name != "c" || fn.Params[2].Type != "String" {
+		t.Errorf("param 2: expected c:String, got %s:%s", fn.Params[2].Name, fn.Params[2].Type)
+	}
+}
+
+func TestClassFieldTypeInference(t *testing.T) {
+	input := `class User
+  def initialize(name : String, age : Int)
+    @name = name
+    @age = age
+  end
+end
+
+def main
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls, ok := program.Declarations[0].(*ast.ClassDecl)
+	if !ok {
+		t.Fatalf("expected ClassDecl, got %T", program.Declarations[0])
+	}
+
+	if len(cls.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(cls.Fields))
+	}
+
+	// Check field types are inferred from parameter types
+	fieldTypes := make(map[string]string)
+	for _, f := range cls.Fields {
+		fieldTypes[f.Name] = f.Type
+	}
+
+	if fieldTypes["name"] != "String" {
+		t.Errorf("expected field 'name' to have type 'String', got %q", fieldTypes["name"])
+	}
+	if fieldTypes["age"] != "Int" {
+		t.Errorf("expected field 'age' to have type 'Int', got %q", fieldTypes["age"])
+	}
+}
+
+func TestTypedMethodParams(t *testing.T) {
+	input := `class Calculator
+  def initialize
+  end
+
+  def add(a : Int, b : Int) -> Int
+    return a
+  end
+end
+
+def main
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls, ok := program.Declarations[0].(*ast.ClassDecl)
+	if !ok {
+		t.Fatalf("expected ClassDecl, got %T", program.Declarations[0])
+	}
+
+	// Find the add method
+	var addMethod *ast.MethodDecl
+	for _, m := range cls.Methods {
+		if m.Name == "add" {
+			addMethod = m
+			break
+		}
+	}
+
+	if addMethod == nil {
+		t.Fatal("expected to find 'add' method")
+	}
+
+	if len(addMethod.Params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(addMethod.Params))
+	}
+
+	if addMethod.Params[0].Name != "a" || addMethod.Params[0].Type != "Int" {
+		t.Errorf("param 0: expected a:Int, got %s:%s", addMethod.Params[0].Name, addMethod.Params[0].Type)
+	}
+	if addMethod.Params[1].Name != "b" || addMethod.Params[1].Type != "Int" {
+		t.Errorf("param 1: expected b:Int, got %s:%s", addMethod.Params[1].Name, addMethod.Params[1].Type)
+	}
+}
+
+func TestUntypedAssignmentStillWorks(t *testing.T) {
+	input := `def main
+  x = 5
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	assign, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
+
+	if assign.Name != "x" {
+		t.Errorf("expected name 'x', got %q", assign.Name)
+	}
+
+	if assign.Type != "" {
+		t.Errorf("expected empty type for untyped assignment, got %q", assign.Type)
+	}
+}

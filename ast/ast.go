@@ -37,6 +37,7 @@ func (i *ImportDecl) stmtNode() {}
 // Param represents a function parameter
 type Param struct {
 	Name string
+	Type string // optional type annotation, empty if not specified
 }
 
 // FuncDecl represents a function definition
@@ -179,6 +180,7 @@ func (u *UnaryExpr) exprNode() {}
 // AssignStmt represents variable assignment
 type AssignStmt struct {
 	Name  string
+	Type  string // optional type annotation, empty if not specified
 	Value Expression
 }
 
@@ -241,6 +243,7 @@ func (c *ClassDecl) stmtNode() {}
 // FieldDecl represents a struct field (inferred from @var in initialize)
 type FieldDecl struct {
 	Name string // field name (without @)
+	Type string // inferred from initialize params or explicit annotation
 }
 
 // MethodDecl represents a method definition within a class
