@@ -60,8 +60,9 @@ const (
 	OR     TokenType = "OR"
 	NOT    TokenType = "NOT"
 	AS     TokenType = "AS"
-	DEFER  TokenType = "DEFER"
-	DO     TokenType = "DO"
+	DEFER TokenType = "DEFER"
+	DO    TokenType = "DO"
+	CLASS TokenType = "CLASS"
 )
 
 type Token struct {
@@ -86,8 +87,9 @@ var keywords = map[string]TokenType{
 	"or":     OR,
 	"not":    NOT,
 	"as":     AS,
-	"defer":  DEFER,
-	"do":     DO,
+	"defer": DEFER,
+	"do":    DO,
+	"class": CLASS,
 }
 
 func LookupIdent(ident string) TokenType {

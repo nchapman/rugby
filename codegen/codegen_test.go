@@ -767,3 +767,102 @@ end`
 	assertContains(t, output, `for i := 0; i < 5; i++`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
+
+func TestEmptyClassCodegen(t *testing.T) {
+	input := `class User
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `type User struct{}`)
+}
+
+func TestClassWithMethodCodegen(t *testing.T) {
+	input := `class User
+  def greet
+    puts "hello"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `type User struct{}`)
+	assertContains(t, output, `func (u User) Greet()`)
+	assertContains(t, output, `runtime.Puts("hello")`)
+}
+
+func TestClassMethodWithParams(t *testing.T) {
+	input := `class Calculator
+  def add(a, b) -> Int
+    return a + b
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `type Calculator struct{}`)
+	assertContains(t, output, `func (c Calculator) Add(a interface{}, b interface{}) int`)
+	assertContains(t, output, `return (a + b)`)
+}
+
+func TestClassMethodSnakeCaseToCamelCase(t *testing.T) {
+	input := `class User
+  def get_name -> String
+    "test"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func (u User) GetName() string`)
+}
+
+func TestClassWithMultipleMethods(t *testing.T) {
+	input := `class Counter
+  def inc
+    puts "inc"
+  end
+
+  def dec
+    puts "dec"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `type Counter struct{}`)
+	assertContains(t, output, `func (c Counter) Inc()`)
+	assertContains(t, output, `func (c Counter) Dec()`)
+}
+
+func TestClassWithEmbedding(t *testing.T) {
+	input := `class Service < Logger
+  def run
+    puts "running"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `type Service struct {`)
+	assertContains(t, output, "Logger")
+	assertContains(t, output, `func (s Service) Run()`)
+}

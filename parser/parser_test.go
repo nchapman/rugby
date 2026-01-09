@@ -1374,3 +1374,182 @@ end`
 		t.Fatalf("expected 2 block params, got %d", len(call.Block.Params))
 	}
 }
+
+func TestEmptyClass(t *testing.T) {
+	input := `class User
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	cls, ok := program.Declarations[0].(*ast.ClassDecl)
+	if !ok {
+		t.Fatalf("expected ClassDecl, got %T", program.Declarations[0])
+	}
+
+	if cls.Name != "User" {
+		t.Errorf("expected class name 'User', got %q", cls.Name)
+	}
+
+	if len(cls.Methods) != 0 {
+		t.Errorf("expected 0 methods, got %d", len(cls.Methods))
+	}
+}
+
+func TestClassWithMethod(t *testing.T) {
+	input := `class User
+  def greet
+    puts "hello"
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+
+	if cls.Name != "User" {
+		t.Errorf("expected class name 'User', got %q", cls.Name)
+	}
+
+	if len(cls.Methods) != 1 {
+		t.Fatalf("expected 1 method, got %d", len(cls.Methods))
+	}
+
+	method := cls.Methods[0]
+	if method.Name != "greet" {
+		t.Errorf("expected method name 'greet', got %q", method.Name)
+	}
+
+	if len(method.Body) != 1 {
+		t.Errorf("expected 1 statement in method body, got %d", len(method.Body))
+	}
+}
+
+func TestClassWithMethodParams(t *testing.T) {
+	input := `class Calculator
+  def add(a, b) -> Int
+    a + b
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+	method := cls.Methods[0]
+
+	if method.Name != "add" {
+		t.Errorf("expected method name 'add', got %q", method.Name)
+	}
+
+	if len(method.Params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(method.Params))
+	}
+
+	if method.Params[0].Name != "a" {
+		t.Errorf("expected first param 'a', got %q", method.Params[0].Name)
+	}
+
+	if method.Params[1].Name != "b" {
+		t.Errorf("expected second param 'b', got %q", method.Params[1].Name)
+	}
+
+	if len(method.ReturnTypes) != 1 || method.ReturnTypes[0] != "Int" {
+		t.Errorf("expected return type 'Int', got %v", method.ReturnTypes)
+	}
+}
+
+func TestClassWithMultipleMethods(t *testing.T) {
+	input := `class Counter
+  def inc
+    puts "increment"
+  end
+
+  def dec
+    puts "decrement"
+  end
+
+  def value -> Int
+    0
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+
+	if len(cls.Methods) != 3 {
+		t.Fatalf("expected 3 methods, got %d", len(cls.Methods))
+	}
+
+	expectedNames := []string{"inc", "dec", "value"}
+	for i, name := range expectedNames {
+		if cls.Methods[i].Name != name {
+			t.Errorf("expected method %d name %q, got %q", i, name, cls.Methods[i].Name)
+		}
+	}
+}
+
+func TestClassWithParent(t *testing.T) {
+	input := `class Service < Logger
+  def run
+    puts "running"
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+
+	if cls.Name != "Service" {
+		t.Errorf("expected class name 'Service', got %q", cls.Name)
+	}
+
+	if cls.Parent != "Logger" {
+		t.Errorf("expected parent 'Logger', got %q", cls.Parent)
+	}
+}
+
+func TestClassMissingName(t *testing.T) {
+	input := `class end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected error for missing class name, got none")
+	}
+}
+
+func TestClassDuplicateMethodParams(t *testing.T) {
+	input := `class User
+  def add(a, a)
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected error for duplicate parameter name, got none")
+	}
+}

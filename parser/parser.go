@@ -113,6 +113,10 @@ func (p *Parser) ParseProgram() *ast.Program {
 			if fn := p.parseFuncDecl(); fn != nil {
 				program.Declarations = append(program.Declarations, fn)
 			}
+		case token.CLASS:
+			if cls := p.parseClassDecl(); cls != nil {
+				program.Declarations = append(program.Declarations, cls)
+			}
 		default:
 			p.errors = append(p.errors, fmt.Sprintf("line %d: unexpected token %s",
 				p.curToken.Line, p.curToken.Type))
@@ -286,6 +290,198 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 	p.nextToken() // consume 'end'
 
 	return fn
+}
+
+func (p *Parser) parseClassDecl() *ast.ClassDecl {
+	p.nextToken() // consume 'class'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected class name after 'class'",
+			p.curToken.Line))
+		return nil
+	}
+
+	cls := &ast.ClassDecl{Name: p.curToken.Literal}
+	p.nextToken()
+
+	// Parse optional parent class: class Service < Logger (Phase C)
+	if p.curTokenIs(token.LT) {
+		p.nextToken() // consume '<'
+		if !p.curTokenIs(token.IDENT) {
+			p.errors = append(p.errors, fmt.Sprintf("line %d: expected parent class name after '<'",
+				p.curToken.Line))
+			return nil
+		}
+		cls.Parent = p.curToken.Literal
+		p.nextToken()
+	}
+
+	p.skipNewlines()
+
+	// Parse methods until 'end'
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.END) {
+			break
+		}
+
+		if p.curTokenIs(token.DEF) {
+			if method := p.parseMethodDecl(); method != nil {
+				cls.Methods = append(cls.Methods, method)
+			}
+		} else {
+			p.errors = append(p.errors, fmt.Sprintf("line %d: unexpected token %s in class body, expected 'def' or 'end'",
+				p.curToken.Line, p.curToken.Type))
+			p.nextToken()
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'end' to close class",
+			p.curToken.Line))
+		return nil
+	}
+	p.nextToken() // consume 'end'
+
+	return cls
+}
+
+func (p *Parser) parseMethodDecl() *ast.MethodDecl {
+	p.nextToken() // consume 'def'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected method name after def",
+			p.curToken.Line))
+		return nil
+	}
+
+	method := &ast.MethodDecl{Name: p.curToken.Literal}
+	p.nextToken()
+
+	// Parse optional parameter list
+	if p.curTokenIs(token.LPAREN) {
+		p.nextToken() // consume '('
+		seen := make(map[string]bool)
+
+		// Parse parameters until ')'
+		if !p.curTokenIs(token.RPAREN) {
+			// First parameter
+			if !p.curTokenIs(token.IDENT) {
+				p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name",
+					p.curToken.Line))
+				return nil
+			}
+			name := p.curToken.Literal
+			if seen[name] {
+				p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate parameter name %q",
+					p.curToken.Line, name))
+				return nil
+			}
+			seen[name] = true
+			method.Params = append(method.Params, &ast.Param{Name: name})
+			p.nextToken()
+
+			// Additional parameters
+			for p.curTokenIs(token.COMMA) {
+				p.nextToken() // consume ','
+				// Allow trailing comma
+				if p.curTokenIs(token.RPAREN) {
+					break
+				}
+				if !p.curTokenIs(token.IDENT) {
+					p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name after comma",
+						p.curToken.Line))
+					return nil
+				}
+				name := p.curToken.Literal
+				if seen[name] {
+					p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate parameter name %q",
+						p.curToken.Line, name))
+					return nil
+				}
+				seen[name] = true
+				method.Params = append(method.Params, &ast.Param{Name: name})
+				p.nextToken()
+			}
+		}
+
+		if !p.curTokenIs(token.RPAREN) {
+			p.errors = append(p.errors, fmt.Sprintf("line %d: expected ')' after parameters",
+				p.curToken.Line))
+			return nil
+		}
+		p.nextToken() // consume ')'
+	}
+
+	// Parse optional return type: -> Type or -> (Type1, Type2)
+	if p.curTokenIs(token.ARROW) {
+		p.nextToken() // consume '->'
+
+		if p.curTokenIs(token.LPAREN) {
+			// Multiple return types: (Type1, Type2, ...)
+			p.nextToken() // consume '('
+
+			if !p.curTokenIs(token.IDENT) {
+				p.errors = append(p.errors, fmt.Sprintf("line %d: expected type in return type list",
+					p.curToken.Line))
+				return nil
+			}
+			method.ReturnTypes = append(method.ReturnTypes, p.curToken.Literal)
+			p.nextToken()
+
+			for p.curTokenIs(token.COMMA) {
+				p.nextToken() // consume ','
+				// Allow trailing comma
+				if p.curTokenIs(token.RPAREN) {
+					break
+				}
+				if !p.curTokenIs(token.IDENT) {
+					p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after comma",
+						p.curToken.Line))
+					return nil
+				}
+				method.ReturnTypes = append(method.ReturnTypes, p.curToken.Literal)
+				p.nextToken()
+			}
+
+			if !p.curTokenIs(token.RPAREN) {
+				p.errors = append(p.errors, fmt.Sprintf("line %d: expected ')' after return types",
+					p.curToken.Line))
+				return nil
+			}
+			p.nextToken() // consume ')'
+		} else if p.curTokenIs(token.IDENT) {
+			// Single return type
+			method.ReturnTypes = append(method.ReturnTypes, p.curToken.Literal)
+			p.nextToken()
+		} else {
+			p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after ->",
+				p.curToken.Line))
+			return nil
+		}
+	}
+
+	p.skipNewlines()
+
+	// Parse body until 'end'
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.END) {
+			break
+		}
+		if stmt := p.parseStatement(); stmt != nil {
+			method.Body = append(method.Body, stmt)
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'end' to close method",
+			p.curToken.Line))
+		return nil
+	}
+	p.nextToken() // consume 'end'
+
+	return method
 }
 
 func (p *Parser) parseStatement() ast.Statement {

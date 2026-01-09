@@ -226,3 +226,24 @@ type DeferStmt struct {
 
 func (d *DeferStmt) node()     {}
 func (d *DeferStmt) stmtNode() {}
+
+// ClassDecl represents a class definition
+type ClassDecl struct {
+	Name    string        // class name (e.g., "User")
+	Parent  string        // embedded type, empty if none (for Phase C)
+	Methods []*MethodDecl // methods defined in class
+}
+
+func (c *ClassDecl) node()     {}
+func (c *ClassDecl) stmtNode() {}
+
+// MethodDecl represents a method definition within a class
+type MethodDecl struct {
+	Name        string      // method name (may end with ! for pointer receiver)
+	Params      []*Param    // parameters
+	ReturnTypes []string    // return types
+	Body        []Statement // method body
+}
+
+func (m *MethodDecl) node()     {}
+func (m *MethodDecl) stmtNode() {}

@@ -133,6 +133,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 	switch s := stmt.(type) {
 	case *ast.FuncDecl:
 		g.genFuncDecl(s)
+	case *ast.ClassDecl:
+		g.genClassDecl(s)
 	case *ast.ExprStmt:
 		g.writeIndent()
 		g.genExpr(s.Expr)
@@ -191,6 +193,73 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	}
 	g.indent--
 	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
+	className := cls.Name
+
+	// Emit struct definition (empty for Phase A - fields added in Phase B)
+	g.buf.WriteString(fmt.Sprintf("type %s struct {", className))
+	if cls.Parent != "" {
+		g.buf.WriteString("\n\t")
+		g.buf.WriteString(cls.Parent)
+		g.buf.WriteString("\n")
+	}
+	g.buf.WriteString("}\n\n")
+
+	// Emit methods
+	for _, method := range cls.Methods {
+		g.genMethodDecl(className, method)
+	}
+}
+
+func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
+	g.vars = make(map[string]bool) // reset vars for each method
+
+	// Mark parameters as declared variables
+	for _, param := range method.Params {
+		g.vars[param.Name] = true
+	}
+
+	// Receiver name: first letter of class, lowercase
+	receiverName := strings.ToLower(className[:1])
+
+	// Method name: convert snake_case to CamelCase
+	methodName := snakeToCamel(method.Name)
+
+	// Generate method signature: func (r ClassName) MethodName(params) returns
+	g.buf.WriteString(fmt.Sprintf("func (%s %s) %s(", receiverName, className, methodName))
+	for i, param := range method.Params {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+	}
+	g.buf.WriteString(")")
+
+	// Generate return type(s) if specified
+	if len(method.ReturnTypes) == 1 {
+		g.buf.WriteString(" ")
+		g.buf.WriteString(mapType(method.ReturnTypes[0]))
+	} else if len(method.ReturnTypes) > 1 {
+		g.buf.WriteString(" (")
+		for i, rt := range method.ReturnTypes {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+			g.buf.WriteString(mapType(rt))
+		}
+		g.buf.WriteString(")")
+	}
+
+	g.buf.WriteString(" {\n")
+
+	g.indent++
+	for _, stmt := range method.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+	g.buf.WriteString("}\n\n")
 }
 
 func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
