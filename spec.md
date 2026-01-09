@@ -574,16 +574,203 @@ Rule: `defer <callable>` compiles to `defer f()`.
 
 ---
 
-## 11. Collections (Prelude)
+## 11. Runtime Package
 
-Minimal standard prelude that lowers to Go:
+Rugby provides a Go runtime package (`rugby/runtime`) that gives Ruby-like ergonomics to Go's built-in types. This is what makes Rugby feel like Ruby while compiling to idiomatic Go.
 
-* `arr.each { |x| ... }` → range loop
-* `arr.map { |x| ... }` → allocate + range loop
-* `arr.compact` for `T?` arrays → filter present values
-* `s.to_i?` → `strconv.Atoi`
+### 11.1 Design principles
 
-Keep it small; only add features that map cleanly to Go.
+* **Wrap, don't reinvent:** Functions wrap Go stdlib, adding Ruby-style APIs
+* **Type-safe generics:** Use Go 1.18+ generics for collections
+* **Zero-cost when unused:** Only imported when Rugby code uses these methods
+* **Predictable mapping:** Each Rugby method maps to a clear runtime function
+
+### 11.2 Package organization
+
+```
+runtime/
+├── array.go      # Array/slice methods
+├── map.go        # Map methods
+├── string.go     # String methods
+├── int.go        # Integer methods
+├── float.go      # Float methods
+├── bytes.go      # Byte slice methods
+└── conv.go       # Type conversions
+```
+
+### 11.3 Array methods (`Array[T]`)
+
+**Iteration:**
+* `each { |x| }` → inline range loop (no runtime call)
+* `each_with_index { |x, i| }` → inline range loop
+
+**Transformation:**
+* `map { |x| }` → `runtime.Map(arr, fn)` → `[]R`
+* `select { |x| }` / `filter { |x| }` → `runtime.Select(arr, fn)` → `[]T`
+* `reject { |x| }` → `runtime.Reject(arr, fn)` → `[]T`
+* `compact` → `runtime.Compact(arr)` → filters nil/zero values
+
+**Search:**
+* `find { |x| }` / `detect { |x| }` → `runtime.Find(arr, fn)` → `T?`
+* `any? { |x| }` → `runtime.Any(arr, fn)` → `Bool`
+* `all? { |x| }` → `runtime.All(arr, fn)` → `Bool`
+* `none? { |x| }` → `runtime.None(arr, fn)` → `Bool`
+* `include?(val)` / `contains?(val)` → `runtime.Contains(arr, val)` → `Bool`
+
+**Aggregation:**
+* `reduce(init) { |acc, x| }` → `runtime.Reduce(arr, init, fn)` → `R`
+* `sum` → `runtime.Sum(arr)` (numeric arrays)
+* `min` / `max` → `runtime.Min(arr)` / `runtime.Max(arr)` → `T?`
+
+**Access:**
+* `first` → `runtime.First(arr)` → `T?`
+* `last` → `runtime.Last(arr)` → `T?`
+* `length` / `size` → `len(arr)` (inlined)
+* `empty?` → `len(arr) == 0` (inlined)
+
+**Mutation:**
+* `reverse!` → `runtime.Reverse(arr)` (in-place)
+* `sort!` → `runtime.Sort(arr)` (in-place, requires `Ordered`)
+* `sort_by! { |x| }` → `runtime.SortBy(arr, fn)`
+
+**Non-mutating variants:**
+* `reverse` → `runtime.Reversed(arr)` → new slice
+* `sort` → `runtime.Sorted(arr)` → new slice
+
+### 11.4 Map methods (`Map[K, V]`)
+
+**Iteration:**
+* `each { |k, v| }` → inline range loop
+* `each_key { |k| }` → inline range loop
+* `each_value { |v| }` → inline range loop
+
+**Access:**
+* `keys` → `runtime.Keys(m)` → `[]K`
+* `values` → `runtime.Values(m)` → `[]V`
+* `length` / `size` → `len(m)` (inlined)
+* `empty?` → `len(m) == 0` (inlined)
+* `has_key?(k)` / `key?(k)` → `_, ok := m[k]` (inlined)
+* `fetch(k, default)` → `runtime.Fetch(m, k, default)` → `V`
+
+**Transformation:**
+* `select { |k, v| }` → `runtime.MapSelect(m, fn)` → `Map[K, V]`
+* `reject { |k, v| }` → `runtime.MapReject(m, fn)` → `Map[K, V]`
+* `merge(other)` → `runtime.Merge(m, other)` → `Map[K, V]`
+
+### 11.5 String methods
+
+**Query:**
+* `length` / `size` → `len(s)` (inlined, byte length)
+* `char_length` → `runtime.CharLength(s)` (rune count)
+* `empty?` → `s == ""` (inlined)
+* `include?(sub)` / `contains?(sub)` → `strings.Contains` (inlined)
+* `start_with?(prefix)` → `strings.HasPrefix` (inlined)
+* `end_with?(suffix)` → `strings.HasSuffix` (inlined)
+
+**Transformation:**
+* `upcase` → `strings.ToUpper` (inlined)
+* `downcase` → `strings.ToLower` (inlined)
+* `strip` → `strings.TrimSpace` (inlined)
+* `lstrip` / `rstrip` → `strings.TrimLeft` / `TrimRight`
+* `replace(old, new)` → `strings.ReplaceAll` (inlined)
+* `reverse` → `runtime.StringReverse(s)`
+
+**Splitting/Joining:**
+* `split(sep)` → `strings.Split` (inlined)
+* `chars` → `runtime.Chars(s)` → `[]String` (splits into characters)
+* `lines` → `strings.Split(s, "\n")` (inlined)
+* `bytes` → `[]byte(s)` (inlined)
+
+**Conversion:**
+* `to_i` → `runtime.MustAtoi(s)` (panics on failure)
+* `to_i?` → `runtime.StringToInt(s)` → `Int?`
+* `to_f?` → `runtime.StringToFloat(s)` → `Float?`
+
+### 11.6 Integer methods
+
+**Predicates:**
+* `even?` → `n % 2 == 0` (inlined)
+* `odd?` → `n % 2 != 0` (inlined)
+* `zero?` → `n == 0` (inlined)
+* `positive?` → `n > 0` (inlined)
+* `negative?` → `n < 0` (inlined)
+
+**Math:**
+* `abs` → `runtime.Abs(n)` (or `math.Abs` for floats)
+* `clamp(min, max)` → `runtime.Clamp(n, min, max)`
+
+**Iteration:**
+* `times { |i| }` → `for i := 0; i < n; i++` (inlined)
+* `upto(max) { |i| }` → `for i := n; i <= max; i++` (inlined)
+* `downto(min) { |i| }` → `for i := n; i >= min; i--` (inlined)
+
+**Conversion:**
+* `to_s` → `strconv.Itoa(n)` (inlined)
+* `to_f` → `float64(n)` (inlined)
+
+### 11.7 Float methods
+
+**Rounding:**
+* `floor` → `math.Floor` (inlined)
+* `ceil` → `math.Ceil` (inlined)
+* `round` → `math.Round` (inlined)
+* `truncate` → `math.Trunc` (inlined)
+
+**Predicates:**
+* `zero?` → `f == 0.0` (inlined)
+* `positive?` / `negative?` → comparison (inlined)
+* `nan?` → `math.IsNaN(f)` (inlined)
+* `infinite?` → `math.IsInf(f, 0)` (inlined)
+
+**Conversion:**
+* `to_i` → `int(f)` (inlined)
+* `to_s` → `strconv.FormatFloat` (inlined)
+
+### 11.8 Codegen integration
+
+The compiler recognizes Rugby method calls and either:
+1. **Inlines** simple operations (predicates, length, type casts)
+2. **Emits runtime calls** for complex operations
+
+Example:
+```ruby
+nums = [1, 2, 3, 4, 5]
+evens = nums.select { |n| n.even? }
+sum = evens.reduce(0) { |acc, n| acc + n }
+```
+
+Compiles to:
+```go
+nums := []int{1, 2, 3, 4, 5}
+evens := runtime.Select(nums, func(n int) bool { return n % 2 == 0 })
+sum := runtime.Reduce(evens, 0, func(acc, n int) int { return acc + n })
+```
+
+### 11.9 Global functions (kernel)
+
+Rugby provides top-level functions similar to Ruby's Kernel methods. These are available without qualification.
+
+**I/O (inlined to fmt):**
+* `puts(args...)` → `fmt.Println(args...)` - print with newline
+* `print(args...)` → `fmt.Print(args...)` - print without newline
+* `p(args...)` → debug print with inspect (uses `runtime.P`)
+
+**Program control:**
+* `exit(code)` → `os.Exit(code)` (inlined)
+* `exit` → `os.Exit(0)` (inlined)
+* `sleep(seconds)` → `runtime.Sleep(seconds)` - pause execution
+* `panic(msg)` → `panic(msg)` (Go builtin)
+
+**Input:**
+* `gets` → `runtime.Gets()` - read line from stdin
+
+**Utilities:**
+* `rand(n)` → `runtime.RandInt(n)` - random int [0, n)
+* `rand` → `runtime.RandFloat()` - random float [0.0, 1.0)
+
+### 11.10 Import generation
+
+The compiler automatically adds `import "rugby/runtime"` when runtime functions are used. If only inlined operations are used, no import is added.
 
 ---
 

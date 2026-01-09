@@ -3,6 +3,7 @@
 Features in implementation order, building incrementally.
 
 **Recent spec updates (see spec.md):**
+- **Runtime package (11):** Full Go runtime with Ruby-like stdlib ergonomics
 - Return statements (6.3): explicit + implicit returns
 - Block semantics (5.4): iteration-only for MVP, not closures
 - Instance variables (7.2.1): types inferred from `initialize`
@@ -49,7 +50,7 @@ Local function names are passed through as-is. Full behavior once `pub` is imple
 - Reserved word escaping (spec 9.7): suffix `_` for internal, error for `pub`
 This requires `pub` keyword support (Phase 8) to be fully correct.
 
-## Phase 5: Collections
+## Phase 5: Collections & Blocks
 - [x] Array literals (`[1, 2, 3]`)
 - [x] Array indexing (`arr[0]`)
 - [x] Map literals (`{"a" => 1}`)
@@ -65,8 +66,70 @@ This requires `pub` keyword support (Phase 8) to be fully correct.
   - [x] Proper variable scope tracking in blocks
   - [x] Duplicate block parameter detection
   - [x] Nested blocks support
-  - [ ] Create `rugby` runtime package for stdlib functions
-  - [ ] Add more array methods: `select`, `reject`, `reduce`, `find`, etc.
+
+## Phase 5b: Runtime Package
+Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md Section 11).
+
+### Setup
+- [x] Create `runtime/` directory structure
+- [x] Set up Go module for runtime package
+- [ ] Add runtime import generation to codegen (auto-import when used)
+
+### Array methods (`runtime/array.go`)
+- [x] `Select[T]([]T, func(T) bool) []T` - filter elements
+- [x] `Reject[T]([]T, func(T) bool) []T` - inverse filter
+- [x] `Map[T,R]([]T, func(T) R) []R` - transform elements (replace IIFE)
+- [x] `Reduce[T,R]([]T, R, func(R,T) R) R` - fold/accumulate
+- [x] `Find[T]([]T, func(T) bool) (T, bool)` - first match
+- [x] `Any[T]([]T, func(T) bool) bool` - any match?
+- [x] `All[T]([]T, func(T) bool) bool` - all match?
+- [x] `None[T]([]T, func(T) bool) bool` - no match?
+- [x] `Contains[T comparable]([]T, T) bool` - includes value?
+- [x] `First[T]([]T) (T, bool)` - first element
+- [x] `Last[T]([]T) (T, bool)` - last element
+- [x] `Reverse[T]([]T)` - in-place reverse
+- [x] `Reversed[T]([]T) []T` - return reversed copy
+- [x] `Sum` / `Min` / `Max` for numeric slices
+
+### Map methods (`runtime/map.go`)
+- [x] `Keys[K,V](map[K]V) []K`
+- [x] `Values[K,V](map[K]V) []V`
+- [x] `Merge[K,V](map[K]V, map[K]V) map[K]V`
+- [x] `MapSelect[K,V](map[K]V, func(K,V) bool) map[K]V`
+- [x] `MapReject[K,V](map[K]V, func(K,V) bool) map[K]V`
+- [x] `Fetch[K,V](map[K]V, K, V) V` - get with default
+
+### String methods (`runtime/string.go`)
+- [x] `Chars(string) []string` - split into characters
+- [x] `CharLength(string) int` - rune count
+- [x] `StringReverse(string) string`
+- [x] `StringToInt(string) (int, bool)` - safe parse
+- [x] `StringToFloat(string) (float64, bool)`
+- [x] `MustAtoi(string) int` - panic on failure
+
+### Integer methods (`runtime/int.go`)
+- [x] `Abs(int) int`
+- [x] `Clamp(int, int, int) int`
+
+### Global/Kernel functions (`runtime/io.go`)
+- [x] `P(args...)` - debug print with %#v formatting
+- [x] `Gets()` - read line from stdin
+- [x] `GetsWithPrompt(prompt)` - print prompt, read line
+- [x] `Sleep(seconds)` - pause execution (float seconds)
+- [x] `SleepMs(ms)` - pause execution (int milliseconds)
+- [x] `RandInt(n)` - random int [0, n)
+- [x] `RandFloat()` - random float [0.0, 1.0)
+- [x] `RandRange(min, max)` - random int [min, max]
+
+### Codegen updates
+- [ ] Update `map` to use `runtime.Map()` instead of IIFE
+- [ ] Add `select`/`filter` block codegen → `runtime.Select()`
+- [ ] Add `reject` block codegen → `runtime.Reject()`
+- [ ] Add `reduce` block codegen → `runtime.Reduce()`
+- [ ] Add `find` block codegen → `runtime.Find()`
+- [ ] Add predicate methods: `any?`, `all?`, `none?`
+- [ ] Inline simple methods: `length`, `empty?`, `even?`, `odd?`, etc.
+- [ ] Add `times`, `upto`, `downto` integer iteration
 
 ## Phase 6: Classes
 - [ ] Class definition (`class User ... end`)
