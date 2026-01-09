@@ -13,6 +13,9 @@ go run <file.go>
 
 # Build the compiler binary
 go build -o rugby .
+
+# Run tests (excludes examples/ which has multiple main packages)
+go test ./lexer/... ./parser/... ./codegen/...
 ```
 
 ## Architecture
