@@ -73,7 +73,22 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 
 func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	g.vars = make(map[string]bool) // reset vars for each function
-	g.buf.WriteString(fmt.Sprintf("func %s() {\n", fn.Name))
+
+	// Mark parameters as declared variables
+	for _, param := range fn.Params {
+		g.vars[param.Name] = true
+	}
+
+	// Generate function signature
+	g.buf.WriteString(fmt.Sprintf("func %s(", fn.Name))
+	for i, param := range fn.Params {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+	}
+	g.buf.WriteString(") {\n")
+
 	g.indent++
 	for _, stmt := range fn.Body {
 		g.genStatement(stmt)

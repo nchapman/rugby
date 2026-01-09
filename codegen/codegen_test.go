@@ -119,6 +119,24 @@ end`
 	assertContains(t, output, `return 42`)
 }
 
+func TestGenerateFunctionParams(t *testing.T) {
+	input := `def add(a, b)
+  x = a
+  a = b
+  return a
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func add(a interface{}, b interface{})`)
+	assertContains(t, output, `x := a`)  // new var uses :=
+	assertContains(t, output, `a = b`)   // param reassignment uses =
+	assertContains(t, output, `func main()`)
+}
+
 func TestVariableReassignment(t *testing.T) {
 	input := `def main
   x = 1

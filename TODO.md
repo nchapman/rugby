@@ -18,7 +18,7 @@ Features in implementation order, building incrementally.
 - [x] Return statements
 
 ## Phase 3: Functions
-- [ ] Function parameters (`def add(a, b)`)
+- [x] Function parameters (`def add(a, b)`)
 - [ ] Explicit return types (`def add(a, b) -> Int`)
 - [ ] Multiple return values (`-> (Int, Bool)`)
 - [x] Function calls with arguments (`add(1, 2)`)

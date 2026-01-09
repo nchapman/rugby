@@ -146,6 +146,62 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 
 	fn := &ast.FuncDecl{Name: p.curToken.Literal}
 	p.nextToken()
+
+	// Parse optional parameter list
+	if p.curTokenIs(token.LPAREN) {
+		p.nextToken() // consume '('
+		seen := make(map[string]bool)
+
+		// Parse parameters until ')'
+		if !p.curTokenIs(token.RPAREN) {
+			// First parameter
+			if !p.curTokenIs(token.IDENT) {
+				p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name",
+					p.curToken.Line))
+				return nil
+			}
+			name := p.curToken.Literal
+			if seen[name] {
+				p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate parameter name %q",
+					p.curToken.Line, name))
+				return nil
+			}
+			seen[name] = true
+			fn.Params = append(fn.Params, &ast.Param{Name: name})
+			p.nextToken()
+
+			// Additional parameters
+			for p.curTokenIs(token.COMMA) {
+				p.nextToken() // consume ','
+				// Allow trailing comma
+				if p.curTokenIs(token.RPAREN) {
+					break
+				}
+				if !p.curTokenIs(token.IDENT) {
+					p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name after comma",
+						p.curToken.Line))
+					return nil
+				}
+				name := p.curToken.Literal
+				if seen[name] {
+					p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate parameter name %q",
+						p.curToken.Line, name))
+					return nil
+				}
+				seen[name] = true
+				fn.Params = append(fn.Params, &ast.Param{Name: name})
+				p.nextToken()
+			}
+		}
+
+		if !p.curTokenIs(token.RPAREN) {
+			p.errors = append(p.errors, fmt.Sprintf("line %d: expected ')' after parameters",
+				p.curToken.Line))
+			return nil
+		}
+		p.nextToken() // consume ')'
+	}
+
 	p.skipNewlines()
 
 	// Parse body until 'end'

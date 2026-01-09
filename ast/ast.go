@@ -34,10 +34,16 @@ type ImportDecl struct {
 func (i *ImportDecl) node()     {}
 func (i *ImportDecl) stmtNode() {}
 
+// Param represents a function parameter
+type Param struct {
+	Name string
+}
+
 // FuncDecl represents a function definition
 type FuncDecl struct {
-	Name string
-	Body []Statement
+	Name   string
+	Params []*Param
+	Body   []Statement
 }
 
 func (f *FuncDecl) node()     {}

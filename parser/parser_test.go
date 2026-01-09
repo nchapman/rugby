@@ -248,6 +248,60 @@ end`
 	}
 }
 
+func TestFunctionParams(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []string
+	}{
+		{"def foo\nend", nil},
+		{"def foo()\nend", nil},
+		{"def foo(a)\nend", []string{"a"}},
+		{"def foo(a, b)\nend", []string{"a", "b"}},
+		{"def foo(a, b, c)\nend", []string{"a", "b", "c"}},
+		{"def foo(a, b,)\nend", []string{"a", "b"}}, // trailing comma allowed
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Declarations) != 1 {
+			t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+		}
+
+		fn, ok := program.Declarations[0].(*ast.FuncDecl)
+		if !ok {
+			t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+		}
+
+		if len(fn.Params) != len(tt.expected) {
+			t.Errorf("input %q: expected %d params, got %d", tt.input, len(tt.expected), len(fn.Params))
+			continue
+		}
+
+		for i, name := range tt.expected {
+			if fn.Params[i].Name != name {
+				t.Errorf("input %q: param %d expected %q, got %q", tt.input, i, name, fn.Params[i].Name)
+			}
+		}
+	}
+}
+
+func TestDuplicateParams(t *testing.T) {
+	input := `def foo(a, a)
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected error for duplicate parameter name, got none")
+	}
+}
+
 func checkParserErrors(t *testing.T, p *Parser) {
 	errors := p.Errors()
 	if len(errors) == 0 {
