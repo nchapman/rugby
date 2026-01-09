@@ -158,11 +158,11 @@ end`
 
 func TestGenerateMultipleReturnTypes(t *testing.T) {
 	input := `def parse(s) -> (Int, Bool)
-  return 42
+  return 42, true
 end
 
 def fetch() -> (String, Int, Bool)
-  return "hello"
+  return "hello", 1, false
 end
 
 def main
@@ -171,7 +171,9 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `func parse(s interface{}) (int, bool)`)
+	assertContains(t, output, `return 42, true`)
 	assertContains(t, output, `func fetch() (string, int, bool)`)
+	assertContains(t, output, `return "hello", 1, false`)
 }
 
 func TestVariableReassignment(t *testing.T) {

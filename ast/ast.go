@@ -163,7 +163,7 @@ func (w *WhileStmt) stmtNode() {}
 
 // ReturnStmt represents a return statement
 type ReturnStmt struct {
-	Value Expression // nil if no return value
+	Values []Expression // empty if no return values
 }
 
 func (r *ReturnStmt) node()     {}

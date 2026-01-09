@@ -186,9 +186,14 @@ func (g *Generator) genWhileStmt(s *ast.WhileStmt) {
 func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
 	g.writeIndent()
 	g.buf.WriteString("return")
-	if s.Value != nil {
+	if len(s.Values) > 0 {
 		g.buf.WriteString(" ")
-		g.genExpr(s.Value)
+		for i, val := range s.Values {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+			g.genExpr(val)
+		}
 	}
 	g.buf.WriteString("\n")
 }

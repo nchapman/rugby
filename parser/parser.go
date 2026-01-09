@@ -414,8 +414,19 @@ func (p *Parser) parseReturnStmt() *ast.ReturnStmt {
 
 	// Check if there's a return value (not newline or end)
 	if !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
-		stmt.Value = p.parseExpression(LOWEST)
+		stmt.Values = append(stmt.Values, p.parseExpression(LOWEST))
 		p.nextToken() // move past expression
+
+		// Parse additional return values
+		for p.curTokenIs(token.COMMA) {
+			p.nextToken() // consume ','
+			// Allow trailing comma
+			if p.curTokenIs(token.NEWLINE) || p.curTokenIs(token.END) || p.curTokenIs(token.EOF) {
+				break
+			}
+			stmt.Values = append(stmt.Values, p.parseExpression(LOWEST))
+			p.nextToken() // move past expression
+		}
 	}
 
 	p.skipNewlines()

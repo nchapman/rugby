@@ -328,6 +328,39 @@ end`
 	}
 }
 
+func TestMultipleReturnValues(t *testing.T) {
+	input := `def foo()
+  return 1, true, "hello"
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	retStmt := fn.Body[0].(*ast.ReturnStmt)
+
+	if len(retStmt.Values) != 3 {
+		t.Fatalf("expected 3 return values, got %d", len(retStmt.Values))
+	}
+
+	// Check first value is int
+	if _, ok := retStmt.Values[0].(*ast.IntLit); !ok {
+		t.Errorf("expected IntLit, got %T", retStmt.Values[0])
+	}
+
+	// Check second value is bool
+	if _, ok := retStmt.Values[1].(*ast.BoolLit); !ok {
+		t.Errorf("expected BoolLit, got %T", retStmt.Values[1])
+	}
+
+	// Check third value is string
+	if _, ok := retStmt.Values[2].(*ast.StringLit); !ok {
+		t.Errorf("expected StringLit, got %T", retStmt.Values[2])
+	}
+}
+
 func TestReturnType(t *testing.T) {
 	tests := []struct {
 		input       string
