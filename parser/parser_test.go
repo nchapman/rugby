@@ -2006,3 +2006,59 @@ end`
 		t.Fatalf("expected 3 body statements, got %d", len(forStmt.Body))
 	}
 }
+
+func TestSelfKeyword(t *testing.T) {
+	input := `class Builder
+  def initialize
+  end
+
+  def with_name(n)
+    @name = n
+    self
+  end
+end
+
+def main
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls, ok := program.Declarations[0].(*ast.ClassDecl)
+	if !ok {
+		t.Fatalf("expected ClassDecl, got %T", program.Declarations[0])
+	}
+
+	// Find the with_name method
+	var method *ast.MethodDecl
+	for _, m := range cls.Methods {
+		if m.Name == "with_name" {
+			method = m
+			break
+		}
+	}
+	if method == nil {
+		t.Fatalf("expected to find method 'with_name'")
+	}
+
+	// Last statement should be an expression statement containing self
+	if len(method.Body) < 2 {
+		t.Fatalf("expected at least 2 body statements, got %d", len(method.Body))
+	}
+
+	exprStmt, ok := method.Body[1].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", method.Body[1])
+	}
+
+	ident, ok := exprStmt.Expr.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident, got %T", exprStmt.Expr)
+	}
+
+	if ident.Name != "self" {
+		t.Errorf("expected ident name 'self', got %q", ident.Name)
+	}
+}

@@ -69,6 +69,7 @@ const (
 	DEFER TokenType = "DEFER"
 	DO    TokenType = "DO"
 	CLASS TokenType = "CLASS"
+	SELF  TokenType = "SELF"
 )
 
 type Token struct {
@@ -100,6 +101,7 @@ var keywords = map[string]TokenType{
 	"defer": DEFER,
 	"do":    DO,
 	"class": CLASS,
+	"self":  SELF,
 }
 
 func LookupIdent(ident string) TokenType {

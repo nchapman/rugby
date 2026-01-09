@@ -525,8 +525,15 @@ func (g *Generator) genExpr(expr ast.Expression) {
 	case *ast.MapLit:
 		g.genMapLit(e)
 	case *ast.Ident:
-		// Check for kernel functions that can be used without parens
-		if runtimeCall, ok := noParenKernelFuncs[e.Name]; ok {
+		// Handle 'self' keyword - compiles to receiver variable
+		if e.Name == "self" {
+			if g.currentClass != "" {
+				g.buf.WriteString(receiverName(g.currentClass))
+			} else {
+				g.buf.WriteString("/* self outside class */")
+			}
+		} else if runtimeCall, ok := noParenKernelFuncs[e.Name]; ok {
+			// Check for kernel functions that can be used without parens
 			g.needsRuntime = true
 			g.buf.WriteString(runtimeCall)
 		} else {

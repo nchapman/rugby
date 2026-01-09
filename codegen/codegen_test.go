@@ -1222,3 +1222,66 @@ end`
 	// Rugby method call uses camelCase
 	assertContains(t, output, `reader.readAll()`)
 }
+
+func TestSelfKeyword(t *testing.T) {
+	input := `class Builder
+  def initialize
+  end
+
+  def with_name(n)
+    @name = n
+    self
+  end
+
+  def build
+    return self
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// 'self' should compile to receiver variable 'b' (first letter of Builder)
+	assertContains(t, output, `func (b *Builder) withName(n interface{})`)
+	// Implicit return of self
+	assertContains(t, output, "return b\n}")
+	// Explicit return of self
+	assertContains(t, output, "return b")
+}
+
+func TestSelfInMethodChain(t *testing.T) {
+	input := `class Config
+  def initialize
+  end
+
+  def set_value(v)
+    @value = v
+    self
+  end
+end
+
+def main
+  c = Config.new()
+  c.set_value(1).set_value(2)
+end`
+
+	output := compile(t, input)
+
+	// Method should return self (receiver 'c')
+	assertContains(t, output, "return c\n}")
+	// Method chaining should work
+	assertContains(t, output, `c.setValue(1).setValue(2)`)
+}
+
+func TestSelfOutsideClass(t *testing.T) {
+	input := `def main
+  x = self
+end`
+
+	output := compile(t, input)
+
+	// self outside class should generate a comment indicating the error
+	assertContains(t, output, `/* self outside class */`)
+}

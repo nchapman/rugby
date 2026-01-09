@@ -958,6 +958,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parsePrefixExpr()
 	case token.AT:
 		left = p.parseInstanceVar()
+	case token.SELF:
+		left = &ast.Ident{Name: "self"}
 	default:
 		return nil
 	}
