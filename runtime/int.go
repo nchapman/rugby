@@ -1,5 +1,29 @@
 package runtime
 
+// Times iterates n times, calling the function with the current index (0 to n-1).
+// Ruby: 5.times { |i| puts i }
+func Times(n int, fn func(int)) {
+	for i := 0; i < n; i++ {
+		fn(i)
+	}
+}
+
+// Upto iterates from start to end (inclusive), calling the function with each value.
+// Ruby: 1.upto(5) { |i| puts i }
+func Upto(start, end int, fn func(int)) {
+	for i := start; i <= end; i++ {
+		fn(i)
+	}
+}
+
+// Downto iterates from start down to end (inclusive), calling the function with each value.
+// Ruby: 5.downto(1) { |i| puts i }
+func Downto(start, end int, fn func(int)) {
+	for i := start; i >= end; i-- {
+		fn(i)
+	}
+}
+
 // Abs returns the absolute value of an integer.
 // Ruby: n.abs
 // Note: Abs(math.MinInt) overflows and returns math.MinInt.

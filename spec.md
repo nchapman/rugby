@@ -85,6 +85,13 @@ Rugby is statically typed with inference.
 | `Array[T]`   | `[]T`       |
 | `Map[K, V]`  | `map[K]V`   |
 | `T?`         | `(T, bool)` |
+| `Range`      | `struct` (internal) |
+
+### 4.2.1 Range Literals
+
+* `start..end` → inclusive (0..5 includes 5)
+* `start...end` → exclusive (0...5 excludes 5)
+* Primarily used in `for` loops.
 
 ### 4.3 Type annotations
 
@@ -188,9 +195,28 @@ end
 
 Compiles to Go `if/else if/else`.
 
-### 5.3 Loops
+### 5.3 Imperative Loops (Statements)
 
-**While:**
+Use loops when you need **control flow** (searching, early exit, side effects). These are statements, not expressions (they do not return a value).
+
+**For Loop:**
+The primary way to iterate with control flow.
+
+```ruby
+for item in items
+  return item if item.id == 5
+end
+
+for i in 0..10
+  puts i
+end
+```
+
+Compiles to:
+* Collections: `for _, item := range items { ... }`
+* Ranges: `for i := 0; i <= 10; i++ { ... }`
+
+**While Loop:**
 
 ```ruby
 while cond
@@ -198,47 +224,43 @@ while cond
 end
 ```
 
-Compiles to `for cond { ... }`
+Compiles to: `for cond { ... }`
 
-**Each (range iteration):**
+**Control Flow Keywords:**
+* `break`: Exits the loop immediately.
+* `next`: Skips to the next iteration (Go `continue`).
+* `return`: Returns from the **enclosing function**.
+
+### 5.4 Functional Blocks (Expressions)
+
+Use blocks when you need to **transform data** or chain operations. Blocks in Rugby are strictly **anonymous functions** (lambdas).
+
+**Syntax:**
+* `do ... end`: Preferred for multi-line blocks.
+* `{ ... }`: Preferred for single-line blocks.
+
+**Semantics:**
+* **Scope:** Creates a new local scope (Go function literal).
+* **Return:** `return` exits the **block only** (returns a value to the iterator), *not* the enclosing function.
+* **Break:** `break` is **not supported** inside blocks (use `for` if you need to stop early).
 
 ```ruby
-arr.each do |v|
-  ...
+# Data transformation (Expression)
+names = users.map do |u|
+  return "Guest" if u.nil?  # Returns "Guest" to the map array, iteration continues
+  u.name                    # Implicit return
 end
 ```
 
-Compiles to `for _, v := range arr { ... }`
+**Compilation:**
+All methods with blocks compile to runtime calls receiving a function literal:
 
-**Each with index:**
-
-```ruby
-arr.each_with_index do |v, i|
-  ...
-end
+```go
+// Ruby: users.each { |u| puts u }
+runtime.Each(users, func(u User) {
+    fmt.Println(u)
+})
 ```
-
-Compiles to `for i, v := range arr { ... }`
-
-Note: Rugby uses `|value, index|` order (Ruby convention), but this is swapped to match Go's `index, value` in compilation.
-
-**Map iteration:**
-
-```ruby
-map.each do |k, v|
-  puts "#{k}: #{v}"
-end
-```
-
-Compiles to `for k, v := range map { ... }`
-
-### 5.4 Blocks
-
-**MVP scope:** Blocks (`do...end` or `{...}`) are **only** allowed with iteration methods (`each`, `each_with_index`, `map`). They are **not** first-class values or closures.
-
-Blocks compile to **inline code** (not function literals). Captured variables follow Go closure semantics (capture by reference).
-
-Future: Full closure support may be added post-MVP.
 
 ---
 
@@ -373,11 +395,23 @@ Rules:
 
 ### 7.4 Methods and receivers
 
-* `def method` → value receiver (default)
-* `def method!` → pointer receiver
-* Compiler may upgrade to pointer receiver if mutation detected
+**Rule:** All methods use **pointer receivers** (`func (r *T)`) by default.
+* This ensures Ruby-like reference semantics (modifying `@field` always works).
+* Prevents accidental mutation of struct copies.
+
+```ruby
+class User
+  def name
+    @name
+  end
+end
+```
+
+Compiles to: `func (u *User) name() string { ... }`
 
 ### 7.5 Methods with `!`
+
+In Rugby, `!` is a **naming convention** only. It does not change compilation semantics (since all methods are already pointer receivers).
 
 ```ruby
 def inc!
@@ -385,10 +419,11 @@ def inc!
 end
 ```
 
-* `!` is stripped from Go name
-* Method uses pointer receiver
+* `!` is stripped from the generated Go function name to match Go idioms.
 * `def inc!` → `func (c *Counter) inc()`
 * `pub def inc!` → `func (c *Counter) Inc()`
+
+This allows Rugby code to communicate "danger/mutation" (`save!`) while generating standard Go names.
 
 ### 7.6 Embedding (composition)
 
@@ -413,6 +448,18 @@ type Service struct { Logger }
 ### 7.7 No inheritance
 
 Rugby does **not** support Ruby inheritance semantics.
+
+### 7.8 Special Methods
+
+**String Conversion (`to_s`):**
+* `def to_s` compiles to `String() string`
+* Automatically satisfies Go's `fmt.Stringer` interface
+* `puts user` uses this method automatically
+
+**Equality (`==`):**
+* Rugby `==` compiles to `runtime.Equal(a, b)` for non-primitive types
+* Handles slice/map equality (deep comparison)
+* To customize equality for a class, define `def ==(other)` (future phase)
 
 ---
 
@@ -631,8 +678,8 @@ runtime/
 ### 11.3 Array methods (`Array[T]`)
 
 **Iteration:**
-* `each { |x| }` → inline range loop (no runtime call)
-* `each_with_index { |x, i| }` → inline range loop
+* `each { |x| }` → `runtime.Each(arr, fn)`
+* `each_with_index { |x, i| }` → `runtime.EachWithIndex(arr, fn)`
 
 **Transformation:**
 * `map { |x| }` → `runtime.Map(arr, fn)` → `[]R`
@@ -670,9 +717,9 @@ runtime/
 ### 11.4 Map methods (`Map[K, V]`)
 
 **Iteration:**
-* `each { |k, v| }` → inline range loop
-* `each_key { |k| }` → inline range loop
-* `each_value { |v| }` → inline range loop
+* `each { |k, v| }` → `runtime.MapEach(m, fn)`
+* `each_key { |k| }` → `runtime.MapEachKey(m, fn)`
+* `each_value { |v| }` → `runtime.MapEachValue(m, fn)`
 
 **Access:**
 * `keys` → `runtime.Keys(m)` → `[]K`
@@ -730,9 +777,9 @@ runtime/
 * `clamp(min, max)` → `runtime.Clamp(n, min, max)`
 
 **Iteration:**
-* `times { |i| }` → `for i := 0; i < n; i++` (inlined)
-* `upto(max) { |i| }` → `for i := n; i <= max; i++` (inlined)
-* `downto(min) { |i| }` → `for i := n; i >= min; i--` (inlined)
+* `times { |i| }` → `runtime.Times(n, fn)`
+* `upto(max) { |i| }` → `runtime.Upto(n, max, fn)`
+* `downto(min) { |i| }` → `runtime.Downto(n, min, fn)`
 
 **Conversion:**
 * `to_s` → `strconv.Itoa(n)` (inlined)

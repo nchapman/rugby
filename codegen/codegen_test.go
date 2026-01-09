@@ -291,18 +291,54 @@ func TestSnakeToCamelConversion(t *testing.T) {
 		input    string
 		expected string
 	}{
-		{"read_all", "ReadAll"},
-		{"new_request", "NewRequest"},
-		{"close", "Close"},
-		{"get", "Get"},
-		{"read_file", "ReadFile"},
-		{"http_server_error", "HttpServerError"},
+		// snake_case transforms to camelCase
+		{"read_all", "readAll"},
+		{"new_request", "newRequest"},
+		{"read_file", "readFile"},
+		{"http_server_error", "httpServerError"},
+		{"do_something!", "doSomething"},
+		{"is_empty?", "isEmpty"},
+		// Non-snake_case passes through as-is (supports Go interop on variables)
+		{"close", "close"},
+		{"get", "get"},
+		{"Close", "Close"},
+		{"Body", "Body"},
+		// Ruby-style suffixes stripped even without underscore
+		{"inc!", "inc"},
+		{"save!", "save"},
+		{"empty?", "empty"},
+		{"valid?", "valid"},
 	}
 
 	for _, tt := range tests {
 		got := snakeToCamel(tt.input)
 		if got != tt.expected {
 			t.Errorf("snakeToCamel(%q) = %q, want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestSnakeToPascalConversion(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		// snake_case transforms to PascalCase
+		{"read_all", "ReadAll"},
+		{"new_request", "NewRequest"},
+		{"read_file", "ReadFile"},
+		{"http_server_error", "HttpServerError"},
+		// Non-snake_case passes through as-is
+		{"close", "close"},
+		{"get", "get"},
+		{"Close", "Close"},
+		{"Get", "Get"},
+	}
+
+	for _, tt := range tests {
+		got := snakeToPascal(tt.input)
+		if got != tt.expected {
+			t.Errorf("snakeToPascal(%q) = %q, want %q", tt.input, got, tt.expected)
 		}
 	}
 }
@@ -426,7 +462,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for _, x := range arr {`)
+	assertContains(t, output, `runtime.Each(arr, func(x interface{}) {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 }
 
@@ -439,8 +475,7 @@ end`
 
 	output := compile(t, input)
 
-	// Rugby |value, index| is swapped to Go's index, value order
-	assertContains(t, output, `for i, v := range arr {`)
+	assertContains(t, output, `runtime.EachWithIndex(arr, func(v interface{}, i int) {`)
 	assertContains(t, output, `runtime.Puts(v)`)
 }
 
@@ -467,8 +502,8 @@ end`
 
 	output := compile(t, input)
 
-	// Block with no params should use _ for range variable
-	assertContains(t, output, `for _, _ := range items`)
+	// Block with no params should use _ for the parameter
+	assertContains(t, output, `runtime.Each(items, func(_ interface{}) {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
@@ -481,7 +516,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for _, x := range get_items()`)
+	assertContains(t, output, `runtime.Each(get_items(), func(x interface{}) {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 }
 
@@ -496,8 +531,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for _, row := range matrix`)
-	assertContains(t, output, `for _, x := range row`)
+	assertContains(t, output, `runtime.Each(matrix, func(row interface{}) {`)
+	assertContains(t, output, `runtime.Each(row, func(x interface{}) {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 }
 
@@ -626,7 +661,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for i := 0; i < 5; i++`)
+	assertContains(t, output, `runtime.Times(5, func(i int) {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
@@ -639,7 +674,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for i := 0; i < n; i++`)
+	assertContains(t, output, `runtime.Times(n, func(i int) {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
@@ -652,7 +687,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for i := 1; i <= 5; i++`)
+	assertContains(t, output, `runtime.Upto(1, 5, func(i int) {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
@@ -665,7 +700,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for i := start; i <= finish; i++`)
+	assertContains(t, output, `runtime.Upto(start, finish, func(i int) {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
@@ -678,7 +713,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for i := 5; i >= 1; i--`)
+	assertContains(t, output, `runtime.Downto(5, 1, func(i int) {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
@@ -691,7 +726,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for i := high; i >= low; i--`)
+	assertContains(t, output, `runtime.Downto(high, low, func(i int) {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
@@ -704,8 +739,8 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate valid Go with synthetic variable _i
-	assertContains(t, output, `for _i := 0; _i < 3; _i++`)
+	// Should generate runtime.Times with _ parameter
+	assertContains(t, output, `runtime.Times(3, func(_ int) {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
@@ -718,7 +753,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for _i := 1; _i <= 3; _i++`)
+	assertContains(t, output, `runtime.Upto(1, 3, func(_ int) {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
@@ -731,7 +766,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for _i := 3; _i >= 1; _i--`)
+	assertContains(t, output, `runtime.Downto(3, 1, func(_ int) {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
@@ -742,7 +777,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for _, x := range arr {`)
+	assertContains(t, output, `runtime.Each(arr, func(x interface{}) {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 }
 
@@ -764,7 +799,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `for i := 0; i < 5; i++`)
+	assertContains(t, output, `runtime.Times(5, func(i int) {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
@@ -793,7 +828,7 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `type User struct{}`)
-	assertContains(t, output, `func (u *User) Greet()`)
+	assertContains(t, output, `func (u *User) greet()`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
@@ -810,7 +845,7 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `type Calculator struct{}`)
-	assertContains(t, output, `func (c *Calculator) Add(a interface{}, b interface{}) int`)
+	assertContains(t, output, `func (c *Calculator) add(a interface{}, b interface{}) int`)
 	assertContains(t, output, `return (a + b)`)
 }
 
@@ -826,7 +861,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func (u *User) GetName() string`)
+	assertContains(t, output, `func (u *User) getName() string`)
 }
 
 func TestClassWithMultipleMethods(t *testing.T) {
@@ -846,8 +881,8 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `type Counter struct{}`)
-	assertContains(t, output, `func (c *Counter) Inc()`)
-	assertContains(t, output, `func (c *Counter) Dec()`)
+	assertContains(t, output, `func (c *Counter) inc()`)
+	assertContains(t, output, `func (c *Counter) dec()`)
 }
 
 func TestClassWithEmbedding(t *testing.T) {
@@ -864,7 +899,7 @@ end`
 
 	assertContains(t, output, `type Service struct {`)
 	assertContains(t, output, "Logger")
-	assertContains(t, output, `func (s *Service) Run()`)
+	assertContains(t, output, `func (s *Service) run()`)
 }
 
 func TestClassWithInstanceVariables(t *testing.T) {
@@ -906,7 +941,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func (u *User) GetName() string`)
+	assertContains(t, output, `func (u *User) getName() string`)
 	assertContains(t, output, `return u.name`)
 }
 
@@ -1015,7 +1050,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func (c *Calculator) Add(a int, b int) int`)
+	assertContains(t, output, `func (c *Calculator) add(a int, b int) int`)
 }
 
 func TestGenerateUntypedStillWorks(t *testing.T) {
@@ -1047,4 +1082,143 @@ end`
 		t.Errorf("expected exactly 1 'var x int', got output:\n%s", output)
 	}
 	assertContains(t, output, `x = 10`)
+}
+
+func TestGenerateForLoop(t *testing.T) {
+	input := `def main
+  for item in items
+    puts item
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for _, item := range items {`)
+	assertContains(t, output, `runtime.Puts(item)`)
+}
+
+func TestGenerateBreak(t *testing.T) {
+	input := `def main
+  while true
+    break
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for true {`)
+	assertContains(t, output, `break`)
+}
+
+func TestGenerateNext(t *testing.T) {
+	input := `def main
+  for item in items
+    next
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for _, item := range items {`)
+	assertContains(t, output, `continue`)
+}
+
+func TestForLoopWithControlFlow(t *testing.T) {
+	input := `def main
+  for item in items
+    if item == 5
+      break
+    end
+    if item == 3
+      next
+    end
+    puts item
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for _, item := range items {`)
+	assertContains(t, output, `if item == 5 {`)
+	assertContains(t, output, `break`)
+	assertContains(t, output, `if item == 3 {`)
+	assertContains(t, output, `continue`)
+	assertContains(t, output, `runtime.Puts(item)`)
+}
+
+func TestClassMethodWithBangSuffix(t *testing.T) {
+	input := `class Counter
+  def inc!
+    puts "incremented"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Method name should have ! stripped and be camelCased (lowercase first letter)
+	assertContains(t, output, `func (c *Counter) inc()`)
+}
+
+func TestClassMethodWithPredicateSuffix(t *testing.T) {
+	input := `class User
+  def valid?
+    return true
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Method name should have ? stripped and be camelCased (lowercase first letter)
+	assertContains(t, output, `func (u *User) valid()`)
+}
+
+func TestRugbyMethodCallCasing(t *testing.T) {
+	input := `class User
+  def get_name -> String
+    return "test"
+  end
+end
+
+def main
+  user = User.new()
+  name = user.get_name()
+end`
+
+	output := compile(t, input)
+
+	// Method definition should use camelCase
+	assertContains(t, output, `func (u *User) getName() string`)
+	// Method call should also use camelCase (matching the definition)
+	assertContains(t, output, `user.getName()`)
+}
+
+func TestGoInteropVsRugbyMethodCasing(t *testing.T) {
+	input := `import io
+
+class Reader
+  def read_all -> String
+    return "data"
+  end
+end
+
+def main
+  io.read_all(r)
+  reader = Reader.new()
+  reader.read_all()
+end`
+
+	output := compile(t, input)
+
+	// Go import uses PascalCase
+	assertContains(t, output, `io.ReadAll(r)`)
+	// Rugby method definition uses camelCase
+	assertContains(t, output, `func (r *Reader) readAll() string`)
+	// Rugby method call uses camelCase
+	assertContains(t, output, `reader.readAll()`)
 }

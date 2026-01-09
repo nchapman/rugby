@@ -55,6 +55,10 @@ const (
 	ELSIF  TokenType = "ELSIF"
 	ELSE   TokenType = "ELSE"
 	WHILE  TokenType = "WHILE"
+	FOR    TokenType = "FOR"
+	IN     TokenType = "IN"
+	BREAK  TokenType = "BREAK"
+	NEXT   TokenType = "NEXT"
 	RETURN TokenType = "RETURN"
 	TRUE   TokenType = "TRUE"
 	FALSE  TokenType = "FALSE"
@@ -82,6 +86,10 @@ var keywords = map[string]TokenType{
 	"elsif":  ELSIF,
 	"else":   ELSE,
 	"while":  WHILE,
+	"for":    FOR,
+	"in":     IN,
+	"break":  BREAK,
+	"next":   NEXT,
 	"return": RETURN,
 	"true":   TRUE,
 	"false":  FALSE,

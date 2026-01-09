@@ -4,8 +4,8 @@ Features in implementation order, building incrementally.
 
 **Recent spec updates (see spec.md):**
 - **Runtime package (11):** Full Go runtime with Ruby-like stdlib ergonomics
+- **Loop semantics (5.3-5.4):** Clear distinction between imperative loops (`for`/`while` with `break`/`next`/`return` exits function) and functional blocks (`each`/`map` where `return` exits block only)
 - Return statements (6.3): explicit + implicit returns
-- Block semantics (5.4): iteration-only for MVP, not closures
 - Instance variables (7.2.1): types inferred from `initialize`
 - Optionals (4.4): `T?` restricted to value types only
 - Interface methods (8.1): implicitly exported
@@ -25,6 +25,8 @@ Features in implementation order, building incrementally.
 - [x] Variable references
 - [x] Conditionals (`if`/`elsif`/`else`/`end`)
 - [x] While loops (`while cond ... end`)
+- [x] For loops (`for item in items ... end`)
+- [x] Loop control: `break` (exit loop), `next` (continue to next iteration)
 - [x] Return statements
 
 ## Phase 3: Functions
@@ -62,7 +64,7 @@ This requires `pub` keyword support (Phase 8) to be fully correct.
   - [x] Add `BlockExpr` AST node (generic `do |params| ... end`)
   - [x] Update `CallExpr` to support optional block argument
   - [x] Refactor parser: parse all blocks generically
-  - [x] Update codegen: recognize patterns (emit `for range`) vs IIFE for map
+  - [x] Update codegen: blocks use runtime calls (`runtime.Each`, `runtime.Times`, etc.) so `return` exits block only
   - [x] Proper variable scope tracking in blocks
   - [x] Duplicate block parameter detection
   - [x] Nested blocks support
@@ -77,6 +79,8 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] Support `?` and `!` suffixes in method names (lexer)
 
 ### Array methods (`runtime/array.go`)
+- [x] `Each(slice, func(elem))` - iterate with block semantics
+- [x] `EachWithIndex(slice, func(elem, index))` - iterate with index
 - [x] `Select[T]([]T, func(T) bool) []T` - filter elements
 - [x] `Reject[T]([]T, func(T) bool) []T` - inverse filter
 - [x] `Map[T,R]([]T, func(T) R) []R` - transform elements (replace IIFE)
@@ -109,6 +113,9 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] `MustAtoi(string) int` - panic on failure
 
 ### Integer methods (`runtime/int.go`)
+- [x] `Times(n, func(i))` - iterate n times
+- [x] `Upto(start, end, func(i))` - iterate from start to end inclusive
+- [x] `Downto(start, end, func(i))` - iterate from start down to end inclusive
 - [x] `Abs(int) int`
 - [x] `Clamp(int, int, int) int`
 
@@ -144,7 +151,8 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] `Class.new(...)` syntax
 - [x] Methods with pointer receivers (for mutation support)
 - [x] Embedding via `<` (`class Service < Logger`) - single parent only for MVP
-- [ ] Pointer receiver methods (`def mutate!`) - explicit `!` suffix convention
+- [x] Pointer receiver methods (`def mutate!`) - `!` suffix stripped in Go output
+- [x] Methods are lowercase (private) by default - `pub` enables uppercase exports
 
 ## Phase 7: Type Annotations
 **Goal:** Add explicit type annotations following Go's philosophy.

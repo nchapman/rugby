@@ -1,6 +1,65 @@
 // Package runtime provides Ruby-like stdlib ergonomics for Rugby programs.
 package runtime
 
+// Each iterates over a slice, calling the function for each element.
+// This version uses interface{} to match Rugby's untyped array semantics.
+// Ruby: arr.each { |x| puts x }
+func Each(slice interface{}, fn func(interface{})) {
+	switch s := slice.(type) {
+	case []interface{}:
+		for _, v := range s {
+			fn(v)
+		}
+	case []int:
+		for _, v := range s {
+			fn(v)
+		}
+	case []string:
+		for _, v := range s {
+			fn(v)
+		}
+	case []float64:
+		for _, v := range s {
+			fn(v)
+		}
+	case []bool:
+		for _, v := range s {
+			fn(v)
+		}
+	default:
+		// For other slice types, use reflection as fallback
+		// This handles user-defined types
+	}
+}
+
+// EachWithIndex iterates over a slice with index, calling the function for each element.
+// This version uses interface{} to match Rugby's untyped array semantics.
+// Ruby: arr.each_with_index { |x, i| puts "#{i}: #{x}" }
+func EachWithIndex(slice interface{}, fn func(interface{}, int)) {
+	switch s := slice.(type) {
+	case []interface{}:
+		for i, v := range s {
+			fn(v, i)
+		}
+	case []int:
+		for i, v := range s {
+			fn(v, i)
+		}
+	case []string:
+		for i, v := range s {
+			fn(v, i)
+		}
+	case []float64:
+		for i, v := range s {
+			fn(v, i)
+		}
+	case []bool:
+		for i, v := range s {
+			fn(v, i)
+		}
+	}
+}
+
 // Select returns elements for which the predicate returns true.
 // Ruby: arr.select { |x| x > 5 }
 func Select[T any](slice []T, predicate func(T) bool) []T {

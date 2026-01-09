@@ -1889,3 +1889,120 @@ end`
 		t.Errorf("expected empty type for untyped assignment, got %q", assign.Type)
 	}
 }
+
+func TestForStatement(t *testing.T) {
+	input := `def main
+  for item in items
+    puts item
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	forStmt, ok := fn.Body[0].(*ast.ForStmt)
+	if !ok {
+		t.Fatalf("expected ForStmt, got %T", fn.Body[0])
+	}
+
+	if forStmt.Var != "item" {
+		t.Errorf("expected loop variable 'item', got %q", forStmt.Var)
+	}
+
+	ident, ok := forStmt.Iterable.(*ast.Ident)
+	if !ok || ident.Name != "items" {
+		t.Errorf("expected iterable 'items', got %v", forStmt.Iterable)
+	}
+
+	if len(forStmt.Body) != 1 {
+		t.Errorf("expected 1 body statement, got %d", len(forStmt.Body))
+	}
+}
+
+func TestBreakStatement(t *testing.T) {
+	input := `def main
+  while true
+    break
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	whileStmt, ok := fn.Body[0].(*ast.WhileStmt)
+	if !ok {
+		t.Fatalf("expected WhileStmt, got %T", fn.Body[0])
+	}
+
+	if len(whileStmt.Body) != 1 {
+		t.Fatalf("expected 1 body statement, got %d", len(whileStmt.Body))
+	}
+
+	_, ok = whileStmt.Body[0].(*ast.BreakStmt)
+	if !ok {
+		t.Fatalf("expected BreakStmt, got %T", whileStmt.Body[0])
+	}
+}
+
+func TestNextStatement(t *testing.T) {
+	input := `def main
+  for item in items
+    next
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	forStmt, ok := fn.Body[0].(*ast.ForStmt)
+	if !ok {
+		t.Fatalf("expected ForStmt, got %T", fn.Body[0])
+	}
+
+	if len(forStmt.Body) != 1 {
+		t.Fatalf("expected 1 body statement, got %d", len(forStmt.Body))
+	}
+
+	_, ok = forStmt.Body[0].(*ast.NextStmt)
+	if !ok {
+		t.Fatalf("expected NextStmt, got %T", forStmt.Body[0])
+	}
+}
+
+func TestForLoopWithControlFlow(t *testing.T) {
+	input := `def main
+  for item in items
+    if item == 5
+      break
+    end
+    if item == 3
+      next
+    end
+    puts item
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	forStmt, ok := fn.Body[0].(*ast.ForStmt)
+	if !ok {
+		t.Fatalf("expected ForStmt, got %T", fn.Body[0])
+	}
+
+	if len(forStmt.Body) != 3 {
+		t.Fatalf("expected 3 body statements, got %d", len(forStmt.Body))
+	}
+}

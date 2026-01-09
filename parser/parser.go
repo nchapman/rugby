@@ -550,6 +550,12 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseIfStmt()
 	case token.WHILE:
 		return p.parseWhileStmt()
+	case token.FOR:
+		return p.parseForStmt()
+	case token.BREAK:
+		return p.parseBreakStmt()
+	case token.NEXT:
+		return p.parseNextStmt()
 	case token.RETURN:
 		return p.parseReturnStmt()
 	case token.DEFER:
@@ -842,6 +848,62 @@ func (p *Parser) parseWhileStmt() *ast.WhileStmt {
 	p.skipNewlines()
 
 	return stmt
+}
+
+func (p *Parser) parseForStmt() *ast.ForStmt {
+	p.nextToken() // consume 'for'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected variable name after 'for'",
+			p.curToken.Line))
+		return nil
+	}
+
+	stmt := &ast.ForStmt{Var: p.curToken.Literal}
+	p.nextToken() // consume variable name
+
+	if !p.curTokenIs(token.IN) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'in' after loop variable",
+			p.curToken.Line))
+		return nil
+	}
+	p.nextToken() // consume 'in'
+
+	stmt.Iterable = p.parseExpression(LOWEST)
+	p.nextToken() // move past iterable expression
+	p.skipNewlines()
+
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.END) {
+			break
+		}
+		if s := p.parseStatement(); s != nil {
+			stmt.Body = append(stmt.Body, s)
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'end' to close for",
+			p.curToken.Line))
+		return nil
+	}
+	p.nextToken() // consume 'end'
+	p.skipNewlines()
+
+	return stmt
+}
+
+func (p *Parser) parseBreakStmt() *ast.BreakStmt {
+	p.nextToken() // consume 'break'
+	p.skipNewlines()
+	return &ast.BreakStmt{}
+}
+
+func (p *Parser) parseNextStmt() *ast.NextStmt {
+	p.nextToken() // consume 'next'
+	p.skipNewlines()
+	return &ast.NextStmt{}
 }
 
 func (p *Parser) parseReturnStmt() *ast.ReturnStmt {

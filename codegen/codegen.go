@@ -64,16 +64,31 @@ var blockMethods = map[string]blockMethod{
 type Generator struct {
 	buf          strings.Builder
 	indent       int
-	vars         map[string]bool // track declared variables
-	needsRuntime bool            // track if rugby/runtime import is needed
-	currentClass string          // current class being generated (for instance vars)
+	vars         map[string]bool   // track declared variables
+	imports      map[string]bool   // track import aliases for Go interop detection
+	needsRuntime bool              // track if rugby/runtime import is needed
+	currentClass string            // current class being generated (for instance vars)
 }
 
 func New() *Generator {
-	return &Generator{vars: make(map[string]bool)}
+	return &Generator{
+		vars:    make(map[string]bool),
+		imports: make(map[string]bool),
+	}
 }
 
 func (g *Generator) Generate(program *ast.Program) (string, error) {
+	// Collect import aliases for Go interop detection
+	for _, imp := range program.Imports {
+		if imp.Alias != "" {
+			g.imports[imp.Alias] = true
+		} else {
+			// Use last part of path as implicit alias (e.g., "encoding/json" -> "json")
+			parts := strings.Split(imp.Path, "/")
+			g.imports[parts[len(parts)-1]] = true
+		}
+	}
+
 	// First pass: generate declarations to determine what imports we need
 	var bodyBuf strings.Builder
 	g.buf = bodyBuf
@@ -148,6 +163,12 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genIfStmt(s)
 	case *ast.WhileStmt:
 		g.genWhileStmt(s)
+	case *ast.ForStmt:
+		g.genForStmt(s)
+	case *ast.BreakStmt:
+		g.genBreakStmt()
+	case *ast.NextStmt:
+		g.genNextStmt()
 	case *ast.ReturnStmt:
 		g.genReturnStmt(s)
 	case *ast.DeferStmt:
@@ -426,6 +447,44 @@ func (g *Generator) genWhileStmt(s *ast.WhileStmt) {
 	g.buf.WriteString("}\n")
 }
 
+func (g *Generator) genForStmt(s *ast.ForStmt) {
+	// Save variable state
+	wasDefinedBefore := g.vars[s.Var]
+
+	g.writeIndent()
+	g.buf.WriteString("for _, ")
+	g.buf.WriteString(s.Var)
+	g.buf.WriteString(" := range ")
+	g.genExpr(s.Iterable)
+	g.buf.WriteString(" {\n")
+
+	g.vars[s.Var] = true
+
+	g.indent++
+	for _, stmt := range s.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	// Restore variable state
+	if !wasDefinedBefore {
+		delete(g.vars, s.Var)
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genBreakStmt() {
+	g.writeIndent()
+	g.buf.WriteString("break\n")
+}
+
+func (g *Generator) genNextStmt() {
+	g.writeIndent()
+	g.buf.WriteString("continue\n")
+}
+
 func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
 	g.writeIndent()
 	g.buf.WriteString("return")
@@ -634,8 +693,11 @@ func (g *Generator) genBlockCall(call *ast.CallExpr) {
 	g.buf.WriteString(fmt.Sprintf("/* unsupported block method: %s */", method))
 }
 
-// genEachBlock generates: for _, v := range iterable { body }
+// genEachBlock generates: runtime.Each(iterable, func(v interface{}) { body })
+// Uses runtime call so that return inside block exits only the block, not enclosing function
 func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) {
+	g.needsRuntime = true
+
 	varName := "_"
 	if len(block.Params) > 0 {
 		varName = block.Params[0]
@@ -644,11 +706,11 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	// Save previous variable state for proper scope restoration
 	wasDefinedBefore := g.vars[varName]
 
-	g.buf.WriteString("for _, ")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" := range ")
+	g.buf.WriteString("runtime.Each(")
 	g.genExpr(iterable)
-	g.buf.WriteString(" {\n")
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" interface{}) {\n")
 
 	if varName != "_" {
 		g.vars[varName] = true
@@ -666,12 +728,14 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	}
 
 	g.writeIndent()
-	g.buf.WriteString("}")
+	g.buf.WriteString("})")
 }
 
-// genEachWithIndexBlock generates: for i, v := range iterable { body }
-// Note: Rugby uses |value, index| order but Go uses index, value
+// genEachWithIndexBlock generates: runtime.EachWithIndex(iterable, func(v interface{}, i int) { body })
+// Note: Rugby uses |value, index| order which matches runtime.EachWithIndex signature
 func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.BlockExpr) {
+	g.needsRuntime = true
+
 	varName := "_"
 	indexName := "_"
 	if len(block.Params) > 0 {
@@ -685,14 +749,13 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 	varWasDefinedBefore := g.vars[varName]
 	indexWasDefinedBefore := g.vars[indexName]
 
-	// Swap order: Rugby |value, index| -> Go index, value
-	g.buf.WriteString("for ")
-	g.buf.WriteString(indexName)
-	g.buf.WriteString(", ")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" := range ")
+	g.buf.WriteString("runtime.EachWithIndex(")
 	g.genExpr(iterable)
-	g.buf.WriteString(" {\n")
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" interface{}, ")
+	g.buf.WriteString(indexName)
+	g.buf.WriteString(" int) {\n")
 
 	if varName != "_" {
 		g.vars[varName] = true
@@ -716,11 +779,13 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 	}
 
 	g.writeIndent()
-	g.buf.WriteString("}")
+	g.buf.WriteString("})")
 }
 
-// genTimesBlock generates: for i := 0; i < n; i++ { body }
+// genTimesBlock generates: runtime.Times(n, func(i int) { body })
 func (g *Generator) genTimesBlock(times ast.Expression, block *ast.BlockExpr) {
+	g.needsRuntime = true
+
 	varName := "_"
 	if len(block.Params) > 0 {
 		varName = block.Params[0]
@@ -728,21 +793,11 @@ func (g *Generator) genTimesBlock(times ast.Expression, block *ast.BlockExpr) {
 
 	wasDefinedBefore := g.vars[varName]
 
-	// Use synthetic variable if no block param (can't use _ in for _ := 0; _ < n; _++)
-	loopVar := varName
-	if loopVar == "_" {
-		loopVar = "_i"
-	}
-
-	g.buf.WriteString("for ")
-	g.buf.WriteString(loopVar)
-	g.buf.WriteString(" := 0; ")
-	g.buf.WriteString(loopVar)
-	g.buf.WriteString(" < ")
+	g.buf.WriteString("runtime.Times(")
 	g.genExpr(times)
-	g.buf.WriteString("; ")
-	g.buf.WriteString(loopVar)
-	g.buf.WriteString("++ {\n")
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" int) {\n")
 
 	if varName != "_" {
 		g.vars[varName] = true
@@ -759,11 +814,13 @@ func (g *Generator) genTimesBlock(times ast.Expression, block *ast.BlockExpr) {
 	}
 
 	g.writeIndent()
-	g.buf.WriteString("}")
+	g.buf.WriteString("})")
 }
 
-// genUptoBlock generates: for i := start; i <= end; i++ { body }
+// genUptoBlock generates: runtime.Upto(start, end, func(i int) { body })
 func (g *Generator) genUptoBlock(start ast.Expression, block *ast.BlockExpr, args []ast.Expression) {
+	g.needsRuntime = true
+
 	varName := "_"
 	if len(block.Params) > 0 {
 		varName = block.Params[0]
@@ -771,27 +828,17 @@ func (g *Generator) genUptoBlock(start ast.Expression, block *ast.BlockExpr, arg
 
 	wasDefinedBefore := g.vars[varName]
 
-	// Use synthetic variable if no block param (can't use _ in for _ := start; _ <= end; _++)
-	loopVar := varName
-	if loopVar == "_" {
-		loopVar = "_i"
-	}
-
-	g.buf.WriteString("for ")
-	g.buf.WriteString(loopVar)
-	g.buf.WriteString(" := ")
+	g.buf.WriteString("runtime.Upto(")
 	g.genExpr(start)
-	g.buf.WriteString("; ")
-	g.buf.WriteString(loopVar)
-	g.buf.WriteString(" <= ")
+	g.buf.WriteString(", ")
 	if len(args) > 0 {
 		g.genExpr(args[0])
 	} else {
 		g.buf.WriteString("0")
 	}
-	g.buf.WriteString("; ")
-	g.buf.WriteString(loopVar)
-	g.buf.WriteString("++ {\n")
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" int) {\n")
 
 	if varName != "_" {
 		g.vars[varName] = true
@@ -808,11 +855,13 @@ func (g *Generator) genUptoBlock(start ast.Expression, block *ast.BlockExpr, arg
 	}
 
 	g.writeIndent()
-	g.buf.WriteString("}")
+	g.buf.WriteString("})")
 }
 
-// genDowntoBlock generates: for i := start; i >= end; i-- { body }
+// genDowntoBlock generates: runtime.Downto(start, end, func(i int) { body })
 func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, args []ast.Expression) {
+	g.needsRuntime = true
+
 	varName := "_"
 	if len(block.Params) > 0 {
 		varName = block.Params[0]
@@ -820,27 +869,17 @@ func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, a
 
 	wasDefinedBefore := g.vars[varName]
 
-	// Use synthetic variable if no block param (can't use _ in for _ := start; _ >= end; _--)
-	loopVar := varName
-	if loopVar == "_" {
-		loopVar = "_i"
-	}
-
-	g.buf.WriteString("for ")
-	g.buf.WriteString(loopVar)
-	g.buf.WriteString(" := ")
+	g.buf.WriteString("runtime.Downto(")
 	g.genExpr(start)
-	g.buf.WriteString("; ")
-	g.buf.WriteString(loopVar)
-	g.buf.WriteString(" >= ")
+	g.buf.WriteString(", ")
 	if len(args) > 0 {
 		g.genExpr(args[0])
 	} else {
 		g.buf.WriteString("0")
 	}
-	g.buf.WriteString("; ")
-	g.buf.WriteString(loopVar)
-	g.buf.WriteString("-- {\n")
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" int) {\n")
 
 	if varName != "_" {
 		g.vars[varName] = true
@@ -857,7 +896,7 @@ func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, a
 	}
 
 	g.writeIndent()
-	g.buf.WriteString("}")
+	g.buf.WriteString("})")
 }
 
 // genRuntimeBlock generates runtime block calls (map, select, reject, reduce, find)
@@ -963,8 +1002,29 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 	g.genExpr(sel.X)
 	g.buf.WriteString(".")
-	// Apply snake_case to CamelCase mapping
-	g.buf.WriteString(snakeToCamel(sel.Sel))
+
+	// Check if receiver is a Go import (use PascalCase) or Rugby object (use camelCase)
+	if g.isGoInterop(sel.X) {
+		g.buf.WriteString(snakeToPascal(sel.Sel))
+	} else {
+		g.buf.WriteString(snakeToCamel(sel.Sel))
+	}
+}
+
+// isGoInterop checks if an expression refers to a Go import.
+// NOTE: This can produce false positives if a local variable shadows an import name.
+// For example, if you `import io` and also have a local `io := something()`,
+// method calls on that variable will incorrectly use PascalCase.
+func (g *Generator) isGoInterop(expr ast.Expression) bool {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		return g.imports[e.Name]
+	case *ast.SelectorExpr:
+		// For chained selectors like resp.Body.Close, check the root
+		return g.isGoInterop(e.X)
+	default:
+		return false
+	}
 }
 
 func (g *Generator) genDeferStmt(s *ast.DeferStmt) {
@@ -983,10 +1043,59 @@ func receiverName(className string) string {
 	return strings.ToLower(className[:1])
 }
 
-// snakeToCamel converts snake_case to CamelCase for Go interop
-// Examples: read_all -> ReadAll, new_request -> NewRequest
+// snakeToCamel converts snake_case to camelCase (lowercase first letter)
+// Used for private method names in Rugby classes
+// Examples: read_all -> readAll, do_something -> doSomething
+// Also strips Ruby-style suffixes: inc! -> inc, empty? -> empty
+// Non-snake_case identifiers pass through as-is to support Go interop on variables
 func snakeToCamel(s string) string {
 	if s == "" {
+		return s
+	}
+
+	// Strip Ruby-style suffixes (! for mutation, ? for predicates)
+	s = strings.TrimSuffix(s, "!")
+	s = strings.TrimSuffix(s, "?")
+
+	// If no underscore, pass through as-is (preserves Go PascalCase on variables)
+	if !strings.Contains(s, "_") {
+		return s
+	}
+
+	var result strings.Builder
+	first := true
+	capitalizeNext := false
+
+	for _, r := range s {
+		if r == '_' {
+			capitalizeNext = true
+			continue
+		}
+		if first {
+			result.WriteRune(unicode.ToLower(r))
+			first = false
+		} else if capitalizeNext {
+			result.WriteRune(unicode.ToUpper(r))
+			capitalizeNext = false
+		} else {
+			result.WriteRune(r)
+		}
+	}
+
+	return result.String()
+}
+
+// snakeToPascal converts snake_case to PascalCase (uppercase first letter)
+// Used for Go interop where exports are always capitalized
+// Examples: read_all -> ReadAll, new_request -> NewRequest
+// Non-snake_case identifiers are passed through as-is (already PascalCase for Go)
+func snakeToPascal(s string) string {
+	if s == "" {
+		return s
+	}
+
+	// If no underscore, pass through as-is (Go identifiers are already correct case)
+	if !strings.Contains(s, "_") {
 		return s
 	}
 

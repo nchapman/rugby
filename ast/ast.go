@@ -213,6 +213,28 @@ type WhileStmt struct {
 func (w *WhileStmt) node()     {}
 func (w *WhileStmt) stmtNode() {}
 
+// ForStmt represents a for...in loop: for item in items ... end
+type ForStmt struct {
+	Var      string     // loop variable name
+	Iterable Expression // the collection to iterate over
+	Body     []Statement
+}
+
+func (f *ForStmt) node()     {}
+func (f *ForStmt) stmtNode() {}
+
+// BreakStmt represents a break statement (exits loop)
+type BreakStmt struct{}
+
+func (b *BreakStmt) node()     {}
+func (b *BreakStmt) stmtNode() {}
+
+// NextStmt represents a next statement (continues to next iteration)
+type NextStmt struct{}
+
+func (n *NextStmt) node()     {}
+func (n *NextStmt) stmtNode() {}
+
 // ReturnStmt represents a return statement
 type ReturnStmt struct {
 	Values []Expression // empty if no return values
