@@ -1285,3 +1285,65 @@ end`
 	// self outside class should generate a comment indicating the error
 	assertContains(t, output, `/* self outside class */`)
 }
+
+func TestToSMethod(t *testing.T) {
+	input := `class User
+  def initialize(name : String)
+    @name = name
+  end
+
+  def to_s
+    return @name
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// to_s should compile to String() string (satisfies fmt.Stringer)
+	assertContains(t, output, `func (u *User) String() string {`)
+	assertContains(t, output, `return u.name`)
+}
+
+func TestToSWithInterpolation(t *testing.T) {
+	input := `class Point
+  def initialize(x : Int, y : Int)
+    @x = x
+    @y = y
+  end
+
+  def to_s
+    return "point"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// to_s should compile to String() string
+	assertContains(t, output, `func (p *Point) String() string {`)
+}
+
+func TestToSWithParamsFallsBack(t *testing.T) {
+	// to_s with parameters doesn't satisfy fmt.Stringer, so it's treated as a normal method
+	input := `class User
+  def initialize
+  end
+
+  def to_s(format : String)
+    return format
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// With parameters, to_s becomes toS (normal snake_case conversion)
+	assertContains(t, output, `func (u *User) toS(format string) {`)
+}

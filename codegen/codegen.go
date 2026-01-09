@@ -317,6 +317,20 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	// Receiver name: first letter of class, lowercase
 	recv := receiverName(className)
 
+	// Special method handling
+	// to_s -> String() string (satisfies fmt.Stringer)
+	// Only applies when to_s has no parameters
+	if method.Name == "to_s" && len(method.Params) == 0 {
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s) String() string {\n", recv, className))
+		g.indent++
+		for _, stmt := range method.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+		g.buf.WriteString("}\n\n")
+		return
+	}
+
 	// Method name: convert snake_case to CamelCase
 	methodName := snakeToCamel(method.Name)
 

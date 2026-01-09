@@ -161,7 +161,7 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] Pointer receiver methods (`def mutate!`) - `!` suffix stripped in Go output
 - [x] Methods are lowercase (private) by default - `pub` enables uppercase exports
 - [x] `self` keyword → compiles to receiver variable (e.g., `u` in `func (u *User)`)
-- [ ] Special method `to_s` → `String() string` (satisfies `fmt.Stringer`)
+- [x] Special method `to_s` → `String() string` (satisfies `fmt.Stringer`)
 - [ ] Custom equality: `def ==(other)` → `Equal(other interface{}) bool`
 - [ ] Equality operator: `==` compiles to `runtime.Equal(a, b)` for non-primitives
 
