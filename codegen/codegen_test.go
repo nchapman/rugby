@@ -734,3 +734,36 @@ end`
 	assertContains(t, output, `for _i := 3; _i >= 1; _i--`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
+
+func TestBraceBlockCodegen(t *testing.T) {
+	input := `def main
+  arr.each {|x| puts x }
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for _, x := range arr {`)
+	assertContains(t, output, `runtime.Puts(x)`)
+}
+
+func TestBraceBlockMapCodegen(t *testing.T) {
+	input := `def main
+  result = arr.map {|x| x * 2 }
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.Map(arr, func(x interface{}) interface{}`)
+	assertContains(t, output, `return (x * 2)`)
+}
+
+func TestBraceBlockTimesCodegen(t *testing.T) {
+	input := `def main
+  5.times {|i| puts i }
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for i := 0; i < 5; i++`)
+	assertContains(t, output, `runtime.Puts(i)`)
+}

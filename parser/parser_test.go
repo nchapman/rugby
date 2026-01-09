@@ -1252,3 +1252,125 @@ end`
 		t.Errorf("expected inner block params [x], got %v", innerCall.Block.Params)
 	}
 }
+
+func TestBraceBlockSyntax(t *testing.T) {
+	input := `def main
+  arr.each {|x| puts x }
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+
+	exprStmt, ok := fn.Body[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", fn.Body[0])
+	}
+
+	call, ok := exprStmt.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+	}
+
+	sel, ok := call.Func.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected SelectorExpr, got %T", call.Func)
+	}
+
+	if sel.Sel != "each" {
+		t.Errorf("expected selector 'each', got %q", sel.Sel)
+	}
+
+	if call.Block == nil {
+		t.Fatal("expected block, got nil")
+	}
+
+	if len(call.Block.Params) != 1 || call.Block.Params[0] != "x" {
+		t.Errorf("expected block params [x], got %v", call.Block.Params)
+	}
+
+	if len(call.Block.Body) != 1 {
+		t.Errorf("expected 1 body statement, got %d", len(call.Block.Body))
+	}
+}
+
+func TestBraceBlockMultipleParams(t *testing.T) {
+	input := `def main
+  arr.each_with_index {|v, i| puts v }
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	exprStmt := fn.Body[0].(*ast.ExprStmt)
+	call := exprStmt.Expr.(*ast.CallExpr)
+
+	if call.Block == nil {
+		t.Fatal("expected block, got nil")
+	}
+
+	if len(call.Block.Params) != 2 {
+		t.Fatalf("expected 2 block params, got %d", len(call.Block.Params))
+	}
+
+	if call.Block.Params[0] != "v" || call.Block.Params[1] != "i" {
+		t.Errorf("expected block params [v, i], got %v", call.Block.Params)
+	}
+}
+
+func TestBraceBlockNoParams(t *testing.T) {
+	input := `def main
+  3.times {|| puts "hello" }
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	exprStmt := fn.Body[0].(*ast.ExprStmt)
+	call := exprStmt.Expr.(*ast.CallExpr)
+
+	if call.Block == nil {
+		t.Fatal("expected block, got nil")
+	}
+
+	if len(call.Block.Params) != 0 {
+		t.Errorf("expected 0 block params, got %v", call.Block.Params)
+	}
+}
+
+func TestBraceBlockWithMethodArgs(t *testing.T) {
+	input := `def main
+  arr.reduce(0) {|acc, x| acc + x }
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	exprStmt := fn.Body[0].(*ast.ExprStmt)
+	call := exprStmt.Expr.(*ast.CallExpr)
+
+	// Should have one argument (the initial value)
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg, got %d", len(call.Args))
+	}
+
+	if call.Block == nil {
+		t.Fatal("expected block, got nil")
+	}
+
+	if len(call.Block.Params) != 2 {
+		t.Fatalf("expected 2 block params, got %d", len(call.Block.Params))
+	}
+}

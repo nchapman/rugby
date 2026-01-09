@@ -308,8 +308,8 @@ func (p *Parser) parseStatement() ast.Statement {
 	// Default: expression statement
 	expr := p.parseExpression(LOWEST)
 	if expr != nil {
-		// Check for block: expr do |params| ... end
-		if p.peekTokenIs(token.DO) {
+		// Check for block: expr do |params| ... end  OR  expr {|params| ... }
+		if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
 			expr = p.parseBlockCall(expr)
 		}
 		p.nextToken() // move past expression
@@ -321,15 +321,19 @@ func (p *Parser) parseStatement() ast.Statement {
 
 // parseBlockCall parses a block attached to a method call.
 // Converts expr.method or expr.method(args) followed by do |params| ... end
-// into a CallExpr with a Block attached.
+// or {|params| ... } into a CallExpr with a Block attached.
 func (p *Parser) parseBlockCall(expr ast.Expression) ast.Expression {
-	p.nextToken() // move to 'do'
+	p.nextToken() // move to 'do' or '{'
 
-	if !p.curTokenIs(token.DO) {
+	var block *ast.BlockExpr
+	if p.curTokenIs(token.DO) {
+		block = p.parseBlock(token.END)
+	} else if p.curTokenIs(token.LBRACE) {
+		block = p.parseBlock(token.RBRACE)
+	} else {
 		return expr // should not happen since we checked peekTokenIs
 	}
 
-	block := p.parseBlock()
 	if block == nil {
 		return expr
 	}
@@ -350,10 +354,10 @@ func (p *Parser) parseBlockCall(expr ast.Expression) ast.Expression {
 	}
 }
 
-// parseBlock parses a block: do |params| ... end
-// Assumes curToken is 'do'
-func (p *Parser) parseBlock() *ast.BlockExpr {
-	p.nextToken() // move past 'do'
+// parseBlock parses a block: do |params| ... end  OR  {|params| ... }
+// Assumes curToken is 'do' or '{'. terminator specifies the closing token (END or RBRACE).
+func (p *Parser) parseBlock(terminator token.TokenType) *ast.BlockExpr {
+	p.nextToken() // move past 'do' or '{'
 
 	block := &ast.BlockExpr{}
 
@@ -369,7 +373,7 @@ func (p *Parser) parseBlock() *ast.BlockExpr {
 			if seen[name] {
 				p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate block parameter name %q",
 					p.curToken.Line, name))
-				p.skipToEnd()
+				p.skipTo(terminator)
 				return nil
 			}
 			seen[name] = true
@@ -381,14 +385,14 @@ func (p *Parser) parseBlock() *ast.BlockExpr {
 				if !p.curTokenIs(token.IDENT) {
 					p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name after comma",
 						p.curToken.Line))
-					p.skipToEnd()
+					p.skipTo(terminator)
 					return nil
 				}
 				name := p.curToken.Literal
 				if seen[name] {
 					p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate block parameter name %q",
 						p.curToken.Line, name))
-					p.skipToEnd()
+					p.skipTo(terminator)
 					return nil
 				}
 				seen[name] = true
@@ -400,7 +404,7 @@ func (p *Parser) parseBlock() *ast.BlockExpr {
 		if !p.curTokenIs(token.PIPE) {
 			p.errors = append(p.errors, fmt.Sprintf("line %d: expected '|' after block parameters",
 				p.curToken.Line))
-			p.skipToEnd()
+			p.skipTo(terminator)
 			return nil
 		}
 		p.nextToken() // move past closing '|'
@@ -408,10 +412,10 @@ func (p *Parser) parseBlock() *ast.BlockExpr {
 
 	p.skipNewlines()
 
-	// Parse body until 'end'
-	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+	// Parse body until terminator (end or })
+	for !p.curTokenIs(terminator) && !p.curTokenIs(token.EOF) {
 		p.skipNewlines()
-		if p.curTokenIs(token.END) {
+		if p.curTokenIs(terminator) {
 			break
 		}
 		if stmt := p.parseStatement(); stmt != nil {
@@ -419,23 +423,27 @@ func (p *Parser) parseBlock() *ast.BlockExpr {
 		}
 	}
 
-	if !p.curTokenIs(token.END) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'end' to close block",
-			p.curToken.Line))
+	if !p.curTokenIs(terminator) {
+		closer := "end"
+		if terminator == token.RBRACE {
+			closer = "}"
+		}
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected '%s' to close block",
+			p.curToken.Line, closer))
 		return nil
 	}
-	p.nextToken() // consume 'end'
+	p.nextToken() // consume terminator
 
 	return block
 }
 
-// skipToEnd skips tokens until 'end' is found (for error recovery in blocks)
-func (p *Parser) skipToEnd() {
-	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+// skipTo skips tokens until the specified terminator is found (for error recovery in blocks)
+func (p *Parser) skipTo(terminator token.TokenType) {
+	for !p.curTokenIs(terminator) && !p.curTokenIs(token.EOF) {
 		p.nextToken()
 	}
-	if p.curTokenIs(token.END) {
-		p.nextToken() // consume 'end'
+	if p.curTokenIs(terminator) {
+		p.nextToken() // consume terminator
 	}
 }
 
@@ -446,8 +454,8 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 
 	value := p.parseExpression(LOWEST)
 
-	// Check for block: expr.method do |x| ... end
-	if p.peekTokenIs(token.DO) {
+	// Check for block: expr.method do |x| ... end  OR  expr.method {|x| ... }
+	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
 		value = p.parseBlockCall(value)
 	}
 
