@@ -553,6 +553,45 @@ end`
 	assertContains(t, output, `((n % 2) == 0)`)
 }
 
+func TestAnyBlock(t *testing.T) {
+	input := `def main
+  has_even = nums.any? do |n|
+    n % 2 == 0
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.Any(nums, func(n interface{}) bool`)
+	assertContains(t, output, `((n % 2) == 0)`)
+}
+
+func TestAllBlock(t *testing.T) {
+	input := `def main
+  all_positive = nums.all? do |n|
+    n > 0
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.All(nums, func(n interface{}) bool`)
+	assertContains(t, output, `(n > 0)`)
+}
+
+func TestNoneBlock(t *testing.T) {
+	input := `def main
+  no_negatives = nums.none? do |n|
+    n < 0
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.None(nums, func(n interface{}) bool`)
+	assertContains(t, output, `(n < 0)`)
+}
+
 func TestKernelFunctions(t *testing.T) {
 	input := `def main
   puts "hello"

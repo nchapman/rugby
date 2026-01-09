@@ -56,6 +56,9 @@ var blockMethods = map[string]blockMethod{
 	"find":   {runtimeFunc: "runtime.Find", returnType: "bool"},
 	"detect": {runtimeFunc: "runtime.Find", returnType: "bool"},
 	"reduce": {runtimeFunc: "runtime.Reduce", returnType: "interface{}", hasAccumulator: true},
+	"any?":   {runtimeFunc: "runtime.Any", returnType: "bool"},
+	"all?":   {runtimeFunc: "runtime.All", returnType: "bool"},
+	"none?":  {runtimeFunc: "runtime.None", returnType: "bool"},
 }
 
 type Generator struct {
