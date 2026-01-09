@@ -13,33 +13,34 @@ import (
 const (
 	_ int = iota
 	LOWEST
-	OR_PREC      // or
-	AND_PREC     // and
-	EQUALS       // ==, !=
-	LESSGREATER  // <, >, <=, >=
-	SUM          // +, -
-	PRODUCT      // *, /, %
-	PREFIX       // -x, not x
-	CALL         // f(x)
-	MEMBER       // x.y (highest)
+	OR_PREC     // or
+	AND_PREC    // and
+	EQUALS      // ==, !=
+	LESSGREATER // <, >, <=, >=
+	SUM         // +, -
+	PRODUCT     // *, /, %
+	PREFIX      // -x, not x
+	CALL        // f(x)
+	MEMBER      // x.y (highest)
 )
 
 var precedences = map[token.TokenType]int{
-	token.OR:      OR_PREC,
-	token.AND:     AND_PREC,
-	token.EQ:      EQUALS,
-	token.NE:      EQUALS,
-	token.LT:      LESSGREATER,
-	token.GT:      LESSGREATER,
-	token.LE:      LESSGREATER,
-	token.GE:      LESSGREATER,
-	token.PLUS:    SUM,
-	token.MINUS:   SUM,
-	token.STAR:    PRODUCT,
-	token.SLASH:   PRODUCT,
-	token.PERCENT: PRODUCT,
-	token.LPAREN:  CALL,
-	token.DOT:     MEMBER,
+	token.OR:       OR_PREC,
+	token.AND:      AND_PREC,
+	token.EQ:       EQUALS,
+	token.NE:       EQUALS,
+	token.LT:       LESSGREATER,
+	token.GT:       LESSGREATER,
+	token.LE:       LESSGREATER,
+	token.GE:       LESSGREATER,
+	token.PLUS:     SUM,
+	token.MINUS:    SUM,
+	token.STAR:     PRODUCT,
+	token.SLASH:    PRODUCT,
+	token.PERCENT:  PRODUCT,
+	token.LPAREN:   CALL,
+	token.LBRACKET: CALL, // array indexing has same precedence as function calls
+	token.DOT:      MEMBER,
 }
 
 type Parser struct {
@@ -307,11 +308,135 @@ func (p *Parser) parseStatement() ast.Statement {
 	// Default: expression statement
 	expr := p.parseExpression(LOWEST)
 	if expr != nil {
+		// Check for block: expr do |params| ... end
+		if p.peekTokenIs(token.DO) {
+			expr = p.parseBlockCall(expr)
+		}
 		p.nextToken() // move past expression
 		p.skipNewlines()
 		return &ast.ExprStmt{Expr: expr}
 	}
 	return nil
+}
+
+// parseBlockCall parses a block attached to a method call.
+// Converts expr.method or expr.method(args) followed by do |params| ... end
+// into a CallExpr with a Block attached.
+func (p *Parser) parseBlockCall(expr ast.Expression) ast.Expression {
+	p.nextToken() // move to 'do'
+
+	if !p.curTokenIs(token.DO) {
+		return expr // should not happen since we checked peekTokenIs
+	}
+
+	block := p.parseBlock()
+	if block == nil {
+		return expr
+	}
+
+	// Convert expression to CallExpr with block
+	switch e := expr.(type) {
+	case *ast.SelectorExpr:
+		// arr.each do |x| -> CallExpr{Func: SelectorExpr{arr, "each"}, Block: ...}
+		return &ast.CallExpr{Func: e, Block: block}
+	case *ast.CallExpr:
+		// arr.method(args) do |x| -> just attach block to existing call
+		e.Block = block
+		return e
+	default:
+		p.errors = append(p.errors, fmt.Sprintf("line %d: block can only follow a method call",
+			p.curToken.Line))
+		return expr
+	}
+}
+
+// parseBlock parses a block: do |params| ... end
+// Assumes curToken is 'do'
+func (p *Parser) parseBlock() *ast.BlockExpr {
+	p.nextToken() // move past 'do'
+
+	block := &ast.BlockExpr{}
+
+	// Parse optional parameters: |var| or |var1, var2|
+	if p.curTokenIs(token.PIPE) {
+		p.nextToken() // move past first '|'
+
+		seen := make(map[string]bool)
+
+		// Parse parameter list
+		if p.curTokenIs(token.IDENT) {
+			name := p.curToken.Literal
+			if seen[name] {
+				p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate block parameter name %q",
+					p.curToken.Line, name))
+				p.skipToEnd()
+				return nil
+			}
+			seen[name] = true
+			block.Params = append(block.Params, name)
+			p.nextToken()
+
+			for p.curTokenIs(token.COMMA) {
+				p.nextToken() // move past ','
+				if !p.curTokenIs(token.IDENT) {
+					p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name after comma",
+						p.curToken.Line))
+					p.skipToEnd()
+					return nil
+				}
+				name := p.curToken.Literal
+				if seen[name] {
+					p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate block parameter name %q",
+						p.curToken.Line, name))
+					p.skipToEnd()
+					return nil
+				}
+				seen[name] = true
+				block.Params = append(block.Params, name)
+				p.nextToken()
+			}
+		}
+
+		if !p.curTokenIs(token.PIPE) {
+			p.errors = append(p.errors, fmt.Sprintf("line %d: expected '|' after block parameters",
+				p.curToken.Line))
+			p.skipToEnd()
+			return nil
+		}
+		p.nextToken() // move past closing '|'
+	}
+
+	p.skipNewlines()
+
+	// Parse body until 'end'
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.END) {
+			break
+		}
+		if stmt := p.parseStatement(); stmt != nil {
+			block.Body = append(block.Body, stmt)
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'end' to close block",
+			p.curToken.Line))
+		return nil
+	}
+	p.nextToken() // consume 'end'
+
+	return block
+}
+
+// skipToEnd skips tokens until 'end' is found (for error recovery in blocks)
+func (p *Parser) skipToEnd() {
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.nextToken()
+	}
+	if p.curTokenIs(token.END) {
+		p.nextToken() // consume 'end'
+	}
 }
 
 func (p *Parser) parseAssignStmt() *ast.AssignStmt {
@@ -320,6 +445,12 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	p.nextToken() // consume '='
 
 	value := p.parseExpression(LOWEST)
+
+	// Check for block: expr.method do |x| ... end
+	if p.peekTokenIs(token.DO) {
+		value = p.parseBlockCall(value)
+	}
+
 	p.nextToken() // move past expression
 	p.skipNewlines()
 
@@ -467,6 +598,10 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseBoolLiteral()
 	case token.LPAREN:
 		left = p.parseGroupedExpr()
+	case token.LBRACKET:
+		left = p.parseArrayLiteral()
+	case token.LBRACE:
+		left = p.parseMapLiteral()
 	case token.MINUS, token.NOT:
 		left = p.parsePrefixExpr()
 	default:
@@ -488,12 +623,17 @@ infixLoop:
 		case token.LPAREN:
 			p.nextToken()
 			left = p.parseCallExprWithParens(left)
+		case token.LBRACKET:
+			p.nextToken()
+			left = p.parseIndexExpr(left)
 		default:
 			break infixLoop
 		}
 	}
 
 	// Handle Ruby-style function call without parens: puts "hi"
+	// Note: LBRACKET not included here - use parens for array args: puts([1,2,3])
+	// This avoids ambiguity with array indexing (arr[0])
 	if ident, ok := left.(*ast.Ident); ok {
 		if p.peekTokenIs(token.STRING) || p.peekTokenIs(token.INT) ||
 			p.peekTokenIs(token.FLOAT) || p.peekTokenIs(token.TRUE) ||
@@ -566,6 +706,154 @@ func (p *Parser) parseStringLiteral() ast.Expression {
 
 func (p *Parser) parseBoolLiteral() ast.Expression {
 	return &ast.BoolLit{Value: p.curTokenIs(token.TRUE)}
+}
+
+func (p *Parser) parseArrayLiteral() ast.Expression {
+	arr := &ast.ArrayLit{}
+	startLine := p.curToken.Line
+
+	p.nextToken() // consume '['
+
+	// Handle empty array
+	if p.curTokenIs(token.RBRACKET) {
+		return arr
+	}
+
+	// Parse first element
+	elem := p.parseExpression(LOWEST)
+	if elem == nil {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected expression in array literal",
+			p.curToken.Line))
+		return nil
+	}
+	arr.Elements = append(arr.Elements, elem)
+
+	// Parse remaining elements
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // move to ','
+		p.nextToken() // move past ',' to next element
+
+		// Allow trailing comma
+		if p.curTokenIs(token.RBRACKET) {
+			return arr
+		}
+
+		elem := p.parseExpression(LOWEST)
+		if elem == nil {
+			p.errors = append(p.errors, fmt.Sprintf("line %d: expected expression after comma in array literal",
+				startLine))
+			return nil
+		}
+		arr.Elements = append(arr.Elements, elem)
+	}
+
+	// Move past last element to ']'
+	p.nextToken()
+
+	if !p.curTokenIs(token.RBRACKET) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected ']' after array elements",
+			p.curToken.Line))
+		return nil
+	}
+
+	return arr
+}
+
+func (p *Parser) parseIndexExpr(left ast.Expression) ast.Expression {
+	// curToken is '['
+	p.nextToken() // move past '[' to the index expression
+
+	index := p.parseExpression(LOWEST)
+	if index == nil {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected index expression",
+			p.curToken.Line))
+		return nil
+	}
+
+	// Move past index expression to ']'
+	p.nextToken()
+
+	if !p.curTokenIs(token.RBRACKET) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected ']' after index",
+			p.curToken.Line))
+		return nil
+	}
+
+	return &ast.IndexExpr{Left: left, Index: index}
+}
+
+func (p *Parser) parseMapLiteral() ast.Expression {
+	mapLit := &ast.MapLit{}
+	startLine := p.curToken.Line
+
+	p.nextToken() // consume '{'
+
+	// Handle empty map
+	if p.curTokenIs(token.RBRACE) {
+		return mapLit
+	}
+
+	// Parse first entry
+	entry, ok := p.parseMapEntry(startLine)
+	if !ok {
+		return nil
+	}
+	mapLit.Entries = append(mapLit.Entries, entry)
+
+	// Parse remaining entries
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // move to ','
+		p.nextToken() // move past ',' to next key
+
+		// Allow trailing comma
+		if p.curTokenIs(token.RBRACE) {
+			return mapLit
+		}
+
+		entry, ok := p.parseMapEntry(startLine)
+		if !ok {
+			return nil
+		}
+		mapLit.Entries = append(mapLit.Entries, entry)
+	}
+
+	// Move past last value to '}'
+	p.nextToken()
+
+	if !p.curTokenIs(token.RBRACE) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected '}' after map entries",
+			p.curToken.Line))
+		return nil
+	}
+
+	return mapLit
+}
+
+func (p *Parser) parseMapEntry(startLine int) (ast.MapEntry, bool) {
+	key := p.parseExpression(LOWEST)
+	if key == nil {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected key in map literal",
+			p.curToken.Line))
+		return ast.MapEntry{}, false
+	}
+
+	// Expect '=>'
+	if !p.peekTokenIs(token.HASHROCKET) {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected '=>' after map key",
+			startLine))
+		return ast.MapEntry{}, false
+	}
+	p.nextToken() // move to '=>'
+	p.nextToken() // move past '=>' to value
+
+	value := p.parseExpression(LOWEST)
+	if value == nil {
+		p.errors = append(p.errors, fmt.Sprintf("line %d: expected value after '=>' in map literal",
+			startLine))
+		return ast.MapEntry{}, false
+	}
+
+	return ast.MapEntry{Key: key, Value: value}, true
 }
 
 func (p *Parser) parseGroupedExpr() ast.Expression {

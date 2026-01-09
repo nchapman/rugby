@@ -6,4 +6,5 @@ import (
 
 func main() {
 	x := 5
+	fmt.Println(x)
 }

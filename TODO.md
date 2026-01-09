@@ -50,13 +50,23 @@ Local function names are passed through as-is. Full behavior once `pub` is imple
 This requires `pub` keyword support (Phase 8) to be fully correct.
 
 ## Phase 5: Collections
-- [ ] Array literals (`[1, 2, 3]`)
-- [ ] Array indexing (`arr[0]`)
-- [ ] Map literals (`{"a" => 1}`)
-- [ ] Map access (`m["key"]`)
-- [ ] `each` blocks (`arr.each do |x| ... end`)
-- [ ] `each_with_index`
-- [ ] `map` blocks
+- [x] Array literals (`[1, 2, 3]`)
+- [x] Array indexing (`arr[0]`)
+- [x] Map literals (`{"a" => 1}`)
+- [x] Map access (`m["key"]`)
+- [x] `each` blocks (`arr.each do |x| ... end`)
+- [x] `each_with_index`
+- [x] `map` blocks (`arr.map do |x| ... end`)
+- [x] **Generic block architecture** (blocks now method-agnostic)
+  - [x] Add `BlockExpr` AST node (generic `do |params| ... end`)
+  - [x] Update `CallExpr` to support optional block argument
+  - [x] Refactor parser: parse all blocks generically
+  - [x] Update codegen: recognize patterns (emit `for range`) vs IIFE for map
+  - [x] Proper variable scope tracking in blocks
+  - [x] Duplicate block parameter detection
+  - [x] Nested blocks support
+  - [ ] Create `rugby` runtime package for stdlib functions
+  - [ ] Add more array methods: `select`, `reject`, `reduce`, `find`, etc.
 
 ## Phase 6: Classes
 - [ ] Class definition (`class User ... end`)

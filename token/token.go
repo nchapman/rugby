@@ -33,11 +33,17 @@ const (
 	ASSIGN TokenType = "="
 
 	// Delimiters
-	LPAREN TokenType = "("
-	RPAREN TokenType = ")"
-	COMMA  TokenType = ","
-	ARROW  TokenType = "->"
-	DOT    TokenType = "."
+	LPAREN     TokenType = "("
+	RPAREN     TokenType = ")"
+	LBRACKET   TokenType = "["
+	RBRACKET   TokenType = "]"
+	LBRACE     TokenType = "{"
+	RBRACE     TokenType = "}"
+	COMMA      TokenType = ","
+	ARROW      TokenType = "->"
+	HASHROCKET TokenType = "=>"
+	DOT        TokenType = "."
+	PIPE       TokenType = "|"
 
 	// Keywords
 	IMPORT TokenType = "IMPORT"
@@ -55,6 +61,7 @@ const (
 	NOT    TokenType = "NOT"
 	AS     TokenType = "AS"
 	DEFER  TokenType = "DEFER"
+	DO     TokenType = "DO"
 )
 
 type Token struct {
@@ -80,6 +87,7 @@ var keywords = map[string]TokenType{
 	"not":    NOT,
 	"as":     AS,
 	"defer":  DEFER,
+	"do":     DO,
 }
 
 func LookupIdent(ident string) TokenType {

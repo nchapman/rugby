@@ -132,8 +132,8 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `func add(a interface{}, b interface{})`)
-	assertContains(t, output, `x := a`)  // new var uses :=
-	assertContains(t, output, `a = b`)   // param reassignment uses =
+	assertContains(t, output, `x := a`) // new var uses :=
+	assertContains(t, output, `a = b`)  // param reassignment uses =
 	assertContains(t, output, `func main()`)
 }
 
@@ -316,4 +316,205 @@ func TestSnakeToCamelConversion(t *testing.T) {
 			t.Errorf("snakeToCamel(%q) = %q, want %q", tt.input, got, tt.expected)
 		}
 	}
+}
+
+func TestGenerateArrayLiteral(t *testing.T) {
+	input := `def main
+  x = [1, 2, 3]
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `x := []interface{}{1, 2, 3}`)
+}
+
+func TestGenerateEmptyArray(t *testing.T) {
+	input := `def main
+  x = []
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `x := []interface{}{}`)
+}
+
+func TestGenerateArrayWithExpressions(t *testing.T) {
+	input := `def main
+  x = [1 + 2, 3 * 4]
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `[]interface{}{(1 + 2), (3 * 4)}`)
+}
+
+func TestGenerateArrayAsArg(t *testing.T) {
+	input := `import fmt
+
+def main
+  puts([1, 2, 3])
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `fmt.Println([]interface{}{1, 2, 3})`)
+}
+
+func TestGenerateNestedArray(t *testing.T) {
+	input := `def main
+  x = [[1, 2], [3, 4]]
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `[]interface{}{[]interface{}{1, 2}, []interface{}{3, 4}}`)
+}
+
+func TestGenerateArrayIndex(t *testing.T) {
+	input := `def main
+  x = arr[0]
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `x := arr[0]`)
+}
+
+func TestGenerateArrayIndexWithExpression(t *testing.T) {
+	input := `def main
+  x = arr[i + 1]
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `arr[(i + 1)]`)
+}
+
+func TestGenerateChainedArrayIndex(t *testing.T) {
+	input := `def main
+  x = matrix[0][1]
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `matrix[0][1]`)
+}
+
+func TestGenerateMapLiteral(t *testing.T) {
+	input := `def main
+  x = {"a" => 1, "b" => 2}
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `map[interface{}]interface{}{"a": 1, "b": 2}`)
+}
+
+func TestGenerateEmptyMap(t *testing.T) {
+	input := `def main
+  x = {}
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `map[interface{}]interface{}{}`)
+}
+
+func TestGenerateMapAccess(t *testing.T) {
+	input := `def main
+  x = m["key"]
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `m["key"]`)
+}
+
+func TestGenerateEachBlock(t *testing.T) {
+	input := `import fmt
+
+def main
+  arr.each do |x|
+    puts x
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for _, x := range arr {`)
+	assertContains(t, output, `fmt.Println(x)`)
+}
+
+func TestGenerateEachWithIndex(t *testing.T) {
+	input := `import fmt
+
+def main
+  arr.each_with_index do |v, i|
+    puts v
+  end
+end`
+
+	output := compile(t, input)
+
+	// Rugby |value, index| is swapped to Go's index, value order
+	assertContains(t, output, `for i, v := range arr {`)
+	assertContains(t, output, `fmt.Println(v)`)
+}
+
+func TestGenerateMapBlock(t *testing.T) {
+	input := `def main
+  result = arr.map do |x|
+    x * 2
+  end
+end`
+
+	output := compile(t, input)
+
+	// Map generates an IIFE that builds a result slice
+	assertContains(t, output, `func() []interface{}`)
+	assertContains(t, output, `for _, x := range arr`)
+	assertContains(t, output, `result = append(result,`)
+}
+
+func TestBlockWithNoParams(t *testing.T) {
+	input := `def main
+  items.each do ||
+    puts "hello"
+  end
+end`
+
+	output := compile(t, input)
+
+	// Block with no params should use _ for range variable
+	assertContains(t, output, `for _, _ := range items`)
+}
+
+func TestBlockOnMethodCall(t *testing.T) {
+	input := `def main
+  get_items().each do |x|
+    puts x
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for _, x := range get_items()`)
+}
+
+func TestNestedBlocks(t *testing.T) {
+	input := `import fmt
+
+def main
+  matrix.each do |row|
+    row.each do |x|
+      puts x
+    end
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for _, row := range matrix`)
+	assertContains(t, output, `for _, x := range row`)
+	assertContains(t, output, `fmt.Println(x)`)
 }

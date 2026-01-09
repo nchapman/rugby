@@ -58,10 +58,20 @@ type ExprStmt struct {
 func (e *ExprStmt) node()     {}
 func (e *ExprStmt) stmtNode() {}
 
-// CallExpr represents a function call
+// BlockExpr represents a block: do |params| ... end or { |params| ... }
+type BlockExpr struct {
+	Params []string    // block parameter names (e.g., |x| or |v, i|)
+	Body   []Statement // the statements in the block
+}
+
+func (b *BlockExpr) node()     {}
+func (b *BlockExpr) exprNode() {}
+
+// CallExpr represents a function call, optionally with a block
 type CallExpr struct {
-	Func Expression
-	Args []Expression
+	Func  Expression // function being called
+	Args  []Expression
+	Block *BlockExpr // optional block argument (nil if no block)
 }
 
 func (c *CallExpr) node()     {}
@@ -115,6 +125,37 @@ type BoolLit struct {
 
 func (b *BoolLit) node()     {}
 func (b *BoolLit) exprNode() {}
+
+// ArrayLit represents an array literal
+type ArrayLit struct {
+	Elements []Expression
+}
+
+func (a *ArrayLit) node()     {}
+func (a *ArrayLit) exprNode() {}
+
+// IndexExpr represents an index expression like arr[0]
+type IndexExpr struct {
+	Left  Expression // the expression being indexed
+	Index Expression // the index expression
+}
+
+func (i *IndexExpr) node()     {}
+func (i *IndexExpr) exprNode() {}
+
+// MapEntry represents a key-value pair in a map literal
+type MapEntry struct {
+	Key   Expression
+	Value Expression
+}
+
+// MapLit represents a map literal like {"a" => 1, "b" => 2}
+type MapLit struct {
+	Entries []MapEntry
+}
+
+func (m *MapLit) node()     {}
+func (m *MapLit) exprNode() {}
 
 // BinaryExpr represents a binary operation
 type BinaryExpr struct {

@@ -223,6 +223,12 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		} else {
 			g.buf.WriteString("false")
 		}
+	case *ast.ArrayLit:
+		g.genArrayLit(e)
+	case *ast.IndexExpr:
+		g.genIndexExpr(e)
+	case *ast.MapLit:
+		g.genMapLit(e)
 	case *ast.Ident:
 		g.buf.WriteString(e.Name)
 	case *ast.BinaryExpr:
@@ -247,7 +253,46 @@ func (g *Generator) genUnaryExpr(e *ast.UnaryExpr) {
 	g.genExpr(e.Expr)
 }
 
+func (g *Generator) genArrayLit(arr *ast.ArrayLit) {
+	// Emit untyped array; type inference will be added in Phase 7
+	g.buf.WriteString("[]interface{}{")
+	for i, elem := range arr.Elements {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.genExpr(elem)
+	}
+	g.buf.WriteString("}")
+}
+
+func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
+	g.genExpr(idx.Left)
+	g.buf.WriteString("[")
+	g.genExpr(idx.Index)
+	g.buf.WriteString("]")
+}
+
+func (g *Generator) genMapLit(m *ast.MapLit) {
+	// Emit untyped map; type inference will be added in Phase 7
+	g.buf.WriteString("map[interface{}]interface{}{")
+	for i, entry := range m.Entries {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.genExpr(entry.Key)
+		g.buf.WriteString(": ")
+		g.genExpr(entry.Value)
+	}
+	g.buf.WriteString("}")
+}
+
 func (g *Generator) genCallExpr(call *ast.CallExpr) {
+	// If the call has a block, handle it specially
+	if call.Block != nil {
+		g.genBlockCall(call)
+		return
+	}
+
 	// Generate the function expression
 	switch fn := call.Func.(type) {
 	case *ast.Ident:
@@ -276,6 +321,184 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		g.genExpr(arg)
 	}
 	g.buf.WriteString(")")
+}
+
+// genBlockCall generates code for method calls with blocks.
+// Recognizes patterns like each, each_with_index, map and generates appropriate Go code.
+func (g *Generator) genBlockCall(call *ast.CallExpr) {
+	sel, ok := call.Func.(*ast.SelectorExpr)
+	if !ok {
+		// Block on non-selector call - future: support generic block-taking functions
+		g.buf.WriteString("/* unsupported block call */")
+		return
+	}
+
+	method := sel.Sel
+	block := call.Block
+
+	switch method {
+	case "each":
+		g.genEachBlock(sel.X, block)
+	case "each_with_index":
+		g.genEachWithIndexBlock(sel.X, block)
+	case "map":
+		g.genMapBlock(sel.X, block)
+	default:
+		// Unknown method with block - future: support user-defined block methods
+		g.buf.WriteString(fmt.Sprintf("/* unsupported block method: %s */", method))
+	}
+}
+
+// genEachBlock generates: for _, v := range iterable { body }
+func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) {
+	varName := "_"
+	if len(block.Params) > 0 {
+		varName = block.Params[0]
+	}
+
+	// Save previous variable state for proper scope restoration
+	wasDefinedBefore := g.vars[varName]
+
+	g.buf.WriteString("for _, ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := range ")
+	g.genExpr(iterable)
+	g.buf.WriteString(" {\n")
+
+	if varName != "_" {
+		g.vars[varName] = true
+	}
+
+	g.indent++
+	for _, stmt := range block.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	// Restore variable state after block
+	if !wasDefinedBefore && varName != "_" {
+		delete(g.vars, varName)
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}")
+}
+
+// genEachWithIndexBlock generates: for i, v := range iterable { body }
+// Note: Rugby uses |value, index| order but Go uses index, value
+func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.BlockExpr) {
+	varName := "_"
+	indexName := "_"
+	if len(block.Params) > 0 {
+		varName = block.Params[0]
+	}
+	if len(block.Params) > 1 {
+		indexName = block.Params[1]
+	}
+
+	// Save previous variable state for proper scope restoration
+	varWasDefinedBefore := g.vars[varName]
+	indexWasDefinedBefore := g.vars[indexName]
+
+	// Swap order: Rugby |value, index| -> Go index, value
+	g.buf.WriteString("for ")
+	g.buf.WriteString(indexName)
+	g.buf.WriteString(", ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := range ")
+	g.genExpr(iterable)
+	g.buf.WriteString(" {\n")
+
+	if varName != "_" {
+		g.vars[varName] = true
+	}
+	if indexName != "_" {
+		g.vars[indexName] = true
+	}
+
+	g.indent++
+	for _, stmt := range block.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	// Restore variable state after block
+	if !varWasDefinedBefore && varName != "_" {
+		delete(g.vars, varName)
+	}
+	if !indexWasDefinedBefore && indexName != "_" {
+		delete(g.vars, indexName)
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}")
+}
+
+// genMapBlock generates an IIFE that builds a result slice:
+// func() []interface{} { var result []interface{}; for _, v := range iterable { result = append(result, expr) }; return result }()
+func (g *Generator) genMapBlock(iterable ast.Expression, block *ast.BlockExpr) {
+	varName := "_"
+	if len(block.Params) > 0 {
+		varName = block.Params[0]
+	}
+
+	// Save previous variable state for proper scope restoration
+	wasDefinedBefore := g.vars[varName]
+
+	// Generate inline IIFE pattern for map
+	g.buf.WriteString("func() []interface{} {\n")
+	g.indent++
+
+	g.writeIndent()
+	g.buf.WriteString("var result []interface{}\n")
+
+	g.writeIndent()
+	g.buf.WriteString("for _, ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := range ")
+	g.genExpr(iterable)
+	g.buf.WriteString(" {\n")
+
+	if varName != "_" {
+		g.vars[varName] = true
+	}
+
+	g.indent++
+
+	// The last expression in the block is the mapped value
+	if len(block.Body) > 0 {
+		// Generate all but last statement normally
+		for i := 0; i < len(block.Body)-1; i++ {
+			g.genStatement(block.Body[i])
+		}
+		// Last statement should be an expression - extract its value
+		lastStmt := block.Body[len(block.Body)-1]
+		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
+			g.writeIndent()
+			g.buf.WriteString("result = append(result, ")
+			g.genExpr(exprStmt.Expr)
+			g.buf.WriteString(")\n")
+		} else {
+			// Not an expression, just generate it
+			g.genStatement(lastStmt)
+		}
+	}
+
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+
+	// Restore variable state after block
+	if !wasDefinedBefore && varName != "_" {
+		delete(g.vars, varName)
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("return result\n")
+
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}()")
 }
 
 func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
