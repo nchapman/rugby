@@ -9,6 +9,55 @@ import (
 	"rugby/ast"
 )
 
+// kernelFunc describes a Rugby kernel function mapping to runtime
+type kernelFunc struct {
+	runtimeFunc string
+	// transform customizes function name based on args (e.g., rand -> RandInt/RandFloat)
+	transform func(args []ast.Expression) string
+}
+
+// Kernel function mappings - single source of truth
+var kernelFuncs = map[string]kernelFunc{
+	"puts":  {runtimeFunc: "runtime.Puts"},
+	"print": {runtimeFunc: "runtime.Print"},
+	"p":     {runtimeFunc: "runtime.P"},
+	"gets":  {runtimeFunc: "runtime.Gets"},
+	"exit":  {runtimeFunc: "runtime.Exit"},
+	"sleep": {runtimeFunc: "runtime.Sleep"},
+	"rand": {
+		transform: func(args []ast.Expression) string {
+			if len(args) > 0 {
+				return "runtime.RandInt"
+			}
+			return "runtime.RandFloat"
+		},
+	},
+}
+
+// Kernel functions that can be used as identifiers (without parens)
+var noParenKernelFuncs = map[string]string{
+	"gets": "runtime.Gets()",
+	"rand": "runtime.RandFloat()",
+}
+
+// blockMethod describes a block method mapping
+type blockMethod struct {
+	runtimeFunc    string
+	returnType     string // "interface{}" or "bool"
+	hasAccumulator bool   // for reduce - takes 2 params (acc, elem) instead of 1
+}
+
+// Block method mappings - single source of truth
+var blockMethods = map[string]blockMethod{
+	"map":    {runtimeFunc: "runtime.Map", returnType: "interface{}"},
+	"select": {runtimeFunc: "runtime.Select", returnType: "bool"},
+	"filter": {runtimeFunc: "runtime.Select", returnType: "bool"},
+	"reject": {runtimeFunc: "runtime.Reject", returnType: "bool"},
+	"find":   {runtimeFunc: "runtime.Find", returnType: "bool"},
+	"detect": {runtimeFunc: "runtime.Find", returnType: "bool"},
+	"reduce": {runtimeFunc: "runtime.Reduce", returnType: "interface{}", hasAccumulator: true},
+}
+
 type Generator struct {
 	buf          strings.Builder
 	indent       int
@@ -251,14 +300,10 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genMapLit(e)
 	case *ast.Ident:
 		// Check for kernel functions that can be used without parens
-		switch e.Name {
-		case "gets":
+		if runtimeCall, ok := noParenKernelFuncs[e.Name]; ok {
 			g.needsRuntime = true
-			g.buf.WriteString("runtime.Gets()")
-		case "rand":
-			g.needsRuntime = true
-			g.buf.WriteString("runtime.RandFloat()")
-		default:
+			g.buf.WriteString(runtimeCall)
+		} else {
 			g.buf.WriteString(e.Name)
 		}
 	case *ast.BinaryExpr:
@@ -328,32 +373,12 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 	case *ast.Ident:
 		// Simple function call - check for kernel/builtin functions
 		funcName := fn.Name
-		switch funcName {
-		case "puts":
+		if kf, ok := kernelFuncs[funcName]; ok {
 			g.needsRuntime = true
-			funcName = "runtime.Puts"
-		case "print":
-			g.needsRuntime = true
-			funcName = "runtime.Print"
-		case "p":
-			g.needsRuntime = true
-			funcName = "runtime.P"
-		case "gets":
-			g.needsRuntime = true
-			funcName = "runtime.Gets"
-		case "exit":
-			g.needsRuntime = true
-			funcName = "runtime.Exit"
-		case "sleep":
-			g.needsRuntime = true
-			funcName = "runtime.Sleep"
-		case "rand":
-			g.needsRuntime = true
-			// rand with args -> RandInt, rand without -> RandFloat
-			if len(call.Args) > 0 {
-				funcName = "runtime.RandInt"
+			if kf.transform != nil {
+				funcName = kf.transform(call.Args)
 			} else {
-				funcName = "runtime.RandFloat"
+				funcName = kf.runtimeFunc
 			}
 		}
 		// Don't transform local function names - they stay as defined
@@ -390,25 +415,24 @@ func (g *Generator) genBlockCall(call *ast.CallExpr) {
 	method := sel.Sel
 	block := call.Block
 
+	// Special cases: inline iteration (each, each_with_index)
 	switch method {
 	case "each":
 		g.genEachBlock(sel.X, block)
+		return
 	case "each_with_index":
 		g.genEachWithIndexBlock(sel.X, block)
-	case "map":
-		g.genMapBlock(sel.X, block)
-	case "select", "filter":
-		g.genSelectBlock(sel.X, block)
-	case "reject":
-		g.genRejectBlock(sel.X, block)
-	case "reduce":
-		g.genReduceBlock(sel.X, block, call.Args)
-	case "find", "detect":
-		g.genFindBlock(sel.X, block)
-	default:
-		// Unknown method with block - future: support user-defined block methods
-		g.buf.WriteString(fmt.Sprintf("/* unsupported block method: %s */", method))
+		return
 	}
+
+	// Check if this is a runtime block method
+	if bm, ok := blockMethods[method]; ok {
+		g.genRuntimeBlock(sel.X, block, call.Args, bm)
+		return
+	}
+
+	// Unknown method with block
+	g.buf.WriteString(fmt.Sprintf("/* unsupported block method: %s */", method))
 }
 
 // genEachBlock generates: for _, v := range iterable { body }
@@ -496,33 +520,77 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 	g.buf.WriteString("}")
 }
 
-// genMapBlock generates: runtime.Map(iterable, func(x T) R { return expr })
-func (g *Generator) genMapBlock(iterable ast.Expression, block *ast.BlockExpr) {
+// genRuntimeBlock generates runtime block calls (map, select, reject, reduce, find)
+// Unified handler for all runtime block methods
+func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExpr, args []ast.Expression, method blockMethod) {
 	g.needsRuntime = true
 
-	varName := "_"
-	if len(block.Params) > 0 {
-		varName = block.Params[0]
+	// Extract parameter names
+	var param1Name, param2Name string
+	if method.hasAccumulator {
+		// reduce: |acc, elem|
+		param1Name = "acc"
+		param2Name = "_"
+		if len(block.Params) > 0 {
+			param1Name = block.Params[0]
+		}
+		if len(block.Params) > 1 {
+			param2Name = block.Params[1]
+		}
+	} else {
+		// map/select/reject/find: |elem|
+		param1Name = "_"
+		if len(block.Params) > 0 {
+			param1Name = block.Params[0]
+		}
 	}
 
-	// Save previous variable state for proper scope restoration
-	wasDefinedBefore := g.vars[varName]
+	// Save variable state
+	param1WasDefinedBefore := g.vars[param1Name]
+	param2WasDefinedBefore := g.vars[param2Name]
 
-	g.buf.WriteString("runtime.Map(")
+	// Generate: runtime.Method(iterable, [initial,] func(...) returnType {
+	g.buf.WriteString(method.runtimeFunc)
+	g.buf.WriteString("(")
 	g.genExpr(iterable)
-	g.buf.WriteString(", func(")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" interface{}) interface{} {\n")
 
-	if varName != "_" {
-		g.vars[varName] = true
+	// For reduce, add initial value
+	if method.hasAccumulator {
+		g.buf.WriteString(", ")
+		if len(args) > 0 {
+			g.genExpr(args[0])
+		} else {
+			g.buf.WriteString("nil")
+		}
+	}
+
+	// Generate function literal
+	g.buf.WriteString(", func(")
+	if method.hasAccumulator {
+		g.buf.WriteString(param1Name)
+		g.buf.WriteString(" interface{}, ")
+		g.buf.WriteString(param2Name)
+		g.buf.WriteString(" interface{}")
+	} else {
+		g.buf.WriteString(param1Name)
+		g.buf.WriteString(" interface{}")
+	}
+	g.buf.WriteString(") ")
+	g.buf.WriteString(method.returnType)
+	g.buf.WriteString(" {\n")
+
+	// Mark variables as declared
+	if param1Name != "_" {
+		g.vars[param1Name] = true
+	}
+	if param2Name != "_" {
+		g.vars[param2Name] = true
 	}
 
 	g.indent++
 
-	// The last expression in the block is the return value
+	// Generate block body with last statement as return
 	if len(block.Body) > 0 {
-		// Generate all but last statement normally
 		for i := 0; i < len(block.Body)-1; i++ {
 			g.genStatement(block.Body[i])
 		}
@@ -534,231 +602,18 @@ func (g *Generator) genMapBlock(iterable ast.Expression, block *ast.BlockExpr) {
 			g.genExpr(exprStmt.Expr)
 			g.buf.WriteString("\n")
 		} else {
-			// Not an expression, just generate it
 			g.genStatement(lastStmt)
 		}
 	}
 
 	g.indent--
 
-	// Restore variable state after block
-	if !wasDefinedBefore && varName != "_" {
-		delete(g.vars, varName)
+	// Restore variable state
+	if !param1WasDefinedBefore && param1Name != "_" {
+		delete(g.vars, param1Name)
 	}
-
-	g.writeIndent()
-	g.buf.WriteString("})")
-}
-
-// genSelectBlock generates: runtime.Select(iterable, func(x T) bool { return expr })
-func (g *Generator) genSelectBlock(iterable ast.Expression, block *ast.BlockExpr) {
-	g.needsRuntime = true
-
-	varName := "_"
-	if len(block.Params) > 0 {
-		varName = block.Params[0]
-	}
-
-	wasDefinedBefore := g.vars[varName]
-
-	g.buf.WriteString("runtime.Select(")
-	g.genExpr(iterable)
-	g.buf.WriteString(", func(")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" interface{}) bool {\n")
-
-	if varName != "_" {
-		g.vars[varName] = true
-	}
-
-	g.indent++
-
-	// Last expression is the predicate
-	if len(block.Body) > 0 {
-		for i := 0; i < len(block.Body)-1; i++ {
-			g.genStatement(block.Body[i])
-		}
-		lastStmt := block.Body[len(block.Body)-1]
-		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
-			g.writeIndent()
-			g.buf.WriteString("return ")
-			g.genExpr(exprStmt.Expr)
-			g.buf.WriteString("\n")
-		} else {
-			g.genStatement(lastStmt)
-		}
-	}
-
-	g.indent--
-
-	if !wasDefinedBefore && varName != "_" {
-		delete(g.vars, varName)
-	}
-
-	g.writeIndent()
-	g.buf.WriteString("})")
-}
-
-// genRejectBlock generates: runtime.Reject(iterable, func(x T) bool { return expr })
-func (g *Generator) genRejectBlock(iterable ast.Expression, block *ast.BlockExpr) {
-	g.needsRuntime = true
-
-	varName := "_"
-	if len(block.Params) > 0 {
-		varName = block.Params[0]
-	}
-
-	wasDefinedBefore := g.vars[varName]
-
-	g.buf.WriteString("runtime.Reject(")
-	g.genExpr(iterable)
-	g.buf.WriteString(", func(")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" interface{}) bool {\n")
-
-	if varName != "_" {
-		g.vars[varName] = true
-	}
-
-	g.indent++
-
-	if len(block.Body) > 0 {
-		for i := 0; i < len(block.Body)-1; i++ {
-			g.genStatement(block.Body[i])
-		}
-		lastStmt := block.Body[len(block.Body)-1]
-		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
-			g.writeIndent()
-			g.buf.WriteString("return ")
-			g.genExpr(exprStmt.Expr)
-			g.buf.WriteString("\n")
-		} else {
-			g.genStatement(lastStmt)
-		}
-	}
-
-	g.indent--
-
-	if !wasDefinedBefore && varName != "_" {
-		delete(g.vars, varName)
-	}
-
-	g.writeIndent()
-	g.buf.WriteString("})")
-}
-
-// genReduceBlock generates: runtime.Reduce(iterable, initial, func(acc R, x T) R { return expr })
-func (g *Generator) genReduceBlock(iterable ast.Expression, block *ast.BlockExpr, args []ast.Expression) {
-	g.needsRuntime = true
-
-	accName := "acc"
-	varName := "_"
-	if len(block.Params) > 0 {
-		accName = block.Params[0]
-	}
-	if len(block.Params) > 1 {
-		varName = block.Params[1]
-	}
-
-	accWasDefinedBefore := g.vars[accName]
-	varWasDefinedBefore := g.vars[varName]
-
-	g.buf.WriteString("runtime.Reduce(")
-	g.genExpr(iterable)
-	g.buf.WriteString(", ")
-
-	// Initial value (first arg to reduce)
-	if len(args) > 0 {
-		g.genExpr(args[0])
-	} else {
-		g.buf.WriteString("nil")
-	}
-
-	g.buf.WriteString(", func(")
-	g.buf.WriteString(accName)
-	g.buf.WriteString(" interface{}, ")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" interface{}) interface{} {\n")
-
-	if accName != "_" {
-		g.vars[accName] = true
-	}
-	if varName != "_" {
-		g.vars[varName] = true
-	}
-
-	g.indent++
-
-	if len(block.Body) > 0 {
-		for i := 0; i < len(block.Body)-1; i++ {
-			g.genStatement(block.Body[i])
-		}
-		lastStmt := block.Body[len(block.Body)-1]
-		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
-			g.writeIndent()
-			g.buf.WriteString("return ")
-			g.genExpr(exprStmt.Expr)
-			g.buf.WriteString("\n")
-		} else {
-			g.genStatement(lastStmt)
-		}
-	}
-
-	g.indent--
-
-	if !accWasDefinedBefore && accName != "_" {
-		delete(g.vars, accName)
-	}
-	if !varWasDefinedBefore && varName != "_" {
-		delete(g.vars, varName)
-	}
-
-	g.writeIndent()
-	g.buf.WriteString("})")
-}
-
-// genFindBlock generates: runtime.Find(iterable, func(x T) bool { return expr })
-func (g *Generator) genFindBlock(iterable ast.Expression, block *ast.BlockExpr) {
-	g.needsRuntime = true
-
-	varName := "_"
-	if len(block.Params) > 0 {
-		varName = block.Params[0]
-	}
-
-	wasDefinedBefore := g.vars[varName]
-
-	g.buf.WriteString("runtime.Find(")
-	g.genExpr(iterable)
-	g.buf.WriteString(", func(")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" interface{}) bool {\n")
-
-	if varName != "_" {
-		g.vars[varName] = true
-	}
-
-	g.indent++
-
-	if len(block.Body) > 0 {
-		for i := 0; i < len(block.Body)-1; i++ {
-			g.genStatement(block.Body[i])
-		}
-		lastStmt := block.Body[len(block.Body)-1]
-		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
-			g.writeIndent()
-			g.buf.WriteString("return ")
-			g.genExpr(exprStmt.Expr)
-			g.buf.WriteString("\n")
-		} else {
-			g.genStatement(lastStmt)
-		}
-	}
-
-	g.indent--
-
-	if !wasDefinedBefore && varName != "_" {
-		delete(g.vars, varName)
+	if !param2WasDefinedBefore && param2Name != "_" {
+		delete(g.vars, param2Name)
 	}
 
 	g.writeIndent()
