@@ -138,13 +138,13 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] Add `times`, `upto`, `downto` integer iteration
 
 ## Phase 6: Classes
-- [ ] Class definition (`class User ... end`)
-- [ ] Instance variables (`@name`) - types inferred from `initialize`
-- [ ] Constructor (`def initialize`) - generates `New*` functions
-- [ ] `Class.new(...)` syntax
-- [ ] Methods with receivers (value receiver default)
-- [ ] Pointer receiver methods (`def mutate!`)
-- [ ] Embedding via `<` (`class Service < Logger`) - single parent only for MVP
+- [x] Class definition (`class User ... end`)
+- [x] Instance variables (`@name`) - types inferred from `initialize`
+- [x] Constructor (`def initialize`) - generates `New*` functions
+- [x] `Class.new(...)` syntax
+- [x] Methods with pointer receivers (for mutation support)
+- [x] Embedding via `<` (`class Service < Logger`) - single parent only for MVP
+- [ ] Pointer receiver methods (`def mutate!`) - explicit `!` suffix convention
 
 ## Phase 7: Types & Optionals
 - [ ] Type annotations (`x : Int = 5`)
