@@ -21,7 +21,7 @@ Features in implementation order, building incrementally.
 - [ ] Function parameters (`def add(a, b)`)
 - [ ] Explicit return types (`def add(a, b) -> Int`)
 - [ ] Multiple return values (`-> (Int, Bool)`)
-- [ ] Function calls with arguments (`add(1, 2)`)
+- [x] Function calls with arguments (`add(1, 2)`)
 
 ## Phase 4: Go Interop
 - [ ] Method calls with dot syntax (`http.Get(url)`)
