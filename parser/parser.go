@@ -202,16 +202,52 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 		p.nextToken() // consume ')'
 	}
 
-	// Parse optional return type: -> Type
+	// Parse optional return type: -> Type or -> (Type1, Type2)
 	if p.curTokenIs(token.ARROW) {
 		p.nextToken() // consume '->'
-		if !p.curTokenIs(token.IDENT) {
+
+		if p.curTokenIs(token.LPAREN) {
+			// Multiple return types: (Type1, Type2, ...)
+			p.nextToken() // consume '('
+
+			if !p.curTokenIs(token.IDENT) {
+				p.errors = append(p.errors, fmt.Sprintf("line %d: expected type in return type list",
+					p.curToken.Line))
+				return nil
+			}
+			fn.ReturnTypes = append(fn.ReturnTypes, p.curToken.Literal)
+			p.nextToken()
+
+			for p.curTokenIs(token.COMMA) {
+				p.nextToken() // consume ','
+				// Allow trailing comma
+				if p.curTokenIs(token.RPAREN) {
+					break
+				}
+				if !p.curTokenIs(token.IDENT) {
+					p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after comma",
+						p.curToken.Line))
+					return nil
+				}
+				fn.ReturnTypes = append(fn.ReturnTypes, p.curToken.Literal)
+				p.nextToken()
+			}
+
+			if !p.curTokenIs(token.RPAREN) {
+				p.errors = append(p.errors, fmt.Sprintf("line %d: expected ')' after return types",
+					p.curToken.Line))
+				return nil
+			}
+			p.nextToken() // consume ')'
+		} else if p.curTokenIs(token.IDENT) {
+			// Single return type
+			fn.ReturnTypes = append(fn.ReturnTypes, p.curToken.Literal)
+			p.nextToken()
+		} else {
 			p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after ->",
 				p.curToken.Line))
 			return nil
 		}
-		fn.ReturnType = p.curToken.Literal
-		p.nextToken()
 	}
 
 	p.skipNewlines()

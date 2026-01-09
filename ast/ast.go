@@ -41,10 +41,10 @@ type Param struct {
 
 // FuncDecl represents a function definition
 type FuncDecl struct {
-	Name       string
-	Params     []*Param
-	ReturnType string // empty if not specified
-	Body       []Statement
+	Name        string
+	Params      []*Param
+	ReturnTypes []string // empty if not specified
+	Body        []Statement
 }
 
 func (f *FuncDecl) node()     {}

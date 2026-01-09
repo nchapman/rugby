@@ -89,10 +89,19 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	}
 	g.buf.WriteString(")")
 
-	// Generate return type if specified
-	if fn.ReturnType != "" {
+	// Generate return type(s) if specified
+	if len(fn.ReturnTypes) == 1 {
 		g.buf.WriteString(" ")
-		g.buf.WriteString(mapType(fn.ReturnType))
+		g.buf.WriteString(mapType(fn.ReturnTypes[0]))
+	} else if len(fn.ReturnTypes) > 1 {
+		g.buf.WriteString(" (")
+		for i, rt := range fn.ReturnTypes {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+			g.buf.WriteString(mapType(rt))
+		}
+		g.buf.WriteString(")")
 	}
 
 	g.buf.WriteString(" {\n")

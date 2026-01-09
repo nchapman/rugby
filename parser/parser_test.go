@@ -315,17 +315,33 @@ end`
 	}
 }
 
+func TestEmptyReturnTypeParens(t *testing.T) {
+	input := `def foo() -> ()
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected error for empty return type list, got none")
+	}
+}
+
 func TestReturnType(t *testing.T) {
 	tests := []struct {
-		input      string
-		returnType string
+		input       string
+		returnTypes []string
 	}{
-		{"def foo\nend", ""},
-		{"def foo()\nend", ""},
-		{"def foo() -> Int\nend", "Int"},
-		{"def foo(a, b) -> String\nend", "String"},
-		{"def foo(x) -> Bool\nend", "Bool"},
-		{"def foo -> Int\nend", "Int"}, // no parens
+		{"def foo\nend", nil},
+		{"def foo()\nend", nil},
+		{"def foo() -> Int\nend", []string{"Int"}},
+		{"def foo(a, b) -> String\nend", []string{"String"}},
+		{"def foo(x) -> Bool\nend", []string{"Bool"}},
+		{"def foo -> Int\nend", []string{"Int"}}, // no parens
+		{"def foo() -> (Int, Bool)\nend", []string{"Int", "Bool"}},
+		{"def foo() -> (String, Int, Bool)\nend", []string{"String", "Int", "Bool"}},
+		{"def foo() -> (Int, Bool,)\nend", []string{"Int", "Bool"}}, // trailing comma
 	}
 
 	for _, tt := range tests {
@@ -336,9 +352,17 @@ func TestReturnType(t *testing.T) {
 
 		fn := program.Declarations[0].(*ast.FuncDecl)
 
-		if fn.ReturnType != tt.returnType {
-			t.Errorf("input %q: expected return type %q, got %q",
-				tt.input, tt.returnType, fn.ReturnType)
+		if len(fn.ReturnTypes) != len(tt.returnTypes) {
+			t.Errorf("input %q: expected %d return types, got %d",
+				tt.input, len(tt.returnTypes), len(fn.ReturnTypes))
+			continue
+		}
+
+		for i, rt := range tt.returnTypes {
+			if fn.ReturnTypes[i] != rt {
+				t.Errorf("input %q: return type %d expected %q, got %q",
+					tt.input, i, rt, fn.ReturnTypes[i])
+			}
 		}
 	}
 }

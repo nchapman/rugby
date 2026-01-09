@@ -20,7 +20,7 @@ Features in implementation order, building incrementally.
 ## Phase 3: Functions
 - [x] Function parameters (`def add(a, b)`)
 - [x] Explicit return types (`def add(a, b) -> Int`)
-- [ ] Multiple return values (`-> (Int, Bool)`)
+- [x] Multiple return values (`-> (Int, Bool)`)
 - [x] Function calls with arguments (`add(1, 2)`)
 
 ## Phase 4: Go Interop
