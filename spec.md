@@ -87,11 +87,40 @@ Rugby is statically typed with inference.
 | `T?`         | `(T, bool)` |
 | `Range`      | `struct` (internal) |
 
-### 4.2.1 Range Literals
+### 4.2.1 Range Type
 
-* `start..end` → inclusive (0..5 includes 5)
-* `start...end` → exclusive (0...5 excludes 5)
-* Primarily used in `for` loops.
+**Status:** Planned for future phase.
+
+Ranges are first-class values representing a sequence of integers.
+
+**Syntax:**
+* `start..end` → inclusive (0..5 includes 0, 1, 2, 3, 4, 5)
+* `start...end` → exclusive (0...5 includes 0, 1, 2, 3, 4)
+
+**Compilation:** Compiles to `runtime.Range` struct:
+
+```go
+type Range struct {
+    Start, End int
+    Exclusive  bool
+}
+```
+
+**Methods:**
+* `each { |i| }` → `runtime.RangeEach(r, fn)` - iterate over values
+* `include?(n)` / `contains?(n)` → `runtime.RangeContains(r, n)` - membership test
+* `to_a` → `runtime.RangeToArray(r)` - materialize to `[]int`
+* `size` / `length` → `runtime.RangeSize(r)` - count of elements
+
+**Use cases:**
+```ruby
+r = 1..10           # store as value
+for i in 0..5       # loop iteration
+  puts i
+end
+(1..100).include?(50)  # membership test
+nums = (1..5).to_a     # [1, 2, 3, 4, 5]
+```
 
 ### 4.3 Type annotations
 
@@ -206,15 +235,18 @@ The primary way to iterate with control flow.
 for item in items
   return item if item.id == 5
 end
+```
 
+Compiles to: `for _, item := range items { ... }`
+
+**Range iteration** (requires Range type - see 4.2.1):
+```ruby
 for i in 0..10
   puts i
 end
 ```
 
-Compiles to:
-* Collections: `for _, item := range items { ... }`
-* Ranges: `for i := 0; i <= 10; i++ { ... }`
+Compiles to: `for i := 0; i <= 10; i++ { ... }`
 
 **While Loop:**
 
@@ -457,9 +489,27 @@ Rugby does **not** support Ruby inheritance semantics.
 * `puts user` uses this method automatically
 
 **Equality (`==`):**
-* Rugby `==` compiles to `runtime.Equal(a, b)` for non-primitive types
-* Handles slice/map equality (deep comparison)
-* To customize equality for a class, define `def ==(other)` (future phase)
+* Rugby `==` compiles to `runtime.Equal(a, b)`
+* **Custom Equality:** If a class defines `def ==(other)`, it compiles to `Equal(other interface{}) bool`.
+* **Runtime Dispatch:** `runtime.Equal` follows this logic:
+    1. If `a` has an `Equal(interface{})` method, call `a.Equal(b)`.
+    2. Else if `a` and `b` are slices/maps, perform a deep comparison.
+    3. Else, use standard Go `==` (identity/primitive equality).
+* This allows Rugby to support both semantic equality (user-defined) and safe deep equality for Go types.
+
+### 7.9 The `self` keyword
+
+* `self` refers to the current instance (the method receiver).
+* It allows method chaining (`return self`) and disambiguation (`self.name` vs local `name`).
+* Compiles to the generated receiver variable name (e.g., `u` in `func (u *User)...`).
+
+```ruby
+def with_name(n)
+  @name = n
+  self
+end
+```
+
 
 ---
 

@@ -5,6 +5,9 @@ Features in implementation order, building incrementally.
 **Recent spec updates (see spec.md):**
 - **Runtime package (11):** Full Go runtime with Ruby-like stdlib ergonomics
 - **Loop semantics (5.3-5.4):** Clear distinction between imperative loops (`for`/`while` with `break`/`next`/`return` exits function) and functional blocks (`each`/`map` where `return` exits block only)
+- **Range type (4.2.1):** First-class Range values with `..`/`...` syntax, methods, and loop integration (Phase 10)
+- **Special methods (7.8):** `def to_s` → `String() string`; `def ==(other)` → `Equal()` method; `==` operator uses `runtime.Equal` with dispatch logic
+- **self keyword (7.9):** `self` refers to receiver, enables method chaining
 - Return statements (6.3): explicit + implicit returns
 - Instance variables (7.2.1): types inferred from `initialize`
 - Optionals (4.4): `T?` restricted to value types only
@@ -143,6 +146,10 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] Add predicate methods: `any?`, `all?`, `none?`
 - [x] Refactor to table-driven mappings (removed 146 lines of duplicate code)
 - [x] Add `times`, `upto`, `downto` integer iteration
+- [ ] Add `runtime.Equal(a, b)` - dispatch logic:
+  1. If `a` has `Equal(interface{}) bool` method, call it
+  2. Else if slices/maps, deep comparison
+  3. Else use Go `==`
 
 ## Phase 6: Classes
 - [x] Class definition (`class User ... end`)
@@ -153,6 +160,10 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] Embedding via `<` (`class Service < Logger`) - single parent only for MVP
 - [x] Pointer receiver methods (`def mutate!`) - `!` suffix stripped in Go output
 - [x] Methods are lowercase (private) by default - `pub` enables uppercase exports
+- [x] `self` keyword → compiles to receiver variable (e.g., `u` in `func (u *User)`)
+- [ ] Special method `to_s` → `String() string` (satisfies `fmt.Stringer`)
+- [ ] Custom equality: `def ==(other)` → `Equal(other interface{}) bool`
+- [ ] Equality operator: `==` compiles to `runtime.Equal(a, b)` for non-primitives
 
 ## Phase 7: Type Annotations
 **Goal:** Add explicit type annotations following Go's philosophy.
@@ -199,3 +210,24 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [ ] Comments in more positions (currently only full-line comments)
 - [ ] Better error messages with source locations
 - [ ] Multi-file compilation
+
+## Phase 10: Range Type
+First-class Range values (see spec.md Section 4.2.1).
+
+### Lexer/Parser
+- [ ] `..` token (inclusive range)
+- [ ] `...` token (exclusive range)
+- [ ] `RangeLit` AST node with `Start`, `End`, `Exclusive` fields
+- [ ] Parse range as infix operator (low precedence)
+
+### Runtime (`runtime/range.go`)
+- [ ] `Range` struct: `Start`, `End int`, `Exclusive bool`
+- [ ] `RangeEach(r, fn)` - iterate with block
+- [ ] `RangeContains(r, n)` - membership test
+- [ ] `RangeToArray(r)` - materialize to `[]int`
+- [ ] `RangeSize(r)` - element count
+
+### Codegen
+- [ ] Range literals → `runtime.Range{Start: x, End: y, Exclusive: bool}`
+- [ ] `for i in range` → C-style for loop: `for i := start; i <= end; i++`
+- [ ] Range method calls → runtime function calls
