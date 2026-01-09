@@ -135,8 +135,7 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] Auto-import `rugby/runtime` when runtime functions are used
 - [x] Add predicate methods: `any?`, `all?`, `none?`
 - [x] Refactor to table-driven mappings (removed 146 lines of duplicate code)
-- [ ] Inline simple methods: `length`, `empty?`, `even?`, `odd?`, etc.
-- [ ] Add `times`, `upto`, `downto` integer iteration
+- [x] Add `times`, `upto`, `downto` integer iteration
 
 ## Phase 6: Classes
 - [ ] Class definition (`class User ... end`)

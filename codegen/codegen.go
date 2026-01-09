@@ -418,13 +418,22 @@ func (g *Generator) genBlockCall(call *ast.CallExpr) {
 	method := sel.Sel
 	block := call.Block
 
-	// Special cases: inline iteration (each, each_with_index)
+	// Special cases: inline iteration (each, each_with_index, times, upto, downto)
 	switch method {
 	case "each":
 		g.genEachBlock(sel.X, block)
 		return
 	case "each_with_index":
 		g.genEachWithIndexBlock(sel.X, block)
+		return
+	case "times":
+		g.genTimesBlock(sel.X, block)
+		return
+	case "upto":
+		g.genUptoBlock(sel.X, block, call.Args)
+		return
+	case "downto":
+		g.genDowntoBlock(sel.X, block, call.Args)
 		return
 	}
 
@@ -517,6 +526,147 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 	}
 	if !indexWasDefinedBefore && indexName != "_" {
 		delete(g.vars, indexName)
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}")
+}
+
+// genTimesBlock generates: for i := 0; i < n; i++ { body }
+func (g *Generator) genTimesBlock(times ast.Expression, block *ast.BlockExpr) {
+	varName := "_"
+	if len(block.Params) > 0 {
+		varName = block.Params[0]
+	}
+
+	wasDefinedBefore := g.vars[varName]
+
+	// Use synthetic variable if no block param (can't use _ in for _ := 0; _ < n; _++)
+	loopVar := varName
+	if loopVar == "_" {
+		loopVar = "_i"
+	}
+
+	g.buf.WriteString("for ")
+	g.buf.WriteString(loopVar)
+	g.buf.WriteString(" := 0; ")
+	g.buf.WriteString(loopVar)
+	g.buf.WriteString(" < ")
+	g.genExpr(times)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(loopVar)
+	g.buf.WriteString("++ {\n")
+
+	if varName != "_" {
+		g.vars[varName] = true
+	}
+
+	g.indent++
+	for _, stmt := range block.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	if !wasDefinedBefore && varName != "_" {
+		delete(g.vars, varName)
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}")
+}
+
+// genUptoBlock generates: for i := start; i <= end; i++ { body }
+func (g *Generator) genUptoBlock(start ast.Expression, block *ast.BlockExpr, args []ast.Expression) {
+	varName := "_"
+	if len(block.Params) > 0 {
+		varName = block.Params[0]
+	}
+
+	wasDefinedBefore := g.vars[varName]
+
+	// Use synthetic variable if no block param (can't use _ in for _ := start; _ <= end; _++)
+	loopVar := varName
+	if loopVar == "_" {
+		loopVar = "_i"
+	}
+
+	g.buf.WriteString("for ")
+	g.buf.WriteString(loopVar)
+	g.buf.WriteString(" := ")
+	g.genExpr(start)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(loopVar)
+	g.buf.WriteString(" <= ")
+	if len(args) > 0 {
+		g.genExpr(args[0])
+	} else {
+		g.buf.WriteString("0")
+	}
+	g.buf.WriteString("; ")
+	g.buf.WriteString(loopVar)
+	g.buf.WriteString("++ {\n")
+
+	if varName != "_" {
+		g.vars[varName] = true
+	}
+
+	g.indent++
+	for _, stmt := range block.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	if !wasDefinedBefore && varName != "_" {
+		delete(g.vars, varName)
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}")
+}
+
+// genDowntoBlock generates: for i := start; i >= end; i-- { body }
+func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, args []ast.Expression) {
+	varName := "_"
+	if len(block.Params) > 0 {
+		varName = block.Params[0]
+	}
+
+	wasDefinedBefore := g.vars[varName]
+
+	// Use synthetic variable if no block param (can't use _ in for _ := start; _ >= end; _--)
+	loopVar := varName
+	if loopVar == "_" {
+		loopVar = "_i"
+	}
+
+	g.buf.WriteString("for ")
+	g.buf.WriteString(loopVar)
+	g.buf.WriteString(" := ")
+	g.genExpr(start)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(loopVar)
+	g.buf.WriteString(" >= ")
+	if len(args) > 0 {
+		g.genExpr(args[0])
+	} else {
+		g.buf.WriteString("0")
+	}
+	g.buf.WriteString("; ")
+	g.buf.WriteString(loopVar)
+	g.buf.WriteString("-- {\n")
+
+	if varName != "_" {
+		g.vars[varName] = true
+	}
+
+	g.indent++
+	for _, stmt := range block.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	if !wasDefinedBefore && varName != "_" {
+		delete(g.vars, varName)
 	}
 
 	g.writeIndent()

@@ -616,3 +616,121 @@ end`
 	assertContains(t, output, `n := runtime.RandInt(10)`)
 	assertContains(t, output, `f := runtime.RandFloat()`)
 }
+
+func TestTimesBlock(t *testing.T) {
+	input := `def main
+  5.times do |i|
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for i := 0; i < 5; i++`)
+	assertContains(t, output, `runtime.Puts(i)`)
+}
+
+func TestTimesBlockWithExpression(t *testing.T) {
+	input := `def main
+  n.times do |i|
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for i := 0; i < n; i++`)
+	assertContains(t, output, `runtime.Puts(i)`)
+}
+
+func TestUptoBlock(t *testing.T) {
+	input := `def main
+  1.upto(5) do |i|
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for i := 1; i <= 5; i++`)
+	assertContains(t, output, `runtime.Puts(i)`)
+}
+
+func TestUptoBlockWithVariables(t *testing.T) {
+	input := `def main
+  start.upto(finish) do |i|
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for i := start; i <= finish; i++`)
+	assertContains(t, output, `runtime.Puts(i)`)
+}
+
+func TestDowntoBlock(t *testing.T) {
+	input := `def main
+  5.downto(1) do |i|
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for i := 5; i >= 1; i--`)
+	assertContains(t, output, `runtime.Puts(i)`)
+}
+
+func TestDowntoBlockWithVariables(t *testing.T) {
+	input := `def main
+  high.downto(low) do |i|
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for i := high; i >= low; i--`)
+	assertContains(t, output, `runtime.Puts(i)`)
+}
+
+func TestTimesBlockNoParam(t *testing.T) {
+	input := `def main
+  3.times do ||
+    puts "hello"
+  end
+end`
+
+	output := compile(t, input)
+
+	// Should generate valid Go with synthetic variable _i
+	assertContains(t, output, `for _i := 0; _i < 3; _i++`)
+	assertContains(t, output, `runtime.Puts("hello")`)
+}
+
+func TestUptoBlockNoParam(t *testing.T) {
+	input := `def main
+  1.upto(3) do ||
+    puts "hello"
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for _i := 1; _i <= 3; _i++`)
+	assertContains(t, output, `runtime.Puts("hello")`)
+}
+
+func TestDowntoBlockNoParam(t *testing.T) {
+	input := `def main
+  3.downto(1) do ||
+    puts "hello"
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `for _i := 3; _i >= 1; _i--`)
+	assertContains(t, output, `runtime.Puts("hello")`)
+}
