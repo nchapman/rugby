@@ -302,6 +302,19 @@ end`
 	}
 }
 
+func TestMissingReturnType(t *testing.T) {
+	input := `def foo() ->
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected error for missing type after ->, got none")
+	}
+}
+
 func TestReturnType(t *testing.T) {
 	tests := []struct {
 		input      string
@@ -312,6 +325,7 @@ func TestReturnType(t *testing.T) {
 		{"def foo() -> Int\nend", "Int"},
 		{"def foo(a, b) -> String\nend", "String"},
 		{"def foo(x) -> Bool\nend", "Bool"},
+		{"def foo -> Int\nend", "Int"}, // no parens
 	}
 
 	for _, tt := range tests {

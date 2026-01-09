@@ -248,12 +248,16 @@ func mapType(rubyType string) string {
 	switch rubyType {
 	case "Int":
 		return "int"
+	case "Int64":
+		return "int64"
 	case "Float":
 		return "float64"
 	case "String":
 		return "string"
 	case "Bool":
 		return "bool"
+	case "Bytes":
+		return "[]byte"
 	default:
 		return rubyType // pass through unknown types (e.g., user-defined)
 	}
