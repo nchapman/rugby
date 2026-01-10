@@ -74,6 +74,88 @@ var optionalMethods = map[string]optionalMethod{
 	"to_f?": {runtimeFunc: "runtime.StringToFloat", resultType: "Float"},
 }
 
+// MethodDef describes a standard library method
+type MethodDef struct {
+	RuntimeFunc string
+	ReturnType  string // optional, used for type inference of the result
+}
+
+// stdLib defines the standard library methods
+// ReceiverType -> MethodName -> MethodDef
+var stdLib = map[string]map[string]MethodDef{
+	"Array": {
+		"join":    {RuntimeFunc: "runtime.Join", ReturnType: "String"},
+		"flatten": {RuntimeFunc: "runtime.Flatten", ReturnType: "Array"},
+		"uniq":    {RuntimeFunc: "runtime.Uniq", ReturnType: "Array"},
+		"sort":    {RuntimeFunc: "runtime.Sort", ReturnType: "Array"},
+		"shuffle": {RuntimeFunc: "runtime.Shuffle", ReturnType: "Array"},
+		"sample":  {RuntimeFunc: "runtime.Sample", ReturnType: ""}, // T
+		"first":   {RuntimeFunc: "runtime.First", ReturnType: ""},  // T
+		"last":    {RuntimeFunc: "runtime.Last", ReturnType: ""},   // T
+		"reverse": {RuntimeFunc: "runtime.Reversed", ReturnType: "Array"},
+		"rotate":  {RuntimeFunc: "runtime.Rotate", ReturnType: "Array"},
+		"include?": {RuntimeFunc: "runtime.Contains", ReturnType: "Bool"},
+	},
+	"Map": {
+		"keys":    {RuntimeFunc: "runtime.Keys", ReturnType: "Array"},
+		"values":  {RuntimeFunc: "runtime.Values", ReturnType: "Array"},
+		"has_key?": {RuntimeFunc: "runtime.MapHasKey", ReturnType: "Bool"},
+		"delete":  {RuntimeFunc: "runtime.MapDelete", ReturnType: ""}, // V
+		"clear":   {RuntimeFunc: "runtime.MapClear", ReturnType: ""},
+		"invert":  {RuntimeFunc: "runtime.MapInvert", ReturnType: "Map"},
+		"merge":   {RuntimeFunc: "runtime.Merge", ReturnType: "Map"},
+	},
+	"String": {
+		"split":      {RuntimeFunc: "runtime.Split", ReturnType: "Array"},
+		"strip":      {RuntimeFunc: "runtime.Strip", ReturnType: "String"},
+		"lstrip":     {RuntimeFunc: "runtime.Lstrip", ReturnType: "String"},
+		"rstrip":     {RuntimeFunc: "runtime.Rstrip", ReturnType: "String"},
+		"upcase":     {RuntimeFunc: "runtime.Upcase", ReturnType: "String"},
+		"downcase":   {RuntimeFunc: "runtime.Downcase", ReturnType: "String"},
+		"capitalize": {RuntimeFunc: "runtime.Capitalize", ReturnType: "String"},
+		"include?":   {RuntimeFunc: "runtime.StringContains", ReturnType: "Bool"},
+		"gsub":       {RuntimeFunc: "runtime.Replace", ReturnType: "String"},
+		"reverse":    {RuntimeFunc: "runtime.StringReverse", ReturnType: "String"},
+		"chars":      {RuntimeFunc: "runtime.Chars", ReturnType: "Array"},
+		"length":     {RuntimeFunc: "runtime.CharLength", ReturnType: "Int"},
+		"to_i":       {RuntimeFunc: "runtime.MustAtoi", ReturnType: "Int"},
+	},
+	"Int": {
+		"even?": {RuntimeFunc: "runtime.Even", ReturnType: "Bool"},
+		"odd?":  {RuntimeFunc: "runtime.Odd", ReturnType: "Bool"},
+		"abs":   {RuntimeFunc: "runtime.Abs", ReturnType: "Int"},
+		"clamp": {RuntimeFunc: "runtime.Clamp", ReturnType: "Int"},
+	},
+	"Math": { // Global Math module calls (Math.sqrt -> runtime.Sqrt)
+		"sqrt":  {RuntimeFunc: "runtime.Sqrt", ReturnType: "Float"},
+		"pow":   {RuntimeFunc: "runtime.Pow", ReturnType: "Float"},
+		"ceil":  {RuntimeFunc: "runtime.Ceil", ReturnType: "Int"},
+		"floor": {RuntimeFunc: "runtime.Floor", ReturnType: "Int"},
+		"round": {RuntimeFunc: "runtime.Round", ReturnType: "Int"},
+	},
+}
+
+// uniqueMethods maps method names to their runtime function if they are unique across the stdlib
+// This helps when type inference fails.
+var uniqueMethods = make(map[string]MethodDef)
+
+func init() {
+	// Populate uniqueMethods
+	counts := make(map[string]int)
+	for _, methods := range stdLib {
+		for name := range methods {
+			counts[name]++
+		}
+	}
+	for _, methods := range stdLib {
+		for name, def := range methods {
+			if counts[name] == 1 {
+				uniqueMethods[name] = def
+			}
+		}
+	}
+}
+
 type contextType int
 
 const (
@@ -180,6 +262,16 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 				return om.resultType
 			}
 		}
+	case *ast.SelectorExpr:
+		// Infer return type from method calls for chaining
+		recvType := g.inferTypeFromExpr(e.X)
+		if recvType != "" {
+			if methods, ok := stdLib[recvType]; ok {
+				if def, ok := methods[e.Sel]; ok && def.ReturnType != "" {
+					return def.ReturnType
+				}
+			}
+		}
 	case *ast.IntLit:
 		return "Int"
 	case *ast.FloatLit:
@@ -198,6 +290,10 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		}
 	case *ast.RangeLit:
 		return "Range"
+	case *ast.ArrayLit:
+		return "Array"
+	case *ast.MapLit:
+		return "Map"
 	}
 	return "" // unknown
 }
@@ -1572,6 +1668,68 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				return
 			}
 		}
+
+		// Check standard library registry
+		recvType := g.inferTypeFromExpr(fn.X)
+		var methodDef MethodDef
+		found := false
+
+		// 1. Special case for Math module (global) - check before type lookup
+		if ident, ok := fn.X.(*ast.Ident); ok && ident.Name == "Math" {
+			if methods, ok := stdLib["Math"]; ok {
+				if def, ok := methods[fn.Sel]; ok {
+					g.needsRuntime = true
+					g.buf.WriteString(def.RuntimeFunc)
+					g.buf.WriteString("(")
+					// Math methods don't take receiver as first arg
+					for i, arg := range call.Args {
+						if i > 0 {
+							g.buf.WriteString(", ")
+						}
+						g.genExpr(arg)
+					}
+					g.buf.WriteString(")")
+					return
+				}
+			}
+		}
+
+		// 2. Try lookup by type
+		if recvType != "" {
+			if methods, ok := stdLib[recvType]; ok {
+				if def, ok := methods[fn.Sel]; ok {
+					methodDef = def
+					found = true
+				}
+			}
+		}
+
+		// 3. Try unique method lookup if type unknown or method not found on type
+		if !found {
+			if def, ok := uniqueMethods[fn.Sel]; ok {
+				methodDef = def
+				found = true
+			}
+		}
+
+		if found {
+			g.needsRuntime = true
+			g.buf.WriteString(methodDef.RuntimeFunc)
+			g.buf.WriteString("(")
+			g.genExpr(fn.X) // Receiver is first arg
+			if len(call.Args) > 0 {
+				g.buf.WriteString(", ")
+				for i, arg := range call.Args {
+					if i > 0 {
+						g.buf.WriteString(", ")
+					}
+					g.genExpr(arg)
+				}
+			}
+			g.buf.WriteString(")")
+			return
+		}
+
 		// Check for range method calls when receiver is a RangeLit
 		if _, ok := fn.X.(*ast.RangeLit); ok {
 			if g.genRangeMethodCall(fn.X, fn.Sel, call.Args) {
@@ -2287,6 +2445,10 @@ func mapType(rubyType string) string {
 		return "bool"
 	case "Bytes":
 		return "[]byte"
+	case "Array":
+		return "[]interface{}"
+	case "Map":
+		return "map[interface{}]interface{}"
 	default:
 		return rubyType // pass through unknown types (e.g., user-defined)
 	}

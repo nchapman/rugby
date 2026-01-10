@@ -1,8 +1,19 @@
 // Package runtime provides Ruby-like stdlib ergonomics for Rugby programs.
 package runtime
 
+import (
+	"fmt"
+	"math/rand"
+	"reflect"
+	"sort"
+	"strings"
+
+	"golang.org/x/exp/constraints"
+)
+
 // Each iterates over a slice, calling the function for each element.
 // The callback returns false to break, true to continue.
+// Uses interface{} with type switches to support both typed and untyped slices.
 func Each(slice interface{}, fn func(interface{}) bool) {
 	switch s := slice.(type) {
 	case []interface{}:
@@ -35,11 +46,23 @@ func Each(slice interface{}, fn func(interface{}) bool) {
 				break
 			}
 		}
+	default:
+		// Use reflection as fallback for other slice types
+		val := reflect.ValueOf(slice)
+		if val.Kind() != reflect.Slice {
+			panic(fmt.Sprintf("Each: expected slice, got %T", slice))
+		}
+		for i := 0; i < val.Len(); i++ {
+			if !fn(val.Index(i).Interface()) {
+				break
+			}
+		}
 	}
 }
 
 // EachWithIndex iterates over a slice with index, calling the function for each element.
 // The callback returns false to break, true to continue.
+// Uses interface{} with type switches to support both typed and untyped slices.
 func EachWithIndex(slice interface{}, fn func(interface{}, int) bool) {
 	switch s := slice.(type) {
 	case []interface{}:
@@ -69,6 +92,17 @@ func EachWithIndex(slice interface{}, fn func(interface{}, int) bool) {
 	case []bool:
 		for i, v := range s {
 			if !fn(v, i) {
+				break
+			}
+		}
+	default:
+		// Use reflection as fallback for other slice types
+		val := reflect.ValueOf(slice)
+		if val.Kind() != reflect.Slice {
+			panic(fmt.Sprintf("EachWithIndex: expected slice, got %T", slice))
+		}
+		for i := 0; i < val.Len(); i++ {
+			if !fn(val.Index(i).Interface(), i) {
 				break
 			}
 		}
@@ -319,4 +353,145 @@ func MaxFloat(slice []float64) (float64, bool) {
 		}
 	}
 	return max, true
+}
+
+// Join concatenates elements into a string using the separator.
+// Ruby: arr.join(sep)
+func Join[T any](slice []T, sep string) string {
+	if len(slice) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for i, v := range slice {
+		if i > 0 {
+			b.WriteString(sep)
+		}
+		b.WriteString(fmt.Sprint(v))
+	}
+	return b.String()
+}
+
+// Flatten flattens a slice of slices (one level or deep? Ruby default is deep, but arg is depth).
+// For now, let's just do a simple flattening if it's []interface{}.
+// Typed slices []int cannot be flattened further.
+// Ruby: arr.flatten
+func Flatten(slice interface{}) []interface{} {
+	result := make([]interface{}, 0)
+	val := reflect.ValueOf(slice)
+	if val.Kind() != reflect.Slice {
+		return []interface{}{slice}
+	}
+
+	for i := 0; i < val.Len(); i++ {
+		elem := val.Index(i).Interface()
+		// If elem is slice, recurse
+		elemVal := reflect.ValueOf(elem)
+		if elemVal.Kind() == reflect.Slice {
+			result = append(result, Flatten(elem)...)
+		} else {
+			result = append(result, elem)
+		}
+	}
+	return result
+}
+
+// Uniq returns a new slice with unique elements.
+// Ruby: arr.uniq
+func Uniq[T comparable](slice []T) []T {
+	seen := make(map[T]bool)
+	result := make([]T, 0, len(slice))
+	for _, v := range slice {
+		if !seen[v] {
+			seen[v] = true
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
+// Sort returns a new sorted slice.
+// Ruby: arr.sort
+func Sort[T constraints.Ordered](slice []T) []T {
+	result := make([]T, len(slice))
+	copy(result, slice)
+	sort.Slice(result, func(i, j int) bool {
+		return result[i] < result[j]
+	})
+	return result
+}
+
+// Shuffle returns a new shuffled slice.
+// Ruby: arr.shuffle
+func Shuffle[T any](slice []T) []T {
+	result := make([]T, len(slice))
+	copy(result, slice)
+	rand.Shuffle(len(result), func(i, j int) {
+		result[i], result[j] = result[j], result[i]
+	})
+	return result
+}
+
+// Sample returns a random element.
+// Ruby: arr.sample
+func Sample[T any](slice []T) (T, bool) {
+	if len(slice) == 0 {
+		var zero T
+		return zero, false
+	}
+	return slice[rand.Intn(len(slice))], true
+}
+
+// FirstN returns the first n elements.
+func FirstN[T any](slice []T, n int) []T {
+	if n <= 0 {
+		return []T{}
+	}
+	if n >= len(slice) {
+		// Return copy? Or slice? Slice is fine.
+		// Ruby returns new array.
+		res := make([]T, len(slice))
+		copy(res, slice)
+		return res
+	}
+	res := make([]T, n)
+	copy(res, slice[:n])
+	return res
+}
+
+// LastN returns the last n elements.
+func LastN[T any](slice []T, n int) []T {
+	if n <= 0 {
+		return []T{}
+	}
+	l := len(slice)
+	if n >= l {
+		res := make([]T, l)
+		copy(res, slice)
+		return res
+	}
+	res := make([]T, n)
+	copy(res, slice[l-n:])
+	return res
+}
+
+// Rotate returns a new slice rotated by n.
+// Ruby: arr.rotate(n)
+func Rotate[T any](slice []T, n int) []T {
+	l := len(slice)
+	if l == 0 {
+		return []T{}
+	}
+	n = n % l
+	if n < 0 {
+		n += l
+	}
+	if n == 0 {
+		res := make([]T, l)
+		copy(res, slice)
+		return res
+	}
+	res := make([]T, 0, l)
+	res = append(res, slice[n:]...)
+	res = append(res, slice[:n]...)
+	return res
 }

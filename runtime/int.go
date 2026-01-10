@@ -73,3 +73,15 @@ func ClampInt64(n, min, max int64) int64 {
 	}
 	return n
 }
+
+// Even returns true if n is even.
+// Ruby: n.even?
+func Even(n int) bool {
+	return n%2 == 0
+}
+
+// Odd returns true if n is odd.
+// Ruby: n.odd?
+func Odd(n int) bool {
+	return n%2 != 0
+}

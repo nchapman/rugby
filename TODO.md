@@ -151,6 +151,43 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
   2. Else if slices/maps, deep comparison
   3. Else use Go `==`
 
+## Phase 5c: Runtime Extensions (Extended Stdlib)
+**Goal:** Fill in gaps to match common Ruby stdlib usage.
+
+### Array (`runtime/array.go`)
+- [x] `Join(slice, separator) string`
+- [x] `Flatten(slice) []interface{}` (recursive or shallow?)
+- [x] `Uniq[T](slice) []T`
+- [x] `Sort[T](slice) []T` (requires Orderable constraint or comparator)
+- [x] `Shuffle[T](slice) []T`
+- [x] `Sample[T](slice) T`
+- [x] `FirstN[T](slice, n) []T`
+- [x] `LastN[T](slice, n) []T`
+- [x] `Rotate[T](slice, n) []T`
+
+### Map (`runtime/map.go`)
+- [x] `Delete(map, key)`
+- [x] `HasKey(map, key) bool`
+- [x] `Clear(map)`
+- [x] `Invert(map) map` (value to key)
+
+### String (`runtime/string.go`)
+- [x] `Split(str, sep) []string`
+- [x] `Strip(str) string` / `Lstrip` / `Rstrip`
+- [x] `Upcase(str) string` / `Downcase(str) string`
+- [x] `Capitalize(str) string`
+- [x] `Contains(str, substr) bool`
+- [x] `Replace(str, old, new) string`
+
+### Integer/Math (`runtime/int.go` / `runtime/math.go`)
+- [x] `Even(int) bool`
+- [x] `Odd(int) bool`
+- [x] `Sqrt(float) float`
+- [x] `Pow(base, exp) float`
+
+### Codegen
+- [x] Update `codegen/codegen.go` to map new methods to runtime functions
+
 ## Phase 6: Classes
 - [x] Class definition (`class User ... end`)
 - [x] Instance variables (`@name`) - types inferred from `initialize`

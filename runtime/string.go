@@ -2,6 +2,8 @@ package runtime
 
 import (
 	"strconv"
+	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -62,4 +64,62 @@ func MustAtoi(s string) int {
 		panic("MustAtoi: invalid integer: " + s)
 	}
 	return n
+}
+
+// Split splits a string by a separator.
+// Ruby: str.split(sep)
+func Split(s, sep string) []string {
+	return strings.Split(s, sep)
+}
+
+// Strip removes leading and trailing whitespace.
+// Ruby: str.strip
+func Strip(s string) string {
+	return strings.TrimSpace(s)
+}
+
+// Lstrip removes leading whitespace.
+// Ruby: str.lstrip
+func Lstrip(s string) string {
+	return strings.TrimLeftFunc(s, unicode.IsSpace)
+}
+
+// Rstrip removes trailing whitespace.
+// Ruby: str.rstrip
+func Rstrip(s string) string {
+	return strings.TrimRightFunc(s, unicode.IsSpace)
+}
+
+// Upcase returns the string in uppercase.
+// Ruby: str.upcase
+func Upcase(s string) string {
+	return strings.ToUpper(s)
+}
+
+// Downcase returns the string in lowercase.
+// Ruby: str.downcase
+func Downcase(s string) string {
+	return strings.ToLower(s)
+}
+
+// Capitalize uppercases the first character and lowercases the rest.
+// Ruby: str.capitalize
+func Capitalize(s string) string {
+	if s == "" {
+		return ""
+	}
+	r, size := utf8.DecodeRuneInString(s)
+	return string(unicode.ToUpper(r)) + strings.ToLower(s[size:])
+}
+
+// StringContains returns true if the string contains the substring.
+// Ruby: str.include?(substr)
+func StringContains(s, substr string) bool {
+	return strings.Contains(s, substr)
+}
+
+// Replace replaces all occurrences of old with new.
+// Ruby: str.gsub(old, new)
+func Replace(s, old, new string) string {
+	return strings.ReplaceAll(s, old, new)
 }

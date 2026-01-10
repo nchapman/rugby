@@ -36,6 +36,9 @@ func Merge[K comparable, V any](m1, m2 map[K]V) map[K]V {
 
 // MapSelect returns a new map with entries for which the predicate returns true.
 // The predicate returns (match, continue).
+//
+// WARNING: If the predicate returns continue=false (break), results are nondeterministic
+// due to Go's random map iteration order. Avoid using break in map predicates.
 func MapSelect[K comparable, V any](m map[K]V, predicate func(K, V) (bool, bool)) map[K]V {
 	result := make(map[K]V)
 	for k, v := range m {
@@ -52,6 +55,9 @@ func MapSelect[K comparable, V any](m map[K]V, predicate func(K, V) (bool, bool)
 
 // MapReject returns a new map with entries for which the predicate returns false.
 // The predicate returns (match, continue).
+//
+// WARNING: If the predicate returns continue=false (break), results are nondeterministic
+// due to Go's random map iteration order. Avoid using break in map predicates.
 func MapReject[K comparable, V any](m map[K]V, predicate func(K, V) (bool, bool)) map[K]V {
 	result := make(map[K]V)
 	for k, v := range m {
@@ -73,4 +79,39 @@ func Fetch[K comparable, V any](m map[K]V, key K, defaultVal V) V {
 		return v
 	}
 	return defaultVal
+}
+
+// MapDelete removes the key from the map and returns the deleted value.
+// Ruby: hash.delete(key)
+func MapDelete[K comparable, V any](m map[K]V, key K) (V, bool) {
+	val, ok := m[key]
+	if ok {
+		delete(m, key)
+	}
+	return val, ok
+}
+
+// MapHasKey returns true if the map contains the key.
+// Ruby: hash.has_key?(key)
+func MapHasKey[K comparable, V any](m map[K]V, key K) bool {
+	_, ok := m[key]
+	return ok
+}
+
+// MapClear removes all entries from the map.
+// Ruby: hash.clear
+func MapClear[K comparable, V any](m map[K]V) {
+	for k := range m {
+		delete(m, k)
+	}
+}
+
+// MapInvert returns a new map with keys and values swapped.
+// Ruby: hash.invert
+func MapInvert[K, V comparable](m map[K]V) map[V]K {
+	result := make(map[V]K, len(m))
+	for k, v := range m {
+		result[v] = k
+	}
+	return result
 }
