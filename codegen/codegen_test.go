@@ -1701,3 +1701,122 @@ end`
 	assertContains(t, output, `GetUserID() int`)
 	assertContains(t, output, `ParseJSON() string`)
 }
+
+func TestRangeLiteral(t *testing.T) {
+	input := `def main
+  r = 1..10
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.Range{Start: 1, End: 10, Exclusive: false}`)
+}
+
+func TestExclusiveRangeLiteral(t *testing.T) {
+	input := `def main
+  r = 0...5
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.Range{Start: 0, End: 5, Exclusive: true}`)
+}
+
+func TestForLoopWithInclusiveRange(t *testing.T) {
+	input := `def main
+  for i in 0..5
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	// Should generate C-style for loop, not range loop
+	assertContains(t, output, `for i := 0; i <= 5; i++ {`)
+	assertContains(t, output, `runtime.Puts(i)`)
+}
+
+func TestForLoopWithExclusiveRange(t *testing.T) {
+	input := `def main
+  for i in 0...5
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	// Should use < for exclusive range
+	assertContains(t, output, `for i := 0; i < 5; i++ {`)
+}
+
+func TestForLoopWithRangeVariables(t *testing.T) {
+	input := `def main
+  start = 1
+  finish = 10
+  for i in start..finish
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	// Should use variables in the for loop
+	assertContains(t, output, `for i := start; i <= finish; i++ {`)
+}
+
+func TestRangeToArray(t *testing.T) {
+	input := `def main
+  nums = (1..5).to_a
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.RangeToArray(runtime.Range{Start: 1, End: 5, Exclusive: false})`)
+}
+
+func TestRangeSize(t *testing.T) {
+	input := `def main
+  n = (1..10).size
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.RangeSize(runtime.Range{Start: 1, End: 10, Exclusive: false})`)
+}
+
+func TestRangeContains(t *testing.T) {
+	input := `def main
+  x = (1..10).include?(5)
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.RangeContains(runtime.Range{Start: 1, End: 10, Exclusive: false}, 5)`)
+}
+
+func TestRangeEachBlock(t *testing.T) {
+	input := `def main
+  (1..5).each do |i|
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.RangeEach(runtime.Range{Start: 1, End: 5, Exclusive: false}, func(i int) {`)
+	assertContains(t, output, `runtime.Puts(i)`)
+}
+
+func TestEmptyRange(t *testing.T) {
+	// When start > end, the loop condition fails immediately (empty range)
+	input := `def main
+  for i in 5..4
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	// Verify the loop generates correct condition (will iterate 0 times)
+	assertContains(t, output, `for i := 5; i <= 4; i++ {`)
+}

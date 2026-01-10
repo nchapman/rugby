@@ -43,6 +43,8 @@ const (
 	ARROW      TokenType = "->"
 	HASHROCKET TokenType = "=>"
 	DOT        TokenType = "."
+	DOTDOT     TokenType = ".."
+	TRIPLEDOT  TokenType = "..."
 	PIPE       TokenType = "|"
 	AT         TokenType = "@"
 	COLON      TokenType = ":"

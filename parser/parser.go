@@ -14,6 +14,7 @@ import (
 const (
 	_ int = iota
 	LOWEST
+	RANGE       // .., ... (ranges)
 	OR_PREC     // or
 	AND_PREC    // and
 	EQUALS      // ==, !=
@@ -26,22 +27,24 @@ const (
 )
 
 var precedences = map[token.TokenType]int{
-	token.OR:       OR_PREC,
-	token.AND:      AND_PREC,
-	token.EQ:       EQUALS,
-	token.NE:       EQUALS,
-	token.LT:       LESSGREATER,
-	token.GT:       LESSGREATER,
-	token.LE:       LESSGREATER,
-	token.GE:       LESSGREATER,
-	token.PLUS:     SUM,
-	token.MINUS:    SUM,
-	token.STAR:     PRODUCT,
-	token.SLASH:    PRODUCT,
-	token.PERCENT:  PRODUCT,
-	token.LPAREN:   CALL,
-	token.LBRACKET: CALL, // array indexing has same precedence as function calls
-	token.DOT:      MEMBER,
+	token.DOTDOT:    RANGE,
+	token.TRIPLEDOT: RANGE,
+	token.OR:        OR_PREC,
+	token.AND:       AND_PREC,
+	token.EQ:        EQUALS,
+	token.NE:        EQUALS,
+	token.LT:        LESSGREATER,
+	token.GT:        LESSGREATER,
+	token.LE:        LESSGREATER,
+	token.GE:        LESSGREATER,
+	token.PLUS:      SUM,
+	token.MINUS:     SUM,
+	token.STAR:      PRODUCT,
+	token.SLASH:     PRODUCT,
+	token.PERCENT:   PRODUCT,
+	token.LPAREN:    CALL,
+	token.LBRACKET:  CALL, // array indexing has same precedence as function calls
+	token.DOT:       MEMBER,
 }
 
 type Parser struct {
@@ -1171,6 +1174,9 @@ infixLoop:
 			token.AND, token.OR:
 			p.nextToken()
 			left = p.parseInfixExpr(left)
+		case token.DOTDOT, token.TRIPLEDOT:
+			p.nextToken()
+			left = p.parseRangeLit(left)
 		case token.DOT:
 			p.nextToken()
 			left = p.parseSelectorExpr(left)
@@ -1529,6 +1535,16 @@ func (p *Parser) parseInfixExpr(left ast.Expression) ast.Expression {
 	right := p.parseExpression(precedence)
 
 	return &ast.BinaryExpr{Left: left, Op: op, Right: right}
+}
+
+func (p *Parser) parseRangeLit(start ast.Expression) ast.Expression {
+	// curToken is '..' or '...'
+	exclusive := p.curToken.Type == token.TRIPLEDOT
+	precedence := p.curPrecedence()
+	p.nextToken()
+	end := p.parseExpression(precedence)
+
+	return &ast.RangeLit{Start: start, End: end, Exclusive: exclusive}
 }
 
 func (p *Parser) parseSelectorExpr(x ast.Expression) ast.Expression {

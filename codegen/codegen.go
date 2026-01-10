@@ -579,6 +579,12 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 	// Save variable state
 	wasDefinedBefore := g.vars[s.Var]
 
+	// Check if iterable is a range literal - optimize to C-style for loop
+	if rangeLit, ok := s.Iterable.(*ast.RangeLit); ok {
+		g.genForRangeLoop(s.Var, rangeLit, s.Body, wasDefinedBefore)
+		return
+	}
+
 	g.writeIndent()
 	g.buf.WriteString("for _, ")
 	g.buf.WriteString(s.Var)
@@ -597,6 +603,43 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 	// Restore variable state
 	if !wasDefinedBefore {
 		delete(g.vars, s.Var)
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.Statement, wasDefinedBefore bool) {
+	// Generate: for i := start; i <= end; i++ { ... }
+	// or:       for i := start; i < end; i++ { ... } (exclusive)
+	g.writeIndent()
+	g.buf.WriteString("for ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.genExpr(r.Start)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	if r.Exclusive {
+		g.buf.WriteString(" < ")
+	} else {
+		g.buf.WriteString(" <= ")
+	}
+	g.genExpr(r.End)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString("++ {\n")
+
+	g.vars[varName] = true
+
+	g.indent++
+	for _, stmt := range body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	// Restore variable state
+	if !wasDefinedBefore {
+		delete(g.vars, varName)
 	}
 
 	g.writeIndent()
@@ -680,6 +723,54 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genBinaryExpr(e)
 	case *ast.UnaryExpr:
 		g.genUnaryExpr(e)
+	case *ast.RangeLit:
+		g.genRangeLit(e)
+	}
+}
+
+func (g *Generator) genRangeLit(r *ast.RangeLit) {
+	g.needsRuntime = true
+	g.buf.WriteString("runtime.Range{Start: ")
+	g.genExpr(r.Start)
+	g.buf.WriteString(", End: ")
+	g.genExpr(r.End)
+	g.buf.WriteString(", Exclusive: ")
+	if r.Exclusive {
+		g.buf.WriteString("true")
+	} else {
+		g.buf.WriteString("false")
+	}
+	g.buf.WriteString("}")
+}
+
+// genRangeMethodCall handles method calls on range literals
+// Returns true if it handled the call, false otherwise
+func (g *Generator) genRangeMethodCall(rangeExpr ast.Expression, method string, args []ast.Expression) bool {
+	g.needsRuntime = true
+
+	switch method {
+	case "to_a":
+		g.buf.WriteString("runtime.RangeToArray(")
+		g.genExpr(rangeExpr)
+		g.buf.WriteString(")")
+		return true
+	case "size", "length":
+		g.buf.WriteString("runtime.RangeSize(")
+		g.genExpr(rangeExpr)
+		g.buf.WriteString(")")
+		return true
+	case "include?", "contains?":
+		if len(args) != 1 {
+			return false
+		}
+		g.buf.WriteString("runtime.RangeContains(")
+		g.genExpr(rangeExpr)
+		g.buf.WriteString(", ")
+		g.genExpr(args[0])
+		g.buf.WriteString(")")
+		return true
+	default:
+		return false
 	}
 }
 
@@ -845,6 +936,12 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				return
 			}
 		}
+		// Check for range method calls when receiver is a RangeLit
+		if _, ok := fn.X.(*ast.RangeLit); ok {
+			if g.genRangeMethodCall(fn.X, fn.Sel, call.Args) {
+				return
+			}
+		}
 		// Method/package call like http.Get or resp.Body.Close
 		// snake_case transformation only applies here (Go interop)
 		g.genSelectorExpr(fn)
@@ -908,6 +1005,12 @@ func (g *Generator) genBlockCall(call *ast.CallExpr) {
 // genEachBlock generates: runtime.Each(iterable, func(v interface{}) { body })
 // Uses runtime call so that return inside block exits only the block, not enclosing function
 func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) {
+	// Check if iterable is a Range - use RangeEach for type-safe iteration
+	if _, ok := iterable.(*ast.RangeLit); ok {
+		g.genRangeEachBlock(iterable, block)
+		return
+	}
+
 	g.needsRuntime = true
 
 	varName := "_"
@@ -935,6 +1038,41 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	g.indent--
 
 	// Restore variable state after block
+	if !wasDefinedBefore && varName != "_" {
+		delete(g.vars, varName)
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genRangeEachBlock generates: runtime.RangeEach(range, func(i int) { body })
+func (g *Generator) genRangeEachBlock(rangeExpr ast.Expression, block *ast.BlockExpr) {
+	g.needsRuntime = true
+
+	varName := "_"
+	if len(block.Params) > 0 {
+		varName = block.Params[0]
+	}
+
+	wasDefinedBefore := g.vars[varName]
+
+	g.buf.WriteString("runtime.RangeEach(")
+	g.genExpr(rangeExpr)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" int) {\n")
+
+	if varName != "_" {
+		g.vars[varName] = true
+	}
+
+	g.indent++
+	for _, stmt := range block.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
 	if !wasDefinedBefore && varName != "_" {
 		delete(g.vars, varName)
 	}
@@ -1212,6 +1350,24 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 }
 
 func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
+	// Check for range methods used without parentheses (property-style access)
+	if _, ok := sel.X.(*ast.RangeLit); ok {
+		switch sel.Sel {
+		case "to_a":
+			g.needsRuntime = true
+			g.buf.WriteString("runtime.RangeToArray(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return
+		case "size", "length":
+			g.needsRuntime = true
+			g.buf.WriteString("runtime.RangeSize(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return
+		}
+	}
+
 	g.genExpr(sel.X)
 	g.buf.WriteString(".")
 

@@ -217,19 +217,19 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 First-class Range values (see spec.md Section 4.2.1).
 
 ### Lexer/Parser
-- [ ] `..` token (inclusive range)
-- [ ] `...` token (exclusive range)
-- [ ] `RangeLit` AST node with `Start`, `End`, `Exclusive` fields
-- [ ] Parse range as infix operator (low precedence)
+- [x] `..` token (inclusive range)
+- [x] `...` token (exclusive range)
+- [x] `RangeLit` AST node with `Start`, `End`, `Exclusive` fields
+- [x] Parse range as infix operator (low precedence)
 
 ### Runtime (`runtime/range.go`)
-- [ ] `Range` struct: `Start`, `End int`, `Exclusive bool`
-- [ ] `RangeEach(r, fn)` - iterate with block
-- [ ] `RangeContains(r, n)` - membership test
-- [ ] `RangeToArray(r)` - materialize to `[]int`
-- [ ] `RangeSize(r)` - element count
+- [x] `Range` struct: `Start`, `End int`, `Exclusive bool`
+- [x] `RangeEach(r, fn)` - iterate with block
+- [x] `RangeContains(r, n)` - membership test
+- [x] `RangeToArray(r)` - materialize to `[]int`
+- [x] `RangeSize(r)` - element count
 
 ### Codegen
-- [ ] Range literals → `runtime.Range{Start: x, End: y, Exclusive: bool}`
-- [ ] `for i in range` → C-style for loop: `for i := start; i <= end; i++`
-- [ ] Range method calls → runtime function calls
+- [x] Range literals → `runtime.Range{Start: x, End: y, Exclusive: bool}`
+- [x] `for i in range` → C-style for loop: `for i := start; i <= end; i++`
+- [x] Range method calls → runtime function calls

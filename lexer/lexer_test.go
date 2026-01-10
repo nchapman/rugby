@@ -680,3 +680,109 @@ func TestInput(t *testing.T) {
 		t.Errorf("Input() = %q, want %q", got, input)
 	}
 }
+
+func TestRangeTokens(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []struct {
+			typ token.TokenType
+			lit string
+		}
+	}{
+		{
+			name:  "inclusive range",
+			input: `1..10`,
+			expected: []struct {
+				typ token.TokenType
+				lit string
+			}{
+				{token.INT, "1"},
+				{token.DOTDOT, ".."},
+				{token.INT, "10"},
+				{token.EOF, ""},
+			},
+		},
+		{
+			name:  "exclusive range",
+			input: `1...10`,
+			expected: []struct {
+				typ token.TokenType
+				lit string
+			}{
+				{token.INT, "1"},
+				{token.TRIPLEDOT, "..."},
+				{token.INT, "10"},
+				{token.EOF, ""},
+			},
+		},
+		{
+			name:  "method call still works",
+			input: `obj.method`,
+			expected: []struct {
+				typ token.TokenType
+				lit string
+			}{
+				{token.IDENT, "obj"},
+				{token.DOT, "."},
+				{token.IDENT, "method"},
+				{token.EOF, ""},
+			},
+		},
+		{
+			name:  "float literal still works",
+			input: `3.14`,
+			expected: []struct {
+				typ token.TokenType
+				lit string
+			}{
+				{token.FLOAT, "3.14"},
+				{token.EOF, ""},
+			},
+		},
+		{
+			name:  "range with variables",
+			input: `start..finish`,
+			expected: []struct {
+				typ token.TokenType
+				lit string
+			}{
+				{token.IDENT, "start"},
+				{token.DOTDOT, ".."},
+				{token.IDENT, "finish"},
+				{token.EOF, ""},
+			},
+		},
+		{
+			name:  "for loop with range",
+			input: `for i in 0..5`,
+			expected: []struct {
+				typ token.TokenType
+				lit string
+			}{
+				{token.FOR, "for"},
+				{token.IDENT, "i"},
+				{token.IN, "in"},
+				{token.INT, "0"},
+				{token.DOTDOT, ".."},
+				{token.INT, "5"},
+				{token.EOF, ""},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := New(tt.input)
+			for i, exp := range tt.expected {
+				tok := l.NextToken()
+				if tok.Type != exp.typ {
+					t.Errorf("token %d: type = %q, want %q", i, tok.Type, exp.typ)
+				}
+				if tok.Literal != exp.lit {
+					t.Errorf("token %d: literal = %q, want %q", i, tok.Literal, exp.lit)
+				}
+			}
+		})
+	}
+}

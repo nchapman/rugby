@@ -130,7 +130,17 @@ func (l *Lexer) NextToken() token.Token {
 	case ',':
 		tok = l.newToken(token.COMMA, ",")
 	case '.':
-		tok = l.newToken(token.DOT, ".")
+		if l.peekChar() == '.' {
+			l.readChar()
+			if l.peekChar() == '.' {
+				l.readChar()
+				tok = l.newToken(token.TRIPLEDOT, "...")
+			} else {
+				tok = l.newToken(token.DOTDOT, "..")
+			}
+		} else {
+			tok = l.newToken(token.DOT, ".")
+		}
 	case '{':
 		tok = l.newToken(token.LBRACE, "{")
 	case '}':

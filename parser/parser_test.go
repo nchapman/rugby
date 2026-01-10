@@ -2485,3 +2485,177 @@ end`
 		t.Errorf("expected error about 'pub def' in non-pub class, got: %s", p.Errors()[0])
 	}
 }
+
+func TestRangeLiteral(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		start     int64
+		end       int64
+		exclusive bool
+	}{
+		{
+			name:      "inclusive range",
+			input:     "def main\n  x = 1..10\nend",
+			start:     1,
+			end:       10,
+			exclusive: false,
+		},
+		{
+			name:      "exclusive range",
+			input:     "def main\n  x = 0...5\nend",
+			start:     0,
+			end:       5,
+			exclusive: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := lexer.New(tt.input)
+			p := New(l)
+			program := p.ParseProgram()
+			checkParserErrors(t, p)
+
+			fn := program.Declarations[0].(*ast.FuncDecl)
+			assign := fn.Body[0].(*ast.AssignStmt)
+
+			rangeLit, ok := assign.Value.(*ast.RangeLit)
+			if !ok {
+				t.Fatalf("expected RangeLit, got %T", assign.Value)
+			}
+
+			startLit, ok := rangeLit.Start.(*ast.IntLit)
+			if !ok {
+				t.Fatalf("expected Start to be IntLit, got %T", rangeLit.Start)
+			}
+			if startLit.Value != tt.start {
+				t.Errorf("expected start %d, got %d", tt.start, startLit.Value)
+			}
+
+			endLit, ok := rangeLit.End.(*ast.IntLit)
+			if !ok {
+				t.Fatalf("expected End to be IntLit, got %T", rangeLit.End)
+			}
+			if endLit.Value != tt.end {
+				t.Errorf("expected end %d, got %d", tt.end, endLit.Value)
+			}
+
+			if rangeLit.Exclusive != tt.exclusive {
+				t.Errorf("expected exclusive=%v, got %v", tt.exclusive, rangeLit.Exclusive)
+			}
+		})
+	}
+}
+
+func TestRangeInForLoop(t *testing.T) {
+	input := `def main
+  for i in 0..5
+    puts i
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	forStmt, ok := fn.Body[0].(*ast.ForStmt)
+	if !ok {
+		t.Fatalf("expected ForStmt, got %T", fn.Body[0])
+	}
+
+	if forStmt.Var != "i" {
+		t.Errorf("expected loop var 'i', got %q", forStmt.Var)
+	}
+
+	rangeLit, ok := forStmt.Iterable.(*ast.RangeLit)
+	if !ok {
+		t.Fatalf("expected RangeLit as iterable, got %T", forStmt.Iterable)
+	}
+
+	startLit := rangeLit.Start.(*ast.IntLit)
+	if startLit.Value != 0 {
+		t.Errorf("expected range start 0, got %d", startLit.Value)
+	}
+
+	endLit := rangeLit.End.(*ast.IntLit)
+	if endLit.Value != 5 {
+		t.Errorf("expected range end 5, got %d", endLit.Value)
+	}
+
+	if rangeLit.Exclusive {
+		t.Error("expected inclusive range (..), got exclusive")
+	}
+}
+
+func TestRangePrecedence(t *testing.T) {
+	// Range should have lower precedence than arithmetic
+	// so 1+2..3+4 parses as (1+2)..(3+4)
+	input := `def main
+  x = 1 + 2..3 + 4
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+
+	rangeLit, ok := assign.Value.(*ast.RangeLit)
+	if !ok {
+		t.Fatalf("expected RangeLit, got %T", assign.Value)
+	}
+
+	// Start should be (1 + 2)
+	startBin, ok := rangeLit.Start.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected Start to be BinaryExpr, got %T", rangeLit.Start)
+	}
+	if startBin.Op != "+" {
+		t.Errorf("expected start op '+', got %q", startBin.Op)
+	}
+
+	// End should be (3 + 4)
+	endBin, ok := rangeLit.End.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected End to be BinaryExpr, got %T", rangeLit.End)
+	}
+	if endBin.Op != "+" {
+		t.Errorf("expected end op '+', got %q", endBin.Op)
+	}
+}
+
+func TestRangeWithVariables(t *testing.T) {
+	input := `def main
+  start = 1
+  finish = 10
+  r = start..finish
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[2].(*ast.AssignStmt)
+
+	rangeLit, ok := assign.Value.(*ast.RangeLit)
+	if !ok {
+		t.Fatalf("expected RangeLit, got %T", assign.Value)
+	}
+
+	startIdent, ok := rangeLit.Start.(*ast.Ident)
+	if !ok || startIdent.Name != "start" {
+		t.Errorf("expected Start to be ident 'start', got %T", rangeLit.Start)
+	}
+
+	endIdent, ok := rangeLit.End.(*ast.Ident)
+	if !ok || endIdent.Name != "finish" {
+		t.Errorf("expected End to be ident 'finish', got %T", rangeLit.End)
+	}
+}

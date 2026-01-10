@@ -168,6 +168,16 @@ type MapLit struct {
 func (m *MapLit) node()     {}
 func (m *MapLit) exprNode() {}
 
+// RangeLit represents a range literal like 1..10 or 0...n
+type RangeLit struct {
+	Start     Expression // start of range
+	End       Expression // end of range
+	Exclusive bool       // true for ... (exclusive), false for .. (inclusive)
+}
+
+func (r *RangeLit) node()     {}
+func (r *RangeLit) exprNode() {}
+
 // BinaryExpr represents a binary operation
 type BinaryExpr struct {
 	Left  Expression
