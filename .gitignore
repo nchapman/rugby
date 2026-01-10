@@ -1,3 +1,5 @@
 rugby
 examples/*.go
+!examples/*_test.go
+!examples/doc.go
 .rugby/
