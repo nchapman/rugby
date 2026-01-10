@@ -272,7 +272,7 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 }
 
 func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
-	g.vars = make(map[string]string) // reset vars for each function
+	clear(g.vars) // reset vars for each function
 
 	// Mark parameters as declared variables with their types
 	for _, param := range fn.Params {
@@ -332,7 +332,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	className := cls.Name
 	g.currentClass = className
 	g.pubClasses[className] = cls.Pub
-	g.classFields = make(map[string]string)
+	clear(g.classFields)
 
 	// Emit struct definition
 	// Class names are already PascalCase by convention; pub affects field/method visibility
@@ -373,7 +373,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	}
 
 	g.currentClass = ""
-	g.classFields = make(map[string]string)
+	clear(g.classFields)
 }
 
 func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
@@ -422,7 +422,7 @@ func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
 }
 
 func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub bool) {
-	g.vars = make(map[string]string)
+	clear(g.vars)
 
 	// Mark parameters as declared variables
 	for _, param := range method.Params {
@@ -466,7 +466,7 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 }
 
 func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
-	g.vars = make(map[string]string) // reset vars for each method
+	clear(g.vars) // reset vars for each method
 
 	// Mark parameters as declared variables with their types
 	for _, param := range method.Params {
