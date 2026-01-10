@@ -13,12 +13,12 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, "Usage: rugby <file.rby> [file2.rby ...]")
+		fmt.Fprintln(os.Stderr, "Usage: rugby <file.rg> [file2.rg ...]")
 		fmt.Fprintln(os.Stderr, "       rugby <directory>")
 		os.Exit(1)
 	}
 
-	// Collect all .rby files to compile
+	// Collect all .rg files to compile
 	var files []string
 	for _, arg := range os.Args[1:] {
 		info, err := os.Stat(arg)
@@ -28,14 +28,14 @@ func main() {
 		}
 
 		if info.IsDir() {
-			// Find all .rby files in directory
+			// Find all .rg files in directory
 			entries, err := os.ReadDir(arg)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error reading directory: %v\n", err)
 				os.Exit(1)
 			}
 			for _, entry := range entries {
-				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".rby") {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".rg") {
 					files = append(files, filepath.Join(arg, entry.Name()))
 				}
 			}
@@ -45,7 +45,7 @@ func main() {
 	}
 
 	if len(files) == 0 {
-		fmt.Fprintln(os.Stderr, "No .rby files found")
+		fmt.Fprintln(os.Stderr, "No .rg files found")
 		os.Exit(1)
 	}
 

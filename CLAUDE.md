@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # Compile a Rugby file to Go
-go run . <file.rby>
+go run . <file.rg>
 
 # Run the generated Go code
 go run <file.go>
@@ -23,7 +23,7 @@ go test ./lexer/... ./parser/... ./codegen/...
 Rugby is a compiler that transforms Ruby-like syntax into idiomatic Go code. The compilation pipeline:
 
 ```
-Source (.rby) → Lexer → Parser → AST → CodeGen → Go (.go)
+Source (.rg) → Lexer → Parser → AST → CodeGen → Go (.go)
 ```
 
 **Packages:**

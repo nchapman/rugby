@@ -211,7 +211,7 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] String interpolation (`"hi #{name}"`) - any expression, uses `fmt.Sprintf`
 - [x] Comments in all positions (trailing, inline) - already worked
 - [x] Better error messages with `file:line:column` format
-- [x] Multi-file compilation (`rugby file1.rby file2.rby` or `rugby directory/`)
+- [x] Multi-file compilation (`rugby file1.rg file2.rg` or `rugby directory/`)
 
 ## Phase 10: Range Type
 First-class Range values (see spec.md Section 4.2.1).
