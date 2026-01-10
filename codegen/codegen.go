@@ -336,6 +336,43 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		return
 	}
 
+	// == -> Equal(other interface{}) bool (satisfies runtime.Equaler)
+	// Only applies when == has exactly one parameter
+	if method.Name == "==" && len(method.Params) == 1 {
+		param := method.Params[0]
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s) Equal(other interface{}) bool {\n", recv, className))
+		g.indent++
+		// Create type assertion for the parameter
+		g.writeIndent()
+		g.buf.WriteString(fmt.Sprintf("%s, ok := other.(*%s)\n", param.Name, className))
+		g.writeIndent()
+		g.buf.WriteString("if !ok {\n")
+		g.indent++
+		g.writeIndent()
+		g.buf.WriteString("return false\n")
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+		// Generate body statements, with implicit return for last expression
+		for i, stmt := range method.Body {
+			isLast := i == len(method.Body)-1
+			if isLast {
+				// If last statement is an expression, add return
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+					continue
+				}
+			}
+			g.genStatement(stmt)
+		}
+		g.indent--
+		g.buf.WriteString("}\n\n")
+		return
+	}
+
 	// Method name: convert snake_case to CamelCase
 	methodName := snakeToCamel(method.Name)
 
@@ -575,6 +612,32 @@ func (g *Generator) genExpr(expr ast.Expression) {
 }
 
 func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
+	// For == and != use runtime.Equal when at least one operand is not a primitive literal
+	// This handles cases like: user1 == user2, x == 5, arr1 == arr2
+	// Only use direct == for literal-to-literal comparisons like 5 == 5 or "a" == "b"
+	leftLit := isPrimitiveLiteral(e.Left)
+	rightLit := isPrimitiveLiteral(e.Right)
+	needsRuntimeEqual := !leftLit || !rightLit
+
+	if e.Op == "==" && needsRuntimeEqual {
+		g.needsRuntime = true
+		g.buf.WriteString("runtime.Equal(")
+		g.genExpr(e.Left)
+		g.buf.WriteString(", ")
+		g.genExpr(e.Right)
+		g.buf.WriteString(")")
+		return
+	}
+	if e.Op == "!=" && needsRuntimeEqual {
+		g.needsRuntime = true
+		g.buf.WriteString("!runtime.Equal(")
+		g.genExpr(e.Left)
+		g.buf.WriteString(", ")
+		g.genExpr(e.Right)
+		g.buf.WriteString(")")
+		return
+	}
+
 	g.buf.WriteString("(")
 	g.genExpr(e.Left)
 	g.buf.WriteString(" ")
@@ -582,6 +645,17 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 	g.buf.WriteString(" ")
 	g.genExpr(e.Right)
 	g.buf.WriteString(")")
+}
+
+// isPrimitiveLiteral returns true if the expression is a primitive literal
+// (int, float, bool, string) that can be safely compared with Go's ==
+func isPrimitiveLiteral(e ast.Expression) bool {
+	switch e.(type) {
+	case *ast.IntLit, *ast.FloatLit, *ast.BoolLit, *ast.StringLit:
+		return true
+	default:
+		return false
+	}
 }
 
 func (g *Generator) genUnaryExpr(e *ast.UnaryExpr) {

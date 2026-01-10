@@ -428,13 +428,20 @@ func extractFields(method *ast.MethodDecl) []*ast.FieldDecl {
 func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 	p.nextToken() // consume 'def'
 
-	if !p.curTokenIs(token.IDENT) {
+	// Accept regular identifiers or operator tokens (== for custom equality)
+	var methodName string
+	switch p.curToken.Type {
+	case token.IDENT:
+		methodName = p.curToken.Literal
+	case token.EQ:
+		methodName = "=="
+	default:
 		p.errors = append(p.errors, fmt.Sprintf("line %d: expected method name after def",
 			p.curToken.Line))
 		return nil
 	}
 
-	method := &ast.MethodDecl{Name: p.curToken.Literal}
+	method := &ast.MethodDecl{Name: methodName}
 	p.nextToken()
 
 	// Parse optional parameter list

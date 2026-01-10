@@ -2160,3 +2160,52 @@ end`
 		t.Fatalf("expected StringLit for plain string, got %T", assignStmt.Value)
 	}
 }
+
+func TestCustomEqualityMethod(t *testing.T) {
+	input := `class Point
+  def initialize(x : Int, y : Int)
+    @x = x
+    @y = y
+  end
+
+  def ==(other)
+    @x == other.x and @y == other.y
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+	if cls.Name != "Point" {
+		t.Errorf("expected class name 'Point', got %q", cls.Name)
+	}
+
+	// Should have 2 methods: initialize and ==
+	if len(cls.Methods) != 2 {
+		t.Fatalf("expected 2 methods, got %d", len(cls.Methods))
+	}
+
+	// Find the == method
+	var eqMethod *ast.MethodDecl
+	for _, m := range cls.Methods {
+		if m.Name == "==" {
+			eqMethod = m
+			break
+		}
+	}
+
+	if eqMethod == nil {
+		t.Fatal("expected to find == method")
+	}
+
+	if len(eqMethod.Params) != 1 {
+		t.Errorf("expected 1 parameter for ==, got %d", len(eqMethod.Params))
+	}
+
+	if eqMethod.Params[0].Name != "other" {
+		t.Errorf("expected parameter name 'other', got %q", eqMethod.Params[0].Name)
+	}
+}

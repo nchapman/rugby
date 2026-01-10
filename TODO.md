@@ -146,7 +146,7 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] Add predicate methods: `any?`, `all?`, `none?`
 - [x] Refactor to table-driven mappings (removed 146 lines of duplicate code)
 - [x] Add `times`, `upto`, `downto` integer iteration
-- [ ] Add `runtime.Equal(a, b)` - dispatch logic:
+- [x] Add `runtime.Equal(a, b)` - dispatch logic:
   1. If `a` has `Equal(interface{}) bool` method, call it
   2. Else if slices/maps, deep comparison
   3. Else use Go `==`
@@ -162,8 +162,8 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] Methods are lowercase (private) by default - `pub` enables uppercase exports
 - [x] `self` keyword → compiles to receiver variable (e.g., `u` in `func (u *User)`)
 - [x] Special method `to_s` → `String() string` (satisfies `fmt.Stringer`)
-- [ ] Custom equality: `def ==(other)` → `Equal(other interface{}) bool`
-- [ ] Equality operator: `==` compiles to `runtime.Equal(a, b)` for non-primitives
+- [x] Custom equality: `def ==(other)` → `Equal(other interface{}) bool`
+- [x] Equality operator: `==` compiles to `runtime.Equal(a, b)` for non-primitives
 
 ## Phase 7: Type Annotations
 **Goal:** Add explicit type annotations following Go's philosophy.

@@ -546,7 +546,7 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `runtime.Select(nums, func(n interface{}) bool`)
-	assertContains(t, output, `((n % 2) == 0)`)
+	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
 }
 
 func TestRejectBlock(t *testing.T) {
@@ -559,7 +559,7 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `runtime.Reject(nums, func(n interface{}) bool`)
-	assertContains(t, output, `((n % 2) == 0)`)
+	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
 }
 
 func TestReduceBlock(t *testing.T) {
@@ -585,7 +585,7 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `runtime.Find(nums, func(n interface{}) bool`)
-	assertContains(t, output, `((n % 2) == 0)`)
+	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
 }
 
 func TestAnyBlock(t *testing.T) {
@@ -598,7 +598,7 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `runtime.Any(nums, func(n interface{}) bool`)
-	assertContains(t, output, `((n % 2) == 0)`)
+	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
 }
 
 func TestAllBlock(t *testing.T) {
@@ -1139,9 +1139,9 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `for _, item := range items {`)
-	assertContains(t, output, `if item == 5 {`)
+	assertContains(t, output, `if runtime.Equal(item, 5) {`)
 	assertContains(t, output, `break`)
-	assertContains(t, output, `if item == 3 {`)
+	assertContains(t, output, `if runtime.Equal(item, 3) {`)
 	assertContains(t, output, `continue`)
 	assertContains(t, output, `runtime.Puts(item)`)
 }
@@ -1428,4 +1428,86 @@ end`
 
 	// Percent should be escaped as %% for fmt.Sprintf
 	assertContains(t, output, `fmt.Sprintf("100%% of %v", name)`)
+}
+
+func TestCustomEqualityMethod(t *testing.T) {
+	input := `class Point
+  def initialize(x : Int, y : Int)
+    @x = x
+    @y = y
+  end
+
+  def ==(other)
+    @x == other.x and @y == other.y
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// def == should compile to Equal(other interface{}) bool
+	assertContains(t, output, `func (p *Point) Equal(other interface{}) bool {`)
+	// Should include type assertion
+	assertContains(t, output, `other, ok := other.(*Point)`)
+	assertContains(t, output, `if !ok {`)
+	assertContains(t, output, `return false`)
+	// Should have implicit return for the last expression
+	assertContains(t, output, `return (runtime.Equal(p.x, other.x) && runtime.Equal(p.y, other.y))`)
+}
+
+func TestEqualityWithVariables(t *testing.T) {
+	input := `def main
+  a = User.new("alice")
+  b = User.new("bob")
+  x = a == b
+end`
+
+	output := compile(t, input)
+
+	// Variable equality should use runtime.Equal
+	assertContains(t, output, `runtime.Equal(a, b)`)
+	// Should import runtime
+	assertContains(t, output, `"rugby/runtime"`)
+}
+
+func TestEqualityWithLiteralsStaysDirect(t *testing.T) {
+	input := `def main
+  x = 5 == 5
+  y = "a" == "b"
+end`
+
+	output := compile(t, input)
+
+	// Literal-to-literal comparisons should use direct ==
+	assertContains(t, output, `x := (5 == 5)`)
+	assertContains(t, output, `y := ("a" == "b")`)
+}
+
+func TestNotEqualWithVariables(t *testing.T) {
+	input := `def main
+  a = User.new("alice")
+  b = User.new("bob")
+  x = a != b
+end`
+
+	output := compile(t, input)
+
+	// Variable inequality should use !runtime.Equal
+	assertContains(t, output, `!runtime.Equal(a, b)`)
+}
+
+func TestMixedLiteralVariableComparison(t *testing.T) {
+	input := `def main
+  x = 5
+  y = x == 5
+  z = "hello" == name
+end`
+
+	output := compile(t, input)
+
+	// Mixed comparisons (variable vs literal) should use runtime.Equal
+	assertContains(t, output, `runtime.Equal(x, 5)`)
+	assertContains(t, output, `runtime.Equal("hello", name)`)
 }
