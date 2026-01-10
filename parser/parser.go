@@ -227,7 +227,7 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 	seen[name] = true
 	p.nextToken() // consume identifier
 
-	// Check for optional type annotation: name : Type
+	// Check for optional type annotation: name : Type or name : Type?
 	var paramType string
 	if p.curTokenIs(token.COLON) {
 		p.nextToken() // consume ':'
@@ -236,11 +236,19 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
-		paramType = p.curToken.Literal
-		p.nextToken() // consume type
+		paramType = p.parseTypeName()
 	}
 
 	return &ast.Param{Name: name, Type: paramType}
+}
+
+// parseTypeName parses a type name (e.g., "Int", "String?")
+// The ? suffix is already included in the identifier by the lexer.
+// Expects current token to be IDENT. Consumes the type.
+func (p *Parser) parseTypeName() string {
+	typeName := p.curToken.Literal
+	p.nextToken() // consume type
+	return typeName
 }
 
 func (p *Parser) parseFuncDecl() *ast.FuncDecl {
@@ -305,8 +313,7 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 					p.curToken.Line, p.curToken.Column))
 				return nil
 			}
-			fn.ReturnTypes = append(fn.ReturnTypes, p.curToken.Literal)
-			p.nextToken()
+			fn.ReturnTypes = append(fn.ReturnTypes, p.parseTypeName())
 
 			for p.curTokenIs(token.COMMA) {
 				p.nextToken() // consume ','
@@ -319,8 +326,7 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 						p.curToken.Line, p.curToken.Column))
 					return nil
 				}
-				fn.ReturnTypes = append(fn.ReturnTypes, p.curToken.Literal)
-				p.nextToken()
+				fn.ReturnTypes = append(fn.ReturnTypes, p.parseTypeName())
 			}
 
 			if !p.curTokenIs(token.RPAREN) {
@@ -331,8 +337,7 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 			p.nextToken() // consume ')'
 		} else if p.curTokenIs(token.IDENT) {
 			// Single return type
-			fn.ReturnTypes = append(fn.ReturnTypes, p.curToken.Literal)
-			p.nextToken()
+			fn.ReturnTypes = append(fn.ReturnTypes, p.parseTypeName())
 		} else {
 			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type after ->",
 				p.curToken.Line, p.curToken.Column))
@@ -375,16 +380,28 @@ func (p *Parser) parseClassDecl() *ast.ClassDecl {
 	cls := &ast.ClassDecl{Name: p.curToken.Literal}
 	p.nextToken()
 
-	// Parse optional parent class: class Service < Logger (Phase C)
+	// Parse optional embedded types: class Service < Logger, Authenticator
 	if p.curTokenIs(token.LT) {
 		p.nextToken() // consume '<'
 		if !p.curTokenIs(token.IDENT) {
-			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected parent class name after '<'",
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type name after '<'",
 				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
-		cls.Parent = p.curToken.Literal
+		cls.Embeds = append(cls.Embeds, p.curToken.Literal)
 		p.nextToken()
+
+		// Parse additional embedded types separated by commas
+		for p.curTokenIs(token.COMMA) {
+			p.nextToken() // consume ','
+			if !p.curTokenIs(token.IDENT) {
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type name after ','",
+					p.curToken.Line, p.curToken.Column))
+				return nil
+			}
+			cls.Embeds = append(cls.Embeds, p.curToken.Literal)
+			p.nextToken()
+		}
 	}
 
 	p.skipNewlines()
@@ -542,8 +559,7 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 					p.curToken.Line, p.curToken.Column))
 				return nil
 			}
-			sig.ReturnTypes = append(sig.ReturnTypes, p.curToken.Literal)
-			p.nextToken()
+			sig.ReturnTypes = append(sig.ReturnTypes, p.parseTypeName())
 
 			for p.curTokenIs(token.COMMA) {
 				p.nextToken() // consume ','
@@ -556,8 +572,7 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 						p.curToken.Line, p.curToken.Column))
 					return nil
 				}
-				sig.ReturnTypes = append(sig.ReturnTypes, p.curToken.Literal)
-				p.nextToken()
+				sig.ReturnTypes = append(sig.ReturnTypes, p.parseTypeName())
 			}
 
 			if !p.curTokenIs(token.RPAREN) {
@@ -568,8 +583,7 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 			p.nextToken() // consume ')'
 		} else if p.curTokenIs(token.IDENT) {
 			// Single return type
-			sig.ReturnTypes = append(sig.ReturnTypes, p.curToken.Literal)
-			p.nextToken()
+			sig.ReturnTypes = append(sig.ReturnTypes, p.parseTypeName())
 		} else {
 			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type after ->",
 				p.curToken.Line, p.curToken.Column))
@@ -611,6 +625,15 @@ func extractFields(method *ast.MethodDecl) []*ast.FieldDecl {
 				}
 
 				fields = append(fields, &ast.FieldDecl{Name: assign.Name, Type: fieldType})
+			}
+		}
+		// Also handle ||= assignments
+		if assign, ok := stmt.(*ast.InstanceVarOrAssign); ok {
+			if !seen[assign.Name] {
+				seen[assign.Name] = true
+				// Type inference for ||= is harder since value is conditional
+				// For now, use empty type (interface{})
+				fields = append(fields, &ast.FieldDecl{Name: assign.Name, Type: ""})
 			}
 		}
 	}
@@ -687,8 +710,7 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 					p.curToken.Line, p.curToken.Column))
 				return nil
 			}
-			method.ReturnTypes = append(method.ReturnTypes, p.curToken.Literal)
-			p.nextToken()
+			method.ReturnTypes = append(method.ReturnTypes, p.parseTypeName())
 
 			for p.curTokenIs(token.COMMA) {
 				p.nextToken() // consume ','
@@ -701,8 +723,7 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 						p.curToken.Line, p.curToken.Column))
 					return nil
 				}
-				method.ReturnTypes = append(method.ReturnTypes, p.curToken.Literal)
-				p.nextToken()
+				method.ReturnTypes = append(method.ReturnTypes, p.parseTypeName())
 			}
 
 			if !p.curTokenIs(token.RPAREN) {
@@ -713,8 +734,7 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 			p.nextToken() // consume ')'
 		} else if p.curTokenIs(token.IDENT) {
 			// Single return type
-			method.ReturnTypes = append(method.ReturnTypes, p.curToken.Literal)
-			p.nextToken()
+			method.ReturnTypes = append(method.ReturnTypes, p.parseTypeName())
 		} else {
 			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type after ->",
 				p.curToken.Line, p.curToken.Column))
@@ -766,11 +786,20 @@ func (p *Parser) parseStatement() ast.Statement {
 		if p.peekTokenIs(token.ASSIGN) || p.peekTokenIs(token.COLON) {
 			return p.parseAssignStmt()
 		}
+		// Check for or-assignment: ident ||= expr
+		if p.peekTokenIs(token.ORASSIGN) {
+			return p.parseOrAssignStmt()
+		}
 	case token.AT:
 		// Check if this is assignment: @name = expr
 		// Pattern: AT IDENT ASSIGN
 		if p.peekTokenIs(token.IDENT) && p.peekTokenAfterIs(token.ASSIGN) {
 			return p.parseInstanceVarAssign()
+		}
+		// Check if this is or-assignment: @name ||= expr
+		// Pattern: AT IDENT ORASSIGN
+		if p.peekTokenIs(token.IDENT) && p.peekTokenAfterIs(token.ORASSIGN) {
+			return p.parseInstanceVarOrAssign()
 		}
 		// Otherwise fall through to expression parsing
 	}
@@ -921,7 +950,7 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	name := p.curToken.Literal
 	p.nextToken() // consume ident
 
-	// Check for optional type annotation: x : Type = value
+	// Check for optional type annotation: x : Type = value or x : Type? = value
 	var typeAnnotation string
 	if p.curTokenIs(token.COLON) {
 		p.nextToken() // consume ':'
@@ -930,8 +959,7 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
-		typeAnnotation = p.curToken.Literal
-		p.nextToken() // consume type
+		typeAnnotation = p.parseTypeName()
 	}
 
 	if !p.curTokenIs(token.ASSIGN) {
@@ -1639,4 +1667,58 @@ func (p *Parser) parseInstanceVarAssign() *ast.InstanceVarAssign {
 	p.skipNewlines()
 
 	return &ast.InstanceVarAssign{Name: name, Value: value}
+}
+
+func (p *Parser) parseOrAssignStmt() *ast.OrAssignStmt {
+	name := p.curToken.Literal
+	p.nextToken() // consume ident
+
+	if !p.curTokenIs(token.ORASSIGN) {
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected '||=' in or-assignment",
+			p.curToken.Line, p.curToken.Column))
+		return nil
+	}
+	p.nextToken() // consume '||='
+
+	value := p.parseExpression(LOWEST)
+
+	// Check for block after expression
+	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
+		value = p.parseBlockCall(value)
+	}
+
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	return &ast.OrAssignStmt{Name: name, Value: value}
+}
+
+func (p *Parser) parseInstanceVarOrAssign() *ast.InstanceVarOrAssign {
+	p.nextToken() // consume '@'
+	if !p.curTokenIs(token.IDENT) {
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected identifier after '@'",
+			p.curToken.Line, p.curToken.Column))
+		return nil
+	}
+	name := p.curToken.Literal
+	p.nextToken() // consume identifier
+
+	if !p.curTokenIs(token.ORASSIGN) {
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected '||=' after instance variable",
+			p.curToken.Line, p.curToken.Column))
+		return nil
+	}
+	p.nextToken() // consume '||='
+
+	value := p.parseExpression(LOWEST)
+
+	// Check for block after expression
+	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
+		value = p.parseBlockCall(value)
+	}
+
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	return &ast.InstanceVarOrAssign{Name: name, Value: value}
 }

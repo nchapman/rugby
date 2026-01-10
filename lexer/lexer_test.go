@@ -786,3 +786,103 @@ func TestRangeTokens(t *testing.T) {
 		})
 	}
 }
+
+func TestOrAssignToken(t *testing.T) {
+	input := `x ||= 5`
+	l := New(input)
+
+	expected := []struct {
+		Type    token.TokenType
+		Literal string
+	}{
+		{token.IDENT, "x"},
+		{token.ORASSIGN, "||="},
+		{token.INT, "5"},
+		{token.EOF, ""},
+	}
+
+	for i, exp := range expected {
+		tok := l.NextToken()
+		if tok.Type != exp.Type {
+			t.Errorf("token %d: type = %q, want %q", i, tok.Type, exp.Type)
+		}
+		if tok.Literal != exp.Literal {
+			t.Errorf("token %d: literal = %q, want %q", i, tok.Literal, exp.Literal)
+		}
+	}
+}
+
+func TestOrAssignVsBlockPipes(t *testing.T) {
+	// Ensure ||= is recognized but || without = is still two PIPE tokens
+	tests := []struct {
+		name     string
+		input    string
+		expected []token.TokenType
+	}{
+		{
+			name:     "or assign",
+			input:    "x ||= y",
+			expected: []token.TokenType{token.IDENT, token.ORASSIGN, token.IDENT, token.EOF},
+		},
+		{
+			name:     "block pipes",
+			input:    "do || end",
+			expected: []token.TokenType{token.DO, token.PIPE, token.PIPE, token.END, token.EOF},
+		},
+		{
+			name:     "block with params",
+			input:    "do |x| end",
+			expected: []token.TokenType{token.DO, token.PIPE, token.IDENT, token.PIPE, token.END, token.EOF},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := New(tt.input)
+			for i, expType := range tt.expected {
+				tok := l.NextToken()
+				if tok.Type != expType {
+					t.Errorf("token %d: type = %q, want %q", i, tok.Type, expType)
+				}
+			}
+		})
+	}
+}
+
+func TestQuestionToken(t *testing.T) {
+	// ? suffix is consumed as part of identifier (like method names: empty?)
+	// This is correct behavior - "Int?" is a single token
+	input := `x : Int?`
+	l := New(input)
+
+	expected := []struct {
+		Type    token.TokenType
+		Literal string
+	}{
+		{token.IDENT, "x"},
+		{token.COLON, ":"},
+		{token.IDENT, "Int?"}, // Type with ? suffix is a single identifier
+		{token.EOF, ""},
+	}
+
+	for i, exp := range expected {
+		tok := l.NextToken()
+		if tok.Type != exp.Type {
+			t.Errorf("token %d: type = %q, want %q", i, tok.Type, exp.Type)
+		}
+		if tok.Literal != exp.Literal {
+			t.Errorf("token %d: literal = %q, want %q", i, tok.Literal, exp.Literal)
+		}
+	}
+}
+
+func TestStandaloneQuestionToken(t *testing.T) {
+	// Standalone ? (not after an identifier) is a QUESTION token
+	input := `?`
+	l := New(input)
+
+	tok := l.NextToken()
+	if tok.Type != token.QUESTION {
+		t.Errorf("expected QUESTION token, got %q", tok.Type)
+	}
+}

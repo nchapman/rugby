@@ -30,7 +30,11 @@ const (
 	GE TokenType = ">="
 
 	// Assignment
-	ASSIGN TokenType = "="
+	ASSIGN   TokenType = "="
+	ORASSIGN TokenType = "||="
+
+	// Type modifiers
+	QUESTION TokenType = "?"
 
 	// Delimiters
 	LPAREN     TokenType = "("

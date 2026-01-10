@@ -207,6 +207,15 @@ type AssignStmt struct {
 func (a *AssignStmt) node()     {}
 func (a *AssignStmt) stmtNode() {}
 
+// OrAssignStmt represents x ||= y (logical or assignment)
+type OrAssignStmt struct {
+	Name  string
+	Value Expression
+}
+
+func (o *OrAssignStmt) node()     {}
+func (o *OrAssignStmt) stmtNode() {}
+
 // IfStmt represents an if/elsif/else statement
 type IfStmt struct {
 	Cond    Expression
@@ -274,7 +283,7 @@ func (d *DeferStmt) stmtNode() {}
 // ClassDecl represents a class definition
 type ClassDecl struct {
 	Name    string        // class name (e.g., "User")
-	Parent  string        // embedded type, empty if none (for Phase C)
+	Embeds  []string      // embedded types (Go struct embedding), empty if none
 	Fields  []*FieldDecl  // fields inferred from initialize
 	Methods []*MethodDecl // methods defined in class
 	Pub     bool          // true if exported (pub class)
@@ -317,6 +326,15 @@ type InstanceVarAssign struct {
 
 func (i *InstanceVarAssign) node()     {}
 func (i *InstanceVarAssign) stmtNode() {}
+
+// InstanceVarOrAssign represents @name ||= value
+type InstanceVarOrAssign struct {
+	Name  string     // variable name without @
+	Value Expression
+}
+
+func (i *InstanceVarOrAssign) node()     {}
+func (i *InstanceVarOrAssign) stmtNode() {}
 
 // InterfaceDecl represents an interface definition
 type InterfaceDecl struct {

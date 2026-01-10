@@ -902,6 +902,41 @@ end`
 	assertContains(t, output, `func (s *Service) run()`)
 }
 
+func TestClassWithMultipleEmbedding(t *testing.T) {
+	input := `class Service < Logger, Authenticator
+  def run
+    puts "running"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `type Service struct {`)
+	assertContains(t, output, "Logger")
+	assertContains(t, output, "Authenticator")
+	assertContains(t, output, `func (s *Service) run()`)
+}
+
+func TestClassWithEmbeddingAndFields(t *testing.T) {
+	input := `class Service < Logger
+  def initialize(name : String)
+    @name = name
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `type Service struct {`)
+	assertContains(t, output, "Logger")
+	assertContains(t, output, "name string")
+}
+
 func TestClassWithInstanceVariables(t *testing.T) {
 	input := `class User
   def initialize(name, age)
@@ -1819,4 +1854,82 @@ end`
 
 	// Verify the loop generates correct condition (will iterate 0 times)
 	assertContains(t, output, `for i := 5; i <= 4; i++ {`)
+}
+
+func TestOrAssignFirstDeclaration(t *testing.T) {
+	input := `def main
+  x ||= 5
+end`
+
+	output := compile(t, input)
+
+	// First use should declare with :=
+	assertContains(t, output, "x := 5")
+}
+
+func TestOrAssignSecondUse(t *testing.T) {
+	input := `def main
+  x = nil
+  x ||= 5
+end`
+
+	output := compile(t, input)
+
+	// Second use should generate nil check
+	assertContains(t, output, "if x == nil {")
+	assertContains(t, output, "x = 5")
+}
+
+func TestInstanceVarOrAssign(t *testing.T) {
+	input := `class Service
+  def get_cache
+    @cache ||= load_cache()
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should generate nil check for instance var
+	assertContains(t, output, "if s.cache == nil {")
+	assertContains(t, output, "s.cache = load_cache()")
+}
+
+func TestOptionalValueType(t *testing.T) {
+	input := `def find(id : Int?) -> String?
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Value type optionals use runtime.OptionalT
+	assertContains(t, output, "func find(id runtime.OptionalInt) runtime.OptionalString")
+}
+
+func TestOptionalReferenceType(t *testing.T) {
+	input := `def find(id : Int) -> User?
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Reference type optionals use pointer
+	assertContains(t, output, "func find(id int) *User")
+}
+
+func TestOptionalVariable(t *testing.T) {
+	input := `def main
+  x : Int? = nil
+end`
+
+	output := compile(t, input)
+
+	// Variable with optional type
+	assertContains(t, output, "var x runtime.OptionalInt = nil")
 }

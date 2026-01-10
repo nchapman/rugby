@@ -1504,7 +1504,7 @@ end`
 	}
 }
 
-func TestClassWithParent(t *testing.T) {
+func TestClassWithEmbed(t *testing.T) {
 	input := `class Service < Logger
   def run
     puts "running"
@@ -1522,8 +1522,71 @@ end`
 		t.Errorf("expected class name 'Service', got %q", cls.Name)
 	}
 
-	if cls.Parent != "Logger" {
-		t.Errorf("expected parent 'Logger', got %q", cls.Parent)
+	if len(cls.Embeds) != 1 || cls.Embeds[0] != "Logger" {
+		t.Errorf("expected embeds ['Logger'], got %v", cls.Embeds)
+	}
+}
+
+func TestClassWithMultipleEmbeds(t *testing.T) {
+	input := `class Service < Logger, Authenticator
+  def run
+    puts "running"
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+
+	if cls.Name != "Service" {
+		t.Errorf("expected class name 'Service', got %q", cls.Name)
+	}
+
+	expectedEmbeds := []string{"Logger", "Authenticator"}
+	if len(cls.Embeds) != len(expectedEmbeds) {
+		t.Fatalf("expected %d embeds, got %d", len(expectedEmbeds), len(cls.Embeds))
+	}
+
+	for i, expected := range expectedEmbeds {
+		if cls.Embeds[i] != expected {
+			t.Errorf("embed %d: expected %q, got %q", i, expected, cls.Embeds[i])
+		}
+	}
+}
+
+func TestClassWithThreeEmbeds(t *testing.T) {
+	input := `class App < Logger, Authenticator, Database
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+
+	if len(cls.Embeds) != 3 {
+		t.Fatalf("expected 3 embeds, got %d", len(cls.Embeds))
+	}
+
+	if cls.Embeds[0] != "Logger" || cls.Embeds[1] != "Authenticator" || cls.Embeds[2] != "Database" {
+		t.Errorf("unexpected embeds: %v", cls.Embeds)
+	}
+}
+
+func TestClassEmbedMissingTypeAfterComma(t *testing.T) {
+	input := `class Service < Logger,
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected error for missing type after comma, got none")
 	}
 }
 
@@ -2657,5 +2720,134 @@ end`
 	endIdent, ok := rangeLit.End.(*ast.Ident)
 	if !ok || endIdent.Name != "finish" {
 		t.Errorf("expected End to be ident 'finish', got %T", rangeLit.End)
+	}
+}
+
+func TestOrAssignStmt(t *testing.T) {
+	input := `def main
+  x ||= 5
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	if len(fn.Body) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(fn.Body))
+	}
+
+	orAssign, ok := fn.Body[0].(*ast.OrAssignStmt)
+	if !ok {
+		t.Fatalf("expected OrAssignStmt, got %T", fn.Body[0])
+	}
+
+	if orAssign.Name != "x" {
+		t.Errorf("expected name 'x', got %q", orAssign.Name)
+	}
+
+	intLit, ok := orAssign.Value.(*ast.IntLit)
+	if !ok {
+		t.Fatalf("expected IntLit, got %T", orAssign.Value)
+	}
+	if intLit.Value != 5 {
+		t.Errorf("expected value 5, got %d", intLit.Value)
+	}
+}
+
+func TestOrAssignWithMethodCall(t *testing.T) {
+	input := `def main
+  user ||= User.new("guest")
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	orAssign, ok := fn.Body[0].(*ast.OrAssignStmt)
+	if !ok {
+		t.Fatalf("expected OrAssignStmt, got %T", fn.Body[0])
+	}
+
+	if orAssign.Name != "user" {
+		t.Errorf("expected name 'user', got %q", orAssign.Name)
+	}
+
+	// Value should be a CallExpr (User.new("guest"))
+	_, ok = orAssign.Value.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", orAssign.Value)
+	}
+}
+
+func TestInstanceVarOrAssign(t *testing.T) {
+	input := `class User
+  def get_cache
+    @cache ||= load_cache()
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+	method := cls.Methods[0]
+
+	orAssign, ok := method.Body[0].(*ast.InstanceVarOrAssign)
+	if !ok {
+		t.Fatalf("expected InstanceVarOrAssign, got %T", method.Body[0])
+	}
+
+	if orAssign.Name != "cache" {
+		t.Errorf("expected name 'cache', got %q", orAssign.Name)
+	}
+}
+
+func TestOptionalTypeInParam(t *testing.T) {
+	input := `def find(id : Int?) -> User?
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+
+	if len(fn.Params) != 1 {
+		t.Fatalf("expected 1 param, got %d", len(fn.Params))
+	}
+	if fn.Params[0].Type != "Int?" {
+		t.Errorf("expected param type 'Int?', got %q", fn.Params[0].Type)
+	}
+
+	if len(fn.ReturnTypes) != 1 {
+		t.Fatalf("expected 1 return type, got %d", len(fn.ReturnTypes))
+	}
+	if fn.ReturnTypes[0] != "User?" {
+		t.Errorf("expected return type 'User?', got %q", fn.ReturnTypes[0])
+	}
+}
+
+func TestOptionalTypeInVariable(t *testing.T) {
+	input := `def main
+  x : Int? = nil
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+
+	if assign.Type != "Int?" {
+		t.Errorf("expected type 'Int?', got %q", assign.Type)
 	}
 }

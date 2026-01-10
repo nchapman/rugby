@@ -233,3 +233,35 @@ First-class Range values (see spec.md Section 4.2.1).
 - [x] Range literals → `runtime.Range{Start: x, End: y, Exclusive: bool}`
 - [x] `for i in range` → C-style for loop: `for i := start; i <= end; i++`
 - [x] Range method calls → runtime function calls
+
+## Phase 11: High-Value Features
+
+### Multiple Embedding
+- [x] Support `class Foo < Bar, Baz` syntax (spec 7.6)
+- [x] AST: `ClassDecl.Embeds []string` (was `Parent string`)
+- [x] Parser: Comma-separated list of embedded types
+- [x] Codegen: Emit multiple embedded fields in struct
+
+### `||=` Operator (spec 5.1)
+- [x] Token: `ORASSIGN` for `||=`
+- [x] Lexer: Handle `||=` while preserving `||` as two PIPE tokens for blocks
+- [x] AST: `OrAssignStmt` and `InstanceVarOrAssign` nodes
+- [x] Parser: Detect `||=` after identifiers and instance variables
+- [x] Codegen: First use → `:=`, subsequent use → nil-check pattern
+- [x] Field extraction: Handle `||=` in initialize methods
+
+**Note:** Per spec, `||=` is not applicable for non-nullable value types (Int, String, etc.) - these will fail at Go compile time, which is correct behavior.
+
+### Optional Types `T?` (spec 4.4) - Phase A
+- [x] Lexer: `?` suffix consumed as part of type identifier (e.g., `Int?`)
+- [x] Parser: `parseTypeName()` handles optional types
+- [x] Codegen: `mapType()` handles optionals:
+  - Value types (`Int?`, `String?`) → `runtime.OptionalT`
+  - Reference types (`User?`) → `*User` pointer
+  - Slices/maps already nullable, passed through
+- [x] Runtime: `optional.go` with OptionalInt, OptionalString, etc.
+
+### Optional Types - Future Phases (deferred)
+- [ ] Phase B: `if x` checks - value types check `.Valid`, reference types check `!= nil`
+- [ ] Phase C: Assignment with check pattern `if (n = s.to_i?)` → `if n, ok := ...; ok`
+- [ ] `nil` literal handling for optional assignments

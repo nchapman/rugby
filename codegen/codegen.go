@@ -166,8 +166,12 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.buf.WriteString("\n")
 	case *ast.AssignStmt:
 		g.genAssignStmt(s)
+	case *ast.OrAssignStmt:
+		g.genOrAssignStmt(s)
 	case *ast.InstanceVarAssign:
 		g.genInstanceVarAssign(s)
+	case *ast.InstanceVarOrAssign:
+		g.genInstanceVarOrAssign(s)
 	case *ast.IfStmt:
 		g.genIfStmt(s)
 	case *ast.WhileStmt:
@@ -249,12 +253,12 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 
 	// Emit struct definition
 	// Class names are already PascalCase by convention; pub affects field/method visibility
-	hasContent := cls.Parent != "" || len(cls.Fields) > 0
+	hasContent := len(cls.Embeds) > 0 || len(cls.Fields) > 0
 	if hasContent {
 		g.buf.WriteString(fmt.Sprintf("type %s struct {\n", className))
-		if cls.Parent != "" {
+		for _, embed := range cls.Embeds {
 			g.buf.WriteString("\t")
-			g.buf.WriteString(cls.Parent)
+			g.buf.WriteString(embed)
 			g.buf.WriteString("\n")
 		}
 		for _, field := range cls.Fields {
@@ -497,6 +501,59 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 	}
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
+}
+
+func (g *Generator) genOrAssignStmt(s *ast.OrAssignStmt) {
+	if !g.vars[s.Name] {
+		// First declaration: just use :=
+		g.writeIndent()
+		g.buf.WriteString(s.Name)
+		g.buf.WriteString(" := ")
+		g.genExpr(s.Value)
+		g.buf.WriteString("\n")
+		g.vars[s.Name] = true
+	} else {
+		// Variable exists: generate nil-check assignment
+		g.writeIndent()
+		g.buf.WriteString("if ")
+		g.buf.WriteString(s.Name)
+		g.buf.WriteString(" == nil {\n")
+		g.indent++
+		g.writeIndent()
+		g.buf.WriteString(s.Name)
+		g.buf.WriteString(" = ")
+		g.genExpr(s.Value)
+		g.buf.WriteString("\n")
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	}
+}
+
+func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
+	if g.currentClass == "" {
+		g.writeIndent()
+		g.buf.WriteString(fmt.Sprintf("/* @%s ||= outside class */\n", s.Name))
+		return
+	}
+
+	recv := receiverName(g.currentClass)
+	field := fmt.Sprintf("%s.%s", recv, s.Name)
+
+	// Generate nil-check assignment
+	g.writeIndent()
+	g.buf.WriteString("if ")
+	g.buf.WriteString(field)
+	g.buf.WriteString(" == nil {\n")
+	g.indent++
+	g.writeIndent()
+	g.buf.WriteString(field)
+	g.buf.WriteString(" = ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
 }
 
 func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
@@ -1486,8 +1543,29 @@ func snakeToPascal(s string) string {
 	return result.String()
 }
 
+// Value types that need runtime.OptionalT wrapper for optional types
+var valueTypes = map[string]bool{
+	"Int": true, "Int64": true, "Float": true,
+	"Bool": true, "String": true,
+}
+
 // mapType converts Rugby type names to Go type names
 func mapType(rubyType string) string {
+	// Handle optional types (T?)
+	if strings.HasSuffix(rubyType, "?") {
+		baseType := strings.TrimSuffix(rubyType, "?")
+		if valueTypes[baseType] {
+			// Value type optional -> runtime.OptionalT
+			return "runtime.Optional" + baseType
+		}
+		// Reference types: slices/maps are already nullable, classes use pointer
+		goBase := mapType(baseType)
+		if strings.HasPrefix(goBase, "[]") || strings.HasPrefix(goBase, "map[") {
+			return goBase // slices and maps are already nullable
+		}
+		return "*" + goBase // class types become pointers
+	}
+
 	switch rubyType {
 	case "Int":
 		return "int"
