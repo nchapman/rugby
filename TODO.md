@@ -261,7 +261,8 @@ First-class Range values (see spec.md Section 4.2.1).
   - Slices/maps already nullable, passed through
 - [x] Runtime: `optional.go` with OptionalInt, OptionalString, etc.
 
-### Optional Types - Future Phases (deferred)
-- [ ] Phase B: `if x` checks - value types check `.Valid`, reference types check `!= nil`
-- [ ] Phase C: Assignment with check pattern `if (n = s.to_i?)` → `if n, ok := ...; ok`
-- [ ] `nil` literal handling for optional assignments
+### Optional Types - Phases B & C
+- [x] Phase B: `if x` checks - value types check `.Valid`, reference types check `!= nil`
+- [x] Phase C: Assignment with check pattern `if (n = s.to_i?)` → `if n, ok := ...; ok`
+- [x] `nil` literal for optional assignments
+- [x] Optional methods `to_i?`/`to_f?` map to runtime functions
