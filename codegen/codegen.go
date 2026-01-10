@@ -83,15 +83,32 @@ type Generator struct {
 	currentClass string            // current class being generated (for instance vars)
 	pubClasses   map[string]bool   // track public classes for constructor naming
 	classFields  map[string]string // track fields of the current class and their types
+	sourceFile   string            // original .rg filename for //line directives
+	emitLineDir  bool              // whether to emit //line directives
 }
 
-func New() *Generator {
-	return &Generator{
+// Option configures a Generator.
+type Option func(*Generator)
+
+// WithSourceFile enables //line directive emission for the given source file.
+func WithSourceFile(path string) Option {
+	return func(g *Generator) {
+		g.sourceFile = path
+		g.emitLineDir = true
+	}
+}
+
+func New(opts ...Option) *Generator {
+	g := &Generator{
 		vars:        make(map[string]string),
 		imports:     make(map[string]bool),
 		pubClasses:  make(map[string]bool),
 		classFields: make(map[string]string),
 	}
+	for _, opt := range opts {
+		opt(g)
+	}
+	return g
 }
 
 // isDeclared checks if a variable has been declared in the current scope
@@ -215,6 +232,11 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 			out.WriteString("\t\"rugby/runtime\"\n")
 		}
 		out.WriteString(")\n\n")
+	}
+
+	// Emit //line directive to map errors back to Rugby source
+	if g.emitLineDir && g.sourceFile != "" {
+		out.WriteString(fmt.Sprintf("//line %s:1\n", g.sourceFile))
 	}
 
 	out.WriteString(bodyCode)

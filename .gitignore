@@ -1,2 +1,3 @@
 rugby
 examples/*.go
+.rugby/
