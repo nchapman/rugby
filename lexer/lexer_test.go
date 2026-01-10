@@ -825,6 +825,26 @@ func TestOrAssignVsBlockPipes(t *testing.T) {
 			expected: []token.TokenType{token.IDENT, token.ORASSIGN, token.IDENT, token.EOF},
 		},
 		{
+			name:     "plus assign",
+			input:    "x += 5",
+			expected: []token.TokenType{token.IDENT, token.PLUSASSIGN, token.INT, token.EOF},
+		},
+		{
+			name:     "minus assign",
+			input:    "x -= 5",
+			expected: []token.TokenType{token.IDENT, token.MINUSASSIGN, token.INT, token.EOF},
+		},
+		{
+			name:     "star assign",
+			input:    "x *= 5",
+			expected: []token.TokenType{token.IDENT, token.STARASSIGN, token.INT, token.EOF},
+		},
+		{
+			name:     "slash assign",
+			input:    "x /= 5",
+			expected: []token.TokenType{token.IDENT, token.SLASHASSIGN, token.INT, token.EOF},
+		},
+		{
 			name:     "block pipes",
 			input:    "do || end",
 			expected: []token.TokenType{token.DO, token.PIPE, token.PIPE, token.END, token.EOF},

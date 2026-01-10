@@ -314,6 +314,19 @@ Compiles to `if n, ok := strconv.Atoi(s); ok { ... }`
 * `x = expr` declares (if new) or assigns (if existing)
 * Shadowing allowed in nested scopes
 
+**Compound Assignment:**
+
+Rugby supports compound assignment operators for arithmetic operations:
+
+```ruby
+x += 5   # x = x + 5
+x -= 3   # x = x - 3
+x *= 2   # x = x * 2
+x /= 4   # x = x / 4
+```
+
+These compile directly to Go's equivalent operations.
+
 **Logical OR Assignment (`||=`):**
 
 Rugby supports `||=` for safe default assignment.

@@ -1912,6 +1912,54 @@ end`
 	assertContains(t, output, "s.cache = load_cache()")
 }
 
+func TestCompoundAssignPlusEquals(t *testing.T) {
+	input := `def main
+  x = 10
+  x += 5
+end`
+
+	output := compile(t, input)
+
+	// Should generate x = x + 5
+	assertContains(t, output, "x = x + 5")
+}
+
+func TestCompoundAssignMinusEquals(t *testing.T) {
+	input := `def main
+  x = 10
+  x -= 3
+end`
+
+	output := compile(t, input)
+
+	// Should generate x = x - 3
+	assertContains(t, output, "x = x - 3")
+}
+
+func TestCompoundAssignStarEquals(t *testing.T) {
+	input := `def main
+  x = 10
+  x *= 2
+end`
+
+	output := compile(t, input)
+
+	// Should generate x = x * 2
+	assertContains(t, output, "x = x * 2")
+}
+
+func TestCompoundAssignSlashEquals(t *testing.T) {
+	input := `def main
+  x = 10
+  x /= 5
+end`
+
+	output := compile(t, input)
+
+	// Should generate x = x / 5
+	assertContains(t, output, "x = x / 5")
+}
+
 func TestOptionalValueType(t *testing.T) {
 	input := `def find(id : Int?) -> String?
 end
