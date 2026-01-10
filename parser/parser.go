@@ -175,9 +175,15 @@ func (p *Parser) ParseProgram() *ast.Program {
 				program.Declarations = append(program.Declarations, iface)
 			}
 		default:
-			p.errors = append(p.errors, fmt.Sprintf("%d:%d: unexpected token %s",
-				p.curToken.Line, p.curToken.Column, p.curToken.Type))
-			p.nextToken()
+			// Parse top-level statements (bare script support)
+			if stmt := p.parseStatement(); stmt != nil {
+				program.Declarations = append(program.Declarations, stmt)
+			} else {
+				// Skip token if parseStatement returned nil to avoid infinite loop
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: unexpected token %s at top level",
+					p.curToken.Line, p.curToken.Column, p.curToken.Type))
+				p.nextToken()
+			}
 		}
 	}
 

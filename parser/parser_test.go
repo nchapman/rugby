@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -2849,5 +2850,380 @@ end`
 
 	if assign.Type != "Int?" {
 		t.Errorf("expected type 'Int?', got %q", assign.Type)
+	}
+}
+
+// --- Bare Script Tests ---
+
+func TestBareScriptSimple(t *testing.T) {
+	input := `puts "hello"`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	exprStmt, ok := program.Declarations[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", program.Declarations[0])
+	}
+
+	call, ok := exprStmt.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+	}
+
+	ident, ok := call.Func.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident, got %T", call.Func)
+	}
+	if ident.Name != "puts" {
+		t.Errorf("expected 'puts', got %q", ident.Name)
+	}
+}
+
+func TestBareScriptWithFunctions(t *testing.T) {
+	input := `def greet(name : String)
+  puts "Hello!"
+end
+
+greet("World")`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 2 {
+		t.Fatalf("expected 2 declarations, got %d", len(program.Declarations))
+	}
+
+	// First should be FuncDecl
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	if fn.Name != "greet" {
+		t.Errorf("expected 'greet', got %q", fn.Name)
+	}
+
+	// Second should be ExprStmt (function call)
+	exprStmt, ok := program.Declarations[1].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", program.Declarations[1])
+	}
+
+	call, ok := exprStmt.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+	}
+
+	ident, ok := call.Func.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident, got %T", call.Func)
+	}
+	if ident.Name != "greet" {
+		t.Errorf("expected 'greet', got %q", ident.Name)
+	}
+}
+
+func TestBareScriptWithClass(t *testing.T) {
+	input := `class Counter
+  def initialize(n : Int)
+    @n = n
+  end
+end
+
+c = Counter.new(0)
+puts c`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 3 {
+		t.Fatalf("expected 3 declarations, got %d", len(program.Declarations))
+	}
+
+	// First should be ClassDecl
+	cls, ok := program.Declarations[0].(*ast.ClassDecl)
+	if !ok {
+		t.Fatalf("expected ClassDecl, got %T", program.Declarations[0])
+	}
+	if cls.Name != "Counter" {
+		t.Errorf("expected 'Counter', got %q", cls.Name)
+	}
+
+	// Second should be AssignStmt
+	assign, ok := program.Declarations[1].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", program.Declarations[1])
+	}
+	if assign.Name != "c" {
+		t.Errorf("expected 'c', got %q", assign.Name)
+	}
+
+	// Third should be ExprStmt
+	_, ok = program.Declarations[2].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", program.Declarations[2])
+	}
+}
+
+func TestBareScriptMultipleStatements(t *testing.T) {
+	input := `x = 1
+y = 2
+puts x`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 3 {
+		t.Fatalf("expected 3 declarations, got %d", len(program.Declarations))
+	}
+
+	// All should be statements (2 assigns + 1 expr)
+	assign1, ok := program.Declarations[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", program.Declarations[0])
+	}
+	if assign1.Name != "x" {
+		t.Errorf("expected 'x', got %q", assign1.Name)
+	}
+
+	assign2, ok := program.Declarations[1].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", program.Declarations[1])
+	}
+	if assign2.Name != "y" {
+		t.Errorf("expected 'y', got %q", assign2.Name)
+	}
+
+	_, ok = program.Declarations[2].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", program.Declarations[2])
+	}
+}
+
+func TestBareScriptWithControlFlow(t *testing.T) {
+	input := `x = 5
+if x > 3
+  puts "big"
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 2 {
+		t.Fatalf("expected 2 declarations, got %d", len(program.Declarations))
+	}
+
+	// First is assignment
+	_, ok := program.Declarations[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", program.Declarations[0])
+	}
+
+	// Second is if statement
+	_, ok = program.Declarations[1].(*ast.IfStmt)
+	if !ok {
+		t.Fatalf("expected IfStmt, got %T", program.Declarations[1])
+	}
+}
+
+func TestBareScriptWithImport(t *testing.T) {
+	input := `import fmt
+
+fmt.Println("hello")`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Imports) != 1 {
+		t.Fatalf("expected 1 import, got %d", len(program.Imports))
+	}
+	if program.Imports[0].Path != "fmt" {
+		t.Errorf("expected import path 'fmt', got %q", program.Imports[0].Path)
+	}
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	_, ok := program.Declarations[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", program.Declarations[0])
+	}
+}
+
+func TestBareScriptWithForLoop(t *testing.T) {
+	input := `for i in 1..5
+  puts i
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	forStmt, ok := program.Declarations[0].(*ast.ForStmt)
+	if !ok {
+		t.Fatalf("expected ForStmt, got %T", program.Declarations[0])
+	}
+
+	if forStmt.Var != "i" {
+		t.Errorf("expected loop var 'i', got %q", forStmt.Var)
+	}
+}
+
+func TestBareScriptWithWhileLoop(t *testing.T) {
+	input := `x = 0
+while x < 3
+  x = x + 1
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 2 {
+		t.Fatalf("expected 2 declarations, got %d", len(program.Declarations))
+	}
+
+	_, ok := program.Declarations[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", program.Declarations[0])
+	}
+
+	_, ok = program.Declarations[1].(*ast.WhileStmt)
+	if !ok {
+		t.Fatalf("expected WhileStmt, got %T", program.Declarations[1])
+	}
+}
+
+func TestBareScriptWithBlock(t *testing.T) {
+	input := `[1, 2, 3].each do |x|
+  puts x
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	exprStmt, ok := program.Declarations[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", program.Declarations[0])
+	}
+
+	call, ok := exprStmt.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+	}
+
+	if call.Block == nil {
+		t.Fatal("expected block, got nil")
+	}
+
+	if len(call.Block.Params) != 1 || call.Block.Params[0] != "x" {
+		t.Errorf("expected block params [x], got %v", call.Block.Params)
+	}
+}
+
+func TestBareScriptMixedOrdering(t *testing.T) {
+	input := `puts "start"
+
+def helper(x : Int) -> Int
+  x * 2
+end
+
+result = helper(5)
+puts result
+
+class Counter
+  def initialize(n : Int)
+    @n = n
+  end
+end
+
+c = Counter.new(0)
+puts "done"`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	// Should have: ExprStmt, FuncDecl, AssignStmt, ExprStmt, ClassDecl, AssignStmt, ExprStmt
+	if len(program.Declarations) != 7 {
+		t.Fatalf("expected 7 declarations, got %d", len(program.Declarations))
+	}
+
+	// Verify types in order
+	expectedTypes := []string{
+		"*ast.ExprStmt",
+		"*ast.FuncDecl",
+		"*ast.AssignStmt",
+		"*ast.ExprStmt",
+		"*ast.ClassDecl",
+		"*ast.AssignStmt",
+		"*ast.ExprStmt",
+	}
+
+	for i, decl := range program.Declarations {
+		got := fmt.Sprintf("%T", decl)
+		if got != expectedTypes[i] {
+			t.Errorf("declaration %d: expected %s, got %s", i, expectedTypes[i], got)
+		}
+	}
+}
+
+func TestBareScriptEmpty(t *testing.T) {
+	input := ``
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Imports) != 0 {
+		t.Errorf("expected 0 imports, got %d", len(program.Imports))
+	}
+	if len(program.Declarations) != 0 {
+		t.Errorf("expected 0 declarations, got %d", len(program.Declarations))
+	}
+}
+
+func TestBareScriptOnlyComments(t *testing.T) {
+	input := `# This is a comment
+# Another comment`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 0 {
+		t.Errorf("expected 0 declarations, got %d", len(program.Declarations))
 	}
 }

@@ -2059,3 +2059,263 @@ end`
 	// should generate if n, ok := runtime.StringToInt(s); ok {
 	assertContains(t, output, "if n, ok := runtime.StringToInt(s); ok {")
 }
+
+// --- Bare Script Tests ---
+
+func TestBareScriptSimple(t *testing.T) {
+	input := `puts "hello"`
+
+	output := compile(t, input)
+
+	// Should generate implicit main
+	assertContains(t, output, "func main()")
+	assertContains(t, output, `runtime.Puts("hello")`)
+}
+
+func TestBareScriptWithFunction(t *testing.T) {
+	input := `def greet(name : String)
+  puts name
+end
+
+greet("World")`
+
+	output := compile(t, input)
+
+	// Should have the function definition
+	assertContains(t, output, "func greet(name string)")
+	// Should have implicit main with the call
+	assertContains(t, output, "func main()")
+	assertContains(t, output, `greet("World")`)
+}
+
+func TestBareScriptWithClass(t *testing.T) {
+	input := `class Counter
+  def initialize(n : Int)
+    @n = n
+  end
+
+  def value -> Int
+    @n
+  end
+end
+
+c = Counter.new(5)
+puts c.value`
+
+	output := compile(t, input)
+
+	// Should have the class definition
+	assertContains(t, output, "type Counter struct")
+	assertContains(t, output, "func newCounter(n int)")
+	// Should have implicit main
+	assertContains(t, output, "func main()")
+	assertContains(t, output, "c := newCounter(5)")
+}
+
+func TestBareScriptMultipleStatements(t *testing.T) {
+	input := `x = 1
+y = 2
+z = x + y
+puts z`
+
+	output := compile(t, input)
+
+	// Should have implicit main with all statements
+	assertContains(t, output, "func main()")
+	assertContains(t, output, "x := 1")
+	assertContains(t, output, "y := 2")
+	assertContains(t, output, "z := (x + y)")
+}
+
+func TestBareScriptWithControlFlow(t *testing.T) {
+	input := `x = 5
+if x > 3
+  puts "big"
+end`
+
+	output := compile(t, input)
+
+	// Should have implicit main with control flow
+	assertContains(t, output, "func main()")
+	assertContains(t, output, "x := 5")
+	assertContains(t, output, "if x > 3")
+}
+
+func TestBareScriptConflictError(t *testing.T) {
+	input := `def main
+  puts "in main"
+end
+
+puts "top-level"`
+
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) > 0 {
+		t.Skipf("parser error: %v", p.Errors())
+	}
+
+	gen := New()
+	_, err := gen.Generate(program)
+
+	if err == nil {
+		t.Error("expected error for conflicting main and top-level statements, got none")
+	}
+	if err != nil && !strings.Contains(err.Error(), "cannot mix") {
+		t.Errorf("expected 'cannot mix' error, got: %v", err)
+	}
+}
+
+func TestExplicitMainStillWorks(t *testing.T) {
+	input := `def main
+  puts "hello"
+end`
+
+	output := compile(t, input)
+
+	// Should have the explicit main
+	assertContains(t, output, "func main()")
+	assertContains(t, output, `runtime.Puts("hello")`)
+}
+
+func TestLibraryModeNoMain(t *testing.T) {
+	input := `def helper(x : Int) -> Int
+  x * 2
+end
+
+class Util
+  def initialize
+  end
+end`
+
+	output := compile(t, input)
+
+	// Should NOT have a main function (library mode)
+	if strings.Contains(output, "func main()") {
+		t.Error("library mode should not generate main function")
+	}
+
+	// Should have the function and class
+	assertContains(t, output, "func helper(x int) int")
+	assertContains(t, output, "type Util struct")
+}
+
+func TestBareScriptWithImport(t *testing.T) {
+	input := `import fmt
+
+fmt.Println("hello")`
+
+	output := compile(t, input)
+
+	// Should have import and implicit main
+	assertContains(t, output, `"fmt"`)
+	assertContains(t, output, "func main()")
+	assertContains(t, output, `fmt.Println("hello")`)
+}
+
+func TestBareScriptWithForLoop(t *testing.T) {
+	input := `for i in 1..3
+  puts i
+end`
+
+	output := compile(t, input)
+
+	// Should have implicit main with for loop
+	assertContains(t, output, "func main()")
+	assertContains(t, output, "for i := 1; i <= 3; i++")
+}
+
+func TestBareScriptWithWhileLoop(t *testing.T) {
+	input := `x = 0
+while x < 3
+  x = x + 1
+end`
+
+	output := compile(t, input)
+
+	// Should have implicit main with while loop
+	assertContains(t, output, "func main()")
+	assertContains(t, output, "x := 0")
+	assertContains(t, output, "for x < 3")
+}
+
+func TestBareScriptWithBlock(t *testing.T) {
+	input := `[1, 2, 3].each do |x|
+  puts x
+end`
+
+	output := compile(t, input)
+
+	// Should have implicit main with each block
+	assertContains(t, output, "func main()")
+	assertContains(t, output, "runtime.Each")
+}
+
+func TestBareScriptMixedOrdering(t *testing.T) {
+	input := `puts "start"
+
+def helper(x : Int) -> Int
+  return x * 2
+end
+
+result = helper(5)
+puts result`
+
+	output := compile(t, input)
+
+	// Function should be defined at package level, not inside main
+	assertContains(t, output, "func helper(x int) int")
+	// Statements should be in implicit main
+	assertContains(t, output, "func main()")
+	assertContains(t, output, `runtime.Puts("start")`)
+	assertContains(t, output, "result := helper(5)")
+
+	// Verify function is NOT inside main (check ordering)
+	mainIdx := strings.Index(output, "func main()")
+	helperIdx := strings.Index(output, "func helper(")
+	if helperIdx > mainIdx {
+		t.Error("helper function should be defined before main, not inside it")
+	}
+}
+
+func TestBareScriptEmpty(t *testing.T) {
+	input := ``
+
+	output := compile(t, input)
+
+	// Should generate minimal valid Go package with no main
+	assertContains(t, output, "package main")
+	if strings.Contains(output, "func main()") {
+		t.Error("empty program should not generate main function")
+	}
+}
+
+func TestBareScriptOnlyComments(t *testing.T) {
+	input := `# This is a comment
+# Another comment`
+
+	output := compile(t, input)
+
+	// Should generate minimal valid Go package with no main
+	assertContains(t, output, "package main")
+	if strings.Contains(output, "func main()") {
+		t.Error("comment-only program should not generate main function")
+	}
+}
+
+func TestBareScriptVariableScoping(t *testing.T) {
+	// Test that variables in functions don't leak into implicit main
+	input := `def helper
+  x = 10
+end
+
+y = 20
+puts y`
+
+	output := compile(t, input)
+
+	// Both should use := since they're new declarations in their respective scopes
+	assertContains(t, output, "x := 10")
+	assertContains(t, output, "y := 20")
+}

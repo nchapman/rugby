@@ -31,6 +31,109 @@ Rugby **must not** support:
 
 ---
 
+## 2.1 Bare Scripts (Top-Level Execution)
+
+Rugby files can contain executable statements at the top level without an explicit `main` function, similar to Ruby scripts.
+
+### Rules
+
+1. **Top-level statements**: Any statement outside a `def`, `class`, or `interface` is considered executable top-level code.
+2. **Order preserved**: Top-level statements execute in source order.
+3. **Definitions lifted**: `def`, `class`, and `interface` at top level become package-level Go constructs (not executed as statements).
+4. **Implicit main**: If top-level statements exist and no `def main` is defined, the compiler generates `func main()` containing them.
+5. **Explicit main wins**: If `def main` exists, top-level statements are a compile error (avoids ambiguity).
+
+### Examples
+
+**Simple script:**
+```ruby
+# hello.rg
+puts "Hello, world!"
+```
+
+Compiles to:
+```go
+package main
+
+import "rugby/runtime"
+
+func main() {
+    runtime.Puts("Hello, world!")
+}
+```
+
+**Script with functions:**
+```ruby
+# greet.rg
+def greet(name : String)
+  puts "Hello, #{name}!"
+end
+
+greet("Rugby")
+greet("World")
+```
+
+Compiles to:
+```go
+package main
+
+import "rugby/runtime"
+
+func greet(name string) {
+    runtime.Puts(fmt.Sprintf("Hello, %s!", name))
+}
+
+func main() {
+    greet("Rugby")
+    greet("World")
+}
+```
+
+**Script with classes:**
+```ruby
+# counter.rg
+class Counter
+  def initialize(n : Int)
+    @n = n
+  end
+
+  def inc!
+    @n += 1
+  end
+
+  def value -> Int
+    @n
+  end
+end
+
+c = Counter.new(0)
+c.inc!
+c.inc!
+puts c.value
+```
+
+### Compile Error Case
+
+```ruby
+# error: can't mix top-level statements with def main
+def main
+  puts "in main"
+end
+
+puts "top-level"  # ERROR: top-level statement with explicit main
+```
+
+### Package Mode vs Script Mode
+
+| File contains | Mode | Output |
+|---------------|------|--------|
+| Only defs/classes | Library | `package <name>`, no main |
+| Top-level statements | Script | `package main` + generated `func main()` |
+| `def main` | Explicit | `package main` + user's `func main()` |
+| Both top-level + `def main` | Error | Compile error |
+
+---
+
 ## 3. Lexical Structure
 
 ### 3.1 Comments

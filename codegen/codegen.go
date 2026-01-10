@@ -191,13 +191,52 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 		}
 	}
 
-	// First pass: generate declarations to determine what imports we need
+	// Separate declarations from top-level statements
+	var definitions []ast.Statement   // def, class, interface
+	var topLevelStmts []ast.Statement // executable statements
+	hasMainFunc := false
+
+	for _, decl := range program.Declarations {
+		switch d := decl.(type) {
+		case *ast.FuncDecl:
+			definitions = append(definitions, d)
+			if d.Name == "main" {
+				hasMainFunc = true
+			}
+		case *ast.ClassDecl:
+			definitions = append(definitions, d)
+		case *ast.InterfaceDecl:
+			definitions = append(definitions, d)
+		default:
+			topLevelStmts = append(topLevelStmts, decl)
+		}
+	}
+
+	// Check for conflict: both def main and top-level statements
+	if hasMainFunc && len(topLevelStmts) > 0 {
+		return "", fmt.Errorf("cannot mix top-level statements with 'def main'; use one or the other")
+	}
+
+	// First pass: generate definitions to determine what imports we need
 	var bodyBuf strings.Builder
 	g.buf = bodyBuf
-	for _, decl := range program.Declarations {
-		g.genStatement(decl)
+	for _, def := range definitions {
+		g.genStatement(def)
 		g.buf.WriteString("\n")
 	}
+
+	// Generate implicit main if there are top-level statements and no explicit main
+	if len(topLevelStmts) > 0 && !hasMainFunc {
+		g.buf.WriteString("func main() {\n")
+		g.indent++
+		clear(g.vars) // Reset variable tracking for implicit main scope
+		for _, stmt := range topLevelStmts {
+			g.genStatement(stmt)
+		}
+		g.indent--
+		g.buf.WriteString("}\n")
+	}
+
 	bodyCode := g.buf.String()
 
 	// Second pass: build final output with package and imports
