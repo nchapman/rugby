@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -30,9 +31,17 @@ var (
 	mutedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
 )
 
+// evalResult is the message sent when async evaluation completes.
+type evalResult struct {
+	output string
+	err    error
+	input  string // original input for tracking assignments
+}
+
 // Model is the bubbletea model for the REPL.
 type Model struct {
 	textInput  textinput.Model
+	spinner    spinner.Model
 	history    []string
 	historyIdx int
 	output     []string
@@ -45,6 +54,10 @@ type Model struct {
 	// Multi-line input
 	inputLines []string
 	blockDepth int
+
+	// Async evaluation state
+	evaluating    bool
+	pendingInput  string // input being evaluated
 
 	project *builder.Project
 	counter int // for unique temp file names
@@ -60,10 +73,15 @@ func New() Model {
 	ti.Width = 80
 	ti.Prompt = ""
 
+	s := spinner.New()
+	s.Spinner = spinner.Dot
+	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
 	project, _ := builder.FindProject()
 
 	return Model{
 		textInput:  ti,
+		spinner:    s,
 		historyIdx: -1,
 		project:    project,
 	}
@@ -77,7 +95,39 @@ func (m Model) Init() tea.Cmd {
 // Update implements tea.Model.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case evalResult:
+		// Evaluation complete
+		m.evaluating = false
+		if msg.err != nil {
+			m.output = append(m.output, errorStyle.Render(msg.err.Error()))
+		} else if msg.output != "" {
+			for _, line := range strings.Split(strings.TrimRight(msg.output, "\n"), "\n") {
+				m.output = append(m.output, outputStyle.Render(line))
+			}
+		}
+
+		// Track assignment for variable persistence
+		if m.isAssignment(msg.input) {
+			m.statements = append(m.statements, msg.input)
+		}
+
+		m.truncateOutput()
+		return m, nil
+
+	case spinner.TickMsg:
+		if m.evaluating {
+			var cmd tea.Cmd
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+
 	case tea.KeyMsg:
+		// Ignore input while evaluating
+		if m.evaluating {
+			return m, nil
+		}
+
 		switch msg.Type {
 		case tea.KeyCtrlC, tea.KeyCtrlD:
 			m.quitting = true
@@ -148,28 +198,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-			// Evaluate
-			result, err := m.eval(fullInput)
-			if err != nil {
-				m.output = append(m.output, errorStyle.Render(err.Error()))
-			} else if result != "" {
-				for _, line := range strings.Split(strings.TrimRight(result, "\n"), "\n") {
-					m.output = append(m.output, outputStyle.Render(line))
-				}
-			}
-
-			// Keep output manageable
-			if len(m.output) > 100 {
-				m.output = m.output[len(m.output)-100:]
-			}
-
-			return m, nil
+			// Start async evaluation with spinner
+			m.evaluating = true
+			m.pendingInput = fullInput
+			return m, tea.Batch(m.spinner.Tick, m.runEval(fullInput))
 		}
 	}
 
 	var cmd tea.Cmd
 	m.textInput, cmd = m.textInput.Update(msg)
 	return m, cmd
+}
+
+// runEval returns a command that runs evaluation asynchronously.
+func (m *Model) runEval(input string) tea.Cmd {
+	return func() tea.Msg {
+		result, err := m.eval(input)
+		return evalResult{output: result, err: err, input: input}
+	}
 }
 
 // View implements tea.Model.
@@ -185,13 +231,16 @@ func (m Model) View() string {
 		s.WriteString(line + "\n")
 	}
 
-	// Show current prompt
-	if m.blockDepth > 0 {
+	// Show spinner or prompt
+	if m.evaluating {
+		s.WriteString(m.spinner.View())
+	} else if m.blockDepth > 0 {
 		s.WriteString(contStyle.Render(".. "))
+		s.WriteString(m.textInput.View())
 	} else {
 		s.WriteString(promptStyle.Render(">> "))
+		s.WriteString(m.textInput.View())
 	}
-	s.WriteString(m.textInput.View())
 
 	return s.String()
 }
@@ -282,6 +331,19 @@ func (m *Model) isClassDef(input string) bool {
 	return strings.HasPrefix(trimmed, "class ") || strings.HasPrefix(trimmed, "pub class ")
 }
 
+// isInterfaceDef checks if the input is an interface definition.
+func (m *Model) isInterfaceDef(input string) bool {
+	trimmed := strings.TrimSpace(input)
+	return strings.HasPrefix(trimmed, "interface ") || strings.HasPrefix(trimmed, "pub interface ")
+}
+
+// truncateOutput keeps output to a maximum of 100 lines.
+func (m *Model) truncateOutput() {
+	if len(m.output) > 100 {
+		m.output = m.output[len(m.output)-100:]
+	}
+}
+
 // eval compiles and runs the input, returning the output.
 func (m *Model) eval(input string) (string, error) {
 	// Handle special inputs
@@ -304,6 +366,16 @@ func (m *Model) eval(input string) (string, error) {
 	if m.isClassDef(input) {
 		m.functions = append(m.functions, input)
 		return successStyle.Render("(defined)"), nil
+	}
+
+	if m.isInterfaceDef(input) {
+		m.functions = append(m.functions, input)
+		return successStyle.Render("(defined)"), nil
+	}
+
+	// Check for valid project
+	if m.project == nil {
+		return "", fmt.Errorf("no Rugby project found - run from a project directory")
 	}
 
 	// Build the program
@@ -350,7 +422,7 @@ func (m *Model) eval(input string) (string, error) {
 	// Create go.mod for the repl directory
 	goModContent := fmt.Sprintf(`module repl
 
-go 1.21
+go 1.25
 
 require rugby v0.0.0
 
@@ -397,11 +469,6 @@ replace rugby => %s
 		}
 	}
 
-	// If successful and it was an assignment, track it
-	if m.isAssignment(input) {
-		m.statements = append(m.statements, input)
-	}
-
 	return output, nil
 }
 
@@ -427,7 +494,8 @@ func (m *Model) getAssignmentVar(input string) string {
 	return ""
 }
 
-// buildProgram wraps input in a full Rugby program.
+// buildProgram constructs a full Rugby program using bare script support.
+// Top-level statements are written directly and codegen wraps them in main().
 func (m *Model) buildProgram(input string) string {
 	var buf strings.Builder
 
@@ -436,34 +504,29 @@ func (m *Model) buildProgram(input string) string {
 		buf.WriteString(imp + "\n")
 	}
 
-	// Function/class definitions (outside main)
+	// Function/class definitions
 	for _, fn := range m.functions {
 		buf.WriteString(fn + "\n")
 	}
 
-	// Main function
-	buf.WriteString("def main\n")
-
 	// Prior statements (for variable persistence)
 	for _, stmt := range m.statements {
-		buf.WriteString("  " + stmt + "\n")
+		buf.WriteString(stmt + "\n")
 	}
 
 	// New input - wrap expressions in p() to print
 	if m.isExpression(input) {
-		buf.WriteString("  p(" + input + ")\n")
+		buf.WriteString("p(" + input + ")\n")
 	} else if varName := m.getAssignmentVar(input); varName != "" {
 		// Assignment - print the value after assigning
-		buf.WriteString("  " + input + "\n")
-		buf.WriteString("  p(" + varName + ")\n")
+		buf.WriteString(input + "\n")
+		buf.WriteString("p(" + varName + ")\n")
 	} else {
-		// Indent each line
+		// Output as-is (multi-line input)
 		for _, line := range strings.Split(input, "\n") {
-			buf.WriteString("  " + line + "\n")
+			buf.WriteString(line + "\n")
 		}
 	}
-
-	buf.WriteString("end\n")
 
 	return buf.String()
 }
