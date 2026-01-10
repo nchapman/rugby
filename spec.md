@@ -89,8 +89,6 @@ Rugby is statically typed with inference.
 
 ### 4.2.1 Range Type
 
-**Status:** Planned for future phase.
-
 Ranges are first-class values representing a sequence of integers.
 
 **Syntax:**
@@ -165,50 +163,68 @@ end
 
 ### 4.4 Optionals (`T?`)
 
-**Status:** Planned for future phase (after basic type annotations).
+**Syntax:** `T?` is the universal syntax for "nullable" or "optional" values. The compiler abstracts the underlying Go representation to ensure idiomatic usage.
 
-Representation (MVP): `T?` compiles to `(T, bool)`.
+**Representation:**
+
+1.  **Value Types** (`Int`, `Float`, `Bool`, `String`, Structs):
+    *   Compiles to `(T, bool)` tuple (value + presence flag).
+    *   Example: `Int?` → `(int, bool)`
+
+2.  **Reference Types** (`Array`, `Map`, Classes, Interfaces):
+    *   Compiles to the underlying pointer/slice/map type.
+    *   Uses Go's `nil` to represent absence.
+    *   Example: `User?` → `*User` (where `User` compiles to `struct`)
+
+**Usage:**
+
+Conditionals unify these differences. `if x` checks for presence:
 
 ```ruby
-n = s.to_i?  # Int?
-```
+# Works for both value types and reference types
+def process(u : User?, score : Int?)
+  if u        # Checks u != nil
+    puts u.name
+  end
 
-Compiles to: `n, ok := strconv.Atoi(s)`
-
-Using in conditionals—`if x` where `x` is `T?` means "present":
-
-```ruby
-if (n = s.to_i?)
-  puts n + 1
+  if score    # Checks the boolean flag
+    puts score
+  end
 end
 ```
 
-Compiles to:
+**Assignment with check:**
 
-```go
-if n, ok := strconv.Atoi(s); ok {
-    fmt.Println(n + 1)
-}
+```ruby
+if (n = s.to_i?)
+  puts n
+end
 ```
-
-**Reference types:** For reference types (pointers, slices, maps, interfaces), `T?` is **disallowed** in MVP. These types already have `nil` semantics in Go.
-
-Examples:
-* `Int?` → valid (`(int, bool)`)
-* `String?` → valid (`(string, bool)`)
-* `*User?` → **compile error** (use `*User` which can already be nil)
-* `Array[Int]?` → **compile error** (use `[]int` which can already be nil)
-
-`nil` is reserved for direct use with reference types only.
+Compiles to `if n, ok := strconv.Atoi(s); ok { ... }`
 
 ---
 
 ## 5. Variables & Control Flow
 
-### 5.1 Variables
+### 5.1 Variables & Operators
 
 * `x = expr` declares (if new) or assigns (if existing)
 * Shadowing allowed in nested scopes
+
+**Logical OR Assignment (`||=`):**
+
+Rugby supports `||=` for safe default assignment.
+
+```ruby
+x ||= y
+```
+
+Semantics depend on the type of `x`:
+*   **Bool:** `x = x || y`
+*   **Reference Types (`User`, `Array`, etc.):** `if x == nil { x = y }`
+*   **Optionals (`T?`):** If value is missing (or nil), assign `y`.
+
+*Note: For non-nullable value types (like `String` or `Int`), `||=` is generally not applicable as they cannot be nil/false (except `Bool`).*
 
 ### 5.2 Conditionals
 
@@ -273,24 +289,28 @@ Use blocks when you need to **transform data** or chain operations. Blocks in Ru
 
 **Semantics:**
 * **Scope:** Creates a new local scope (Go function literal).
-* **Return:** `return` exits the **block only** (returns a value to the iterator), *not* the enclosing function.
-* **Break:** `break` is **not supported** inside blocks (use `for` if you need to stop early).
+* **Return:** `return` exits the **block only** (returns a value to the iterator).
+* **Break/Next:** Supported via boolean return signals in the generated Go code.
 
 ```ruby
-# Data transformation (Expression)
 names = users.map do |u|
-  return "Guest" if u.nil?  # Returns "Guest" to the map array, iteration continues
-  u.name                    # Implicit return
+  break if u.is_admin? # Stops iteration
+  next if u.inactive?  # Skips to next item
+  u.name
 end
 ```
 
 **Compilation:**
-All methods with blocks compile to runtime calls receiving a function literal:
+Runtime methods accept a function that returns `bool` to signal continuation (`true`) or termination (`false`).
 
 ```go
-// Ruby: users.each { |u| puts u }
-runtime.Each(users, func(u User) {
-    fmt.Println(u)
+// Ruby: users.each { |u| ... }
+runtime.Each(users, func(u User) bool {
+    if u.IsAdmin() {
+        return false // break
+    }
+    // ...
+    return true // next
 })
 ```
 
@@ -399,22 +419,24 @@ end
 
 ### 7.2.1 Instance variable type inference
 
-Instance variable types are **inferred from `initialize` only** (MVP):
+Instance variable types are inferred by scanning **all methods** in the class.
 
 ```ruby
 class User
-  def initialize(name : String, age : Int)
-    @name = name  # @name inferred as String
-    @age = age    # @age inferred as Int
+  def initialize(name : String)
+    @name = name
+  end
+  
+  def set_age(age : Int)
+    @age = age  # @age inferred as Int, added to struct
   end
 end
 ```
 
 Rules:
-* All instance variables must be assigned in `initialize`
-* Using `@var` before assignment in `initialize` is a compile error
-* Types are inferred from the assigned expression
-* Optional: explicit type annotations on instance variables (post-MVP)
+* All assignments to the same `@var` must have consistent types.
+* Fields implied by non-`initialize` methods are created with Go's zero value.
+* It is good practice, but not strictly required, to initialize all fields in `initialize`.
 
 ### 7.3 Constructors
 
@@ -460,9 +482,10 @@ This allows Rugby code to communicate "danger/mutation" (`save!`) while generati
 ### 7.6 Embedding (composition)
 
 ```ruby
-class Service < Logger
+class Service < Logger, Authenticator
   def run
     info("running")
+    authenticate!
   end
 end
 ```
@@ -470,12 +493,15 @@ end
 Compiles to:
 
 ```go
-type Service struct { Logger }
+type Service struct {
+    Logger
+    Authenticator
+}
 ```
 
-* `<` means embedding only (not inheritance)
-* No `super` in MVP
-* Multiple embedding not supported in MVP (single embed only)
+* `<` means embedding (Go struct embedding).
+* Multiple embedding is supported (comma-separated).
+* Name collisions in embedded types follow Go's rules (explicit selector required if ambiguous).
 
 ### 7.7 No inheritance
 
