@@ -986,8 +986,37 @@ func (p *Parser) parseIfStmt() *ast.IfStmt {
 	p.nextToken() // consume 'if'
 
 	stmt := &ast.IfStmt{}
-	stmt.Cond = p.parseExpression(LOWEST)
-	p.nextToken() // move past condition
+
+	// Check for assignment-in-condition pattern: if (name = expr)
+	if p.curTokenIs(token.LPAREN) {
+		// Peek ahead to see if it's (ident = expr) pattern
+		p.nextToken() // consume '('
+		if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.ASSIGN) {
+			// Assignment pattern detected
+			stmt.AssignName = p.curToken.Literal
+			p.nextToken() // consume ident
+			p.nextToken() // consume '='
+			stmt.AssignExpr = p.parseExpression(LOWEST)
+			p.nextToken() // move past expression
+			if !p.curTokenIs(token.RPAREN) {
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ')' after assignment expression",
+					p.curToken.Line, p.curToken.Column))
+				return nil
+			}
+			p.nextToken() // consume ')'
+		} else {
+			// Regular parenthesized condition - parse as grouped expression
+			// We already consumed '(', so parse the inner expression
+			stmt.Cond = p.parseExpression(LOWEST)
+			p.nextToken() // move past expression
+			if p.curTokenIs(token.RPAREN) {
+				p.nextToken() // consume ')'
+			}
+		}
+	} else {
+		stmt.Cond = p.parseExpression(LOWEST)
+		p.nextToken() // move past condition
+	}
 	p.skipNewlines()
 
 	// Parse 'then' body
@@ -1177,6 +1206,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseStringLiteral()
 	case token.TRUE, token.FALSE:
 		left = p.parseBoolLiteral()
+	case token.NIL:
+		left = p.parseNilLiteral()
 	case token.LPAREN:
 		left = p.parseGroupedExpr()
 	case token.LBRACKET:
@@ -1374,6 +1405,10 @@ func (p *Parser) parseInterpolatedString(value string) ast.Expression {
 
 func (p *Parser) parseBoolLiteral() ast.Expression {
 	return &ast.BoolLit{Value: p.curTokenIs(token.TRUE)}
+}
+
+func (p *Parser) parseNilLiteral() ast.Expression {
+	return &ast.NilLit{}
 }
 
 func (p *Parser) parseArrayLiteral() ast.Expression {

@@ -137,6 +137,13 @@ type BoolLit struct {
 func (b *BoolLit) node()     {}
 func (b *BoolLit) exprNode() {}
 
+// NilLit represents the nil literal
+type NilLit struct{}
+
+func (n *NilLit) node()     {}
+func (n *NilLit) exprNode() {}
+func (n *NilLit) String() string { return "nil" }
+
 // ArrayLit represents an array literal
 type ArrayLit struct {
 	Elements []Expression
@@ -218,6 +225,11 @@ func (o *OrAssignStmt) stmtNode() {}
 
 // IfStmt represents an if/elsif/else statement
 type IfStmt struct {
+	// Optional assignment in condition: if (name = expr)
+	// When set, generates: if name, ok := expr; ok { ... }
+	AssignName string     // variable name for assignment (empty if none)
+	AssignExpr Expression // expression to assign (nil if none)
+
 	Cond    Expression
 	Then    []Statement
 	ElseIfs []ElseIfClause

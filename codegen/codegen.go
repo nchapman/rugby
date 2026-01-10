@@ -61,10 +61,22 @@ var blockMethods = map[string]blockMethod{
 	"none?":  {runtimeFunc: "runtime.None", returnType: "bool"},
 }
 
+// optionalMethod describes a method that returns (value, bool) for optional results
+type optionalMethod struct {
+	runtimeFunc string // e.g., "runtime.StringToInt"
+	resultType  string // the type of the value (e.g., "Int")
+}
+
+// Optional method mappings - methods that return (T, bool)
+var optionalMethods = map[string]optionalMethod{
+	"to_i?": {runtimeFunc: "runtime.StringToInt", resultType: "Int"},
+	"to_f?": {runtimeFunc: "runtime.StringToFloat", resultType: "Float"},
+}
+
 type Generator struct {
 	buf          strings.Builder
 	indent       int
-	vars         map[string]bool   // track declared variables
+	vars         map[string]string // track declared variables and their types (empty string = unknown type)
 	imports      map[string]bool   // track import aliases for Go interop detection
 	needsRuntime bool              // track if rugby/runtime import is needed
 	needsFmt     bool              // track if fmt import is needed (string interpolation)
@@ -74,10 +86,67 @@ type Generator struct {
 
 func New() *Generator {
 	return &Generator{
-		vars:       make(map[string]bool),
+		vars:       make(map[string]string),
 		imports:    make(map[string]bool),
 		pubClasses: make(map[string]bool),
 	}
+}
+
+// isDeclared checks if a variable has been declared in the current scope
+func (g *Generator) isDeclared(name string) bool {
+	_, exists := g.vars[name]
+	return exists
+}
+
+// isOptionalType checks if a type is an optional type (ends with ?)
+func isOptionalType(t string) bool {
+	return strings.HasSuffix(t, "?")
+}
+
+// isValueTypeOptional checks if a type is a value type optional (Int?, String?, etc.)
+func isValueTypeOptional(t string) bool {
+	if !isOptionalType(t) {
+		return false
+	}
+	base := strings.TrimSuffix(t, "?")
+	return valueTypes[base]
+}
+
+// inferTypeFromExpr attempts to infer the type from an expression
+// Returns the inferred type or empty string if unknown
+func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
+	switch e := expr.(type) {
+	case *ast.CallExpr:
+		// Check if it's a call to an optional method like s.to_i?
+		if sel, ok := e.Func.(*ast.SelectorExpr); ok {
+			if om, ok := optionalMethods[sel.Sel]; ok {
+				return om.resultType
+			}
+		}
+	case *ast.IntLit:
+		return "Int"
+	case *ast.FloatLit:
+		return "Float"
+	case *ast.StringLit:
+		return "String"
+	case *ast.BoolLit:
+		return "Bool"
+	}
+	return "" // unknown
+}
+
+// isOptionalMethodCall checks if an expression is a call to an optional method (to_i?, to_f?)
+func isOptionalMethodCall(expr ast.Expression) bool {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := call.Func.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	_, isOptional := optionalMethods[sel.Sel]
+	return isOptional
 }
 
 func (g *Generator) Generate(program *ast.Program) (string, error) {
@@ -190,11 +259,11 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 }
 
 func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
-	g.vars = make(map[string]bool) // reset vars for each function
+	g.vars = make(map[string]string) // reset vars for each function
 
-	// Mark parameters as declared variables
+	// Mark parameters as declared variables with their types
 	for _, param := range fn.Params {
-		g.vars[param.Name] = true
+		g.vars[param.Name] = param.Type
 	}
 
 	// Generate function name with proper casing
@@ -337,11 +406,11 @@ func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
 }
 
 func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub bool) {
-	g.vars = make(map[string]bool)
+	g.vars = make(map[string]string)
 
 	// Mark parameters as declared variables
 	for _, param := range method.Params {
-		g.vars[param.Name] = true
+		g.vars[param.Name] = param.Type
 	}
 
 	// Receiver name for field assignments
@@ -381,11 +450,11 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 }
 
 func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
-	g.vars = make(map[string]bool) // reset vars for each method
+	g.vars = make(map[string]string) // reset vars for each method
 
-	// Mark parameters as declared variables
+	// Mark parameters as declared variables with their types
 	for _, param := range method.Params {
-		g.vars[param.Name] = true
+		g.vars[param.Name] = param.Type
 	}
 
 	// Receiver name: first letter of class, lowercase
@@ -504,14 +573,14 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 }
 
 func (g *Generator) genOrAssignStmt(s *ast.OrAssignStmt) {
-	if !g.vars[s.Name] {
+	if !g.isDeclared(s.Name) {
 		// First declaration: just use :=
 		g.writeIndent()
 		g.buf.WriteString(s.Name)
 		g.buf.WriteString(" := ")
 		g.genExpr(s.Value)
 		g.buf.WriteString("\n")
-		g.vars[s.Name] = true
+		g.vars[s.Name] = "" // type unknown
 	} else {
 		// Variable exists: generate nil-check assignment
 		g.writeIndent()
@@ -558,11 +627,23 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 
 func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 	g.writeIndent()
-	if s.Type != "" && !g.vars[s.Name] {
+
+	// Handle optional method calls like s.to_i?() which return (T, bool)
+	// Generate: n, _ := runtime.StringToInt(s)
+	if isOptionalMethodCall(s.Value) {
+		g.buf.WriteString(s.Name)
+		g.buf.WriteString(", _ := ")
+		g.genExpr(s.Value)
+		g.buf.WriteString("\n")
+		g.vars[s.Name] = g.inferTypeFromExpr(s.Value)
+		return
+	}
+
+	if s.Type != "" && !g.isDeclared(s.Name) {
 		// Typed declaration: var x int = value
 		g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
-		g.vars[s.Name] = true
-	} else if g.vars[s.Name] {
+		g.vars[s.Name] = s.Type // store the declared type
+	} else if g.isDeclared(s.Name) {
 		// Reassignment: x = value
 		g.buf.WriteString(s.Name)
 		g.buf.WriteString(" = ")
@@ -570,17 +651,49 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 		// Untyped declaration: x := value
 		g.buf.WriteString(s.Name)
 		g.buf.WriteString(" := ")
-		g.vars[s.Name] = true
+		g.vars[s.Name] = "" // type unknown
 	}
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
 }
 
+// genCondition generates a condition expression, handling optional types.
+// For optional types: if x generates x.Valid (value types) or x != nil (reference types)
+func (g *Generator) genCondition(cond ast.Expression) {
+	// Check if condition is a simple identifier
+	if ident, ok := cond.(*ast.Ident); ok {
+		if varType, exists := g.vars[ident.Name]; exists && isOptionalType(varType) {
+			if isValueTypeOptional(varType) {
+				// Value type optional: check .Valid
+				g.buf.WriteString(ident.Name + ".Valid")
+				return
+			}
+			// Reference type optional: check != nil
+			g.buf.WriteString(ident.Name + " != nil")
+			return
+		}
+	}
+	// Default: generate expression as-is
+	g.genExpr(cond)
+}
+
 func (g *Generator) genIfStmt(s *ast.IfStmt) {
 	g.writeIndent()
 	g.buf.WriteString("if ")
-	g.genExpr(s.Cond)
-	g.buf.WriteString(" {\n")
+
+	// Handle assignment-in-condition pattern: if (n = s.to_i?)
+	// Generates: if n, ok := runtime.StringToInt(s); ok {
+	if s.AssignName != "" {
+		g.buf.WriteString(s.AssignName)
+		g.buf.WriteString(", ok := ")
+		g.genExpr(s.AssignExpr)
+		g.buf.WriteString("; ok {\n")
+		// Track the variable with its inferred type
+		g.vars[s.AssignName] = g.inferTypeFromExpr(s.AssignExpr)
+	} else {
+		g.genCondition(s.Cond)
+		g.buf.WriteString(" {\n")
+	}
 
 	g.indent++
 	for _, stmt := range s.Then {
@@ -591,7 +704,7 @@ func (g *Generator) genIfStmt(s *ast.IfStmt) {
 	for _, elsif := range s.ElseIfs {
 		g.writeIndent()
 		g.buf.WriteString("} else if ")
-		g.genExpr(elsif.Cond)
+		g.genCondition(elsif.Cond)
 		g.buf.WriteString(" {\n")
 
 		g.indent++
@@ -619,7 +732,7 @@ func (g *Generator) genIfStmt(s *ast.IfStmt) {
 func (g *Generator) genWhileStmt(s *ast.WhileStmt) {
 	g.writeIndent()
 	g.buf.WriteString("for ")
-	g.genExpr(s.Cond)
+	g.genCondition(s.Cond)
 	g.buf.WriteString(" {\n")
 
 	g.indent++
@@ -634,11 +747,11 @@ func (g *Generator) genWhileStmt(s *ast.WhileStmt) {
 
 func (g *Generator) genForStmt(s *ast.ForStmt) {
 	// Save variable state
-	wasDefinedBefore := g.vars[s.Var]
+	prevType, wasDefinedBefore := g.vars[s.Var]
 
 	// Check if iterable is a range literal - optimize to C-style for loop
 	if rangeLit, ok := s.Iterable.(*ast.RangeLit); ok {
-		g.genForRangeLoop(s.Var, rangeLit, s.Body, wasDefinedBefore)
+		g.genForRangeLoop(s.Var, rangeLit, s.Body, wasDefinedBefore, prevType)
 		return
 	}
 
@@ -649,7 +762,7 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 	g.genExpr(s.Iterable)
 	g.buf.WriteString(" {\n")
 
-	g.vars[s.Var] = true
+	g.vars[s.Var] = "" // loop variable, type unknown
 
 	g.indent++
 	for _, stmt := range s.Body {
@@ -660,13 +773,15 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 	// Restore variable state
 	if !wasDefinedBefore {
 		delete(g.vars, s.Var)
+	} else {
+		g.vars[s.Var] = prevType
 	}
 
 	g.writeIndent()
 	g.buf.WriteString("}\n")
 }
 
-func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.Statement, wasDefinedBefore bool) {
+func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.Statement, wasDefinedBefore bool, prevType string) {
 	// Generate: for i := start; i <= end; i++ { ... }
 	// or:       for i := start; i < end; i++ { ... } (exclusive)
 	g.writeIndent()
@@ -686,7 +801,7 @@ func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.
 	g.buf.WriteString(varName)
 	g.buf.WriteString("++ {\n")
 
-	g.vars[varName] = true
+	g.vars[varName] = "Int" // range loop variable is always Int
 
 	g.indent++
 	for _, stmt := range body {
@@ -697,6 +812,8 @@ func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.
 	// Restore variable state
 	if !wasDefinedBefore {
 		delete(g.vars, varName)
+	} else {
+		g.vars[varName] = prevType
 	}
 
 	g.writeIndent()
@@ -748,6 +865,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		} else {
 			g.buf.WriteString("false")
 		}
+	case *ast.NilLit:
+		g.buf.WriteString("nil")
 	case *ast.ArrayLit:
 		g.genArrayLit(e)
 	case *ast.IndexExpr:
@@ -999,6 +1118,15 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				return
 			}
 		}
+		// Check for optional methods like to_i?, to_f?
+		if om, ok := optionalMethods[fn.Sel]; ok {
+			g.needsRuntime = true
+			g.buf.WriteString(om.runtimeFunc)
+			g.buf.WriteString("(")
+			g.genExpr(fn.X) // receiver becomes first arg
+			g.buf.WriteString(")")
+			return
+		}
 		// Method/package call like http.Get or resp.Body.Close
 		// snake_case transformation only applies here (Go interop)
 		g.genSelectorExpr(fn)
@@ -1076,7 +1204,7 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	}
 
 	// Save previous variable state for proper scope restoration
-	wasDefinedBefore := g.vars[varName]
+	prevType, wasDefinedBefore := g.vars[varName]
 
 	g.buf.WriteString("runtime.Each(")
 	g.genExpr(iterable)
@@ -1085,7 +1213,7 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	g.buf.WriteString(" interface{}) {\n")
 
 	if varName != "_" {
-		g.vars[varName] = true
+		g.vars[varName] = "" // block param, type unknown
 	}
 
 	g.indent++
@@ -1095,8 +1223,12 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	g.indent--
 
 	// Restore variable state after block
-	if !wasDefinedBefore && varName != "_" {
-		delete(g.vars, varName)
+	if varName != "_" {
+		if !wasDefinedBefore {
+			delete(g.vars, varName)
+		} else {
+			g.vars[varName] = prevType
+		}
 	}
 
 	g.writeIndent()
@@ -1112,7 +1244,7 @@ func (g *Generator) genRangeEachBlock(rangeExpr ast.Expression, block *ast.Block
 		varName = block.Params[0]
 	}
 
-	wasDefinedBefore := g.vars[varName]
+	prevType, wasDefinedBefore := g.vars[varName]
 
 	g.buf.WriteString("runtime.RangeEach(")
 	g.genExpr(rangeExpr)
@@ -1121,7 +1253,7 @@ func (g *Generator) genRangeEachBlock(rangeExpr ast.Expression, block *ast.Block
 	g.buf.WriteString(" int) {\n")
 
 	if varName != "_" {
-		g.vars[varName] = true
+		g.vars[varName] = "Int" // range iteration is always int
 	}
 
 	g.indent++
@@ -1130,8 +1262,12 @@ func (g *Generator) genRangeEachBlock(rangeExpr ast.Expression, block *ast.Block
 	}
 	g.indent--
 
-	if !wasDefinedBefore && varName != "_" {
-		delete(g.vars, varName)
+	if varName != "_" {
+		if !wasDefinedBefore {
+			delete(g.vars, varName)
+		} else {
+			g.vars[varName] = prevType
+		}
 	}
 
 	g.writeIndent()
@@ -1153,8 +1289,8 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 	}
 
 	// Save previous variable state for proper scope restoration
-	varWasDefinedBefore := g.vars[varName]
-	indexWasDefinedBefore := g.vars[indexName]
+	varPrevType, varWasDefinedBefore := g.vars[varName]
+	indexPrevType, indexWasDefinedBefore := g.vars[indexName]
 
 	g.buf.WriteString("runtime.EachWithIndex(")
 	g.genExpr(iterable)
@@ -1165,10 +1301,10 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 	g.buf.WriteString(" int) {\n")
 
 	if varName != "_" {
-		g.vars[varName] = true
+		g.vars[varName] = "" // block param, type unknown
 	}
 	if indexName != "_" {
-		g.vars[indexName] = true
+		g.vars[indexName] = "Int" // index is always int
 	}
 
 	g.indent++
@@ -1178,11 +1314,19 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 	g.indent--
 
 	// Restore variable state after block
-	if !varWasDefinedBefore && varName != "_" {
-		delete(g.vars, varName)
+	if varName != "_" {
+		if !varWasDefinedBefore {
+			delete(g.vars, varName)
+		} else {
+			g.vars[varName] = varPrevType
+		}
 	}
-	if !indexWasDefinedBefore && indexName != "_" {
-		delete(g.vars, indexName)
+	if indexName != "_" {
+		if !indexWasDefinedBefore {
+			delete(g.vars, indexName)
+		} else {
+			g.vars[indexName] = indexPrevType
+		}
 	}
 
 	g.writeIndent()
@@ -1198,7 +1342,7 @@ func (g *Generator) genTimesBlock(times ast.Expression, block *ast.BlockExpr) {
 		varName = block.Params[0]
 	}
 
-	wasDefinedBefore := g.vars[varName]
+	prevType, wasDefinedBefore := g.vars[varName]
 
 	g.buf.WriteString("runtime.Times(")
 	g.genExpr(times)
@@ -1207,7 +1351,7 @@ func (g *Generator) genTimesBlock(times ast.Expression, block *ast.BlockExpr) {
 	g.buf.WriteString(" int) {\n")
 
 	if varName != "_" {
-		g.vars[varName] = true
+		g.vars[varName] = "Int" // times iteration is always int
 	}
 
 	g.indent++
@@ -1216,8 +1360,12 @@ func (g *Generator) genTimesBlock(times ast.Expression, block *ast.BlockExpr) {
 	}
 	g.indent--
 
-	if !wasDefinedBefore && varName != "_" {
-		delete(g.vars, varName)
+	if varName != "_" {
+		if !wasDefinedBefore {
+			delete(g.vars, varName)
+		} else {
+			g.vars[varName] = prevType
+		}
 	}
 
 	g.writeIndent()
@@ -1233,7 +1381,7 @@ func (g *Generator) genUptoBlock(start ast.Expression, block *ast.BlockExpr, arg
 		varName = block.Params[0]
 	}
 
-	wasDefinedBefore := g.vars[varName]
+	prevType, wasDefinedBefore := g.vars[varName]
 
 	g.buf.WriteString("runtime.Upto(")
 	g.genExpr(start)
@@ -1248,7 +1396,7 @@ func (g *Generator) genUptoBlock(start ast.Expression, block *ast.BlockExpr, arg
 	g.buf.WriteString(" int) {\n")
 
 	if varName != "_" {
-		g.vars[varName] = true
+		g.vars[varName] = "Int" // upto iteration is always int
 	}
 
 	g.indent++
@@ -1257,8 +1405,12 @@ func (g *Generator) genUptoBlock(start ast.Expression, block *ast.BlockExpr, arg
 	}
 	g.indent--
 
-	if !wasDefinedBefore && varName != "_" {
-		delete(g.vars, varName)
+	if varName != "_" {
+		if !wasDefinedBefore {
+			delete(g.vars, varName)
+		} else {
+			g.vars[varName] = prevType
+		}
 	}
 
 	g.writeIndent()
@@ -1274,7 +1426,7 @@ func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, a
 		varName = block.Params[0]
 	}
 
-	wasDefinedBefore := g.vars[varName]
+	prevType, wasDefinedBefore := g.vars[varName]
 
 	g.buf.WriteString("runtime.Downto(")
 	g.genExpr(start)
@@ -1289,7 +1441,7 @@ func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, a
 	g.buf.WriteString(" int) {\n")
 
 	if varName != "_" {
-		g.vars[varName] = true
+		g.vars[varName] = "Int" // downto iteration is always int
 	}
 
 	g.indent++
@@ -1298,8 +1450,12 @@ func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, a
 	}
 	g.indent--
 
-	if !wasDefinedBefore && varName != "_" {
-		delete(g.vars, varName)
+	if varName != "_" {
+		if !wasDefinedBefore {
+			delete(g.vars, varName)
+		} else {
+			g.vars[varName] = prevType
+		}
 	}
 
 	g.writeIndent()
@@ -1332,8 +1488,8 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 	}
 
 	// Save variable state
-	param1WasDefinedBefore := g.vars[param1Name]
-	param2WasDefinedBefore := g.vars[param2Name]
+	param1PrevType, param1WasDefinedBefore := g.vars[param1Name]
+	param2PrevType, param2WasDefinedBefore := g.vars[param2Name]
 
 	// Generate: runtime.Method(iterable, [initial,] func(...) returnType {
 	g.buf.WriteString(method.runtimeFunc)
@@ -1365,12 +1521,12 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 	g.buf.WriteString(method.returnType)
 	g.buf.WriteString(" {\n")
 
-	// Mark variables as declared
+	// Mark variables as declared (block params, type unknown)
 	if param1Name != "_" {
-		g.vars[param1Name] = true
+		g.vars[param1Name] = ""
 	}
 	if param2Name != "_" {
-		g.vars[param2Name] = true
+		g.vars[param2Name] = ""
 	}
 
 	g.indent++
@@ -1395,11 +1551,19 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 	g.indent--
 
 	// Restore variable state
-	if !param1WasDefinedBefore && param1Name != "_" {
-		delete(g.vars, param1Name)
+	if param1Name != "_" {
+		if !param1WasDefinedBefore {
+			delete(g.vars, param1Name)
+		} else {
+			g.vars[param1Name] = param1PrevType
+		}
 	}
-	if !param2WasDefinedBefore && param2Name != "_" {
-		delete(g.vars, param2Name)
+	if param2Name != "_" {
+		if !param2WasDefinedBefore {
+			delete(g.vars, param2Name)
+		} else {
+			g.vars[param2Name] = param2PrevType
+		}
 	}
 
 	g.writeIndent()

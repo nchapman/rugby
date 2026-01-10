@@ -1933,3 +1933,114 @@ end`
 	// Variable with optional type
 	assertContains(t, output, "var x runtime.OptionalInt = nil")
 }
+
+func TestOptionalValueTypeInCondition(t *testing.T) {
+	input := `def main
+  x : Int? = nil
+  if x
+    puts "has value"
+  end
+end`
+
+	output := compile(t, input)
+
+	// Value type optional in condition checks .Valid
+	assertContains(t, output, "if x.Valid {")
+}
+
+func TestOptionalReferenceTypeInCondition(t *testing.T) {
+	input := `def process(u : User?)
+  if u
+    puts "has user"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Reference type optional in condition checks != nil
+	assertContains(t, output, "if u != nil {")
+}
+
+func TestOptionalInElsifCondition(t *testing.T) {
+	input := `def main
+  x : Int? = nil
+  y : String? = nil
+  if x
+    puts "x"
+  elsif y
+    puts "y"
+  end
+end`
+
+	output := compile(t, input)
+
+	// Both if and elsif should use .Valid for value type optionals
+	assertContains(t, output, "if x.Valid {")
+	assertContains(t, output, "} else if y.Valid {")
+}
+
+func TestNonOptionalInCondition(t *testing.T) {
+	input := `def main
+  x : Bool = true
+  if x
+    puts "yes"
+  end
+end`
+
+	output := compile(t, input)
+
+	// Non-optional types should be used as-is
+	assertContains(t, output, "if x {")
+}
+
+func TestNilLiteral(t *testing.T) {
+	input := `def main
+  x : User? = nil
+end`
+
+	output := compile(t, input)
+
+	// nil literal should be generated as-is
+	assertContains(t, output, "var x *User = nil")
+}
+
+func TestOptionalMethodToInt(t *testing.T) {
+	input := `def main
+  s = "42"
+  n = s.to_i?()
+end`
+
+	output := compile(t, input)
+
+	// to_i? should map to runtime.StringToInt, discarding the boolean
+	assertContains(t, output, "n, _ := runtime.StringToInt(s)")
+}
+
+func TestOptionalMethodToFloat(t *testing.T) {
+	input := `def main
+  s = "3.14"
+  n = s.to_f?()
+end`
+
+	output := compile(t, input)
+
+	// to_f? should map to runtime.StringToFloat, discarding the boolean
+	assertContains(t, output, "n, _ := runtime.StringToFloat(s)")
+}
+
+func TestAssignmentInCondition(t *testing.T) {
+	input := `def main
+  s = "42"
+  if (n = s.to_i?())
+    puts n
+  end
+end`
+
+	output := compile(t, input)
+
+	// should generate if n, ok := runtime.StringToInt(s); ok {
+	assertContains(t, output, "if n, ok := runtime.StringToInt(s); ok {")
+}

@@ -68,6 +68,7 @@ const (
 	RETURN TokenType = "RETURN"
 	TRUE   TokenType = "TRUE"
 	FALSE  TokenType = "FALSE"
+	NIL    TokenType = "NIL"
 	AND    TokenType = "AND"
 	OR     TokenType = "OR"
 	NOT    TokenType = "NOT"
@@ -102,6 +103,7 @@ var keywords = map[string]TokenType{
 	"return": RETURN,
 	"true":   TRUE,
 	"false":  FALSE,
+	"nil":    NIL,
 	"and":    AND,
 	"or":     OR,
 	"not":    NOT,
