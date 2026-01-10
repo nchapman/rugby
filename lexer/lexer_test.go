@@ -908,3 +908,91 @@ func TestStandaloneQuestionToken(t *testing.T) {
 		t.Errorf("expected QUESTION token, got %q", tok.Type)
 	}
 }
+
+func TestSymbols(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []struct {
+			Type    token.TokenType
+			Literal string
+		}
+	}{
+		{
+			name:  "basic symbol",
+			input: `:ok`,
+			expected: []struct {
+				Type    token.TokenType
+				Literal string
+			}{
+				{token.SYMBOL, "ok"},
+				{token.EOF, ""},
+			},
+		},
+		{
+			name:  "symbol with underscores",
+			input: `:not_found`,
+			expected: []struct {
+				Type    token.TokenType
+				Literal string
+			}{
+				{token.SYMBOL, "not_found"},
+				{token.EOF, ""},
+			},
+		},
+		{
+			name:  "multiple symbols",
+			input: `:success :error :pending`,
+			expected: []struct {
+				Type    token.TokenType
+				Literal string
+			}{
+				{token.SYMBOL, "success"},
+				{token.SYMBOL, "error"},
+				{token.SYMBOL, "pending"},
+				{token.EOF, ""},
+			},
+		},
+		{
+			name:  "symbol vs type annotation",
+			input: `x : Int`,
+			expected: []struct {
+				Type    token.TokenType
+				Literal string
+			}{
+				{token.IDENT, "x"},
+				{token.COLON, ":"},
+				{token.IDENT, "Int"},
+				{token.EOF, ""},
+			},
+		},
+		{
+			name:  "symbol in expression",
+			input: `status = :active`,
+			expected: []struct {
+				Type    token.TokenType
+				Literal string
+			}{
+				{token.IDENT, "status"},
+				{token.ASSIGN, "="},
+				{token.SYMBOL, "active"},
+				{token.EOF, ""},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := New(tt.input)
+			for i, exp := range tt.expected {
+				tok := l.NextToken()
+				if tok.Type != exp.Type {
+					t.Errorf("token %d: type = %q, want %q", i, tok.Type, exp.Type)
+				}
+				if tok.Literal != exp.Literal {
+					t.Errorf("token %d: literal = %q, want %q", i, tok.Literal, exp.Literal)
+				}
+			}
+		})
+	}
+}

@@ -13,6 +13,7 @@ const (
 	STRING TokenType = "STRING"
 	INT    TokenType = "INT"
 	FLOAT  TokenType = "FLOAT"
+	SYMBOL TokenType = "SYMBOL"
 
 	// Operators
 	PLUS    TokenType = "+"

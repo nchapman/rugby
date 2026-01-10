@@ -1374,6 +1374,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseBoolLiteral()
 	case token.NIL:
 		left = p.parseNilLiteral()
+	case token.SYMBOL:
+		left = p.parseSymbolLiteral()
 	case token.LPAREN:
 		left = p.parseGroupedExpr()
 	case token.LBRACKET:
@@ -1423,7 +1425,7 @@ infixLoop:
 		if p.peekTokenIs(token.STRING) || p.peekTokenIs(token.INT) ||
 			p.peekTokenIs(token.FLOAT) || p.peekTokenIs(token.TRUE) ||
 			p.peekTokenIs(token.FALSE) || p.peekTokenIs(token.IDENT) ||
-			p.peekTokenIs(token.LPAREN) {
+			p.peekTokenIs(token.LPAREN) || p.peekTokenIs(token.SYMBOL) {
 			p.nextToken()
 			arg := p.parseExpression(LOWEST)
 			return &ast.CallExpr{Func: ident, Args: []ast.Expression{arg}}
@@ -1575,6 +1577,10 @@ func (p *Parser) parseBoolLiteral() ast.Expression {
 
 func (p *Parser) parseNilLiteral() ast.Expression {
 	return &ast.NilLit{}
+}
+
+func (p *Parser) parseSymbolLiteral() ast.Expression {
+	return &ast.SymbolLit{Value: p.curToken.Literal}
 }
 
 func (p *Parser) parseArrayLiteral() ast.Expression {

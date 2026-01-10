@@ -323,11 +323,16 @@ First-class Range values (see spec.md Section 4.2.1).
   - [x] Update Codegen to emit `if !cond`
 
 ## Phase 13: Symbols & Case Expressions
-- [ ] Implement Symbols (spec 4.1.1)
-  - [ ] Add `COLON` token prefix handling in Lexer for identifiers (`:ident`)
-  - [ ] Add `SymbolLit` AST node
-  - [ ] Update Parser to handle symbol literals
-  - [ ] Update Codegen to emit string literals (`:foo` → `"foo"`)
+- [x] Implement Symbols (spec 4.1.1) ✅
+  - [x] Add `SYMBOL` token type
+  - [x] Update Lexer to recognize `:ident` as symbol (distinguishes from `: ` type annotation)
+  - [x] Add `SymbolLit` AST node
+  - [x] Update Parser to handle symbol literals in expressions
+  - [x] Update Parser to support symbols in parenthesis-less calls (`puts :hello`)
+  - [x] Update Codegen to emit string literals (`:foo` → `"foo"`)
+  - [x] Update Codegen inferType to return "String" for symbols
+  - [x] Add comprehensive tests (lexer, parser, codegen)
+  - [x] Add examples/symbols.rg demonstration
 - [ ] Implement Case Expressions (spec 5.2)
   - [ ] Add `CASE`, `WHEN` tokens
   - [ ] Add `CaseStmt` AST node with `Condition`, `WhenClauses`, `Else`

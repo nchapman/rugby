@@ -204,6 +204,13 @@ func (l *Lexer) NextToken() token.Token {
 	case '@':
 		tok = l.newToken(token.AT, "@")
 	case ':':
+		// Check if this is a symbol (:identifier) or type annotation
+		if isLetter(l.peekChar()) {
+			l.readChar() // consume the ':'
+			tok.Type = token.SYMBOL
+			tok.Literal = l.readIdentifier()
+			return tok
+		}
 		tok = l.newToken(token.COLON, ":")
 	case '?':
 		tok = l.newToken(token.QUESTION, "?")

@@ -2417,3 +2417,57 @@ puts y`
 	assertContains(t, output, "x := 10")
 	assertContains(t, output, "y := 20")
 }
+
+func TestSymbolLiterals(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name: "basic symbol assignment",
+			input: `def main
+  status = :ok
+end`,
+			expected: []string{
+				`status := "ok"`,
+			},
+		},
+		{
+			name: "symbol with underscores",
+			input: `def main
+  state = :not_found
+end`,
+			expected: []string{
+				`state := "not_found"`,
+			},
+		},
+		{
+			name: "symbols in array",
+			input: `def main
+  statuses = [:pending, :active, :completed]
+end`,
+			expected: []string{
+				`statuses := []string{"pending", "active", "completed"}`,
+			},
+		},
+		{
+			name: "symbol as function argument",
+			input: `def main
+  puts :hello
+end`,
+			expected: []string{
+				`runtime.Puts("hello")`,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := compile(t, tt.input)
+			for _, exp := range tt.expected {
+				assertContains(t, output, exp)
+			}
+		})
+	}
+}

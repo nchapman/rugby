@@ -3276,3 +3276,67 @@ func TestBareScriptOnlyComments(t *testing.T) {
 		t.Errorf("expected 0 declarations, got %d", len(program.Declarations))
 	}
 }
+
+func TestSymbolLiterals(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "basic symbol",
+			input:    "def main\n  x = :ok\nend",
+			expected: "ok",
+		},
+		{
+			name:     "symbol with underscores",
+			input:    "def main\n  status = :not_found\nend",
+			expected: "not_found",
+		},
+		{
+			name:     "symbol in array",
+			input:    "def main\n  statuses = [:pending, :active, :completed]\nend",
+			expected: "pending",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := lexer.New(tt.input)
+			p := New(l)
+			program := p.ParseProgram()
+			checkParserErrors(t, p)
+
+			if len(program.Declarations) != 1 {
+				t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+			}
+
+			fn, ok := program.Declarations[0].(*ast.FuncDecl)
+			if !ok {
+				t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+			}
+
+			if len(fn.Body) == 0 {
+				t.Fatalf("expected at least 1 statement in body")
+			}
+
+			var symbolLit *ast.SymbolLit
+			switch stmt := fn.Body[0].(type) {
+			case *ast.AssignStmt:
+				if sym, ok := stmt.Value.(*ast.SymbolLit); ok {
+					symbolLit = sym
+				} else if arr, ok := stmt.Value.(*ast.ArrayLit); ok && len(arr.Elements) > 0 {
+					symbolLit, _ = arr.Elements[0].(*ast.SymbolLit)
+				}
+			}
+
+			if symbolLit == nil {
+				t.Fatalf("expected SymbolLit in assignment")
+			}
+
+			if symbolLit.Value != tt.expected {
+				t.Errorf("expected symbol value %q, got %q", tt.expected, symbolLit.Value)
+			}
+		})
+	}
+}

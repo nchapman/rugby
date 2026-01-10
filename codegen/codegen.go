@@ -278,6 +278,8 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		return "Float"
 	case *ast.StringLit:
 		return "String"
+	case *ast.SymbolLit:
+		return "String"
 	case *ast.BoolLit:
 		return "Bool"
 	case *ast.Ident:
@@ -1493,6 +1495,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		}
 	case *ast.NilLit:
 		g.buf.WriteString("nil")
+	case *ast.SymbolLit:
+		g.buf.WriteString(fmt.Sprintf("%q", e.Value))
 	case *ast.ArrayLit:
 		g.genArrayLit(e)
 	case *ast.IndexExpr:

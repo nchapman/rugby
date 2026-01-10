@@ -147,6 +147,14 @@ func (n *NilLit) node()     {}
 func (n *NilLit) exprNode() {}
 func (n *NilLit) String() string { return "nil" }
 
+// SymbolLit represents a symbol literal (:foo, :status, etc.)
+type SymbolLit struct {
+	Value string // the symbol name without the colon
+}
+
+func (s *SymbolLit) node()     {}
+func (s *SymbolLit) exprNode() {}
+
 // ArrayLit represents an array literal
 type ArrayLit struct {
 	Elements []Expression
