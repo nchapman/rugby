@@ -844,6 +844,8 @@ func (p *Parser) parseStatement() ast.Statement {
 	switch p.curToken.Type {
 	case token.IF:
 		return p.parseIfStmt()
+	case token.UNLESS:
+		return p.parseUnlessStmt()
 	case token.WHILE:
 		return p.parseWhileStmt()
 	case token.FOR:
@@ -892,8 +894,10 @@ func (p *Parser) parseStatement() ast.Statement {
 			expr = p.parseBlockCall(expr)
 		}
 		p.nextToken() // move past expression
+		// Check for statement modifier (e.g., "puts x unless valid?")
+		cond, isUnless := p.parseStatementModifier()
 		p.skipNewlines()
-		return &ast.ExprStmt{Expr: expr}
+		return &ast.ExprStmt{Expr: expr, Condition: cond, IsUnless: isUnless}
 	}
 	return nil
 }
@@ -1159,6 +1163,67 @@ func (p *Parser) parseIfStmt() *ast.IfStmt {
 	return stmt
 }
 
+func (p *Parser) parseUnlessStmt() *ast.IfStmt {
+	// Note: elsif is not supported with unless (matches Ruby behavior)
+	p.nextToken() // consume 'unless'
+
+	stmt := &ast.IfStmt{IsUnless: true}
+
+	// Parse condition (unless doesn't support assignment pattern)
+	stmt.Cond = p.parseExpression(LOWEST)
+	p.nextToken() // move past condition
+	p.skipNewlines()
+
+	// Parse 'then' body (executed when condition is false)
+	// Note: elsif should not appear here, but if it does, treat it as an error
+	for !p.curTokenIs(token.ELSE) && !p.curTokenIs(token.END) &&
+		!p.curTokenIs(token.EOF) && !p.curTokenIs(token.ELSIF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.ELSE) || p.curTokenIs(token.END) || p.curTokenIs(token.ELSIF) {
+			break
+		}
+		if s := p.parseStatement(); s != nil {
+			stmt.Then = append(stmt.Then, s)
+		}
+	}
+
+	// If we encountered elsif, that's an error
+	if p.curTokenIs(token.ELSIF) {
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: elsif not supported with unless",
+			p.curToken.Line, p.curToken.Column))
+		// Skip to end to recover
+		for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+			p.nextToken()
+		}
+	}
+
+	// Parse else clause (optional)
+	if p.curTokenIs(token.ELSE) {
+		p.nextToken() // consume 'else'
+		p.skipNewlines()
+		for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+			p.skipNewlines()
+			if p.curTokenIs(token.END) {
+				break
+			}
+			if s := p.parseStatement(); s != nil {
+				stmt.Else = append(stmt.Else, s)
+			}
+		}
+	}
+
+	// Expect 'end'
+	if !p.curTokenIs(token.END) {
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected 'end' after unless block",
+			p.curToken.Line, p.curToken.Column))
+		return nil
+	}
+	p.nextToken() // consume 'end'
+	p.skipNewlines()
+
+	return stmt
+}
+
 func (p *Parser) parseWhileStmt() *ast.WhileStmt {
 	p.nextToken() // consume 'while'
 
@@ -1232,16 +1297,34 @@ func (p *Parser) parseForStmt() *ast.ForStmt {
 	return stmt
 }
 
+// parseStatementModifier checks for and parses trailing if/unless modifiers
+// Returns (condition, isUnless) - condition is nil if no modifier present
+func (p *Parser) parseStatementModifier() (ast.Expression, bool) {
+	// Check for trailing if/unless before newline
+	if p.curTokenIs(token.IF) || p.curTokenIs(token.UNLESS) {
+		isUnless := p.curTokenIs(token.UNLESS)
+		p.nextToken() // consume 'if' or 'unless'
+		cond := p.parseExpression(LOWEST)
+		p.nextToken() // move past condition
+		return cond, isUnless
+	}
+	return nil, false
+}
+
 func (p *Parser) parseBreakStmt() *ast.BreakStmt {
 	p.nextToken() // consume 'break'
+	stmt := &ast.BreakStmt{}
+	stmt.Condition, stmt.IsUnless = p.parseStatementModifier()
 	p.skipNewlines()
-	return &ast.BreakStmt{}
+	return stmt
 }
 
 func (p *Parser) parseNextStmt() *ast.NextStmt {
 	p.nextToken() // consume 'next'
+	stmt := &ast.NextStmt{}
+	stmt.Condition, stmt.IsUnless = p.parseStatementModifier()
 	p.skipNewlines()
-	return &ast.NextStmt{}
+	return stmt
 }
 
 func (p *Parser) parseReturnStmt() *ast.ReturnStmt {
@@ -1249,8 +1332,9 @@ func (p *Parser) parseReturnStmt() *ast.ReturnStmt {
 
 	stmt := &ast.ReturnStmt{}
 
-	// Check if there's a return value (not newline or end)
-	if !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+	// Check if there's a return value (not newline, end, or modifier keyword)
+	if !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) &&
+		!p.curTokenIs(token.IF) && !p.curTokenIs(token.UNLESS) {
 		stmt.Values = append(stmt.Values, p.parseExpression(LOWEST))
 		p.nextToken() // move past expression
 
@@ -1266,6 +1350,8 @@ func (p *Parser) parseReturnStmt() *ast.ReturnStmt {
 		}
 	}
 
+	// Check for statement modifier
+	stmt.Condition, stmt.IsUnless = p.parseStatementModifier()
 	p.skipNewlines()
 	return stmt
 }

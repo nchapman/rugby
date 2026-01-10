@@ -64,6 +64,7 @@ const (
 	IF     TokenType = "IF"
 	ELSIF  TokenType = "ELSIF"
 	ELSE   TokenType = "ELSE"
+	UNLESS TokenType = "UNLESS"
 	WHILE  TokenType = "WHILE"
 	FOR    TokenType = "FOR"
 	IN     TokenType = "IN"
@@ -99,6 +100,7 @@ var keywords = map[string]TokenType{
 	"if":     IF,
 	"elsif":  ELSIF,
 	"else":   ELSE,
+	"unless": UNLESS,
 	"while":  WHILE,
 	"for":    FOR,
 	"in":     IN,

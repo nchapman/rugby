@@ -305,22 +305,22 @@ First-class Range values (see spec.md Section 4.2.1).
 - [x] `nil` literal for optional assignments
 - [x] Optional methods `to_i?`/`to_f?` map to runtime functions
 
-## Phase 12: Spec Compliance & Hardening
-- [ ] Enforce single-entry rule: only one file with top-level statements per package (spec 2.1)
+## Phase 12: Spec Compliance & Hardening ✅
+- [x] Enforce single-entry rule: only one file with top-level statements per package (spec 2.1)
 - [x] Implement `break` and `next` in functional blocks (spec 5.4)
   - [x] Update `runtime` iterative methods (`Each`, `Times`, etc.) to use `bool` return for control
   - [x] Update `runtime` transformation methods (`Map`, `Select`, etc.) to use `(T, bool)` return for control
   - [x] Update codegen to track "in block" state and emit `return true/false` instead of `break/continue`
   - [x] Add tests for `break`/`next` in various block types
-- [ ] Implement Statement Modifiers (`if`/`unless`) (spec 5.5)
-  - [ ] Add `unless` keyword support (lexer/parser)
-  - [ ] Update AST to include optional `Condition` and `IsUnless` flag on statements
-  - [ ] Update Parser to detect trailing `if` and `unless`
-  - [ ] Update Codegen to wrap statements in `if` blocks (inverting condition for `unless`)
-- [ ] Implement `unless` statement (spec 5.2)
-  - [ ] Add `UnlessStmt` AST node or reuse `IfStmt` with inversion flag
-  - [ ] Update Parser to handle `unless ... else ... end`
-  - [ ] Update Codegen to emit `if !cond`
+- [x] Implement Statement Modifiers (`if`/`unless`) (spec 5.5)
+  - [x] Add `unless` keyword support (lexer/parser)
+  - [x] Update AST to include optional `Condition` and `IsUnless` flag on statements
+  - [x] Update Parser to detect trailing `if` and `unless`
+  - [x] Update Codegen to wrap statements in `if` blocks (inverting condition for `unless`)
+- [x] Implement `unless` statement (spec 5.2)
+  - [x] Reuse `IfStmt` with `IsUnless` flag
+  - [x] Update Parser to handle `unless ... else ... end`
+  - [x] Update Codegen to emit `if !cond`
 
 ## Phase 13: Symbols & Case Expressions
 - [ ] Implement Symbols (spec 4.1.1)

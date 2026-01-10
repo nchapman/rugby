@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 
+	"rugby/ast"
 	"rugby/codegen"
 	"rugby/lexer"
 	"rugby/parser"
@@ -70,12 +71,26 @@ func (b *Builder) Compile(files []string) (*CompileResult, error) {
 
 	result := &CompileResult{}
 
+	// Track which file has top-level statements (for single-entry rule)
+	var entryPointFile string
+
 	for _, rgFile := range files {
-		genFile, err := b.compileFile(rgFile)
+		genFile, hasTopLevel, err := b.compileFile(rgFile)
 		if err != nil {
 			return nil, err
 		}
 		result.GenFiles = append(result.GenFiles, genFile)
+
+		// Enforce single-entry rule: only one file may have top-level statements
+		if hasTopLevel {
+			if entryPointFile != "" {
+				return nil, fmt.Errorf(
+					"multiple files with top-level statements: %s and %s\n"+
+						"Only one file may contain executable code at the top level (see spec 2.1)",
+					entryPointFile, rgFile)
+			}
+			entryPointFile = rgFile
+		}
 	}
 
 	// Set up the gen directory for building
@@ -87,15 +102,16 @@ func (b *Builder) Compile(files []string) (*CompileResult, error) {
 }
 
 // compileFile transpiles a single .rg file to .go.
-func (b *Builder) compileFile(inputPath string) (string, error) {
+// Returns (outputPath, hasTopLevelStmts, error)
+func (b *Builder) compileFile(inputPath string) (string, bool, error) {
 	absPath, err := filepath.Abs(inputPath)
 	if err != nil {
-		return "", fmt.Errorf("invalid path %s: %w", inputPath, err)
+		return "", false, fmt.Errorf("invalid path %s: %w", inputPath, err)
 	}
 
 	source, err := os.ReadFile(absPath)
 	if err != nil {
-		return "", fmt.Errorf("error reading %s: %w", inputPath, err)
+		return "", false, fmt.Errorf("error reading %s: %w", inputPath, err)
 	}
 
 	// Lex
@@ -106,30 +122,49 @@ func (b *Builder) compileFile(inputPath string) (string, error) {
 	program := p.ParseProgram()
 
 	if len(p.Errors()) > 0 {
-		return "", b.formatParseErrors(inputPath, p.Errors())
+		return "", false, b.formatParseErrors(inputPath, p.Errors())
 	}
+
+	// Check if this file has top-level statements
+	hasTopLevel := hasTopLevelStatements(program)
 
 	// Generate with //line directive pointing to original source
 	gen := codegen.New(codegen.WithSourceFile(absPath))
 	output, err := gen.Generate(program)
 	if err != nil {
-		return "", fmt.Errorf("code generation error in %s: %w", inputPath, err)
+		return "", false, fmt.Errorf("code generation error in %s: %w", inputPath, err)
 	}
 
 	// Write to .rugby/gen/
 	outputPath := b.project.GenPath(absPath)
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
-		return "", fmt.Errorf("error creating directory: %w", err)
+		return "", false, fmt.Errorf("error creating directory: %w", err)
 	}
 	if err := os.WriteFile(outputPath, []byte(output), 0644); err != nil {
-		return "", fmt.Errorf("error writing %s: %w", outputPath, err)
+		return "", false, fmt.Errorf("error writing %s: %w", outputPath, err)
 	}
 
 	if b.verbose {
 		b.logger.Info("compiled", "file", b.project.RelPath(absPath))
 	}
 
-	return outputPath, nil
+	return outputPath, hasTopLevel, nil
+}
+
+// hasTopLevelStatements checks if a program contains executable top-level statements
+// (anything other than def, class, or interface)
+func hasTopLevelStatements(program *ast.Program) bool {
+	for _, decl := range program.Declarations {
+		switch decl.(type) {
+		case *ast.FuncDecl, *ast.ClassDecl, *ast.InterfaceDecl:
+			// These are definitions, not executable statements
+			continue
+		default:
+			// Any other statement is a top-level executable statement
+			return true
+		}
+	}
+	return false
 }
 
 // formatParseErrors formats parser errors for display.

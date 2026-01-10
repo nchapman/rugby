@@ -438,9 +438,7 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 	case *ast.InterfaceDecl:
 		g.genInterfaceDecl(s)
 	case *ast.ExprStmt:
-		g.writeIndent()
-		g.genExpr(s.Expr)
-		g.buf.WriteString("\n")
+		g.genExprStmt(s)
 	case *ast.AssignStmt:
 		g.genAssignStmt(s)
 	case *ast.OrAssignStmt:
@@ -458,9 +456,9 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 	case *ast.ForStmt:
 		g.genForStmt(s)
 	case *ast.BreakStmt:
-		g.genBreakStmt()
+		g.genBreakStmt(s)
 	case *ast.NextStmt:
-		g.genNextStmt()
+		g.genNextStmt(s)
 	case *ast.ReturnStmt:
 		g.genReturnStmt(s)
 	case *ast.DeferStmt:
@@ -1096,6 +1094,10 @@ func (g *Generator) genIfStmt(s *ast.IfStmt) {
 		// Track the variable with its inferred type
 		g.vars[s.AssignName] = g.inferTypeFromExpr(s.AssignExpr)
 	} else {
+		// For unless, negate the condition
+		if s.IsUnless {
+			g.buf.WriteString("!")
+		}
 		g.genCondition(s.Cond)
 		g.buf.WriteString(" {\n")
 	}
@@ -1275,13 +1277,54 @@ func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.
 	g.buf.WriteString("}\n")
 }
 
-func (g *Generator) genBreakStmt() {
+func (g *Generator) genExprStmt(s *ast.ExprStmt) {
+	if s.Condition != nil {
+		// Wrap in if/unless block
+		g.writeIndent()
+		g.buf.WriteString("if ")
+		if s.IsUnless {
+			g.buf.WriteString("!(")
+		}
+		g.genCondition(s.Condition)
+		if s.IsUnless {
+			g.buf.WriteString(")")
+		}
+		g.buf.WriteString(" {\n")
+		g.indent++
+		g.writeIndent()
+		g.genExpr(s.Expr)
+		g.buf.WriteString("\n")
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	} else {
+		g.writeIndent()
+		g.genExpr(s.Expr)
+		g.buf.WriteString("\n")
+	}
+}
+
+func (g *Generator) genBreakStmt(s *ast.BreakStmt) {
+	if s.Condition != nil {
+		// Wrap in if/unless block
+		g.writeIndent()
+		g.buf.WriteString("if ")
+		if s.IsUnless {
+			g.buf.WriteString("!(")
+		}
+		g.genCondition(s.Condition)
+		if s.IsUnless {
+			g.buf.WriteString(")")
+		}
+		g.buf.WriteString(" {\n")
+		g.indent++
+	}
+
 	g.writeIndent()
 	ctx, ok := g.currentContext()
 	if ok {
 		if ctx.kind == ctxIterBlock {
 			g.buf.WriteString("return false\n")
-			return
 		} else if ctx.kind == ctxTransformBlock {
 			// Transform blocks with three values (map): return (value, include, continue)
 			if ctx.usesIncludeFlag {
@@ -1294,19 +1337,43 @@ func (g *Generator) genBreakStmt() {
 					g.buf.WriteString("return nil, false\n")
 				}
 			}
-			return
+		} else {
+			// Regular loop context
+			g.buf.WriteString("break\n")
 		}
+	} else {
+		// No context - regular loop
+		g.buf.WriteString("break\n")
 	}
-	g.buf.WriteString("break\n")
+
+	if s.Condition != nil {
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	}
 }
 
-func (g *Generator) genNextStmt() {
+func (g *Generator) genNextStmt(s *ast.NextStmt) {
+	if s.Condition != nil {
+		// Wrap in if/unless block
+		g.writeIndent()
+		g.buf.WriteString("if ")
+		if s.IsUnless {
+			g.buf.WriteString("!(")
+		}
+		g.genCondition(s.Condition)
+		if s.IsUnless {
+			g.buf.WriteString(")")
+		}
+		g.buf.WriteString(" {\n")
+		g.indent++
+	}
+
 	g.writeIndent()
 	ctx, ok := g.currentContext()
 	if ok {
 		if ctx.kind == ctxIterBlock {
 			g.buf.WriteString("return true\n")
-			return
 		} else if ctx.kind == ctxTransformBlock {
 			// next in transform blocks with three values (map): skip element, continue iteration
 			if ctx.usesIncludeFlag {
@@ -1319,13 +1386,38 @@ func (g *Generator) genNextStmt() {
 					g.buf.WriteString("return nil, true\n")
 				}
 			}
-			return
+		} else {
+			// Regular loop context
+			g.buf.WriteString("continue\n")
 		}
+	} else {
+		// No context - regular loop
+		g.buf.WriteString("continue\n")
 	}
-	g.buf.WriteString("continue\n")
+
+	if s.Condition != nil {
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	}
 }
 
 func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
+	if s.Condition != nil {
+		// Wrap in if/unless block
+		g.writeIndent()
+		g.buf.WriteString("if ")
+		if s.IsUnless {
+			g.buf.WriteString("!(")
+		}
+		g.genCondition(s.Condition)
+		if s.IsUnless {
+			g.buf.WriteString(")")
+		}
+		g.buf.WriteString(" {\n")
+		g.indent++
+	}
+
 	g.writeIndent()
 	g.buf.WriteString("return")
 	if len(s.Values) > 0 {
@@ -1371,6 +1463,12 @@ func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
 		}
 	}
 	g.buf.WriteString("\n")
+
+	if s.Condition != nil {
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	}
 }
 
 func (g *Generator) genExpr(expr ast.Expression) {
@@ -1641,8 +1739,10 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			} else {
 				funcName = kf.runtimeFunc
 			}
+		} else {
+			// Transform local function names to match their definition (snake_case -> camelCase)
+			funcName = snakeToCamelWithAcronyms(funcName)
 		}
-		// Don't transform local function names - they stay as defined
 		g.buf.WriteString(funcName)
 	case *ast.SelectorExpr:
 		// Check for ClassName.new() constructor call

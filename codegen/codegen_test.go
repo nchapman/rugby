@@ -519,7 +519,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(get_items(), func(x interface{}) bool {`)
+	assertContains(t, output, `runtime.Each(getItems(), func(x interface{}) bool {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 	assertContains(t, output, `return true`)
 }
@@ -1959,7 +1959,7 @@ end`
 
 	// Should generate nil check for instance var
 	assertContains(t, output, "if s.cache == nil {")
-	assertContains(t, output, "s.cache = load_cache()")
+	assertContains(t, output, "s.cache = loadCache()")
 }
 
 func TestCompoundAssignPlusEquals(t *testing.T) {

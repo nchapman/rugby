@@ -55,6 +55,9 @@ func (f *FuncDecl) stmtNode() {}
 // ExprStmt wraps an expression as a statement
 type ExprStmt struct {
 	Expr Expression
+	// Statement modifiers (e.g., "puts x unless valid?")
+	Condition Expression // nil if no modifier
+	IsUnless  bool       // true for "unless", false for "if"
 }
 
 func (e *ExprStmt) node()     {}
@@ -233,17 +236,18 @@ type CompoundAssignStmt struct {
 func (c *CompoundAssignStmt) node()     {}
 func (c *CompoundAssignStmt) stmtNode() {}
 
-// IfStmt represents an if/elsif/else statement
+// IfStmt represents an if/elsif/else statement or unless/else statement
 type IfStmt struct {
 	// Optional assignment in condition: if (name = expr)
 	// When set, generates: if name, ok := expr; ok { ... }
 	AssignName string     // variable name for assignment (empty if none)
 	AssignExpr Expression // expression to assign (nil if none)
 
-	Cond    Expression
-	Then    []Statement
-	ElseIfs []ElseIfClause
-	Else    []Statement
+	IsUnless bool // true for "unless", false for "if" (inverts condition)
+	Cond     Expression
+	Then     []Statement
+	ElseIfs  []ElseIfClause
+	Else     []Statement
 }
 
 func (i *IfStmt) node()     {}
@@ -275,13 +279,21 @@ func (f *ForStmt) node()     {}
 func (f *ForStmt) stmtNode() {}
 
 // BreakStmt represents a break statement (exits loop)
-type BreakStmt struct{}
+type BreakStmt struct {
+	// Statement modifiers (e.g., "break if x == 2")
+	Condition Expression // nil if no modifier
+	IsUnless  bool       // true for "unless", false for "if"
+}
 
 func (b *BreakStmt) node()     {}
 func (b *BreakStmt) stmtNode() {}
 
 // NextStmt represents a next statement (continues to next iteration)
-type NextStmt struct{}
+type NextStmt struct {
+	// Statement modifiers (e.g., "next unless valid?")
+	Condition Expression // nil if no modifier
+	IsUnless  bool       // true for "unless", false for "if"
+}
 
 func (n *NextStmt) node()     {}
 func (n *NextStmt) stmtNode() {}
@@ -289,6 +301,9 @@ func (n *NextStmt) stmtNode() {}
 // ReturnStmt represents a return statement
 type ReturnStmt struct {
 	Values []Expression // empty if no return values
+	// Statement modifiers (e.g., "return if error")
+	Condition Expression // nil if no modifier
+	IsUnless  bool       // true for "unless", false for "if"
 }
 
 func (r *ReturnStmt) node()     {}
