@@ -796,6 +796,11 @@ func (p *Parser) parseStatement() ast.Statement {
 		if p.peekTokenIs(token.ORASSIGN) {
 			return p.parseOrAssignStmt()
 		}
+		// Check for compound assignment: ident += expr, ident -= expr, etc.
+		if p.peekTokenIs(token.PLUSASSIGN) || p.peekTokenIs(token.MINUSASSIGN) ||
+			p.peekTokenIs(token.STARASSIGN) || p.peekTokenIs(token.SLASHASSIGN) {
+			return p.parseCompoundAssignStmt()
+		}
 	case token.AT:
 		// Check if this is assignment: @name = expr
 		// Pattern: AT IDENT ASSIGN
@@ -1732,6 +1737,41 @@ func (p *Parser) parseOrAssignStmt() *ast.OrAssignStmt {
 	p.skipNewlines()
 
 	return &ast.OrAssignStmt{Name: name, Value: value}
+}
+
+func (p *Parser) parseCompoundAssignStmt() *ast.CompoundAssignStmt {
+	name := p.curToken.Literal
+	p.nextToken() // consume ident
+
+	// Determine the operator
+	var op string
+	switch p.curToken.Type {
+	case token.PLUSASSIGN:
+		op = "+"
+	case token.MINUSASSIGN:
+		op = "-"
+	case token.STARASSIGN:
+		op = "*"
+	case token.SLASHASSIGN:
+		op = "/"
+	default:
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected compound assignment operator",
+			p.curToken.Line, p.curToken.Column))
+		return nil
+	}
+	p.nextToken() // consume operator
+
+	value := p.parseExpression(LOWEST)
+
+	// Check for block after expression
+	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
+		value = p.parseBlockCall(value)
+	}
+
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	return &ast.CompoundAssignStmt{Name: name, Op: op, Value: value}
 }
 
 func (p *Parser) parseInstanceVarOrAssign() *ast.InstanceVarOrAssign {

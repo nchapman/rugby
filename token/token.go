@@ -30,8 +30,12 @@ const (
 	GE TokenType = ">="
 
 	// Assignment
-	ASSIGN   TokenType = "="
-	ORASSIGN TokenType = "||="
+	ASSIGN      TokenType = "="
+	ORASSIGN    TokenType = "||="
+	PLUSASSIGN  TokenType = "+="
+	MINUSASSIGN TokenType = "-="
+	STARASSIGN  TokenType = "*="
+	SLASHASSIGN TokenType = "/="
 
 	// Type modifiers
 	QUESTION TokenType = "?"

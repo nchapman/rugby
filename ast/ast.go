@@ -223,6 +223,16 @@ type OrAssignStmt struct {
 func (o *OrAssignStmt) node()     {}
 func (o *OrAssignStmt) stmtNode() {}
 
+// CompoundAssignStmt represents x += y, x -= y, x *= y, x /= y
+type CompoundAssignStmt struct {
+	Name  string // variable name
+	Op    string // operator: "+", "-", "*", "/"
+	Value Expression
+}
+
+func (c *CompoundAssignStmt) node()     {}
+func (c *CompoundAssignStmt) stmtNode() {}
+
 // IfStmt represents an if/elsif/else statement
 type IfStmt struct {
 	// Optional assignment in condition: if (name = expr)

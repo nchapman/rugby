@@ -311,6 +311,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genAssignStmt(s)
 	case *ast.OrAssignStmt:
 		g.genOrAssignStmt(s)
+	case *ast.CompoundAssignStmt:
+		g.genCompoundAssignStmt(s)
 	case *ast.InstanceVarAssign:
 		g.genInstanceVarAssign(s)
 	case *ast.InstanceVarOrAssign:
@@ -726,6 +728,18 @@ func (g *Generator) genOrAssignStmt(s *ast.OrAssignStmt) {
 		g.writeIndent()
 		g.buf.WriteString("}\n")
 	}
+}
+
+func (g *Generator) genCompoundAssignStmt(s *ast.CompoundAssignStmt) {
+	g.writeIndent()
+	g.buf.WriteString(s.Name)
+	g.buf.WriteString(" = ")
+	g.buf.WriteString(s.Name)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(s.Op)
+	g.buf.WriteString(" ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
 }
 
 func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {

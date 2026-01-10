@@ -122,18 +122,36 @@ func (l *Lexer) NextToken() token.Token {
 		l.skipComment()
 		return l.NextToken()
 	case '+':
-		tok = l.newToken(token.PLUS, "+")
+		if l.peekChar() == '=' {
+			l.readChar()
+			tok = l.newToken(token.PLUSASSIGN, "+=")
+		} else {
+			tok = l.newToken(token.PLUS, "+")
+		}
 	case '-':
 		if l.peekChar() == '>' {
 			l.readChar()
 			tok = l.newToken(token.ARROW, "->")
+		} else if l.peekChar() == '=' {
+			l.readChar()
+			tok = l.newToken(token.MINUSASSIGN, "-=")
 		} else {
 			tok = l.newToken(token.MINUS, "-")
 		}
 	case '*':
-		tok = l.newToken(token.STAR, "*")
+		if l.peekChar() == '=' {
+			l.readChar()
+			tok = l.newToken(token.STARASSIGN, "*=")
+		} else {
+			tok = l.newToken(token.STAR, "*")
+		}
 	case '/':
-		tok = l.newToken(token.SLASH, "/")
+		if l.peekChar() == '=' {
+			l.readChar()
+			tok = l.newToken(token.SLASHASSIGN, "/=")
+		} else {
+			tok = l.newToken(token.SLASH, "/")
+		}
 	case '%':
 		tok = l.newToken(token.PERCENT, "%")
 	case '(':
