@@ -100,7 +100,7 @@ func TestOperators(t *testing.T) {
 }
 
 func TestKeywords(t *testing.T) {
-	input := `if elsif else while for in break next return true false and or not end def import as defer do class self`
+	input := `if elsif else case when while for in break next return true false and or not end def import as defer do class self`
 
 	tests := []struct {
 		expectedType    token.TokenType
@@ -109,6 +109,8 @@ func TestKeywords(t *testing.T) {
 		{token.IF, "if"},
 		{token.ELSIF, "elsif"},
 		{token.ELSE, "else"},
+		{token.CASE, "case"},
+		{token.WHEN, "when"},
 		{token.WHILE, "while"},
 		{token.FOR, "for"},
 		{token.IN, "in"},

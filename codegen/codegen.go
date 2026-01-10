@@ -453,6 +453,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genInstanceVarOrAssign(s)
 	case *ast.IfStmt:
 		g.genIfStmt(s)
+	case *ast.CaseStmt:
+		g.genCaseStmt(s)
 	case *ast.WhileStmt:
 		g.genWhileStmt(s)
 	case *ast.ForStmt:
@@ -1126,6 +1128,68 @@ func (g *Generator) genIfStmt(s *ast.IfStmt) {
 	if len(s.Else) > 0 {
 		g.writeIndent()
 		g.buf.WriteString("} else {\n")
+
+		g.indent++
+		for _, stmt := range s.Else {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genCaseStmt(s *ast.CaseStmt) {
+	g.writeIndent()
+
+	// Handle case with subject vs case without subject
+	if s.Subject != nil {
+		g.buf.WriteString("switch ")
+		g.genExpr(s.Subject)
+		g.buf.WriteString(" {\n")
+	} else {
+		// Case without subject - use switch true
+		g.buf.WriteString("switch {\n")
+	}
+
+	// Generate when clauses
+	for _, whenClause := range s.WhenClauses {
+		g.writeIndent()
+
+		if s.Subject != nil {
+			// With subject: case value1, value2:
+			g.buf.WriteString("case ")
+			for i, val := range whenClause.Values {
+				if i > 0 {
+					g.buf.WriteString(", ")
+				}
+				g.genExpr(val)
+			}
+			g.buf.WriteString(":\n")
+		} else {
+			// Without subject: case condition1 || condition2:
+			g.buf.WriteString("case ")
+			for i, val := range whenClause.Values {
+				if i > 0 {
+					g.buf.WriteString(" || ")
+				}
+				g.genCondition(val)
+			}
+			g.buf.WriteString(":\n")
+		}
+
+		g.indent++
+		for _, stmt := range whenClause.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	// Generate default (else) clause
+	if len(s.Else) > 0 {
+		g.writeIndent()
+		g.buf.WriteString("default:\n")
 
 		g.indent++
 		for _, stmt := range s.Else {

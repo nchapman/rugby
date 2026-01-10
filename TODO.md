@@ -333,11 +333,14 @@ First-class Range values (see spec.md Section 4.2.1).
   - [x] Update Codegen inferType to return "String" for symbols
   - [x] Add comprehensive tests (lexer, parser, codegen)
   - [x] Add examples/symbols.rg demonstration
-- [ ] Implement Case Expressions (spec 5.2)
-  - [ ] Add `CASE`, `WHEN` tokens
-  - [ ] Add `CaseStmt` AST node with `Condition`, `WhenClauses`, `Else`
-  - [ ] Update Parser to handle `case ... when ... else ... end`
-  - [ ] Update Codegen to emit Go `switch` statements
+- [x] Implement Case Expressions (spec 5.2) ✅
+  - [x] Add `CASE`, `WHEN` tokens
+  - [x] Add `CaseStmt` AST node with `Subject`, `WhenClauses`, `Else`
+  - [x] Update Parser to handle `case ... when ... else ... end`
+  - [x] Update Codegen to emit Go `switch` statements
+  - [x] Support multiple values per when clause (`when 1, 2, 3`)
+  - [x] Support case without subject (`case when x > 10`)
+  - [x] Add comprehensive tests and examples/case.rg
 
 ## Phase 14: Class System Overhaul (v0.2)
 Refining the class system based on Crystal's model.

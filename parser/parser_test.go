@@ -3340,3 +3340,120 @@ func TestSymbolLiterals(t *testing.T) {
 		})
 	}
 }
+
+func TestCaseStatement(t *testing.T) {
+	input := `def main
+  x = 2
+  case x
+  when 1
+    puts "one"
+  when 2, 3
+    puts "two or three"
+  else
+    puts "other"
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	caseStmt, ok := fn.Body[1].(*ast.CaseStmt)
+	if !ok {
+		t.Fatalf("expected CaseStmt, got %T", fn.Body[1])
+	}
+
+	if caseStmt.Subject == nil {
+		t.Fatal("expected subject, got nil")
+	}
+
+	if len(caseStmt.WhenClauses) != 2 {
+		t.Errorf("expected 2 when clauses, got %d", len(caseStmt.WhenClauses))
+	}
+
+	// Check first when clause has 1 value
+	if len(caseStmt.WhenClauses[0].Values) != 1 {
+		t.Errorf("expected first when to have 1 value, got %d", len(caseStmt.WhenClauses[0].Values))
+	}
+
+	// Check second when clause has 2 values
+	if len(caseStmt.WhenClauses[1].Values) != 2 {
+		t.Errorf("expected second when to have 2 values, got %d", len(caseStmt.WhenClauses[1].Values))
+	}
+
+	if len(caseStmt.Else) != 1 {
+		t.Errorf("expected 1 else statement, got %d", len(caseStmt.Else))
+	}
+}
+
+func TestCaseStatementNoElse(t *testing.T) {
+	input := `def main
+  case status
+  when 200
+    puts "ok"
+  when 404
+    puts "not found"
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	caseStmt, ok := fn.Body[0].(*ast.CaseStmt)
+	if !ok {
+		t.Fatalf("expected CaseStmt, got %T", fn.Body[0])
+	}
+
+	if caseStmt.Subject == nil {
+		t.Fatal("expected subject, got nil")
+	}
+
+	if len(caseStmt.WhenClauses) != 2 {
+		t.Errorf("expected 2 when clauses, got %d", len(caseStmt.WhenClauses))
+	}
+
+	if len(caseStmt.Else) != 0 {
+		t.Errorf("expected 0 else statements, got %d", len(caseStmt.Else))
+	}
+}
+
+func TestCaseStatementNoSubject(t *testing.T) {
+	input := `def main
+  case
+  when x > 10
+    puts "big"
+  when x > 5
+    puts "medium"
+  else
+    puts "small"
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	caseStmt, ok := fn.Body[0].(*ast.CaseStmt)
+	if !ok {
+		t.Fatalf("expected CaseStmt, got %T", fn.Body[0])
+	}
+
+	if caseStmt.Subject != nil {
+		t.Fatal("expected no subject (nil), got non-nil")
+	}
+
+	if len(caseStmt.WhenClauses) != 2 {
+		t.Errorf("expected 2 when clauses, got %d", len(caseStmt.WhenClauses))
+	}
+
+	if len(caseStmt.Else) != 1 {
+		t.Errorf("expected 1 else statement, got %d", len(caseStmt.Else))
+	}
+}

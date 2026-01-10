@@ -20,6 +20,8 @@ func TestExamplesCompile(t *testing.T) {
 		{"tiny.rg", false},
 		{"fizzbuzz.rg", false},
 		{"ranges.rg", true},
+		{"symbols.rg", true},
+		{"case.rg", true},
 	}
 
 	// Get the rugby binary path

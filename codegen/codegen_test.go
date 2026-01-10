@@ -210,6 +210,12 @@ func assertContains(t *testing.T, output, substr string) {
 	}
 }
 
+func assertNotContains(t *testing.T, output, substr string) {
+	if strings.Contains(output, substr) {
+		t.Errorf("expected output NOT to contain %q, got:\n%s", substr, output)
+	}
+}
+
 func TestGenerateImportAlias(t *testing.T) {
 	input := `import encoding/json as json
 
@@ -2470,4 +2476,90 @@ end`,
 			}
 		})
 	}
+}
+
+func TestGenerateCaseStatement(t *testing.T) {
+	input := `def main
+  x = 2
+  case x
+  when 1
+    puts "one"
+  when 2, 3
+    puts "two or three"
+  else
+    puts "other"
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `switch x {`)
+	assertContains(t, output, `case 1:`)
+	assertContains(t, output, `case 2, 3:`)
+	assertContains(t, output, `default:`)
+	assertContains(t, output, `runtime.Puts("one")`)
+	assertContains(t, output, `runtime.Puts("two or three")`)
+	assertContains(t, output, `runtime.Puts("other")`)
+}
+
+func TestGenerateCaseStatementNoElse(t *testing.T) {
+	input := `def main
+  status = 200
+  case status
+  when 200
+    puts "ok"
+  when 404
+    puts "not found"
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `switch status {`)
+	assertContains(t, output, `case 200:`)
+	assertContains(t, output, `case 404:`)
+	assertNotContains(t, output, `default:`)
+}
+
+func TestGenerateCaseStatementNoSubject(t *testing.T) {
+	input := `def main
+  x = 15
+  case
+  when x > 10
+    puts "big"
+  when x > 5
+    puts "medium"
+  else
+    puts "small"
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `switch {`)
+	assertContains(t, output, `case (x > 10):`)
+	assertContains(t, output, `case (x > 5):`)
+	assertContains(t, output, `default:`)
+}
+
+func TestGenerateCaseWithStringsAndSymbols(t *testing.T) {
+	input := `def main
+  status = "active"
+  case status
+  when "active"
+    puts "running"
+  when :stopped
+    puts "halted"
+  else
+    puts "unknown"
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `switch status {`)
+	assertContains(t, output, `case "active":`)
+	assertContains(t, output, `case "stopped":`) // symbol compiles to string
+	assertContains(t, output, `runtime.Puts("running")`)
+	assertContains(t, output, `runtime.Puts("halted")`)
 }

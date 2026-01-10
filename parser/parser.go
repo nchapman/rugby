@@ -846,6 +846,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseIfStmt()
 	case token.UNLESS:
 		return p.parseUnlessStmt()
+	case token.CASE:
+		return p.parseCaseStmt()
 	case token.WHILE:
 		return p.parseWhileStmt()
 	case token.FOR:
@@ -1215,6 +1217,92 @@ func (p *Parser) parseUnlessStmt() *ast.IfStmt {
 	// Expect 'end'
 	if !p.curTokenIs(token.END) {
 		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected 'end' after unless block",
+			p.curToken.Line, p.curToken.Column))
+		return nil
+	}
+	p.nextToken() // consume 'end'
+	p.skipNewlines()
+
+	return stmt
+}
+
+func (p *Parser) parseCaseStmt() *ast.CaseStmt {
+	p.nextToken() // consume 'case'
+
+	stmt := &ast.CaseStmt{}
+
+	// Parse optional subject expression (before newline/when)
+	// If next token is NEWLINE or WHEN, it's case without subject
+	if !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.WHEN) {
+		stmt.Subject = p.parseExpression(LOWEST)
+		p.nextToken() // move past expression
+	}
+	p.skipNewlines()
+
+	// Parse when clauses
+	for p.curTokenIs(token.WHEN) {
+		p.nextToken() // consume 'when'
+
+		clause := ast.WhenClause{}
+
+		// Parse one or more comma-separated values
+		clause.Values = append(clause.Values, p.parseExpression(LOWEST))
+		p.nextToken() // move past first value
+
+		// Parse additional values separated by commas
+		for p.curTokenIs(token.COMMA) {
+			p.nextToken() // consume ','
+			clause.Values = append(clause.Values, p.parseExpression(LOWEST))
+			p.nextToken() // move past value
+		}
+
+		// Validate that when clause has at least one value
+		if len(clause.Values) == 0 {
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: 'when' requires at least one value",
+				p.curToken.Line, p.curToken.Column))
+			return nil
+		}
+		p.skipNewlines()
+
+		// Parse body until next WHEN, ELSE, or END
+		for !p.curTokenIs(token.WHEN) && !p.curTokenIs(token.ELSE) &&
+			!p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+			p.skipNewlines()
+			if p.curTokenIs(token.WHEN) || p.curTokenIs(token.ELSE) || p.curTokenIs(token.END) {
+				break
+			}
+			if s := p.parseStatement(); s != nil {
+				clause.Body = append(clause.Body, s)
+			}
+		}
+		stmt.WhenClauses = append(stmt.WhenClauses, clause)
+	}
+
+	// Validate that case has at least one when clause
+	if len(stmt.WhenClauses) == 0 {
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: case statement requires at least one 'when' clause",
+			p.curToken.Line, p.curToken.Column))
+		return nil
+	}
+
+	// Parse optional else clause
+	if p.curTokenIs(token.ELSE) {
+		p.nextToken() // consume 'else'
+		p.skipNewlines()
+
+		for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+			p.skipNewlines()
+			if p.curTokenIs(token.END) {
+				break
+			}
+			if s := p.parseStatement(); s != nil {
+				stmt.Else = append(stmt.Else, s)
+			}
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected 'end' to close case",
 			p.curToken.Line, p.curToken.Column))
 		return nil
 	}

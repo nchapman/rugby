@@ -267,6 +267,22 @@ type ElseIfClause struct {
 	Body []Statement
 }
 
+// CaseStmt represents a case/when/else statement
+type CaseStmt struct {
+	Subject     Expression   // the expression being matched (nil for case without subject)
+	WhenClauses []WhenClause // one or more when branches
+	Else        []Statement  // optional else clause
+}
+
+func (c *CaseStmt) node()     {}
+func (c *CaseStmt) stmtNode() {}
+
+// WhenClause represents a single when branch in a case statement
+type WhenClause struct {
+	Values []Expression // one or more values to match (can be comma-separated)
+	Body   []Statement  // statements in this when branch
+}
+
 // WhileStmt represents a while loop
 type WhileStmt struct {
 	Cond Expression
