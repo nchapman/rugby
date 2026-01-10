@@ -82,13 +82,15 @@ type Generator struct {
 	needsFmt     bool              // track if fmt import is needed (string interpolation)
 	currentClass string            // current class being generated (for instance vars)
 	pubClasses   map[string]bool   // track public classes for constructor naming
+	classFields  map[string]string // track fields of the current class and their types
 }
 
 func New() *Generator {
 	return &Generator{
-		vars:       make(map[string]string),
-		imports:    make(map[string]bool),
-		pubClasses: make(map[string]bool),
+		vars:        make(map[string]string),
+		imports:     make(map[string]bool),
+		pubClasses:  make(map[string]bool),
+		classFields: make(map[string]string),
 	}
 }
 
@@ -131,22 +133,33 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		return "String"
 	case *ast.BoolLit:
 		return "Bool"
+	case *ast.Ident:
+		if t, ok := g.vars[e.Name]; ok {
+			return t
+		}
+	case *ast.InstanceVar:
+		if t, ok := g.classFields[e.Name]; ok {
+			return t
+		}
+	case *ast.RangeLit:
+		return "Range"
 	}
 	return "" // unknown
 }
 
 // isOptionalMethodCall checks if an expression is a call to an optional method (to_i?, to_f?)
 func isOptionalMethodCall(expr ast.Expression) bool {
-	call, ok := expr.(*ast.CallExpr)
-	if !ok {
-		return false
+	if call, ok := expr.(*ast.CallExpr); ok {
+		if sel, ok := call.Func.(*ast.SelectorExpr); ok {
+			_, isOptional := optionalMethods[sel.Sel]
+			return isOptional
+		}
 	}
-	sel, ok := call.Func.(*ast.SelectorExpr)
-	if !ok {
-		return false
+	if sel, ok := expr.(*ast.SelectorExpr); ok {
+		_, isOptional := optionalMethods[sel.Sel]
+		return isOptional
 	}
-	_, isOptional := optionalMethods[sel.Sel]
-	return isOptional
+	return false
 }
 
 func (g *Generator) Generate(program *ast.Program) (string, error) {
@@ -319,6 +332,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	className := cls.Name
 	g.currentClass = className
 	g.pubClasses[className] = cls.Pub
+	g.classFields = make(map[string]string)
 
 	// Emit struct definition
 	// Class names are already PascalCase by convention; pub affects field/method visibility
@@ -331,6 +345,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			g.buf.WriteString("\n")
 		}
 		for _, field := range cls.Fields {
+			g.classFields[field.Name] = field.Type // Store field type
 			if field.Type != "" {
 				g.buf.WriteString(fmt.Sprintf("\t%s %s\n", field.Name, mapType(field.Type)))
 			} else {
@@ -358,6 +373,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	}
 
 	g.currentClass = ""
+	g.classFields = make(map[string]string)
 }
 
 func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
@@ -565,10 +581,31 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 	if g.currentClass != "" {
 		recv := receiverName(g.currentClass)
 		g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, s.Name))
+		
+		// Check for optional wrapping
+		fieldType := g.classFields[s.Name]
+		sourceType := g.inferTypeFromExpr(s.Value)
+		needsWrap := false
+		
+		if isValueTypeOptional(fieldType) {
+			baseType := strings.TrimSuffix(fieldType, "?")
+			if sourceType == baseType {
+				needsWrap = true
+			}
+		}
+		
+		if needsWrap {
+			baseType := strings.TrimSuffix(fieldType, "?")
+			g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+			g.genExpr(s.Value)
+			g.buf.WriteString(")")
+		} else {
+			g.genExpr(s.Value)
+		}
 	} else {
 		g.buf.WriteString(fmt.Sprintf("/* @%s outside class */ ", s.Name))
+		g.genExpr(s.Value)
 	}
-	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
 }
 
@@ -582,16 +619,47 @@ func (g *Generator) genOrAssignStmt(s *ast.OrAssignStmt) {
 		g.buf.WriteString("\n")
 		g.vars[s.Name] = "" // type unknown
 	} else {
-		// Variable exists: generate nil-check assignment
+		// Variable exists: generate check
 		g.writeIndent()
 		g.buf.WriteString("if ")
-		g.buf.WriteString(s.Name)
-		g.buf.WriteString(" == nil {\n")
+		
+		declaredType := g.vars[s.Name]
+		if isValueTypeOptional(declaredType) {
+			// Value type optional: check !x.Valid
+			g.buf.WriteString("!")
+			g.buf.WriteString(s.Name)
+			g.buf.WriteString(".Valid")
+		} else {
+			// Reference type or standard: check x == nil
+			g.buf.WriteString(s.Name)
+			g.buf.WriteString(" == nil")
+		}
+		
+		g.buf.WriteString(" {\n")
 		g.indent++
 		g.writeIndent()
 		g.buf.WriteString(s.Name)
 		g.buf.WriteString(" = ")
-		g.genExpr(s.Value)
+		
+		// Check for optional wrapping
+		sourceType := g.inferTypeFromExpr(s.Value)
+		needsWrap := false
+		if isValueTypeOptional(declaredType) {
+			baseType := strings.TrimSuffix(declaredType, "?")
+			if sourceType == baseType {
+				needsWrap = true
+			}
+		}
+
+		if needsWrap {
+			baseType := strings.TrimSuffix(declaredType, "?")
+			g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+			g.genExpr(s.Value)
+			g.buf.WriteString(")")
+		} else {
+			g.genExpr(s.Value)
+		}
+
 		g.buf.WriteString("\n")
 		g.indent--
 		g.writeIndent()
@@ -608,17 +676,48 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 
 	recv := receiverName(g.currentClass)
 	field := fmt.Sprintf("%s.%s", recv, s.Name)
+	fieldType := g.classFields[s.Name]
 
-	// Generate nil-check assignment
+	// Generate check
 	g.writeIndent()
 	g.buf.WriteString("if ")
-	g.buf.WriteString(field)
-	g.buf.WriteString(" == nil {\n")
+	
+	if isValueTypeOptional(fieldType) {
+		// Value type optional: check !field.Valid
+		g.buf.WriteString("!")
+		g.buf.WriteString(field)
+		g.buf.WriteString(".Valid")
+	} else {
+		// Reference type: check field == nil
+		g.buf.WriteString(field)
+		g.buf.WriteString(" == nil")
+	}
+	
+	g.buf.WriteString(" {\n")
 	g.indent++
 	g.writeIndent()
 	g.buf.WriteString(field)
 	g.buf.WriteString(" = ")
-	g.genExpr(s.Value)
+	
+	// Check for optional wrapping
+	sourceType := g.inferTypeFromExpr(s.Value)
+	needsWrap := false
+	if isValueTypeOptional(fieldType) {
+		baseType := strings.TrimSuffix(fieldType, "?")
+		if sourceType == baseType {
+			needsWrap = true
+		}
+	}
+	
+	if needsWrap {
+		baseType := strings.TrimSuffix(fieldType, "?")
+		g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+		g.genExpr(s.Value)
+		g.buf.WriteString(")")
+	} else {
+		g.genExpr(s.Value)
+	}
+
 	g.buf.WriteString("\n")
 	g.indent--
 	g.writeIndent()
@@ -631,12 +730,77 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 	// Handle optional method calls like s.to_i?() which return (T, bool)
 	// Generate: n, _ := runtime.StringToInt(s)
 	if isOptionalMethodCall(s.Value) {
-		g.buf.WriteString(s.Name)
-		g.buf.WriteString(", _ := ")
-		g.genExpr(s.Value)
+		var receiver ast.Expression
+		var method string
+		
+		if call, ok := s.Value.(*ast.CallExpr); ok {
+			if sel, ok := call.Func.(*ast.SelectorExpr); ok {
+				receiver = sel.X
+				method = sel.Sel
+			}
+		} else if sel, ok := s.Value.(*ast.SelectorExpr); ok {
+			receiver = sel.X
+			method = sel.Sel
+		}
+
+		if receiver != nil {
+			om := optionalMethods[method]
+			g.buf.WriteString(s.Name)
+			g.buf.WriteString(", _ := ")
+			g.buf.WriteString(om.runtimeFunc)
+			g.buf.WriteString("(")
+			g.genExpr(receiver)
+			g.buf.WriteString(")\n")
+			g.vars[s.Name] = om.resultType
+			return
+		}
+	}
+
+	// Determine target type
+	var targetType string
+	if s.Type != "" {
+		targetType = s.Type
+	} else if declaredType, ok := g.vars[s.Name]; ok {
+		targetType = declaredType
+	}
+
+	// Check if we are assigning nil to a value type optional
+	isNilAssignment := false
+	if _, ok := s.Value.(*ast.NilLit); ok {
+		isNilAssignment = true
+	}
+
+	if isNilAssignment && isValueTypeOptional(targetType) {
+		baseType := strings.TrimSuffix(targetType, "?")
+		
+		if s.Type != "" && !g.isDeclared(s.Name) {
+			// Typed declaration: var x Int? = nil
+			g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
+			g.vars[s.Name] = s.Type
+		} else if g.isDeclared(s.Name) {
+			// Reassignment: x = nil
+			g.buf.WriteString(s.Name)
+			g.buf.WriteString(" = ")
+		} else {
+			// Untyped declaration (x = nil)
+			g.buf.WriteString(s.Name)
+			g.buf.WriteString(" := ")
+			g.vars[s.Name] = ""
+		}
+		
+		g.buf.WriteString(fmt.Sprintf("runtime.None%s()", baseType))
 		g.buf.WriteString("\n")
-		g.vars[s.Name] = g.inferTypeFromExpr(s.Value)
 		return
+	}
+
+	// Check if we need to wrap value type -> Optional (e.g. x : Int? = 5)
+	sourceType := g.inferTypeFromExpr(s.Value)
+	needsWrap := false
+	if isValueTypeOptional(targetType) {
+		baseType := strings.TrimSuffix(targetType, "?")
+		if sourceType == baseType {
+			needsWrap = true
+		}
 	}
 
 	if s.Type != "" && !g.isDeclared(s.Name) {
@@ -651,9 +815,17 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 		// Untyped declaration: x := value
 		g.buf.WriteString(s.Name)
 		g.buf.WriteString(" := ")
-		g.vars[s.Name] = "" // type unknown
+		g.vars[s.Name] = sourceType // infer type from value if variable is new
 	}
-	g.genExpr(s.Value)
+
+	if needsWrap {
+		baseType := strings.TrimSuffix(targetType, "?")
+		g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+		g.genExpr(s.Value)
+		g.buf.WriteString(")")
+	} else {
+		g.genExpr(s.Value)
+	}
 	g.buf.WriteString("\n")
 }
 
@@ -755,6 +927,14 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 		return
 	}
 
+	// Check if iterable is a variable of type Range
+	if ident, ok := s.Iterable.(*ast.Ident); ok {
+		if g.vars[ident.Name] == "Range" {
+			g.genForRangeVarLoop(s.Var, ident.Name, s.Body, wasDefinedBefore, prevType)
+			return
+		}
+	}
+
 	g.writeIndent()
 	g.buf.WriteString("for _, ")
 	g.buf.WriteString(s.Var)
@@ -775,6 +955,40 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 		delete(g.vars, s.Var)
 	} else {
 		g.vars[s.Var] = prevType
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genForRangeVarLoop(varName string, rangeVar string, body []ast.Statement, wasDefinedBefore bool, prevType string) {
+	g.writeIndent()
+	g.buf.WriteString("for ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.buf.WriteString(rangeVar)
+	g.buf.WriteString(".Start; ")
+	
+	// Condition: (r.Exclusive && i < r.End) || (!r.Exclusive && i <= r.End)
+	g.buf.WriteString(fmt.Sprintf("(%s.Exclusive && %s < %s.End) || (!%s.Exclusive && %s <= %s.End)", 
+		rangeVar, varName, rangeVar, rangeVar, varName, rangeVar))
+	
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString("++ {\n")
+
+	g.vars[varName] = "Int"
+
+	g.indent++
+	for _, stmt := range body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	if !wasDefinedBefore {
+		delete(g.vars, varName)
+	} else {
+		g.vars[varName] = prevType
 	}
 
 	g.writeIndent()
@@ -1587,6 +1801,16 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 			g.buf.WriteString(")")
 			return
 		}
+	}
+
+	// Check for optional methods like to_i?, to_f?
+	if om, ok := optionalMethods[sel.Sel]; ok {
+		g.needsRuntime = true
+		g.buf.WriteString(om.runtimeFunc)
+		g.buf.WriteString("(")
+		g.genExpr(sel.X) // receiver becomes first arg
+		g.buf.WriteString(")")
+		return
 	}
 
 	g.genExpr(sel.X)

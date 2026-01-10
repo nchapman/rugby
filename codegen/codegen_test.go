@@ -1799,6 +1799,21 @@ end`
 	assertContains(t, output, `for i := start; i <= finish; i++ {`)
 }
 
+func TestForLoopWithRangeObjectVariable(t *testing.T) {
+	input := `def main
+  r = 1..10
+  for i in r
+    puts i
+  end
+end`
+
+	output := compile(t, input)
+
+	// Should generate loop using r.Start, r.End and checking r.Exclusive
+	assertContains(t, output, `for i := r.Start; (r.Exclusive && i < r.End) || (!r.Exclusive && i <= r.End); i++ {`)
+	assertContains(t, output, `runtime.Puts(i)`)
+}
+
 func TestRangeToArray(t *testing.T) {
 	input := `def main
   nums = (1..5).to_a
@@ -1930,8 +1945,8 @@ end`
 
 	output := compile(t, input)
 
-	// Variable with optional type
-	assertContains(t, output, "var x runtime.OptionalInt = nil")
+	// Variable with optional type should use NoneInt()
+	assertContains(t, output, "var x runtime.OptionalInt = runtime.NoneInt()")
 }
 
 func TestOptionalValueTypeInCondition(t *testing.T) {
