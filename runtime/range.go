@@ -7,14 +7,18 @@ type Range struct {
 }
 
 // RangeEach iterates over each value in the range
-func RangeEach(r Range, fn func(int)) {
+func RangeEach(r Range, fn func(int) bool) {
 	if r.Exclusive {
 		for i := r.Start; i < r.End; i++ {
-			fn(i)
+			if !fn(i) {
+				break
+			}
 		}
 	} else {
 		for i := r.Start; i <= r.End; i++ {
-			fn(i)
+			if !fn(i) {
+				break
+			}
 		}
 	}
 }
@@ -34,8 +38,9 @@ func RangeToArray(r Range) []int {
 		return []int{}
 	}
 	result := make([]int, 0, size)
-	RangeEach(r, func(i int) {
+	RangeEach(r, func(i int) bool {
 		result = append(result, i)
+		return true
 	})
 	return result
 }

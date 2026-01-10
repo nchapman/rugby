@@ -2,114 +2,152 @@
 package runtime
 
 // Each iterates over a slice, calling the function for each element.
-// This version uses interface{} to match Rugby's untyped array semantics.
-// Ruby: arr.each { |x| puts x }
-func Each(slice interface{}, fn func(interface{})) {
+// The callback returns false to break, true to continue.
+func Each(slice interface{}, fn func(interface{}) bool) {
 	switch s := slice.(type) {
 	case []interface{}:
 		for _, v := range s {
-			fn(v)
+			if !fn(v) {
+				break
+			}
 		}
 	case []int:
 		for _, v := range s {
-			fn(v)
+			if !fn(v) {
+				break
+			}
 		}
 	case []string:
 		for _, v := range s {
-			fn(v)
+			if !fn(v) {
+				break
+			}
 		}
 	case []float64:
 		for _, v := range s {
-			fn(v)
+			if !fn(v) {
+				break
+			}
 		}
 	case []bool:
 		for _, v := range s {
-			fn(v)
+			if !fn(v) {
+				break
+			}
 		}
-	default:
-		// For other slice types, use reflection as fallback
-		// This handles user-defined types
 	}
 }
 
 // EachWithIndex iterates over a slice with index, calling the function for each element.
-// This version uses interface{} to match Rugby's untyped array semantics.
-// Ruby: arr.each_with_index { |x, i| puts "#{i}: #{x}" }
-func EachWithIndex(slice interface{}, fn func(interface{}, int)) {
+// The callback returns false to break, true to continue.
+func EachWithIndex(slice interface{}, fn func(interface{}, int) bool) {
 	switch s := slice.(type) {
 	case []interface{}:
 		for i, v := range s {
-			fn(v, i)
+			if !fn(v, i) {
+				break
+			}
 		}
 	case []int:
 		for i, v := range s {
-			fn(v, i)
+			if !fn(v, i) {
+				break
+			}
 		}
 	case []string:
 		for i, v := range s {
-			fn(v, i)
+			if !fn(v, i) {
+				break
+			}
 		}
 	case []float64:
 		for i, v := range s {
-			fn(v, i)
+			if !fn(v, i) {
+				break
+			}
 		}
 	case []bool:
 		for i, v := range s {
-			fn(v, i)
+			if !fn(v, i) {
+				break
+			}
 		}
 	}
 }
 
 // Select returns elements for which the predicate returns true.
-// Ruby: arr.select { |x| x > 5 }
-func Select[T any](slice []T, predicate func(T) bool) []T {
+// The predicate returns (match, continue).
+func Select[T any](slice []T, predicate func(T) (bool, bool)) []T {
 	result := make([]T, 0)
 	for _, v := range slice {
-		if predicate(v) {
+		match, cont := predicate(v)
+		if match {
 			result = append(result, v)
+		}
+		if !cont {
+			break
 		}
 	}
 	return result
 }
 
 // Reject returns elements for which the predicate returns false.
-// Ruby: arr.reject { |x| x > 5 }
-func Reject[T any](slice []T, predicate func(T) bool) []T {
+// The predicate returns (match, continue).
+func Reject[T any](slice []T, predicate func(T) (bool, bool)) []T {
 	result := make([]T, 0)
 	for _, v := range slice {
-		if !predicate(v) {
+		match, cont := predicate(v)
+		if !match {
 			result = append(result, v)
+		}
+		if !cont {
+			break
 		}
 	}
 	return result
 }
 
 // Map transforms each element using the mapper function.
-// Ruby: arr.map { |x| x * 2 }
-func Map[T, R any](slice []T, mapper func(T) R) []R {
-	result := make([]R, len(slice))
-	for i, v := range slice {
-		result[i] = mapper(v)
+// The mapper returns (result, include, continue).
+// include=false means skip this element (next), continue=false means stop (break).
+func Map[T, R any](slice []T, mapper func(T) (R, bool, bool)) []R {
+	result := make([]R, 0, len(slice))
+	for _, v := range slice {
+		val, include, cont := mapper(v)
+		if include {
+			result = append(result, val)
+		}
+		if !cont {
+			break
+		}
 	}
 	return result
 }
 
 // Reduce folds the slice into a single value using the reducer function.
-// Ruby: arr.reduce(0) { |acc, x| acc + x }
-func Reduce[T, R any](slice []T, initial R, reducer func(R, T) R) R {
+// The reducer returns (accumulator, continue).
+func Reduce[T, R any](slice []T, initial R, reducer func(R, T) (R, bool)) R {
 	acc := initial
 	for _, v := range slice {
-		acc = reducer(acc, v)
+		newAcc, cont := reducer(acc, v)
+		acc = newAcc
+		if !cont {
+			break
+		}
 	}
 	return acc
 }
 
 // Find returns the first element matching the predicate.
-// Ruby: arr.find { |x| x > 5 }
-func Find[T any](slice []T, predicate func(T) bool) (T, bool) {
+// The predicate returns (match, continue).
+func Find[T any](slice []T, predicate func(T) (bool, bool)) (T, bool) {
 	for _, v := range slice {
-		if predicate(v) {
+		match, cont := predicate(v)
+		if match {
 			return v, true
+		}
+		if !cont {
+			break
 		}
 	}
 	var zero T
@@ -117,33 +155,42 @@ func Find[T any](slice []T, predicate func(T) bool) (T, bool) {
 }
 
 // Any returns true if any element matches the predicate.
-// Ruby: arr.any? { |x| x > 5 }
-func Any[T any](slice []T, predicate func(T) bool) bool {
+func Any[T any](slice []T, predicate func(T) (bool, bool)) bool {
 	for _, v := range slice {
-		if predicate(v) {
+		match, cont := predicate(v)
+		if match {
 			return true
+		}
+		if !cont {
+			break
 		}
 	}
 	return false
 }
 
 // All returns true if all elements match the predicate.
-// Ruby: arr.all? { |x| x > 0 }
-func All[T any](slice []T, predicate func(T) bool) bool {
+func All[T any](slice []T, predicate func(T) (bool, bool)) bool {
 	for _, v := range slice {
-		if !predicate(v) {
+		match, cont := predicate(v)
+		if !match {
 			return false
+		}
+		if !cont {
+			break
 		}
 	}
 	return true
 }
 
 // None returns true if no elements match the predicate.
-// Ruby: arr.none? { |x| x < 0 }
-func None[T any](slice []T, predicate func(T) bool) bool {
+func None[T any](slice []T, predicate func(T) (bool, bool)) bool {
 	for _, v := range slice {
-		if predicate(v) {
+		match, cont := predicate(v)
+		if match {
 			return false
+		}
+		if !cont {
+			break
 		}
 	}
 	return true

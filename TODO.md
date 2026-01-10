@@ -260,9 +260,50 @@ First-class Range values (see spec.md Section 4.2.1).
   - Reference types (`User?`) → `*User` pointer
   - Slices/maps already nullable, passed through
 - [x] Runtime: `optional.go` with OptionalInt, OptionalString, etc.
+- [ ] Refactor value type optionals to use `*T` instead of `runtime.OptionalT` (per updated spec)
 
 ### Optional Types - Phases B & C
 - [x] Phase B: `if x` checks - value types check `.Valid`, reference types check `!= nil`
 - [x] Phase C: Assignment with check pattern `if (n = s.to_i?)` → `if n, ok := ...; ok`
 - [x] `nil` literal for optional assignments
 - [x] Optional methods `to_i?`/`to_f?` map to runtime functions
+
+## Phase 12: Spec Compliance & Hardening
+- [ ] Enforce single-entry rule: only one file with top-level statements per package (spec 2.1)
+- [x] Implement `break` and `next` in functional blocks (spec 5.4)
+  - [x] Update `runtime` iterative methods (`Each`, `Times`, etc.) to use `bool` return for control
+  - [x] Update `runtime` transformation methods (`Map`, `Select`, etc.) to use `(T, bool)` return for control
+  - [x] Update codegen to track "in block" state and emit `return true/false` instead of `break/continue`
+  - [x] Add tests for `break`/`next` in various block types
+- [ ] Implement Statement Modifiers (`if`/`unless`) (spec 5.5)
+  - [ ] Add `unless` keyword support (lexer/parser)
+  - [ ] Update AST to include optional `Condition` and `IsUnless` flag on statements
+  - [ ] Update Parser to detect trailing `if` and `unless`
+  - [ ] Update Codegen to wrap statements in `if` blocks (inverting condition for `unless`)
+- [ ] Implement `unless` statement (spec 5.2)
+  - [ ] Add `UnlessStmt` AST node or reuse `IfStmt` with inversion flag
+  - [ ] Update Parser to handle `unless ... else ... end`
+  - [ ] Update Codegen to emit `if !cond`
+
+## Phase 13: Symbols & Case Expressions
+- [ ] Implement Symbols (spec 4.1.1)
+  - [ ] Add `COLON` token prefix handling in Lexer for identifiers (`:ident`)
+  - [ ] Add `SymbolLit` AST node
+  - [ ] Update Parser to handle symbol literals
+  - [ ] Update Codegen to emit string literals (`:foo` → `"foo"`)
+- [ ] Implement Case Expressions (spec 5.2)
+  - [ ] Add `CASE`, `WHEN` tokens
+  - [ ] Add `CaseStmt` AST node with `Condition`, `WhenClauses`, `Else`
+  - [ ] Update Parser to handle `case ... when ... else ... end`
+  - [ ] Update Codegen to emit Go `switch` statements
+
+## Phase 14: Class System Overhaul (v0.2)
+Refining the class system based on Crystal's model.
+- [ ] `attr_accessor` / `property` macros with types
+- [ ] Class-level constants
+- [ ] Static methods (`def self.method`)
+
+
+
+
+

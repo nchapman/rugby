@@ -39,9 +39,10 @@ Rugby files can contain executable statements at the top level without an explic
 
 1. **Top-level statements**: Any statement outside a `def`, `class`, or `interface` is considered executable top-level code.
 2. **Order preserved**: Top-level statements execute in source order.
-3. **Definitions lifted**: `def`, `class`, and `interface` at top level become package-level Go constructs (not executed as statements).
-4. **Implicit main**: If top-level statements exist and no `def main` is defined, the compiler generates `func main()` containing them.
-5. **Explicit main wins**: If `def main` exists, top-level statements are a compile error (avoids ambiguity).
+3. **Single Entry**: When compiling a directory, only **one** file may contain top-level statements (the entry point). Multiple files with top-level statements is a compile error.
+4. **Definitions lifted**: `def`, `class`, and `interface` at top level become package-level Go constructs (not executed as statements).
+5. **Implicit main**: If top-level statements exist and no `def main` is defined, the compiler generates `func main()` containing them.
+6. **Explicit main wins**: If `def main` exists, top-level statements are a compile error (avoids ambiguity).
 
 ### Examples
 
@@ -179,7 +180,22 @@ Rugby is statically typed with inference.
 | `Float`  | `float64` |
 | `Bool`   | `bool`    |
 | `String` | `string`  |
+| `Symbol` | `string` (interned const behavior) |
 | `Bytes`  | `[]byte`  |
+
+### 4.1.1 Symbols
+
+Symbols are lightweight identifiers starting with `:`.
+
+**Syntax:** `:status`, `:ok`, `:not_found`
+
+**Compilation:**
+For the MVP, symbols compile to **Go strings**.
+`:ok` → `"ok"`
+
+*Future optimization:* Compile to integer constants for fast comparison.
+
+---
 
 ### 4.2 Composite types
 
@@ -271,8 +287,10 @@ end
 **Representation:**
 
 1.  **Value Types** (`Int`, `Float`, `Bool`, `String`, Structs):
-    *   Compiles to `(T, bool)` tuple (value + presence flag).
-    *   Example: `Int?` → `(int, bool)`
+    *   **Return Values:** Compiles to `(T, bool)` (standard Go "comma-ok" idiom).
+    *   **Storage (Fields, Arrays, Maps):** Compiles to `*T` (pointer to value) to represent nullability in data structures.
+    *   **Local Variables:** Compiler determines representation (unpacked `val, ok` or `*T`).
+    *   Example: `Int?` → `(int, bool)` (return) or `*int` (storage).
 
 2.  **Reference Types** (`Array`, `Map`, Classes, Interfaces):
     *   Compiles to the underlying pointer/slice/map type.
@@ -354,7 +372,38 @@ else
 end
 ```
 
-Compiles to Go `if/else if/else`.
+**Unless:**
+
+Rugby also supports `unless` (inverse of `if`).
+
+```ruby
+unless valid?
+  puts "invalid"
+else
+  puts "valid"
+end
+```
+
+**Case Expressions:**
+
+Rugby supports `case` for pattern matching.
+
+```ruby
+case status
+when 200
+  puts "ok"
+when 404
+  puts "not found"
+else
+  puts "error"
+end
+```
+
+**Compilation:**
+Compiles to Go `switch` statement.
+*   Values map to `case val:`
+*   Multiple values `when 1, 2` map to `case 1, 2:`
+*   Type matching (Future): `when String` maps to type switch.
 
 ### 5.3 Imperative Loops (Statements)
 
@@ -405,7 +454,7 @@ Use blocks when you need to **transform data** or chain operations. Blocks in Ru
 
 **Semantics:**
 * **Scope:** Creates a new local scope (Go function literal).
-* **Return:** `return` exits the **block only** (returns a value to the iterator).
+* **Return:** `return` exits the **block only** (returns a value to the iterator), unlike Ruby where it returns from the enclosing method.
 * **Break/Next:** Supported via boolean return signals in the generated Go code.
 
 ```ruby
@@ -417,17 +466,61 @@ end
 ```
 
 **Compilation:**
-Runtime methods accept a function that returns `bool` to signal continuation (`true`) or termination (`false`).
 
+1. **Iterative Blocks** (`each`, `times`, `upto`, `downto`):
+   The callback returns `bool`. `false` signals `break`, `true` signals `next` (continue).
+   ```go
+   runtime.Each(items, func(item interface{}) bool {
+       if condition { return false } // break
+       return true // next
+   })
+   ```
+
+2. **Transformation Blocks** (`map`, `select`, `reject`, `find`, `reduce`):
+   The callback returns `(T, bool)` where the second value signals continuation.
+   ```go
+   runtime.Map(items, func(item interface{}) (interface{}, bool) {
+       if condition { return nil, false } // break
+       return result, true // next
+   })
+   ```
+
+### 5.5 Statement Modifiers
+
+Rugby supports suffix `if` and `unless` modifiers for concise control flow.
+
+**Syntax:**
+```ruby
+<statement> if <condition>
+<statement> unless <condition>
+```
+
+**Supported statements:**
+* `break if cond`
+* `next unless cond`
+* `return if cond`
+* `puts x unless cond` (any expression statement)
+
+**Compilation:**
+Lowered to a standard Go `if` block.
+```ruby
+break if x == 2
+```
+Compiles to:
 ```go
-// Ruby: users.each { |u| ... }
-runtime.Each(users, func(u User) bool {
-    if u.IsAdmin() {
-        return false // break
-    }
-    // ...
-    return true // next
-})
+if x == 2 {
+    break
+}
+```
+
+```ruby
+puts "error" unless valid?
+```
+Compiles to:
+```go
+if !valid() {
+    runtime.Puts("error")
+}
 ```
 
 ---

@@ -35,24 +35,32 @@ func Merge[K comparable, V any](m1, m2 map[K]V) map[K]V {
 }
 
 // MapSelect returns a new map with entries for which the predicate returns true.
-// Ruby: hash.select { |k, v| v > 5 }
-func MapSelect[K comparable, V any](m map[K]V, predicate func(K, V) bool) map[K]V {
+// The predicate returns (match, continue).
+func MapSelect[K comparable, V any](m map[K]V, predicate func(K, V) (bool, bool)) map[K]V {
 	result := make(map[K]V)
 	for k, v := range m {
-		if predicate(k, v) {
+		match, cont := predicate(k, v)
+		if match {
 			result[k] = v
+		}
+		if !cont {
+			break
 		}
 	}
 	return result
 }
 
 // MapReject returns a new map with entries for which the predicate returns false.
-// Ruby: hash.reject { |k, v| v > 5 }
-func MapReject[K comparable, V any](m map[K]V, predicate func(K, V) bool) map[K]V {
+// The predicate returns (match, continue).
+func MapReject[K comparable, V any](m map[K]V, predicate func(K, V) (bool, bool)) map[K]V {
 	result := make(map[K]V)
 	for k, v := range m {
-		if !predicate(k, v) {
+		match, cont := predicate(k, v)
+		if !match {
 			result[k] = v
+		}
+		if !cont {
+			break
 		}
 	}
 	return result

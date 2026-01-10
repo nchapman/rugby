@@ -462,8 +462,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(arr, func(x interface{}) {`)
+	assertContains(t, output, `runtime.Each(arr, func(x interface{}) bool {`)
 	assertContains(t, output, `runtime.Puts(x)`)
+	assertContains(t, output, `return true`)
 }
 
 func TestGenerateEachWithIndex(t *testing.T) {
@@ -475,8 +476,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.EachWithIndex(arr, func(v interface{}, i int) {`)
+	assertContains(t, output, `runtime.EachWithIndex(arr, func(v interface{}, i int) bool {`)
 	assertContains(t, output, `runtime.Puts(v)`)
+	assertContains(t, output, `return true`)
 }
 
 func TestGenerateMapBlock(t *testing.T) {
@@ -488,9 +490,9 @@ end`
 
 	output := compile(t, input)
 
-	// Map generates runtime.Map() call with function literal
-	assertContains(t, output, `runtime.Map(arr, func(x interface{}) interface{}`)
-	assertContains(t, output, `return (x * 2)`)
+	// Map generates runtime.Map() call with function literal (three-value return)
+	assertContains(t, output, `runtime.Map(arr, func(x interface{}) (interface{}, bool, bool) {`)
+	assertContains(t, output, `return (x * 2), true, true`)
 }
 
 func TestBlockWithNoParams(t *testing.T) {
@@ -503,8 +505,9 @@ end`
 	output := compile(t, input)
 
 	// Block with no params should use _ for the parameter
-	assertContains(t, output, `runtime.Each(items, func(_ interface{}) {`)
+	assertContains(t, output, `runtime.Each(items, func(_ interface{}) bool {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
+	assertContains(t, output, `return true`)
 }
 
 func TestBlockOnMethodCall(t *testing.T) {
@@ -516,8 +519,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(get_items(), func(x interface{}) {`)
+	assertContains(t, output, `runtime.Each(get_items(), func(x interface{}) bool {`)
 	assertContains(t, output, `runtime.Puts(x)`)
+	assertContains(t, output, `return true`)
 }
 
 func TestNestedBlocks(t *testing.T) {
@@ -531,9 +535,10 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(matrix, func(row interface{}) {`)
-	assertContains(t, output, `runtime.Each(row, func(x interface{}) {`)
+	assertContains(t, output, `runtime.Each(matrix, func(row interface{}) bool {`)
+	assertContains(t, output, `runtime.Each(row, func(x interface{}) bool {`)
 	assertContains(t, output, `runtime.Puts(x)`)
+	assertContains(t, output, `return true`)
 }
 
 func TestSelectBlock(t *testing.T) {
@@ -545,8 +550,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Select(nums, func(n interface{}) bool`)
-	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
+	assertContains(t, output, `runtime.Select(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `return runtime.Equal((n % 2), 0), true`)
 }
 
 func TestRejectBlock(t *testing.T) {
@@ -558,8 +563,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Reject(nums, func(n interface{}) bool`)
-	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
+	assertContains(t, output, `runtime.Reject(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `return runtime.Equal((n % 2), 0), true`)
 }
 
 func TestReduceBlock(t *testing.T) {
@@ -571,8 +576,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Reduce(nums, 0, func(acc interface{}, n interface{}) interface{}`)
-	assertContains(t, output, `return (acc + n)`)
+	assertContains(t, output, `runtime.Reduce(nums, 0, func(acc interface{}, n interface{}) (interface{}, bool) {`)
+	assertContains(t, output, `return (acc + n), true`)
 }
 
 func TestFindBlock(t *testing.T) {
@@ -584,8 +589,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Find(nums, func(n interface{}) bool`)
-	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
+	assertContains(t, output, `runtime.Find(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `return runtime.Equal((n % 2), 0), true`)
 }
 
 func TestAnyBlock(t *testing.T) {
@@ -597,8 +602,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Any(nums, func(n interface{}) bool`)
-	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
+	assertContains(t, output, `runtime.Any(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `return runtime.Equal((n % 2), 0), true`)
 }
 
 func TestAllBlock(t *testing.T) {
@@ -610,8 +615,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.All(nums, func(n interface{}) bool`)
-	assertContains(t, output, `(n > 0)`)
+	assertContains(t, output, `runtime.All(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `return (n > 0), true`)
 }
 
 func TestNoneBlock(t *testing.T) {
@@ -623,8 +628,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.None(nums, func(n interface{}) bool`)
-	assertContains(t, output, `(n < 0)`)
+	assertContains(t, output, `runtime.None(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `return (n < 0), true`)
 }
 
 func TestKernelFunctions(t *testing.T) {
@@ -661,8 +666,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Times(5, func(i int) {`)
+	assertContains(t, output, `runtime.Times(5, func(i int) bool {`)
 	assertContains(t, output, `runtime.Puts(i)`)
+	assertContains(t, output, `return true`)
 }
 
 func TestTimesBlockWithExpression(t *testing.T) {
@@ -674,8 +680,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Times(n, func(i int) {`)
+	assertContains(t, output, `runtime.Times(n, func(i int) bool {`)
 	assertContains(t, output, `runtime.Puts(i)`)
+	assertContains(t, output, `return true`)
 }
 
 func TestUptoBlock(t *testing.T) {
@@ -687,8 +694,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Upto(1, 5, func(i int) {`)
+	assertContains(t, output, `runtime.Upto(1, 5, func(i int) bool {`)
 	assertContains(t, output, `runtime.Puts(i)`)
+	assertContains(t, output, `return true`)
 }
 
 func TestUptoBlockWithVariables(t *testing.T) {
@@ -700,8 +708,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Upto(start, finish, func(i int) {`)
+	assertContains(t, output, `runtime.Upto(start, finish, func(i int) bool {`)
 	assertContains(t, output, `runtime.Puts(i)`)
+	assertContains(t, output, `return true`)
 }
 
 func TestDowntoBlock(t *testing.T) {
@@ -713,8 +722,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Downto(5, 1, func(i int) {`)
+	assertContains(t, output, `runtime.Downto(5, 1, func(i int) bool {`)
 	assertContains(t, output, `runtime.Puts(i)`)
+	assertContains(t, output, `return true`)
 }
 
 func TestDowntoBlockWithVariables(t *testing.T) {
@@ -726,8 +736,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Downto(high, low, func(i int) {`)
+	assertContains(t, output, `runtime.Downto(high, low, func(i int) bool {`)
 	assertContains(t, output, `runtime.Puts(i)`)
+	assertContains(t, output, `return true`)
 }
 
 func TestTimesBlockNoParam(t *testing.T) {
@@ -740,8 +751,9 @@ end`
 	output := compile(t, input)
 
 	// Should generate runtime.Times with _ parameter
-	assertContains(t, output, `runtime.Times(3, func(_ int) {`)
+	assertContains(t, output, `runtime.Times(3, func(_ int) bool {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
+	assertContains(t, output, `return true`)
 }
 
 func TestUptoBlockNoParam(t *testing.T) {
@@ -753,8 +765,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Upto(1, 3, func(_ int) {`)
+	assertContains(t, output, `runtime.Upto(1, 3, func(_ int) bool {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
+	assertContains(t, output, `return true`)
 }
 
 func TestDowntoBlockNoParam(t *testing.T) {
@@ -766,41 +779,77 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Downto(3, 1, func(_ int) {`)
+	assertContains(t, output, `runtime.Downto(3, 1, func(_ int) bool {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
+	assertContains(t, output, `return true`)
 }
 
 func TestBraceBlockCodegen(t *testing.T) {
+
 	input := `def main
-  arr.each {|x| puts x }
+
+  arr.each { |x| puts x }
+
 end`
+
+
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(arr, func(x interface{}) {`)
+
+
+	assertContains(t, output, `runtime.Each(arr, func(x interface{}) bool {`)
+
 	assertContains(t, output, `runtime.Puts(x)`)
+
+	assertContains(t, output, `return true`)
+
 }
+
+
 
 func TestBraceBlockMapCodegen(t *testing.T) {
+
 	input := `def main
-  result = arr.map {|x| x * 2 }
+
+  result = arr.map { |x| x * 2 }
+
 end`
+
+
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Map(arr, func(x interface{}) interface{}`)
-	assertContains(t, output, `return (x * 2)`)
+
+
+	assertContains(t, output, `runtime.Map(arr, func(x interface{}) (interface{}, bool, bool) {`)
+
+	assertContains(t, output, `return (x * 2), true, true`)
+
 }
 
+
+
 func TestBraceBlockTimesCodegen(t *testing.T) {
+
 	input := `def main
-  5.times {|i| puts i }
+
+  5.times { |i| puts i }
+
 end`
+
+
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Times(5, func(i int) {`)
+
+
+	assertContains(t, output, `runtime.Times(5, func(i int) bool {`)
+
 	assertContains(t, output, `runtime.Puts(i)`)
+
+	assertContains(t, output, `return true`)
+
 }
 
 func TestEmptyClassCodegen(t *testing.T) {
@@ -1853,8 +1902,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.RangeEach(runtime.Range{Start: 1, End: 5, Exclusive: false}, func(i int) {`)
+	assertContains(t, output, `runtime.RangeEach(runtime.Range{Start: 1, End: 5, Exclusive: false}, func(i int) bool {`)
 	assertContains(t, output, `runtime.Puts(i)`)
+	assertContains(t, output, `return true`)
 }
 
 func TestEmptyRange(t *testing.T) {

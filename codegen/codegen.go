@@ -42,14 +42,15 @@ var noParenKernelFuncs = map[string]string{
 
 // blockMethod describes a block method mapping
 type blockMethod struct {
-	runtimeFunc    string
-	returnType     string // "interface{}" or "bool"
-	hasAccumulator bool   // for reduce - takes 2 params (acc, elem) instead of 1
+	runtimeFunc     string
+	returnType      string // "interface{}" or "bool"
+	hasAccumulator  bool   // for reduce - takes 2 params (acc, elem) instead of 1
+	usesIncludeFlag bool   // for map - uses (value, include, continue) instead of (value, continue)
 }
 
 // Block method mappings - single source of truth
 var blockMethods = map[string]blockMethod{
-	"map":    {runtimeFunc: "runtime.Map", returnType: "interface{}"},
+	"map":    {runtimeFunc: "runtime.Map", returnType: "interface{}", usesIncludeFlag: true},
 	"select": {runtimeFunc: "runtime.Select", returnType: "bool"},
 	"filter": {runtimeFunc: "runtime.Select", returnType: "bool"},
 	"reject": {runtimeFunc: "runtime.Reject", returnType: "bool"},
@@ -73,6 +74,20 @@ var optionalMethods = map[string]optionalMethod{
 	"to_f?": {runtimeFunc: "runtime.StringToFloat", resultType: "Float"},
 }
 
+type contextType int
+
+const (
+	ctxLoop contextType = iota
+	ctxIterBlock
+	ctxTransformBlock
+)
+
+type loopContext struct {
+	kind            contextType
+	returnType      string // "interface{}", "bool", or empty for iterative
+	usesIncludeFlag bool   // for map - uses three-value returns
+}
+
 type Generator struct {
 	buf                strings.Builder
 	indent             int
@@ -86,6 +101,28 @@ type Generator struct {
 	sourceFile         string            // original .rg filename for //line directives
 	emitLineDir        bool              // whether to emit //line directives
 	currentReturnTypes []string          // return types of the current function/method
+	contexts           []loopContext     // stack of loop/block contexts
+}
+
+func (g *Generator) pushContext(kind contextType, returnType string) {
+	g.contexts = append(g.contexts, loopContext{kind: kind, returnType: returnType, usesIncludeFlag: false})
+}
+
+func (g *Generator) pushContextWithInclude(kind contextType, returnType string, usesInclude bool) {
+	g.contexts = append(g.contexts, loopContext{kind: kind, returnType: returnType, usesIncludeFlag: usesInclude})
+}
+
+func (g *Generator) popContext() {
+	if len(g.contexts) > 0 {
+		g.contexts = g.contexts[:len(g.contexts)-1]
+	}
+}
+
+func (g *Generator) currentContext() (loopContext, bool) {
+	if len(g.contexts) == 0 {
+		return loopContext{}, false
+	}
+	return g.contexts[len(g.contexts)-1], true
 }
 
 // Option configures a Generator.
@@ -1007,11 +1044,13 @@ func (g *Generator) genWhileStmt(s *ast.WhileStmt) {
 	g.genCondition(s.Cond)
 	g.buf.WriteString(" {\n")
 
+	g.pushContext(ctxLoop, "")
 	g.indent++
 	for _, stmt := range s.Body {
 		g.genStatement(stmt)
 	}
 	g.indent--
+	g.popContext()
 
 	g.writeIndent()
 	g.buf.WriteString("}\n")
@@ -1044,11 +1083,13 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 
 	g.vars[s.Var] = "" // loop variable, type unknown
 
+	g.pushContext(ctxLoop, "")
 	g.indent++
 	for _, stmt := range s.Body {
 		g.genStatement(stmt)
 	}
 	g.indent--
+	g.popContext()
 
 	// Restore variable state
 	if !wasDefinedBefore {
@@ -1079,11 +1120,13 @@ func (g *Generator) genForRangeVarLoop(varName string, rangeVar string, body []a
 
 	g.vars[varName] = "Int"
 
+	g.pushContext(ctxLoop, "")
 	g.indent++
 	for _, stmt := range body {
 		g.genStatement(stmt)
 	}
 	g.indent--
+	g.popContext()
 
 	if !wasDefinedBefore {
 		delete(g.vars, varName)
@@ -1117,11 +1160,13 @@ func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.
 
 	g.vars[varName] = "Int" // range loop variable is always Int
 
+	g.pushContext(ctxLoop, "")
 	g.indent++
 	for _, stmt := range body {
 		g.genStatement(stmt)
 	}
 	g.indent--
+	g.popContext()
 
 	// Restore variable state
 	if !wasDefinedBefore {
@@ -1136,11 +1181,51 @@ func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.
 
 func (g *Generator) genBreakStmt() {
 	g.writeIndent()
+	ctx, ok := g.currentContext()
+	if ok {
+		if ctx.kind == ctxIterBlock {
+			g.buf.WriteString("return false\n")
+			return
+		} else if ctx.kind == ctxTransformBlock {
+			// Transform blocks with three values (map): return (value, include, continue)
+			if ctx.usesIncludeFlag {
+				g.buf.WriteString("return nil, false, false\n")
+			} else {
+				// Transform blocks with two values (select, reject, find): return (value, continue)
+				if ctx.returnType == "bool" {
+					g.buf.WriteString("return false, false\n")
+				} else {
+					g.buf.WriteString("return nil, false\n")
+				}
+			}
+			return
+		}
+	}
 	g.buf.WriteString("break\n")
 }
 
 func (g *Generator) genNextStmt() {
 	g.writeIndent()
+	ctx, ok := g.currentContext()
+	if ok {
+		if ctx.kind == ctxIterBlock {
+			g.buf.WriteString("return true\n")
+			return
+		} else if ctx.kind == ctxTransformBlock {
+			// next in transform blocks with three values (map): skip element, continue iteration
+			if ctx.usesIncludeFlag {
+				g.buf.WriteString("return nil, false, true\n")
+			} else {
+				// next in two-value transform blocks: return zero value and true to continue
+				if ctx.returnType == "bool" {
+					g.buf.WriteString("return false, true\n")
+				} else {
+					g.buf.WriteString("return nil, true\n")
+				}
+			}
+			return
+		}
+	}
 	g.buf.WriteString("continue\n")
 }
 
@@ -1585,17 +1670,21 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	g.genExpr(iterable)
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" interface{}) {\n")
+	g.buf.WriteString(" interface{}) bool {\n")
 
 	if varName != "_" {
 		g.vars[varName] = "" // block param, type unknown
 	}
 
+	g.pushContext(ctxIterBlock, "")
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
 	}
+	g.writeIndent()
+	g.buf.WriteString("return true\n")
 	g.indent--
+	g.popContext()
 
 	// Restore variable state after block
 	if varName != "_" {
@@ -1625,17 +1714,21 @@ func (g *Generator) genRangeEachBlock(rangeExpr ast.Expression, block *ast.Block
 	g.genExpr(rangeExpr)
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" int) {\n")
+	g.buf.WriteString(" int) bool {\n")
 
 	if varName != "_" {
 		g.vars[varName] = "Int" // range iteration is always int
 	}
 
+	g.pushContext(ctxIterBlock, "")
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
 	}
+	g.writeIndent()
+	g.buf.WriteString("return true\n")
 	g.indent--
+	g.popContext()
 
 	if varName != "_" {
 		if !wasDefinedBefore {
@@ -1673,7 +1766,7 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 	g.buf.WriteString(varName)
 	g.buf.WriteString(" interface{}, ")
 	g.buf.WriteString(indexName)
-	g.buf.WriteString(" int) {\n")
+	g.buf.WriteString(" int) bool {\n")
 
 	if varName != "_" {
 		g.vars[varName] = "" // block param, type unknown
@@ -1682,11 +1775,15 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 		g.vars[indexName] = "Int" // index is always int
 	}
 
+	g.pushContext(ctxIterBlock, "")
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
 	}
+	g.writeIndent()
+	g.buf.WriteString("return true\n")
 	g.indent--
+	g.popContext()
 
 	// Restore variable state after block
 	if varName != "_" {
@@ -1723,17 +1820,21 @@ func (g *Generator) genTimesBlock(times ast.Expression, block *ast.BlockExpr) {
 	g.genExpr(times)
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" int) {\n")
+	g.buf.WriteString(" int) bool {\n")
 
 	if varName != "_" {
 		g.vars[varName] = "Int" // times iteration is always int
 	}
 
+	g.pushContext(ctxIterBlock, "")
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
 	}
+	g.writeIndent()
+	g.buf.WriteString("return true\n")
 	g.indent--
+	g.popContext()
 
 	if varName != "_" {
 		if !wasDefinedBefore {
@@ -1768,17 +1869,21 @@ func (g *Generator) genUptoBlock(start ast.Expression, block *ast.BlockExpr, arg
 	}
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" int) {\n")
+	g.buf.WriteString(" int) bool {\n")
 
 	if varName != "_" {
 		g.vars[varName] = "Int" // upto iteration is always int
 	}
 
+	g.pushContext(ctxIterBlock, "")
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
 	}
+	g.writeIndent()
+	g.buf.WriteString("return true\n")
 	g.indent--
+	g.popContext()
 
 	if varName != "_" {
 		if !wasDefinedBefore {
@@ -1813,17 +1918,21 @@ func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, a
 	}
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" int) {\n")
+	g.buf.WriteString(" int) bool {\n")
 
 	if varName != "_" {
 		g.vars[varName] = "Int" // downto iteration is always int
 	}
 
+	g.pushContext(ctxIterBlock, "")
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
 	}
+	g.writeIndent()
+	g.buf.WriteString("return true\n")
 	g.indent--
+	g.popContext()
 
 	if varName != "_" {
 		if !wasDefinedBefore {
@@ -1892,9 +2001,14 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 		g.buf.WriteString(param1Name)
 		g.buf.WriteString(" interface{}")
 	}
-	g.buf.WriteString(") ")
+	g.buf.WriteString(") (")
 	g.buf.WriteString(method.returnType)
-	g.buf.WriteString(" {\n")
+	// Map uses three-value return (value, include, continue)
+	if method.usesIncludeFlag {
+		g.buf.WriteString(", bool, bool) {\n")
+	} else {
+		g.buf.WriteString(", bool) {\n")
+	}
 
 	// Mark variables as declared (block params, type unknown)
 	if param1Name != "_" {
@@ -1904,6 +2018,7 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 		g.vars[param2Name] = ""
 	}
 
+	g.pushContextWithInclude(ctxTransformBlock, method.returnType, method.usesIncludeFlag)
 	g.indent++
 
 	// Generate block body with last statement as return
@@ -1917,13 +2032,40 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 			g.writeIndent()
 			g.buf.WriteString("return ")
 			g.genExpr(exprStmt.Expr)
-			g.buf.WriteString("\n")
+			if method.usesIncludeFlag {
+				g.buf.WriteString(", true, true\n") // value, include=true, continue=true
+			} else {
+				g.buf.WriteString(", true\n")
+			}
 		} else {
 			g.genStatement(lastStmt)
+			g.writeIndent()
+			// Default return if last stmt was not an expression
+			if method.usesIncludeFlag {
+				g.buf.WriteString("return nil, false, true\n") // skip element, continue
+			} else {
+				if method.returnType == "bool" {
+					g.buf.WriteString("return false, true\n")
+				} else {
+					g.buf.WriteString("return nil, true\n")
+				}
+			}
+		}
+	} else {
+		g.writeIndent()
+		if method.usesIncludeFlag {
+			g.buf.WriteString("return nil, false, true\n") // skip element, continue
+		} else {
+			if method.returnType == "bool" {
+				g.buf.WriteString("return false, true\n")
+			} else {
+				g.buf.WriteString("return nil, true\n")
+			}
 		}
 	}
 
 	g.indent--
+	g.popContext()
 
 	// Restore variable state
 	if param1Name != "_" {

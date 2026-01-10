@@ -1,26 +1,32 @@
 package runtime
 
 // Times iterates n times, calling the function with the current index (0 to n-1).
-// Ruby: 5.times { |i| puts i }
-func Times(n int, fn func(int)) {
+// The callback returns false to break, true to continue.
+func Times(n int, fn func(int) bool) {
 	for i := 0; i < n; i++ {
-		fn(i)
+		if !fn(i) {
+			break
+		}
 	}
 }
 
 // Upto iterates from start to end (inclusive), calling the function with each value.
-// Ruby: 1.upto(5) { |i| puts i }
-func Upto(start, end int, fn func(int)) {
+// The callback returns false to break, true to continue.
+func Upto(start, end int, fn func(int) bool) {
 	for i := start; i <= end; i++ {
-		fn(i)
+		if !fn(i) {
+			break
+		}
 	}
 }
 
 // Downto iterates from start down to end (inclusive), calling the function with each value.
-// Ruby: 5.downto(1) { |i| puts i }
-func Downto(start, end int, fn func(int)) {
+// The callback returns false to break, true to continue.
+func Downto(start, end int, fn func(int) bool) {
 	for i := start; i >= end; i-- {
-		fn(i)
+		if !fn(i) {
+			break
+		}
 	}
 }
 
