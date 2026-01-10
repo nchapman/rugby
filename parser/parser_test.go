@@ -2209,3 +2209,279 @@ end`
 		t.Errorf("expected parameter name 'other', got %q", eqMethod.Params[0].Name)
 	}
 }
+
+func TestInterfaceDeclaration(t *testing.T) {
+	input := `interface Speaker
+  def speak -> String
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	iface, ok := program.Declarations[0].(*ast.InterfaceDecl)
+	if !ok {
+		t.Fatalf("expected InterfaceDecl, got %T", program.Declarations[0])
+	}
+
+	if iface.Name != "Speaker" {
+		t.Errorf("expected interface name 'Speaker', got %q", iface.Name)
+	}
+
+	if len(iface.Methods) != 1 {
+		t.Fatalf("expected 1 method, got %d", len(iface.Methods))
+	}
+
+	method := iface.Methods[0]
+	if method.Name != "speak" {
+		t.Errorf("expected method 'speak', got %q", method.Name)
+	}
+
+	if len(method.ReturnTypes) != 1 || method.ReturnTypes[0] != "String" {
+		t.Errorf("expected return type 'String', got %v", method.ReturnTypes)
+	}
+}
+
+func TestInterfaceWithMultipleMethods(t *testing.T) {
+	input := `interface ReadWriter
+  def read(n : Int) -> String
+  def write(data : String) -> Int
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	iface := program.Declarations[0].(*ast.InterfaceDecl)
+
+	if iface.Name != "ReadWriter" {
+		t.Errorf("expected interface name 'ReadWriter', got %q", iface.Name)
+	}
+
+	if len(iface.Methods) != 2 {
+		t.Fatalf("expected 2 methods, got %d", len(iface.Methods))
+	}
+
+	// Check first method
+	if iface.Methods[0].Name != "read" {
+		t.Errorf("expected method 'read', got %q", iface.Methods[0].Name)
+	}
+	if len(iface.Methods[0].Params) != 1 {
+		t.Errorf("expected 1 param for read, got %d", len(iface.Methods[0].Params))
+	}
+
+	// Check second method
+	if iface.Methods[1].Name != "write" {
+		t.Errorf("expected method 'write', got %q", iface.Methods[1].Name)
+	}
+}
+
+func TestEmptyInterface(t *testing.T) {
+	input := `interface Empty
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	iface := program.Declarations[0].(*ast.InterfaceDecl)
+	if len(iface.Methods) != 0 {
+		t.Errorf("expected 0 methods, got %d", len(iface.Methods))
+	}
+}
+
+func TestPubFunction(t *testing.T) {
+	input := `pub def add(a : Int, b : Int) -> Int
+  a + b
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	if fn.Name != "add" {
+		t.Errorf("expected function name 'add', got %q", fn.Name)
+	}
+
+	if !fn.Pub {
+		t.Error("expected function to be pub")
+	}
+}
+
+func TestPubClass(t *testing.T) {
+	input := `pub class User
+  def initialize(name : String)
+    @name = name
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls, ok := program.Declarations[0].(*ast.ClassDecl)
+	if !ok {
+		t.Fatalf("expected ClassDecl, got %T", program.Declarations[0])
+	}
+
+	if !cls.Pub {
+		t.Error("expected class to be pub")
+	}
+}
+
+func TestPubClassWithPubMethods(t *testing.T) {
+	input := `pub class User
+  def initialize(name : String)
+    @name = name
+  end
+
+  pub def get_name -> String
+    @name
+  end
+
+  def internal_method
+    @name
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls := program.Declarations[0].(*ast.ClassDecl)
+
+	if !cls.Pub {
+		t.Error("expected class to be pub")
+	}
+
+	if len(cls.Methods) != 3 {
+		t.Fatalf("expected 3 methods, got %d", len(cls.Methods))
+	}
+
+	// Find methods
+	var getName, internalMethod *ast.MethodDecl
+	for _, m := range cls.Methods {
+		if m.Name == "get_name" {
+			getName = m
+		} else if m.Name == "internal_method" {
+			internalMethod = m
+		}
+	}
+
+	if getName == nil || !getName.Pub {
+		t.Error("expected get_name to be pub")
+	}
+
+	if internalMethod == nil || internalMethod.Pub {
+		t.Error("expected internal_method to not be pub")
+	}
+}
+
+func TestPubInterface(t *testing.T) {
+	input := `pub interface Speaker
+  def speak -> String
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	iface, ok := program.Declarations[0].(*ast.InterfaceDecl)
+	if !ok {
+		t.Fatalf("expected InterfaceDecl, got %T", program.Declarations[0])
+	}
+
+	if !iface.Pub {
+		t.Error("expected interface to be pub")
+	}
+}
+
+func TestNonPubByDefault(t *testing.T) {
+	input := `def helper
+end
+
+class InternalClass
+end
+
+interface InternalInterface
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 3 {
+		t.Fatalf("expected 3 declarations, got %d", len(program.Declarations))
+	}
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	if fn.Pub {
+		t.Error("expected function to not be pub by default")
+	}
+
+	cls := program.Declarations[1].(*ast.ClassDecl)
+	if cls.Pub {
+		t.Error("expected class to not be pub by default")
+	}
+
+	iface := program.Declarations[2].(*ast.InterfaceDecl)
+	if iface.Pub {
+		t.Error("expected interface to not be pub by default")
+	}
+}
+
+func TestPubMustBeFollowedByDefClassOrInterface(t *testing.T) {
+	input := `pub x = 5`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected error for 'pub' not followed by def/class/interface")
+	}
+
+	if !strings.Contains(p.Errors()[0], "pub") {
+		t.Errorf("expected error about 'pub', got: %s", p.Errors()[0])
+	}
+}
+
+func TestPubDefInNonPubClassIsError(t *testing.T) {
+	input := `class User
+  pub def greet
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected error for 'pub def' in non-pub class")
+	}
+
+	if !strings.Contains(p.Errors()[0], "pub def") || !strings.Contains(p.Errors()[0], "non-pub class") {
+		t.Errorf("expected error about 'pub def' in non-pub class, got: %s", p.Errors()[0])
+	}
+}

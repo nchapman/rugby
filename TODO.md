@@ -201,15 +201,17 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - Type inference engine
 
 ## Phase 8: Interfaces & Visibility
-- [ ] Interface definitions (`interface Speaker`) - methods implicitly exported
-- [ ] Structural conformance checking
-- [ ] `pub` keyword for exports - enables proper name casing
+- [x] Interface definitions (`interface Speaker`) - methods implicitly exported
+- [x] Structural conformance checking (deferred to Go compiler)
+- [x] `pub` keyword for exports - enables proper name casing
+- [x] Acronym handling: `id` → `ID`, `url` → `URL`, `http` → `HTTP`, etc. (spec 9.5)
+- [x] Validation: `pub def` in non-pub class is compile error (spec 9.2)
 
 ## Phase 9: Strings & Polish
 - [x] String interpolation (`"hi #{name}"`) - any expression, uses `fmt.Sprintf`
-- [ ] Comments in more positions (currently only full-line comments)
-- [ ] Better error messages with source locations
-- [ ] Multi-file compilation
+- [x] Comments in all positions (trailing, inline) - already worked
+- [x] Better error messages with `file:line:column` format
+- [x] Multi-file compilation (`rugby file1.rby file2.rby` or `rugby directory/`)
 
 ## Phase 10: Range Type
 First-class Range values (see spec.md Section 4.2.1).

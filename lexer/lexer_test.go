@@ -538,3 +538,145 @@ func TestTypedParameterTokens(t *testing.T) {
 		}
 	}
 }
+
+func TestInterfaceKeyword(t *testing.T) {
+	input := `interface Speaker end`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.INTERFACE, "interface"},
+		{token.IDENT, "Speaker"},
+		{token.END, "end"},
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
+				i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}
+
+func TestPubKeyword(t *testing.T) {
+	input := `pub def add(a, b) end`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.PUB, "pub"},
+		{token.DEF, "def"},
+		{token.IDENT, "add"},
+		{token.LPAREN, "("},
+		{token.IDENT, "a"},
+		{token.COMMA, ","},
+		{token.IDENT, "b"},
+		{token.RPAREN, ")"},
+		{token.END, "end"},
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
+				i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}
+
+func TestPubClassAndInterface(t *testing.T) {
+	input := `pub class User end
+pub interface Speaker end`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.PUB, "pub"},
+		{token.CLASS, "class"},
+		{token.IDENT, "User"},
+		{token.END, "end"},
+		{token.NEWLINE, "\n"},
+		{token.PUB, "pub"},
+		{token.INTERFACE, "interface"},
+		{token.IDENT, "Speaker"},
+		{token.END, "end"},
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
+				i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}
+
+func TestGetLine(t *testing.T) {
+	input := "line1\nline2\nline3"
+	l := New(input)
+
+	tests := []struct {
+		lineNum  int
+		expected string
+	}{
+		{1, "line1"},
+		{2, "line2"},
+		{3, "line3"},
+		{0, ""},  // out of range low
+		{4, ""},  // out of range high
+		{-1, ""}, // negative
+	}
+
+	for _, tt := range tests {
+		got := l.GetLine(tt.lineNum)
+		if got != tt.expected {
+			t.Errorf("GetLine(%d) = %q, want %q", tt.lineNum, got, tt.expected)
+		}
+	}
+}
+
+func TestGetLineEmptyInput(t *testing.T) {
+	l := New("")
+	if got := l.GetLine(1); got != "" {
+		t.Errorf("GetLine(1) on empty input = %q, want empty", got)
+	}
+}
+
+func TestInput(t *testing.T) {
+	input := "def main\n  puts 42\nend"
+	l := New(input)
+	if got := l.Input(); got != input {
+		t.Errorf("Input() = %q, want %q", got, input)
+	}
+}

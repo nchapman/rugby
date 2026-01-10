@@ -2,6 +2,7 @@ package lexer
 
 import (
 	"rugby/token"
+	"strings"
 )
 
 type Lexer struct {
@@ -46,6 +47,21 @@ func New(input string) *Lexer {
 	l := &Lexer{input: input, line: 1, column: 0}
 	l.readChar()
 	return l
+}
+
+// GetLine returns the source line at the given line number (1-indexed).
+// Returns empty string if line is out of range.
+func (l *Lexer) GetLine(lineNum int) string {
+	lines := strings.Split(l.input, "\n")
+	if lineNum < 1 || lineNum > len(lines) {
+		return ""
+	}
+	return lines[lineNum-1]
+}
+
+// Input returns the full source input.
+func (l *Lexer) Input() string {
+	return l.input
 }
 
 func (l *Lexer) readChar() {

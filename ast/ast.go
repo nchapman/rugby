@@ -46,6 +46,7 @@ type FuncDecl struct {
 	Params      []*Param
 	ReturnTypes []string // empty if not specified
 	Body        []Statement
+	Pub         bool // true if exported (pub def)
 }
 
 func (f *FuncDecl) node()     {}
@@ -266,6 +267,7 @@ type ClassDecl struct {
 	Parent  string        // embedded type, empty if none (for Phase C)
 	Fields  []*FieldDecl  // fields inferred from initialize
 	Methods []*MethodDecl // methods defined in class
+	Pub     bool          // true if exported (pub class)
 }
 
 func (c *ClassDecl) node()     {}
@@ -283,6 +285,7 @@ type MethodDecl struct {
 	Params      []*Param    // parameters
 	ReturnTypes []string    // return types
 	Body        []Statement // method body
+	Pub         bool        // true if exported (pub def)
 }
 
 func (m *MethodDecl) node()     {}
@@ -304,3 +307,20 @@ type InstanceVarAssign struct {
 
 func (i *InstanceVarAssign) node()     {}
 func (i *InstanceVarAssign) stmtNode() {}
+
+// InterfaceDecl represents an interface definition
+type InterfaceDecl struct {
+	Name    string        // interface name (e.g., "Speaker")
+	Methods []*MethodSig  // method signatures (no body)
+	Pub     bool          // true if exported (pub interface)
+}
+
+func (i *InterfaceDecl) node()     {}
+func (i *InterfaceDecl) stmtNode() {}
+
+// MethodSig represents a method signature in an interface (no body)
+type MethodSig struct {
+	Name        string   // method name
+	Params      []*Param // parameters
+	ReturnTypes []string // return types
+}

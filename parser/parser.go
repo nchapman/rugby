@@ -130,17 +130,50 @@ func (p *Parser) ParseProgram() *ast.Program {
 			if imp := p.parseImport(); imp != nil {
 				program.Imports = append(program.Imports, imp)
 			}
+		case token.PUB:
+			p.nextToken() // consume 'pub'
+			switch p.curToken.Type {
+			case token.DEF:
+				if fn := p.parseFuncDecl(); fn != nil {
+					fn.Pub = true
+					program.Declarations = append(program.Declarations, fn)
+				}
+			case token.CLASS:
+				if cls := p.parseClassDecl(); cls != nil {
+					cls.Pub = true
+					program.Declarations = append(program.Declarations, cls)
+				}
+			case token.INTERFACE:
+				if iface := p.parseInterfaceDecl(); iface != nil {
+					iface.Pub = true
+					program.Declarations = append(program.Declarations, iface)
+				}
+			default:
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: 'pub' must be followed by 'def', 'class', or 'interface'",
+					p.curToken.Line, p.curToken.Column))
+				p.nextToken()
+			}
 		case token.DEF:
 			if fn := p.parseFuncDecl(); fn != nil {
 				program.Declarations = append(program.Declarations, fn)
 			}
 		case token.CLASS:
 			if cls := p.parseClassDecl(); cls != nil {
+				// Validate: pub def inside non-pub class is an error (spec 9.2)
+				for _, method := range cls.Methods {
+					if method.Pub {
+						p.errors = append(p.errors, fmt.Sprintf("'pub def %s' not allowed in non-pub class '%s'", method.Name, cls.Name))
+					}
+				}
 				program.Declarations = append(program.Declarations, cls)
 			}
+		case token.INTERFACE:
+			if iface := p.parseInterfaceDecl(); iface != nil {
+				program.Declarations = append(program.Declarations, iface)
+			}
 		default:
-			p.errors = append(p.errors, fmt.Sprintf("line %d: unexpected token %s",
-				p.curToken.Line, p.curToken.Type))
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: unexpected token %s",
+				p.curToken.Line, p.curToken.Column, p.curToken.Type))
 			p.nextToken()
 		}
 	}
@@ -152,8 +185,8 @@ func (p *Parser) parseImport() *ast.ImportDecl {
 	p.nextToken() // consume 'import'
 
 	if !p.curTokenIs(token.IDENT) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected package path after import",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected package path after import",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
@@ -164,8 +197,8 @@ func (p *Parser) parseImport() *ast.ImportDecl {
 	if p.curTokenIs(token.AS) {
 		p.nextToken() // consume 'as'
 		if !p.curTokenIs(token.IDENT) {
-			p.errors = append(p.errors, fmt.Sprintf("line %d: expected alias name after 'as'",
-				p.curToken.Line))
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected alias name after 'as'",
+				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
 		imp.Alias = p.curToken.Literal
@@ -178,14 +211,14 @@ func (p *Parser) parseImport() *ast.ImportDecl {
 // parseTypedParam parses a parameter with optional type annotation: name or name : Type
 func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 	if !p.curTokenIs(token.IDENT) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected parameter name",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	name := p.curToken.Literal
 	if seen[name] {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate parameter name %q",
-			p.curToken.Line, name))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: duplicate parameter name %q",
+			p.curToken.Line, p.curToken.Column, name))
 		return nil
 	}
 	seen[name] = true
@@ -196,8 +229,8 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 	if p.curTokenIs(token.COLON) {
 		p.nextToken() // consume ':'
 		if !p.curTokenIs(token.IDENT) {
-			p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after ':'",
-				p.curToken.Line))
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type after ':'",
+				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
 		paramType = p.curToken.Literal
@@ -211,8 +244,8 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 	p.nextToken() // consume 'def'
 
 	if !p.curTokenIs(token.IDENT) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected function name after def",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected function name after def",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
@@ -249,8 +282,8 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 		}
 
 		if !p.curTokenIs(token.RPAREN) {
-			p.errors = append(p.errors, fmt.Sprintf("line %d: expected ')' after parameters",
-				p.curToken.Line))
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ')' after parameters",
+				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
 		p.nextToken() // consume ')'
@@ -265,8 +298,8 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 			p.nextToken() // consume '('
 
 			if !p.curTokenIs(token.IDENT) {
-				p.errors = append(p.errors, fmt.Sprintf("line %d: expected type in return type list",
-					p.curToken.Line))
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type in return type list",
+					p.curToken.Line, p.curToken.Column))
 				return nil
 			}
 			fn.ReturnTypes = append(fn.ReturnTypes, p.curToken.Literal)
@@ -279,8 +312,8 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 					break
 				}
 				if !p.curTokenIs(token.IDENT) {
-					p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after comma",
-						p.curToken.Line))
+					p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type after comma",
+						p.curToken.Line, p.curToken.Column))
 					return nil
 				}
 				fn.ReturnTypes = append(fn.ReturnTypes, p.curToken.Literal)
@@ -288,8 +321,8 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 			}
 
 			if !p.curTokenIs(token.RPAREN) {
-				p.errors = append(p.errors, fmt.Sprintf("line %d: expected ')' after return types",
-					p.curToken.Line))
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ')' after return types",
+					p.curToken.Line, p.curToken.Column))
 				return nil
 			}
 			p.nextToken() // consume ')'
@@ -298,8 +331,8 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 			fn.ReturnTypes = append(fn.ReturnTypes, p.curToken.Literal)
 			p.nextToken()
 		} else {
-			p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after ->",
-				p.curToken.Line))
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type after ->",
+				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
 	}
@@ -318,8 +351,8 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'end' to close function",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected 'end' to close function",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -331,8 +364,8 @@ func (p *Parser) parseClassDecl() *ast.ClassDecl {
 	p.nextToken() // consume 'class'
 
 	if !p.curTokenIs(token.IDENT) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected class name after 'class'",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected class name after 'class'",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
@@ -343,8 +376,8 @@ func (p *Parser) parseClassDecl() *ast.ClassDecl {
 	if p.curTokenIs(token.LT) {
 		p.nextToken() // consume '<'
 		if !p.curTokenIs(token.IDENT) {
-			p.errors = append(p.errors, fmt.Sprintf("line %d: expected parent class name after '<'",
-				p.curToken.Line))
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected parent class name after '<'",
+				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
 		cls.Parent = p.curToken.Literal
@@ -360,20 +393,33 @@ func (p *Parser) parseClassDecl() *ast.ClassDecl {
 			break
 		}
 
-		if p.curTokenIs(token.DEF) {
+		switch p.curToken.Type {
+		case token.PUB:
+			p.nextToken() // consume 'pub'
+			if p.curTokenIs(token.DEF) {
+				if method := p.parseMethodDecl(); method != nil {
+					method.Pub = true
+					cls.Methods = append(cls.Methods, method)
+				}
+			} else {
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: 'pub' in class body must be followed by 'def'",
+					p.curToken.Line, p.curToken.Column))
+				p.nextToken()
+			}
+		case token.DEF:
 			if method := p.parseMethodDecl(); method != nil {
 				cls.Methods = append(cls.Methods, method)
 			}
-		} else {
-			p.errors = append(p.errors, fmt.Sprintf("line %d: unexpected token %s in class body, expected 'def' or 'end'",
-				p.curToken.Line, p.curToken.Type))
+		default:
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: unexpected token %s in class body, expected 'def', 'pub def', or 'end'",
+				p.curToken.Line, p.curToken.Column, p.curToken.Type))
 			p.nextToken()
 		}
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'end' to close class",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected 'end' to close class",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -387,6 +433,150 @@ func (p *Parser) parseClassDecl() *ast.ClassDecl {
 	}
 
 	return cls
+}
+
+func (p *Parser) parseInterfaceDecl() *ast.InterfaceDecl {
+	p.nextToken() // consume 'interface'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected interface name after 'interface'",
+			p.curToken.Line, p.curToken.Column))
+		return nil
+	}
+
+	iface := &ast.InterfaceDecl{Name: p.curToken.Literal}
+	p.nextToken()
+	p.skipNewlines()
+
+	// Parse method signatures until 'end'
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.END) {
+			break
+		}
+
+		if p.curTokenIs(token.DEF) {
+			if sig := p.parseMethodSig(); sig != nil {
+				iface.Methods = append(iface.Methods, sig)
+			}
+		} else {
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: unexpected token %s in interface body, expected 'def' or 'end'",
+				p.curToken.Line, p.curToken.Column, p.curToken.Type))
+			p.nextToken()
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected 'end' to close interface",
+			p.curToken.Line, p.curToken.Column))
+		return nil
+	}
+	p.nextToken() // consume 'end'
+
+	return iface
+}
+
+// parseMethodSig parses a method signature (no body) for interfaces
+func (p *Parser) parseMethodSig() *ast.MethodSig {
+	p.nextToken() // consume 'def'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected method name after def",
+			p.curToken.Line, p.curToken.Column))
+		return nil
+	}
+
+	sig := &ast.MethodSig{Name: p.curToken.Literal}
+	p.nextToken()
+
+	// Parse optional parameter list
+	if p.curTokenIs(token.LPAREN) {
+		p.nextToken() // consume '('
+		seen := make(map[string]bool)
+
+		// Parse parameters until ')'
+		if !p.curTokenIs(token.RPAREN) {
+			// First parameter
+			param := p.parseTypedParam(seen)
+			if param == nil {
+				return nil
+			}
+			sig.Params = append(sig.Params, param)
+
+			// Additional parameters
+			for p.curTokenIs(token.COMMA) {
+				p.nextToken() // consume ','
+				// Allow trailing comma
+				if p.curTokenIs(token.RPAREN) {
+					break
+				}
+				param := p.parseTypedParam(seen)
+				if param == nil {
+					return nil
+				}
+				sig.Params = append(sig.Params, param)
+			}
+		}
+
+		if !p.curTokenIs(token.RPAREN) {
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ')' after parameters",
+				p.curToken.Line, p.curToken.Column))
+			return nil
+		}
+		p.nextToken() // consume ')'
+	}
+
+	// Parse optional return type: -> Type or -> (Type1, Type2)
+	if p.curTokenIs(token.ARROW) {
+		p.nextToken() // consume '->'
+
+		if p.curTokenIs(token.LPAREN) {
+			// Multiple return types: (Type1, Type2, ...)
+			p.nextToken() // consume '('
+
+			if !p.curTokenIs(token.IDENT) {
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type in return type list",
+					p.curToken.Line, p.curToken.Column))
+				return nil
+			}
+			sig.ReturnTypes = append(sig.ReturnTypes, p.curToken.Literal)
+			p.nextToken()
+
+			for p.curTokenIs(token.COMMA) {
+				p.nextToken() // consume ','
+				// Allow trailing comma
+				if p.curTokenIs(token.RPAREN) {
+					break
+				}
+				if !p.curTokenIs(token.IDENT) {
+					p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type after comma",
+						p.curToken.Line, p.curToken.Column))
+					return nil
+				}
+				sig.ReturnTypes = append(sig.ReturnTypes, p.curToken.Literal)
+				p.nextToken()
+			}
+
+			if !p.curTokenIs(token.RPAREN) {
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ')' after return types",
+					p.curToken.Line, p.curToken.Column))
+				return nil
+			}
+			p.nextToken() // consume ')'
+		} else if p.curTokenIs(token.IDENT) {
+			// Single return type
+			sig.ReturnTypes = append(sig.ReturnTypes, p.curToken.Literal)
+			p.nextToken()
+		} else {
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type after ->",
+				p.curToken.Line, p.curToken.Column))
+			return nil
+		}
+	}
+
+	p.skipNewlines()
+
+	return sig
 }
 
 // extractFields extracts field declarations from instance variable assignments in a method.
@@ -436,8 +626,8 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 	case token.EQ:
 		methodName = "=="
 	default:
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected method name after def",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected method name after def",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
@@ -474,8 +664,8 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 		}
 
 		if !p.curTokenIs(token.RPAREN) {
-			p.errors = append(p.errors, fmt.Sprintf("line %d: expected ')' after parameters",
-				p.curToken.Line))
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ')' after parameters",
+				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
 		p.nextToken() // consume ')'
@@ -490,8 +680,8 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 			p.nextToken() // consume '('
 
 			if !p.curTokenIs(token.IDENT) {
-				p.errors = append(p.errors, fmt.Sprintf("line %d: expected type in return type list",
-					p.curToken.Line))
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type in return type list",
+					p.curToken.Line, p.curToken.Column))
 				return nil
 			}
 			method.ReturnTypes = append(method.ReturnTypes, p.curToken.Literal)
@@ -504,8 +694,8 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 					break
 				}
 				if !p.curTokenIs(token.IDENT) {
-					p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after comma",
-						p.curToken.Line))
+					p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type after comma",
+						p.curToken.Line, p.curToken.Column))
 					return nil
 				}
 				method.ReturnTypes = append(method.ReturnTypes, p.curToken.Literal)
@@ -513,8 +703,8 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 			}
 
 			if !p.curTokenIs(token.RPAREN) {
-				p.errors = append(p.errors, fmt.Sprintf("line %d: expected ')' after return types",
-					p.curToken.Line))
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ')' after return types",
+					p.curToken.Line, p.curToken.Column))
 				return nil
 			}
 			p.nextToken() // consume ')'
@@ -523,8 +713,8 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 			method.ReturnTypes = append(method.ReturnTypes, p.curToken.Literal)
 			p.nextToken()
 		} else {
-			p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after ->",
-				p.curToken.Line))
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type after ->",
+				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
 	}
@@ -543,8 +733,8 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'end' to close method",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected 'end' to close method",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -625,8 +815,8 @@ func (p *Parser) parseBlockCall(expr ast.Expression) ast.Expression {
 		e.Block = block
 		return e
 	default:
-		p.errors = append(p.errors, fmt.Sprintf("line %d: block can only follow a method call",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: block can only follow a method call",
+			p.curToken.Line, p.curToken.Column))
 		return expr
 	}
 }
@@ -648,8 +838,8 @@ func (p *Parser) parseBlock(terminator token.TokenType) *ast.BlockExpr {
 		if p.curTokenIs(token.IDENT) {
 			name := p.curToken.Literal
 			if seen[name] {
-				p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate block parameter name %q",
-					p.curToken.Line, name))
+				p.errors = append(p.errors, fmt.Sprintf("%d:%d: duplicate block parameter name %q",
+					p.curToken.Line, p.curToken.Column, name))
 				p.skipTo(terminator)
 				return nil
 			}
@@ -660,15 +850,15 @@ func (p *Parser) parseBlock(terminator token.TokenType) *ast.BlockExpr {
 			for p.curTokenIs(token.COMMA) {
 				p.nextToken() // move past ','
 				if !p.curTokenIs(token.IDENT) {
-					p.errors = append(p.errors, fmt.Sprintf("line %d: expected parameter name after comma",
-						p.curToken.Line))
+					p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected parameter name after comma",
+						p.curToken.Line, p.curToken.Column))
 					p.skipTo(terminator)
 					return nil
 				}
 				name := p.curToken.Literal
 				if seen[name] {
-					p.errors = append(p.errors, fmt.Sprintf("line %d: duplicate block parameter name %q",
-						p.curToken.Line, name))
+					p.errors = append(p.errors, fmt.Sprintf("%d:%d: duplicate block parameter name %q",
+						p.curToken.Line, p.curToken.Column, name))
 					p.skipTo(terminator)
 					return nil
 				}
@@ -679,8 +869,8 @@ func (p *Parser) parseBlock(terminator token.TokenType) *ast.BlockExpr {
 		}
 
 		if !p.curTokenIs(token.PIPE) {
-			p.errors = append(p.errors, fmt.Sprintf("line %d: expected '|' after block parameters",
-				p.curToken.Line))
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected '|' after block parameters",
+				p.curToken.Line, p.curToken.Column))
 			p.skipTo(terminator)
 			return nil
 		}
@@ -705,8 +895,8 @@ func (p *Parser) parseBlock(terminator token.TokenType) *ast.BlockExpr {
 		if terminator == token.RBRACE {
 			closer = "}"
 		}
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected '%s' to close block",
-			p.curToken.Line, closer))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected '%s' to close block",
+			p.curToken.Line, p.curToken.Column, closer))
 		return nil
 	}
 	p.nextToken() // consume terminator
@@ -733,8 +923,8 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	if p.curTokenIs(token.COLON) {
 		p.nextToken() // consume ':'
 		if !p.curTokenIs(token.IDENT) {
-			p.errors = append(p.errors, fmt.Sprintf("line %d: expected type after ':'",
-				p.curToken.Line))
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected type after ':'",
+				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
 		typeAnnotation = p.curToken.Literal
@@ -742,8 +932,8 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	}
 
 	if !p.curTokenIs(token.ASSIGN) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected '=' in assignment",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected '=' in assignment",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	p.nextToken() // consume '='
@@ -819,8 +1009,8 @@ func (p *Parser) parseIfStmt() *ast.IfStmt {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'end' to close if",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected 'end' to close if",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -848,8 +1038,8 @@ func (p *Parser) parseWhileStmt() *ast.WhileStmt {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'end' to close while",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected 'end' to close while",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -862,8 +1052,8 @@ func (p *Parser) parseForStmt() *ast.ForStmt {
 	p.nextToken() // consume 'for'
 
 	if !p.curTokenIs(token.IDENT) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected variable name after 'for'",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected variable name after 'for'",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
@@ -871,8 +1061,8 @@ func (p *Parser) parseForStmt() *ast.ForStmt {
 	p.nextToken() // consume variable name
 
 	if !p.curTokenIs(token.IN) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'in' after loop variable",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected 'in' after loop variable",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	p.nextToken() // consume 'in'
@@ -892,8 +1082,8 @@ func (p *Parser) parseForStmt() *ast.ForStmt {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected 'end' to close for",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected 'end' to close for",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -1036,8 +1226,8 @@ func (p *Parser) parseCallExprWithParens(fn ast.Expression) ast.Expression {
 	}
 
 	if !p.curTokenIs(token.RPAREN) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected ')' after arguments",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ')' after arguments",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
@@ -1047,8 +1237,8 @@ func (p *Parser) parseCallExprWithParens(fn ast.Expression) ast.Expression {
 func (p *Parser) parseIntLiteral() ast.Expression {
 	val, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
 	if err != nil {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: invalid integer %s",
-			p.curToken.Line, p.curToken.Literal))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: invalid integer %s",
+			p.curToken.Line, p.curToken.Column, p.curToken.Literal))
 		return nil
 	}
 	return &ast.IntLit{Value: val}
@@ -1057,8 +1247,8 @@ func (p *Parser) parseIntLiteral() ast.Expression {
 func (p *Parser) parseFloatLiteral() ast.Expression {
 	val, err := strconv.ParseFloat(p.curToken.Literal, 64)
 	if err != nil {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: invalid float %s",
-			p.curToken.Line, p.curToken.Literal))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: invalid float %s",
+			p.curToken.Line, p.curToken.Column, p.curToken.Literal))
 		return nil
 	}
 	return &ast.FloatLit{Value: val}
@@ -1113,7 +1303,8 @@ func (p *Parser) parseInterpolatedString(value string) ast.Expression {
 		}
 
 		if braceCount != 0 {
-			p.errors = append(p.errors, "unterminated string interpolation")
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: unterminated string interpolation",
+				p.curToken.Line, p.curToken.Column))
 			return &ast.StringLit{Value: value}
 		}
 
@@ -1153,7 +1344,6 @@ func (p *Parser) parseBoolLiteral() ast.Expression {
 
 func (p *Parser) parseArrayLiteral() ast.Expression {
 	arr := &ast.ArrayLit{}
-	startLine := p.curToken.Line
 
 	p.nextToken() // consume '['
 
@@ -1165,8 +1355,8 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 	// Parse first element
 	elem := p.parseExpression(LOWEST)
 	if elem == nil {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected expression in array literal",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected expression in array literal",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	arr.Elements = append(arr.Elements, elem)
@@ -1183,8 +1373,8 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 
 		elem := p.parseExpression(LOWEST)
 		if elem == nil {
-			p.errors = append(p.errors, fmt.Sprintf("line %d: expected expression after comma in array literal",
-				startLine))
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected expression after comma in array literal",
+				p.curToken.Line, p.curToken.Column))
 			return nil
 		}
 		arr.Elements = append(arr.Elements, elem)
@@ -1194,8 +1384,8 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 	p.nextToken()
 
 	if !p.curTokenIs(token.RBRACKET) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected ']' after array elements",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ']' after array elements",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
@@ -1208,8 +1398,8 @@ func (p *Parser) parseIndexExpr(left ast.Expression) ast.Expression {
 
 	index := p.parseExpression(LOWEST)
 	if index == nil {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected index expression",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected index expression",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
@@ -1217,8 +1407,8 @@ func (p *Parser) parseIndexExpr(left ast.Expression) ast.Expression {
 	p.nextToken()
 
 	if !p.curTokenIs(token.RBRACKET) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected ']' after index",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ']' after index",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
@@ -1227,7 +1417,6 @@ func (p *Parser) parseIndexExpr(left ast.Expression) ast.Expression {
 
 func (p *Parser) parseMapLiteral() ast.Expression {
 	mapLit := &ast.MapLit{}
-	startLine := p.curToken.Line
 
 	p.nextToken() // consume '{'
 
@@ -1237,7 +1426,7 @@ func (p *Parser) parseMapLiteral() ast.Expression {
 	}
 
 	// Parse first entry
-	entry, ok := p.parseMapEntry(startLine)
+	entry, ok := p.parseMapEntry()
 	if !ok {
 		return nil
 	}
@@ -1253,7 +1442,7 @@ func (p *Parser) parseMapLiteral() ast.Expression {
 			return mapLit
 		}
 
-		entry, ok := p.parseMapEntry(startLine)
+		entry, ok := p.parseMapEntry()
 		if !ok {
 			return nil
 		}
@@ -1264,26 +1453,26 @@ func (p *Parser) parseMapLiteral() ast.Expression {
 	p.nextToken()
 
 	if !p.curTokenIs(token.RBRACE) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected '}' after map entries",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected '}' after map entries",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
 	return mapLit
 }
 
-func (p *Parser) parseMapEntry(startLine int) (ast.MapEntry, bool) {
+func (p *Parser) parseMapEntry() (ast.MapEntry, bool) {
 	key := p.parseExpression(LOWEST)
 	if key == nil {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected key in map literal",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected key in map literal",
+			p.curToken.Line, p.curToken.Column))
 		return ast.MapEntry{}, false
 	}
 
 	// Expect '=>'
 	if !p.peekTokenIs(token.HASHROCKET) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected '=>' after map key",
-			startLine))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected '=>' after map key",
+			p.curToken.Line, p.curToken.Column))
 		return ast.MapEntry{}, false
 	}
 	p.nextToken() // move to '=>'
@@ -1291,8 +1480,8 @@ func (p *Parser) parseMapEntry(startLine int) (ast.MapEntry, bool) {
 
 	value := p.parseExpression(LOWEST)
 	if value == nil {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected value after '=>' in map literal",
-			startLine))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected value after '=>' in map literal",
+			p.curToken.Line, p.curToken.Column))
 		return ast.MapEntry{}, false
 	}
 
@@ -1305,8 +1494,8 @@ func (p *Parser) parseGroupedExpr() ast.Expression {
 	expr := p.parseExpression(LOWEST)
 
 	if !p.peekTokenIs(token.RPAREN) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected ')'",
-			p.peekToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ')'",
+			p.peekToken.Line, p.peekToken.Column))
 		return nil
 	}
 	p.nextToken() // move to ')'
@@ -1347,8 +1536,8 @@ func (p *Parser) parseSelectorExpr(x ast.Expression) ast.Expression {
 	p.nextToken() // move past '.' to the selector
 
 	if !p.curTokenIs(token.IDENT) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected identifier after '.'",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected identifier after '.'",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
@@ -1360,13 +1549,14 @@ func (p *Parser) parseSelectorExpr(x ast.Expression) ast.Expression {
 
 func (p *Parser) parseDeferStmt() *ast.DeferStmt {
 	deferLine := p.curToken.Line
+	deferCol := p.curToken.Column
 	p.nextToken() // consume 'defer'
 
 	// Parse the expression that should be a call
 	expr := p.parseExpression(LOWEST)
 	if expr == nil {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected expression after defer",
-			deferLine))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected expression after defer",
+			deferLine, deferCol))
 		return nil
 	}
 
@@ -1383,8 +1573,8 @@ func (p *Parser) parseDeferStmt() *ast.DeferStmt {
 		// defer close becomes defer close()
 		call = &ast.CallExpr{Func: e, Args: nil}
 	default:
-		p.errors = append(p.errors, fmt.Sprintf("line %d: defer requires a callable expression",
-			deferLine))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: defer requires a callable expression",
+			deferLine, deferCol))
 		return nil
 	}
 
@@ -1397,8 +1587,8 @@ func (p *Parser) parseDeferStmt() *ast.DeferStmt {
 func (p *Parser) parseInstanceVar() ast.Expression {
 	p.nextToken() // consume '@'
 	if !p.curTokenIs(token.IDENT) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected identifier after '@'",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected identifier after '@'",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	name := p.curToken.Literal
@@ -1408,16 +1598,16 @@ func (p *Parser) parseInstanceVar() ast.Expression {
 func (p *Parser) parseInstanceVarAssign() *ast.InstanceVarAssign {
 	p.nextToken() // consume '@'
 	if !p.curTokenIs(token.IDENT) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected identifier after '@'",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected identifier after '@'",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	name := p.curToken.Literal
 	p.nextToken() // consume identifier
 
 	if !p.curTokenIs(token.ASSIGN) {
-		p.errors = append(p.errors, fmt.Sprintf("line %d: expected '=' after instance variable",
-			p.curToken.Line))
+		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected '=' after instance variable",
+			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 	p.nextToken() // consume '='

@@ -69,12 +69,14 @@ type Generator struct {
 	needsRuntime bool              // track if rugby/runtime import is needed
 	needsFmt     bool              // track if fmt import is needed (string interpolation)
 	currentClass string            // current class being generated (for instance vars)
+	pubClasses   map[string]bool   // track public classes for constructor naming
 }
 
 func New() *Generator {
 	return &Generator{
-		vars:    make(map[string]bool),
-		imports: make(map[string]bool),
+		vars:       make(map[string]bool),
+		imports:    make(map[string]bool),
+		pubClasses: make(map[string]bool),
 	}
 }
 
@@ -156,6 +158,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genFuncDecl(s)
 	case *ast.ClassDecl:
 		g.genClassDecl(s)
+	case *ast.InterfaceDecl:
+		g.genInterfaceDecl(s)
 	case *ast.ExprStmt:
 		g.writeIndent()
 		g.genExpr(s.Expr)
@@ -189,8 +193,18 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 		g.vars[param.Name] = true
 	}
 
+	// Generate function name with proper casing
+	// pub def parse_json -> ParseJSON (exported)
+	// def parse_json -> parseJSON (unexported)
+	funcName := fn.Name
+	if fn.Pub {
+		funcName = snakeToPascalWithAcronyms(fn.Name)
+	} else {
+		funcName = snakeToCamelWithAcronyms(fn.Name)
+	}
+
 	// Generate function signature
-	g.buf.WriteString(fmt.Sprintf("func %s(", fn.Name))
+	g.buf.WriteString(fmt.Sprintf("func %s(", funcName))
 	for i, param := range fn.Params {
 		if i > 0 {
 			g.buf.WriteString(", ")
@@ -231,8 +245,10 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	className := cls.Name
 	g.currentClass = className
+	g.pubClasses[className] = cls.Pub
 
 	// Emit struct definition
+	// Class names are already PascalCase by convention; pub affects field/method visibility
 	hasContent := cls.Parent != "" || len(cls.Fields) > 0
 	if hasContent {
 		g.buf.WriteString(fmt.Sprintf("type %s struct {\n", className))
@@ -256,7 +272,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	// Emit constructor if initialize exists
 	for _, method := range cls.Methods {
 		if method.Name == "initialize" {
-			g.genConstructor(className, method)
+			g.genConstructor(className, method, cls.Pub)
 			break
 		}
 	}
@@ -271,7 +287,52 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	g.currentClass = ""
 }
 
-func (g *Generator) genConstructor(className string, method *ast.MethodDecl) {
+func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
+	// Generate: type InterfaceName interface { ... }
+	g.buf.WriteString(fmt.Sprintf("type %s interface {\n", iface.Name))
+
+	for _, method := range iface.Methods {
+		g.buf.WriteString("\t")
+		// Interface methods are always exported (PascalCase) per Go interface rules
+		methodName := snakeToPascalWithAcronyms(method.Name)
+		g.buf.WriteString(methodName)
+		g.buf.WriteString("(")
+
+		// Parameters (just types, no names in Go interface definitions)
+		for i, param := range method.Params {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+			if param.Type != "" {
+				g.buf.WriteString(mapType(param.Type))
+			} else {
+				g.buf.WriteString("interface{}")
+			}
+		}
+		g.buf.WriteString(")")
+
+		// Return types
+		if len(method.ReturnTypes) == 1 {
+			g.buf.WriteString(" ")
+			g.buf.WriteString(mapType(method.ReturnTypes[0]))
+		} else if len(method.ReturnTypes) > 1 {
+			g.buf.WriteString(" (")
+			for i, rt := range method.ReturnTypes {
+				if i > 0 {
+					g.buf.WriteString(", ")
+				}
+				g.buf.WriteString(mapType(rt))
+			}
+			g.buf.WriteString(")")
+		}
+
+		g.buf.WriteString("\n")
+	}
+
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub bool) {
 	g.vars = make(map[string]bool)
 
 	// Mark parameters as declared variables
@@ -282,8 +343,12 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl) {
 	// Receiver name for field assignments
 	recv := receiverName(className)
 
-	// Constructor: func NewClassName(params) *ClassName
-	g.buf.WriteString(fmt.Sprintf("func New%s(", className))
+	// Constructor: func NewClassName(params) *ClassName (pub) or newClassName (non-pub)
+	constructorName := "new" + className
+	if pub {
+		constructorName = "New" + className
+	}
+	g.buf.WriteString(fmt.Sprintf("func %s(", constructorName))
 	for i, param := range method.Params {
 		if i > 0 {
 			g.buf.WriteString(", ")
@@ -373,8 +438,15 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		return
 	}
 
-	// Method name: convert snake_case to CamelCase
-	methodName := snakeToCamel(method.Name)
+	// Method name: convert snake_case to proper casing
+	// pub def in a pub class -> PascalCase (exported)
+	// def in any class -> camelCase (unexported)
+	var methodName string
+	if method.Pub {
+		methodName = snakeToPascalWithAcronyms(method.Name)
+	} else {
+		methodName = snakeToCamelWithAcronyms(method.Name)
+	}
 
 	// Generate method signature with pointer receiver: func (r *ClassName) MethodName(params) returns
 	g.buf.WriteString(fmt.Sprintf("func (%s *%s) %s(", recv, className, methodName))
@@ -753,8 +825,15 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		// Check for ClassName.new() constructor call
 		if fn.Sel == "new" {
 			if ident, ok := fn.X.(*ast.Ident); ok {
-				// Rewrite User.new(args) to NewUser(args)
-				g.buf.WriteString(fmt.Sprintf("New%s", ident.Name))
+				// Rewrite User.new(args) to NewUser(args) or newUser(args)
+				// based on class visibility
+				var ctorName string
+				if g.pubClasses[ident.Name] {
+					ctorName = fmt.Sprintf("New%s", ident.Name)
+				} else {
+					ctorName = fmt.Sprintf("new%s", ident.Name)
+				}
+				g.buf.WriteString(ctorName)
 				g.buf.WriteString("(")
 				for i, arg := range call.Args {
 					if i > 0 {
@@ -1269,4 +1348,117 @@ func mapType(rubyType string) string {
 	default:
 		return rubyType // pass through unknown types (e.g., user-defined)
 	}
+}
+
+// Common acronyms that should be uppercased in Go identifiers
+// Per spec section 9.5
+var acronyms = map[string]string{
+	"id":    "ID",
+	"url":   "URL",
+	"uri":   "URI",
+	"http":  "HTTP",
+	"https": "HTTPS",
+	"json":  "JSON",
+	"xml":   "XML",
+	"api":   "API",
+	"uuid":  "UUID",
+	"ip":    "IP",
+	"tcp":   "TCP",
+	"udp":   "UDP",
+	"sql":   "SQL",
+	"tls":   "TLS",
+	"ssh":   "SSH",
+	"cpu":   "CPU",
+	"gpu":   "GPU",
+	"html":  "HTML",
+	"css":   "CSS",
+}
+
+// snakeToPascalWithAcronyms converts snake_case to PascalCase with acronym handling
+// Examples: user_id -> UserID, parse_json -> ParseJSON, read_http_url -> ReadHTTPURL
+func snakeToPascalWithAcronyms(s string) string {
+	if s == "" {
+		return s
+	}
+
+	// Strip Ruby-style suffixes (! for mutation, ? for predicates)
+	s = strings.TrimSuffix(s, "!")
+	s = strings.TrimSuffix(s, "?")
+
+	// If no underscore, check for single-word acronym or capitalize first letter
+	if !strings.Contains(s, "_") {
+		if upper, ok := acronyms[strings.ToLower(s)]; ok {
+			return upper
+		}
+		// Capitalize first letter only
+		if len(s) > 0 {
+			return strings.ToUpper(s[:1]) + s[1:]
+		}
+		return s
+	}
+
+	// Split by underscore and process each part
+	parts := strings.Split(s, "_")
+	var result strings.Builder
+
+	for _, part := range parts {
+		if part == "" {
+			continue
+		}
+		if upper, ok := acronyms[strings.ToLower(part)]; ok {
+			result.WriteString(upper)
+		} else {
+			// Capitalize first letter
+			result.WriteString(strings.ToUpper(part[:1]))
+			if len(part) > 1 {
+				result.WriteString(part[1:])
+			}
+		}
+	}
+
+	return result.String()
+}
+
+// snakeToCamelWithAcronyms converts snake_case to camelCase with acronym handling
+// Examples: user_id -> userID, parse_json -> parseJSON, http_request -> httpRequest
+// Note: first-part acronyms stay lowercase in camelCase
+func snakeToCamelWithAcronyms(s string) string {
+	if s == "" {
+		return s
+	}
+
+	// Strip Ruby-style suffixes (! for mutation, ? for predicates)
+	s = strings.TrimSuffix(s, "!")
+	s = strings.TrimSuffix(s, "?")
+
+	// If no underscore, return as-is (already camelCase or single word)
+	if !strings.Contains(s, "_") {
+		return s
+	}
+
+	// Split by underscore and process each part
+	parts := strings.Split(s, "_")
+	var result strings.Builder
+
+	for i, part := range parts {
+		if part == "" {
+			continue
+		}
+		if i == 0 {
+			// First part: lowercase, even if it's an acronym
+			result.WriteString(strings.ToLower(part))
+		} else {
+			// Subsequent parts: uppercase acronyms, capitalize others
+			if upper, ok := acronyms[strings.ToLower(part)]; ok {
+				result.WriteString(upper)
+			} else {
+				result.WriteString(strings.ToUpper(part[:1]))
+				if len(part) > 1 {
+					result.WriteString(part[1:])
+				}
+			}
+		}
+	}
+
+	return result.String()
 }

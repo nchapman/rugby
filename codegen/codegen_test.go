@@ -918,7 +918,7 @@ end`
 	assertContains(t, output, `type User struct {`)
 	assertContains(t, output, `name interface{}`)
 	assertContains(t, output, `age interface{}`)
-	assertContains(t, output, `func NewUser(name interface{}, age interface{}) *User`)
+	assertContains(t, output, `func newUser(name interface{}, age interface{}) *User`)
 	assertContains(t, output, `u := &User{}`)
 	assertContains(t, output, `u.name = name`)
 	assertContains(t, output, `u.age = age`)
@@ -958,8 +958,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func NewUser(name interface{}) *User`)
-	assertContains(t, output, `user := NewUser("Alice")`)
+	assertContains(t, output, `func newUser(name interface{}) *User`)
+	assertContains(t, output, `user := newUser("Alice")`)
 }
 
 func TestClassNewWithMultipleArgs(t *testing.T) {
@@ -976,8 +976,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func NewPoint(x interface{}, y interface{}) *Point`)
-	assertContains(t, output, `p := NewPoint(10, 20)`)
+	assertContains(t, output, `func newPoint(x interface{}, y interface{}) *Point`)
+	assertContains(t, output, `p := newPoint(10, 20)`)
 }
 
 func TestGenerateTypedVariable(t *testing.T) {
@@ -1031,8 +1031,8 @@ end`
 	// Check struct fields have inferred types
 	assertContains(t, output, `name string`)
 	assertContains(t, output, `age int`)
-	// Check constructor has typed params
-	assertContains(t, output, `func NewUser(name string, age int) *User`)
+	// Check constructor has typed params (non-pub class uses camelCase)
+	assertContains(t, output, `func newUser(name string, age int) *User`)
 }
 
 func TestGenerateTypedMethodParams(t *testing.T) {
@@ -1510,4 +1510,194 @@ end`
 	// Mixed comparisons (variable vs literal) should use runtime.Equal
 	assertContains(t, output, `runtime.Equal(x, 5)`)
 	assertContains(t, output, `runtime.Equal("hello", name)`)
+}
+
+func TestInterfaceDeclaration(t *testing.T) {
+	input := `interface Speaker
+  def speak -> String
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Interface should be generated with PascalCase method names
+	assertContains(t, output, `type Speaker interface {`)
+	assertContains(t, output, `Speak() string`)
+	assertContains(t, output, `}`)
+}
+
+func TestInterfaceWithMultipleMethods(t *testing.T) {
+	input := `interface ReadWriter
+  def read(n : Int) -> String
+  def write(data : String) -> Int
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `type ReadWriter interface {`)
+	assertContains(t, output, `Read(int) string`)
+	assertContains(t, output, `Write(string) int`)
+}
+
+func TestInterfaceMethodWithSnakeCase(t *testing.T) {
+	input := `interface Handler
+  def handle_request(req : String) -> String
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Interface methods should be PascalCase
+	assertContains(t, output, `HandleRequest(string) string`)
+}
+
+func TestPubFunctionExported(t *testing.T) {
+	input := `pub def parse_json(s : String) -> String
+  s
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// pub function should be PascalCase with acronym handling
+	assertContains(t, output, `func ParseJSON(s string) string`)
+}
+
+func TestNonPubFunctionCamelCase(t *testing.T) {
+	input := `def parse_json(s : String) -> String
+  s
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// non-pub function should be camelCase with acronym handling
+	assertContains(t, output, `func parseJSON(s string) string`)
+}
+
+func TestPubClassWithPubMethod(t *testing.T) {
+	input := `pub class User
+  def initialize(name : String)
+    @name = name
+  end
+
+  pub def get_name -> String
+    @name
+  end
+
+  def internal_helper -> String
+    @name
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// pub class should have NewClassName constructor (uppercase)
+	assertContains(t, output, `func NewUser(name string) *User`)
+	// pub method should be PascalCase
+	assertContains(t, output, `func (u *User) GetName() string`)
+	// non-pub method should be camelCase
+	assertContains(t, output, `func (u *User) internalHelper() string`)
+}
+
+func TestNonPubClassWithMethods(t *testing.T) {
+	input := `class User
+  def initialize(name : String)
+    @name = name
+  end
+
+  def get_name -> String
+    @name
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// non-pub class should have newClassName constructor (lowercase)
+	assertContains(t, output, `func newUser(name string) *User`)
+	// methods should be camelCase
+	assertContains(t, output, `func (u *User) getName() string`)
+}
+
+func TestAcronymHandling(t *testing.T) {
+	input := `pub def get_user_id -> Int
+  0
+end
+
+pub def parse_http_url -> String
+  ""
+end
+
+def get_api_json -> String
+  ""
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Pub functions with acronyms should have proper casing
+	assertContains(t, output, `func GetUserID() int`)
+	assertContains(t, output, `func ParseHTTPURL() string`)
+	// Non-pub function with acronyms
+	assertContains(t, output, `func getAPIJSON() string`)
+}
+
+func TestMethodWithBangSuffixStripped(t *testing.T) {
+	input := `pub class Counter
+  def initialize
+    @n = 0
+  end
+
+  pub def inc!
+    @n = @n + 1
+  end
+
+  def reset!
+    @n = 0
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// ! suffix should be stripped
+	assertContains(t, output, `func (c *Counter) Inc()`)
+	assertContains(t, output, `func (c *Counter) reset()`)
+}
+
+func TestInterfaceWithSnakeCaseAcronyms(t *testing.T) {
+	input := `interface HttpHandler
+  def get_user_id -> Int
+  def parse_json -> String
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Interface methods should be PascalCase with acronyms
+	assertContains(t, output, `GetUserID() int`)
+	assertContains(t, output, `ParseJSON() string`)
 }
