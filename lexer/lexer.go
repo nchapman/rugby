@@ -263,25 +263,48 @@ func (l *Lexer) newToken(tokenType token.TokenType, literal string) token.Token 
 
 func (l *Lexer) readIdentifier() string {
 	pos := l.pos
-	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' || l.ch == '/' {
+	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
 		l.readChar()
 	}
 	// Ruby-style method suffixes: ? for predicates, ! for mutating methods
-	if l.ch == '?' || l.ch == '!' {
+	if l.ch == '?' {
 		l.readChar()
+	} else if l.ch == '!' {
+		// Only consume ! if it's NOT followed by = (which would make it !=)
+		if l.peekChar() != '=' {
+			l.readChar()
+		}
 	}
 	return l.input[pos:l.pos]
 }
 
 func (l *Lexer) readString() string {
 	l.readChar() // skip opening quote
-	pos := l.pos
+	var out []byte
 	for l.ch != '"' && l.ch != 0 {
+		if l.ch == '\\' {
+			l.readChar()
+			switch l.ch {
+			case 'n':
+				out = append(out, '\n')
+			case 'r':
+				out = append(out, '\r')
+			case 't':
+				out = append(out, '\t')
+			case '"':
+				out = append(out, '"')
+			case '\\':
+				out = append(out, '\\')
+			default:
+				out = append(out, l.ch)
+			}
+		} else {
+			out = append(out, l.ch)
+		}
 		l.readChar()
 	}
-	str := l.input[pos:l.pos]
 	l.readChar() // skip closing quote
-	return str
+	return string(out)
 }
 
 func (l *Lexer) readNumber() token.Token {

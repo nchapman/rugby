@@ -252,7 +252,9 @@ func TestImportAliasSyntax(t *testing.T) {
 		expectedLiteral string
 	}{
 		{token.IMPORT, "import"},
-		{token.IDENT, "encoding/json"},
+		{token.IDENT, "encoding"},
+		{token.SLASH, "/"},
+		{token.IDENT, "json"},
 		{token.AS, "as"},
 		{token.IDENT, "json"},
 		{token.EOF, ""},

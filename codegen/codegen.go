@@ -74,17 +74,18 @@ var optionalMethods = map[string]optionalMethod{
 }
 
 type Generator struct {
-	buf          strings.Builder
-	indent       int
-	vars         map[string]string // track declared variables and their types (empty string = unknown type)
-	imports      map[string]bool   // track import aliases for Go interop detection
-	needsRuntime bool              // track if rugby/runtime import is needed
-	needsFmt     bool              // track if fmt import is needed (string interpolation)
-	currentClass string            // current class being generated (for instance vars)
-	pubClasses   map[string]bool   // track public classes for constructor naming
-	classFields  map[string]string // track fields of the current class and their types
-	sourceFile   string            // original .rg filename for //line directives
-	emitLineDir  bool              // whether to emit //line directives
+	buf                strings.Builder
+	indent             int
+	vars               map[string]string // track declared variables and their types (empty string = unknown type)
+	imports            map[string]bool   // track import aliases for Go interop detection
+	needsRuntime       bool              // track if rugby/runtime import is needed
+	needsFmt           bool              // track if fmt import is needed (string interpolation)
+	currentClass       string            // current class being generated (for instance vars)
+	pubClasses         map[string]bool   // track public classes for constructor naming
+	classFields        map[string]string // track fields of the current class and their types
+	sourceFile         string            // original .rg filename for //line directives
+	emitLineDir        bool              // whether to emit //line directives
+	currentReturnTypes []string          // return types of the current function/method
 }
 
 // Option configures a Generator.
@@ -336,6 +337,7 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 
 func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	clear(g.vars) // reset vars for each function
+	g.currentReturnTypes = fn.ReturnTypes
 
 	// Mark parameters as declared variables with their types
 	for _, param := range fn.Params {
@@ -384,11 +386,21 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	g.buf.WriteString(" {\n")
 
 	g.indent++
-	for _, stmt := range fn.Body {
+	for i, stmt := range fn.Body {
+		isLast := i == len(fn.Body)-1
+		if isLast && len(fn.ReturnTypes) > 0 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				// Implicit return: treat last expression as return value
+				retStmt := &ast.ReturnStmt{Values: []ast.Expression{exprStmt.Expr}}
+				g.genReturnStmt(retStmt)
+				continue
+			}
+		}
 		g.genStatement(stmt)
 	}
 	g.indent--
 	g.buf.WriteString("}\n")
+	g.currentReturnTypes = nil
 }
 
 func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
@@ -530,6 +542,7 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 
 func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	clear(g.vars) // reset vars for each method
+	g.currentReturnTypes = method.ReturnTypes
 
 	// Mark parameters as declared variables with their types
 	for _, param := range method.Params {
@@ -550,6 +563,7 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		}
 		g.indent--
 		g.buf.WriteString("}\n\n")
+		g.currentReturnTypes = nil
 		return
 	}
 
@@ -587,6 +601,7 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		}
 		g.indent--
 		g.buf.WriteString("}\n\n")
+		g.currentReturnTypes = nil
 		return
 	}
 
@@ -632,11 +647,21 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	g.buf.WriteString(" {\n")
 
 	g.indent++
-	for _, stmt := range method.Body {
+	for i, stmt := range method.Body {
+		isLast := i == len(method.Body)-1
+		if isLast && len(method.ReturnTypes) > 0 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				// Implicit return
+				retStmt := &ast.ReturnStmt{Values: []ast.Expression{exprStmt.Expr}}
+				g.genReturnStmt(retStmt)
+				continue
+			}
+		}
 		g.genStatement(stmt)
 	}
 	g.indent--
 	g.buf.WriteString("}\n\n")
+	g.currentReturnTypes = nil
 }
 
 func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
@@ -1128,7 +1153,40 @@ func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
 			if i > 0 {
 				g.buf.WriteString(", ")
 			}
-			g.genExpr(val)
+
+			// Check if we need to wrap for Optional types
+			needsWrap := false
+			baseType := ""
+			handled := false
+
+			if i < len(g.currentReturnTypes) {
+				targetType := g.currentReturnTypes[i]
+				if isValueTypeOptional(targetType) {
+					baseType = strings.TrimSuffix(targetType, "?")
+
+					// If returning nil, use NoneT()
+					if _, isNil := val.(*ast.NilLit); isNil {
+						g.buf.WriteString(fmt.Sprintf("runtime.None%s()", baseType))
+						handled = true
+					} else {
+						// Infer type of val to see if it needs wrapping
+						inferred := g.inferTypeFromExpr(val)
+						if inferred == baseType {
+							needsWrap = true
+						}
+					}
+				}
+			}
+
+			if !handled {
+				if needsWrap {
+					g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+					g.genExpr(val)
+					g.buf.WriteString(")")
+				} else {
+					g.genExpr(val)
+				}
+			}
 		}
 	}
 	g.buf.WriteString("\n")
@@ -1323,8 +1381,36 @@ func (g *Generator) genInterpolatedString(s *ast.InterpolatedString) {
 }
 
 func (g *Generator) genArrayLit(arr *ast.ArrayLit) {
-	// Emit untyped array; type inference will be added in Phase 7
-	g.buf.WriteString("[]interface{}{")
+	// Try to infer element type from elements
+	elemType := ""
+	consistent := true
+
+	if len(arr.Elements) > 0 {
+		for _, elem := range arr.Elements {
+			t := g.inferTypeFromExpr(elem)
+			if t == "" {
+				consistent = false
+				break
+			}
+			if elemType == "" {
+				elemType = t
+			} else if elemType != t {
+				consistent = false
+				break
+			}
+		}
+	} else {
+		// Empty array - ambiguous without context
+		consistent = false
+	}
+
+	if consistent && elemType != "" {
+		goType := mapType(elemType)
+		g.buf.WriteString("[]" + goType + "{")
+	} else {
+		g.buf.WriteString("[]interface{}{")
+	}
+
 	for i, elem := range arr.Elements {
 		if i > 0 {
 			g.buf.WriteString(", ")
@@ -2014,6 +2100,23 @@ var valueTypes = map[string]bool{
 
 // mapType converts Rugby type names to Go type names
 func mapType(rubyType string) string {
+	// Handle Array[T]
+	if strings.HasPrefix(rubyType, "Array[") && strings.HasSuffix(rubyType, "]") {
+		inner := rubyType[6 : len(rubyType)-1]
+		return "[]" + mapType(inner)
+	}
+	// Handle Map[K, V]
+	if strings.HasPrefix(rubyType, "Map[") && strings.HasSuffix(rubyType, "]") {
+		content := rubyType[4 : len(rubyType)-1]
+		// Simple comma split for now (assuming no nested generic commas for MVP)
+		parts := strings.Split(content, ",")
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			return fmt.Sprintf("map[%s]%s", mapType(key), mapType(val))
+		}
+	}
+
 	// Handle optional types (T?)
 	if strings.HasSuffix(rubyType, "?") {
 		baseType := strings.TrimSuffix(rubyType, "?")

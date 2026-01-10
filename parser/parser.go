@@ -193,14 +193,53 @@ func (p *Parser) ParseProgram() *ast.Program {
 func (p *Parser) parseImport() *ast.ImportDecl {
 	p.nextToken() // consume 'import'
 
-	if !p.curTokenIs(token.IDENT) {
+	var path strings.Builder
+	expectSeparator := false // start by expecting a component
+
+	for !p.curTokenIs(token.EOF) && !p.curTokenIs(token.NEWLINE) {
+		// Check for alias 'as'
+		if p.curTokenIs(token.AS) && expectSeparator {
+			break
+		}
+
+		isSeparator := p.curTokenIs(token.SLASH) || p.curTokenIs(token.DOT)
+		isConnector := p.curTokenIs(token.MINUS)
+
+		if isSeparator {
+			path.WriteString(p.curToken.Literal)
+			expectSeparator = false
+			p.nextToken()
+			continue
+		}
+
+		if isConnector {
+			path.WriteString(p.curToken.Literal)
+			expectSeparator = false
+			p.nextToken()
+			continue
+		}
+
+		// If we expect a separator but got a component (and it's not 'as'), it's an error
+		// e.g., "import a b"
+		if expectSeparator {
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: unexpected token %s in import path",
+				p.curToken.Line, p.curToken.Column, p.curToken.Literal))
+			return nil
+		}
+
+		// Consume component (IDENT, INT, KEYWORDS, etc.)
+		path.WriteString(p.curToken.Literal)
+		expectSeparator = true
+		p.nextToken()
+	}
+
+	if path.Len() == 0 {
 		p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected package path after import",
 			p.curToken.Line, p.curToken.Column))
 		return nil
 	}
 
-	imp := &ast.ImportDecl{Path: p.curToken.Literal}
-	p.nextToken()
+	imp := &ast.ImportDecl{Path: path.String()}
 
 	// Check for optional alias: import foo/bar as baz
 	if p.curTokenIs(token.AS) {
@@ -249,11 +288,41 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 }
 
 // parseTypeName parses a type name (e.g., "Int", "String?")
-// The ? suffix is already included in the identifier by the lexer.
-// Expects current token to be IDENT. Consumes the type.
+// The ? suffix is already included in the identifier by the lexer for simple types (Int?).
+// For generics (Array[Int]), brackets are tokens.
 func (p *Parser) parseTypeName() string {
 	typeName := p.curToken.Literal
-	p.nextToken() // consume type
+	p.nextToken() // consume type name
+
+	// Check for generics: Type[T] or Type[K, V]
+	if p.curTokenIs(token.LBRACKET) {
+		typeName += "["
+		p.nextToken() // consume '['
+
+		typeName += p.parseTypeName()
+
+		for p.curTokenIs(token.COMMA) {
+			typeName += ", "
+			p.nextToken() // consume ','
+			typeName += p.parseTypeName()
+		}
+
+		if p.curTokenIs(token.RBRACKET) {
+			typeName += "]"
+			p.nextToken() // consume ']'
+		} else {
+			p.errors = append(p.errors, fmt.Sprintf("%d:%d: expected ']' after generic types",
+				p.curToken.Line, p.curToken.Column))
+			return typeName // Return what we have so far
+		}
+	}
+
+	// Check for optional suffix '?' (for generic types like Array[Int]?)
+	if p.curTokenIs(token.QUESTION) {
+		typeName += "?"
+		p.nextToken()
+	}
+
 	return typeName
 }
 

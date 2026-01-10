@@ -350,7 +350,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `x := []interface{}{1, 2, 3}`)
+	assertContains(t, output, `x := []int{1, 2, 3}`)
 }
 
 func TestGenerateEmptyArray(t *testing.T) {
@@ -380,7 +380,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Puts([]interface{}{1, 2, 3})`)
+	assertContains(t, output, `runtime.Puts([]int{1, 2, 3})`)
 }
 
 func TestGenerateNestedArray(t *testing.T) {
@@ -390,7 +390,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `[]interface{}{[]interface{}{1, 2}, []interface{}{3, 4}}`)
+	assertContains(t, output, `[]interface{}{[]int{1, 2}, []int{3, 4}}`)
 }
 
 func TestGenerateArrayIndex(t *testing.T) {
