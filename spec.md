@@ -258,9 +258,43 @@ def log(msg : any)         # msg is any
 Instance variable types must be deducible at compile-time to generate the underlying Go struct. They are resolved from:
 1.  **Explicit Declarations:** `@field : Type` at the class level.
 2.  **Initialize Inference:** Assignments within the `initialize` method.
-3.  **Parameter Promotion:** `def initialize(@field)` syntax.
+3.  **Parameter Promotion:** `def initialize(@field : Type)` syntax.
 
-If an instance variable is not assigned in `initialize` and not explicitly declared, it is a compile-time error. Nilable fields must be explicitly typed as `T?`.
+```ruby
+class User
+  @role : String                # 1. explicit declaration
+
+  def initialize(@name : String) # 3. parameter promotion → @name : String
+    @age = 0                     # 2. initialize inference → @age : Int
+  end
+end
+```
+
+New instance variables may only be introduced in `initialize` (or via class-level declarations). Introducing a new `@field` outside `initialize` is a compile-time error.
+
+**Definite Assignment:** All non-optional fields must be definitely assigned on all control-flow paths in `initialize`. Optional fields (`T?`) may be left unassigned.
+
+```ruby
+class Example
+  def initialize(flag : Bool)
+    if flag
+      @value = 1
+    end
+    # ERROR: @value not assigned when flag is false
+  end
+end
+
+class ExampleFixed
+  @value : Int?  # optional, may be unassigned
+
+  def initialize(flag : Bool)
+    if flag
+      @value = 1
+    end
+    # OK: @value is optional
+  end
+end
+```
 
 ### 4.4 Optionals (`T?`)
 
@@ -593,35 +627,47 @@ Classes in Rugby describe the shape of objects (Go structs) and their behavior (
 
 ### 7.1 Definition
 
-All instance variables **must** be explicitly declared in the class body.
-
 ```ruby
 class User implements Identifiable
-  # Explicit field declaration
-  @email : String
-  @name : String
-  @age : Int
-
-  # Initialize can still infer assignment, but fields must exist
   def initialize(@name : String, email : String, @age : Int)
     @email = email
   end
+end
 ```
 
-### 7.2 Instance Variables & Layout
+### 7.2 Instance Variables & Layout (Strict Inference)
 
-Rugby classes compile directly to Go structs.
+Rugby classes compile directly to Go structs. Instance variables may be inferred; explicit declarations are optional.
 
 **Rules:**
-1.  **Explicit Declaration:** Every instance variable (`@foo`) used in the class must be declared at the class level with a type.
-2.  **Parameter Promotion:** `def initialize(@field : Type)` is syntax sugar for `self.field = field`, but the field must still be declared.
+
+New instance variables may be introduced only by:
+1. **Explicit Declaration:** `@field : Type` at the class level.
+2. **Parameter Promotion:** `def initialize(@field : Type)` syntax.
+3. **First Assignment in Initialize:** `@field = expr` within `initialize`.
+
+Introducing a new instance variable outside `initialize` is a **compile-time error**.
+
+The compiler determines the complete struct layout at compile time.
+
+**Definite Assignment:** All non-optional fields must be definitely assigned on all control-flow paths in `initialize`. Optional fields (`T?`) may be left unassigned.
 
 ```ruby
 class Point
-  @x : Int
-  @y : Int
-
   def initialize(@x : Int, @y : Int)
+  end
+end
+
+class User
+  @email : String  # explicit declaration (optional)
+
+  def initialize(@name : String, @age : Int)
+    @email = "unknown"
+  end
+
+  def birthday
+    @age += 1  # OK: uses existing field
+    @new = 5   # ERROR: cannot introduce field outside initialize
   end
 end
 ```
@@ -648,11 +694,23 @@ func NewUser(name string, email string, age int) *User {
 
 ### 7.4 Accessors (Properties)
 
-Rugby provides macros to reduce boilerplate, inspired by Crystal:
+Rugby provides macros to reduce boilerplate, inspired by Crystal. Each macro **declares the field** and generates accessor methods:
 
-*   `getter name : String` → Generates `def name -> String`
-*   `setter name : String` → Generates `def name=(v : String)`
-*   `property name : String` → Generates both.
+*   `getter name : String` → Declares `@name : String` + generates `def name -> String`
+*   `setter name : String` → Declares `@name : String` + generates `def name=(v : String)`
+*   `property name : String` → Declares `@name : String` + generates both methods
+
+You do **not** need to separately declare `@name : String` when using these macros. Writing both is redundant.
+
+```ruby
+class User
+  property name : String   # declares @name and generates getter/setter
+  getter age : Int         # declares @age and generates getter only
+
+  def initialize(@name : String, @age : Int)
+  end
+end
+```
 
 These compile to idiomatic Go methods:
 *   `getter` → `func (r *T) Name() T`
