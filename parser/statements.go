@@ -25,8 +25,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseNextStmt()
 	case token.RETURN:
 		return p.parseReturnStmt()
-	case token.RAISE:
-		return p.parseRaiseStmt()
+	case token.PANIC:
+		return p.parsePanicStmt()
 	case token.DEFER:
 		return p.parseDeferStmt()
 	case token.IDENT:
@@ -480,15 +480,15 @@ func (p *Parser) parseReturnStmt() *ast.ReturnStmt {
 	return stmt
 }
 
-func (p *Parser) parseRaiseStmt() *ast.RaiseStmt {
+func (p *Parser) parsePanicStmt() *ast.PanicStmt {
 	line := p.curToken.Line
-	p.nextToken() // consume 'raise'
+	p.nextToken() // consume 'panic'
 
-	stmt := &ast.RaiseStmt{Line: line}
+	stmt := &ast.PanicStmt{Line: line}
 
-	// raise requires a message expression
+	// panic requires a message expression
 	if p.curTokenIs(token.NEWLINE) || p.curTokenIs(token.END) || p.curTokenIs(token.EOF) {
-		p.errorAt(line, p.curToken.Column, "expected expression after raise")
+		p.errorAt(line, p.curToken.Column, "expected expression after panic")
 		return stmt
 	}
 

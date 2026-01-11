@@ -132,5 +132,16 @@ func TestP(t *testing.T) {
 	}
 }
 
+func TestError(t *testing.T) {
+	err := Error("something went wrong")
+	if err == nil {
+		t.Error("Error() returned nil")
+	}
+	if err.Error() != "something went wrong" {
+		t.Errorf("Error() message = %q, want %q", err.Error(), "something went wrong")
+	}
+}
+
 // Exit is not tested as it terminates the program
+// Fatal is not tested as it terminates the program
 // Gets is not tested as it requires stdin mocking

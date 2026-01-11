@@ -2012,11 +2012,11 @@ This is standard Go-style error handling and always works.
 
 ### 15.8 Panics (Programmer Errors)
 
-For unrecoverable programmer errors or impossible states, use `raise`:
+For unrecoverable programmer errors or impossible states, use `panic`:
 
 ```ruby
-raise "unreachable"
-raise "invalid state: #{state}"
+panic "unreachable"
+panic "invalid state: #{state}"
 ```
 
 **Lowering:**
@@ -2025,7 +2025,7 @@ panic("unreachable")
 panic(fmt.Sprintf("invalid state: %v", state))
 ```
 
-**Guideline:** Use `raise` only for invariants and bugs. Use returned `error` for expected failures.
+**Guideline:** Use `panic` only for invariants and bugs. Use returned `error` for expected failures.
 
 ---
 

@@ -412,14 +412,14 @@ type ReturnStmt struct {
 func (r *ReturnStmt) node()     {}
 func (r *ReturnStmt) stmtNode() {}
 
-// RaiseStmt represents a panic: raise "message"
-type RaiseStmt struct {
+// PanicStmt represents a panic: panic "message"
+type PanicStmt struct {
 	Message Expression // the panic message/value
 	Line    int        // source line number
 }
 
-func (r *RaiseStmt) node()     {}
-func (r *RaiseStmt) stmtNode() {}
+func (r *PanicStmt) node()     {}
+func (r *PanicStmt) stmtNode() {}
 
 // DeferStmt represents a defer statement
 type DeferStmt struct {

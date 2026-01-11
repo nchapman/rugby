@@ -76,7 +76,7 @@ const (
 	BREAK     TokenType = "BREAK"
 	NEXT      TokenType = "NEXT"
 	RETURN    TokenType = "RETURN"
-	RAISE     TokenType = "RAISE"
+	PANIC     TokenType = "PANIC"
 	RESCUE    TokenType = "RESCUE"
 	TRUE      TokenType = "TRUE"
 	FALSE     TokenType = "FALSE"
@@ -124,7 +124,7 @@ var keywords = map[string]TokenType{
 	"break":     BREAK,
 	"next":      NEXT,
 	"return":    RETURN,
-	"raise":     RAISE,
+	"panic":     PANIC,
 	"rescue":    RESCUE,
 	"true":      TRUE,
 	"false":     FALSE,

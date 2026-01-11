@@ -673,9 +673,9 @@ end`
 	}
 }
 
-func TestRaiseStatement(t *testing.T) {
+func TestPanicStatement(t *testing.T) {
 	input := `def main
-  raise "something went wrong"
+  panic "something went wrong"
 end`
 
 	l := lexer.New(input)
@@ -688,14 +688,14 @@ end`
 		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
 	}
 
-	raiseStmt, ok := fn.Body[0].(*ast.RaiseStmt)
+	panicStmt, ok := fn.Body[0].(*ast.PanicStmt)
 	if !ok {
-		t.Fatalf("expected RaiseStmt, got %T", fn.Body[0])
+		t.Fatalf("expected PanicStmt, got %T", fn.Body[0])
 	}
 
-	strLit, ok := raiseStmt.Message.(*ast.StringLit)
+	strLit, ok := panicStmt.Message.(*ast.StringLit)
 	if !ok {
-		t.Fatalf("expected StringLit message, got %T", raiseStmt.Message)
+		t.Fatalf("expected StringLit message, got %T", panicStmt.Message)
 	}
 
 	if strLit.Value != "something went wrong" {

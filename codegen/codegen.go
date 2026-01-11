@@ -33,6 +33,7 @@ var kernelFuncs = map[string]kernelFunc{
 			return "runtime.RandFloat"
 		},
 	},
+	"error": {runtimeFunc: "runtime.Error"},
 }
 
 // Kernel functions that can be used as identifiers (without parens)
@@ -492,8 +493,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genNextStmt(s)
 	case *ast.ReturnStmt:
 		g.genReturnStmt(s)
-	case *ast.RaiseStmt:
-		g.genRaiseStmt(s)
+	case *ast.PanicStmt:
+		g.genPanicStmt(s)
 	case *ast.DeferStmt:
 		g.genDeferStmt(s)
 	// Testing constructs
@@ -1854,7 +1855,7 @@ func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
 	}
 }
 
-func (g *Generator) genRaiseStmt(s *ast.RaiseStmt) {
+func (g *Generator) genPanicStmt(s *ast.PanicStmt) {
 	g.writeIndent()
 	g.buf.WriteString("panic(")
 	g.genExpr(s.Message)

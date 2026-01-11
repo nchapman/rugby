@@ -1,11 +1,9 @@
 # Error Handling in Rugby
-# Demonstrates: error type, ! operator, rescue, and raise
-
-import errors
+# Demonstrates: error type, ! operator, rescue, and panic
 
 def might_fail(n : Int) -> (Int, error)
   if n < 0
-    return 0, errors.New("negative number")
+    return 0, error("negative number")
   end
   return n * 2, nil
 end
@@ -19,8 +17,8 @@ def main
   safe = might_fail(-1) rescue 0
   puts("Safe result: #{safe}")
 
-  # Raise for panics (commented out)
-  # raise "something went wrong!"
+  # Panic for unrecoverable errors (commented out)
+  # panic "something went wrong!"
 
   puts("Done!")
 end

@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -68,6 +69,12 @@ func Exit(code int) {
 func Fatal(err error) {
 	fmt.Fprintln(os.Stderr, err)
 	os.Exit(1)
+}
+
+// Error creates a new error with the given message.
+// Rugby: error("message")
+func Error(msg string) error {
+	return errors.New(msg)
 }
 
 // Sleep pauses execution for the given number of seconds.

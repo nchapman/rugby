@@ -2581,9 +2581,9 @@ end`
 	assertContains(t, output, `return 42, true, nil`)
 }
 
-func TestGenerateRaiseStatement(t *testing.T) {
+func TestGeneratePanicStatement(t *testing.T) {
 	input := `def main
-  raise "something went wrong"
+  panic "something went wrong"
 end`
 
 	output := compile(t, input)
@@ -2591,10 +2591,10 @@ end`
 	assertContains(t, output, `panic("something went wrong")`)
 }
 
-func TestGenerateRaiseWithInterpolation(t *testing.T) {
+func TestGeneratePanicWithInterpolation(t *testing.T) {
 	input := `def main
   state = "invalid"
-  raise "bad state: #{state}"
+  panic "bad state: #{state}"
 end`
 
 	output := compile(t, input)
@@ -2602,10 +2602,10 @@ end`
 	assertContains(t, output, `panic(fmt.Sprintf("bad state: %v", state))`)
 }
 
-func TestGenerateRaiseWithVariable(t *testing.T) {
+func TestGeneratePanicWithVariable(t *testing.T) {
 	input := `def main
   msg = "error occurred"
-  raise msg
+  panic msg
 end`
 
 	output := compile(t, input)
@@ -2768,4 +2768,38 @@ end`
 	assertContains(t, output, `err := _err`)
 	assertContains(t, output, `runtime.Puts(fmt.Sprintf("error: %v", err))`)
 	assertContains(t, output, `result = "error"`)
+}
+
+func TestGenerateErrorKernelFunc(t *testing.T) {
+	input := `def validate(n : Int) -> (Int, error)
+  if n < 0
+    return 0, error("negative number")
+  end
+  return n, nil
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should use runtime.Error
+	assertContains(t, output, `runtime.Error("negative number")`)
+}
+
+func TestGenerateErrorWithInterpolation(t *testing.T) {
+	input := `def validate(n : Int) -> (Int, error)
+  if n < 0
+    return 0, error("negative: #{n}")
+  end
+  return n, nil
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should use runtime.Error with fmt.Sprintf
+	assertContains(t, output, `runtime.Error(fmt.Sprintf("negative: %v", n))`)
 }
