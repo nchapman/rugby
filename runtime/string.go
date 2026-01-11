@@ -10,6 +10,7 @@ import (
 
 // Chars splits a string into individual characters (as strings).
 // Ruby: str.chars
+// Note: strings.Split with empty separator splits on UTF-8 character boundaries.
 func Chars(s string) []string {
 	return strings.Split(s, "")
 }

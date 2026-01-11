@@ -38,6 +38,40 @@ end`
 	assertNotContains(t, output, "interface{}") // Should not have old-style interface{}
 }
 
+// TestRangeOverIntOptimization verifies that exclusive ranges starting at 0
+// use range-over-int syntax, while inclusive ranges use traditional for loops.
+func TestRangeOverIntOptimization(t *testing.T) {
+	// Exclusive range 0...n should use range-over-int
+	exclusiveInput := `def main
+  for i in 0...5
+    puts i
+  end
+end`
+	exclusiveOutput := compile(t, exclusiveInput)
+	assertContains(t, exclusiveOutput, "for i := range 5")
+	assertNotContains(t, exclusiveOutput, "i < 5")
+
+	// Inclusive range 0..n should use traditional for loop
+	inclusiveInput := `def main
+  for i in 0..5
+    puts i
+  end
+end`
+	inclusiveOutput := compile(t, inclusiveInput)
+	assertContains(t, inclusiveOutput, "i <= 5")
+	assertNotContains(t, inclusiveOutput, "for i := range")
+
+	// Non-zero start should use traditional for loop
+	nonZeroInput := `def main
+  for i in 1...5
+    puts i
+  end
+end`
+	nonZeroOutput := compile(t, nonZeroInput)
+	assertContains(t, nonZeroOutput, "i := 1")
+	assertContains(t, nonZeroOutput, "i < 5")
+}
+
 // TestGeneratedCodeLints ensures generated code passes golangci-lint
 func TestGeneratedCodeLints(t *testing.T) {
 	// Skip if golangci-lint is not installed

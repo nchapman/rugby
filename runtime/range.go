@@ -38,7 +38,7 @@ func RangeToArray(r Range) []int {
 		return []int{}
 	}
 	result := make([]int, size)
-	for i := 0; i < size; i++ {
+	for i := range size {
 		result[i] = r.Start + i
 	}
 	return result
