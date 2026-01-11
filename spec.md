@@ -1,8 +1,8 @@
-# Rugby Language Spec (MVP v0.1)
+# Rugby Language Specification
 
-**Goal:** Ruby-ish surface syntax that compiles to idiomatic Go and makes using Go libraries feel native.
+**Goal:** Provide a robust, Ruby-inspired surface syntax that compiles to idiomatic Go, enabling developers to build high-performance systems with Go's power and Ruby's elegance.
 
-Rugby is **compiled**, **static**, and **predictable**.
+Rugby is **compiled**, **statically typed**, and **deterministic**.
 
 ---
 
@@ -190,10 +190,7 @@ Symbols are lightweight identifiers starting with `:`.
 **Syntax:** `:status`, `:ok`, `:not_found`
 
 **Compilation:**
-For the MVP, symbols compile to **Go strings**.
-`:ok` → `"ok"`
-
-*Future optimization:* Compile to integer constants for fast comparison.
+Symbols compile to **Go strings**. `:ok` → `"ok"`
 
 ---
 
@@ -239,46 +236,31 @@ end
 nums = (1..5).to_a     # [1, 2, 3, 4, 5]
 ```
 
-### 4.3 Type annotations
+### 4.3 Type Inference
 
-Rugby follows Go's philosophy: rely on Go's type inference where possible.
+Rugby uses a flow-sensitive type inference algorithm inspired by Crystal, designed to map cleanly to Go's static structures.
 
-**Variables:** Type annotations are optional. Without annotation, Go infers from the assignment:
-
+**Local Variables:**
+Types are inferred from their first assignment.
 ```ruby
-x = 5           # x := 5 (Go infers int)
-y : Int64 = 5   # var y int64 = 5 (explicit type)
+x = 5           # x is Int
+y : Int64 = 5   # y is Int64
 ```
 
-**Function parameters:** Type annotations are optional. Without annotation, parameters default to `interface{}`:
-
+**Function Parameters:**
+Parameters can be explicitly typed or left untyped (inferred as `interface{}`).
 ```ruby
-# Untyped - uses interface{}
-def add(a, b)
-  a + b
-end
-# → func add(a interface{}, b interface{}) { ... }
-
-# Typed parameters
-def add(a : Int, b : Int) -> Int
-  a + b
-end
-# → func add(a int, b int) int { return a + b }
+def add(a : Int, b : Int)  # a, b are Int
+def log(msg)               # msg is interface{}
 ```
 
-**Instance variables:** Types are inferred from `initialize` parameter types:
+**Instance Variables:**
+Instance variable types must be deducible at compile-time to generate the underlying Go struct. They are resolved from:
+1.  **Explicit Declarations:** `@field : Type` at the class level.
+2.  **Initialize Inference:** Assignments within the `initialize` method.
+3.  **Parameter Promotion:** `def initialize(@field)` syntax.
 
-```ruby
-class User
-  def initialize(name : String, age : Int)
-    @name = name   # @name is string
-    @age = age     # @age is int
-  end
-end
-# → type User struct { name string; age int }
-```
-
-**Type checking:** Rugby does not perform type checking. Type mismatches are caught by the Go compiler.
+If an instance variable is not assigned in `initialize` and not explicitly declared, it is a compile-time error. Nilable fields must be explicitly typed as `T?`.
 
 ### 4.4 Optionals (`T?`)
 
@@ -403,7 +385,7 @@ end
 Compiles to Go `switch` statement.
 *   Values map to `case val:`
 *   Multiple values `when 1, 2` map to `case 1, 2:`
-*   Type matching (Future): `when String` maps to type switch.
+*   Type matching: `when String` maps to a Go type switch.
 
 ### 5.3 Imperative Loops (Statements)
 
@@ -595,68 +577,82 @@ def read(path : String) -> (Bytes, error)
 end
 ```
 
-Optional sugar (`try`/`?`) may come later, but must lower to explicit error checks.
+The language focuses on explicit error handling consistent with Go's philosophy.
 
 ---
 
 ## 7. Classes
 
+Classes in Rugby describe the shape of objects (Go structs) and their behavior (methods).
+
 ### 7.1 Definition
 
 ```ruby
 class User
-  def initialize(name : String, age : Int)
-    @name = name
-    @age  = age
+  # Explicit field declaration (Crystal-style)
+  @email : String
+  
+  # Properties (generates getter/setter + field)
+  property age : Int
+
+  # Inferred field (via parameter promotion)
+  def initialize(@name : String, email : String, age : Int)
+    @email = email
+    @age = age
   end
 
   def greet -> String
-    "hi #{@name}"
-  end
-
-  def birthday!
-    @age += 1
+    "hi #{@name}, #{@age}"
   end
 end
 ```
 
-### 7.2 Go lowering
+### 7.2 Instance Variables & Layout
 
-* `class User` → `type User struct { name string; age int }`
-* `@name`/`@age` become struct fields (unexported by default)
-* If `pub`, fields are exported
+Rugby classes compile directly to Go structs. The fields of the struct are determined by:
 
-### 7.2.1 Instance variable type inference
+1.  **Explicit Declarations:** `@field : Type` at the class level.
+2.  **Initialize Inference:** Assignments to `@field` inside `initialize`.
+3.  **Parameter Promotion:** `def initialize(@field : Type)` shortcut automatically assigns the argument to the instance variable.
 
-Instance variable types are inferred by scanning **all methods** in the class.
+**Rules:**
+*   Every instance variable MUST have a resolvable type.
+*   If a variable is used in other methods but not declared/initialized, it is an error.
+*   Nilable fields must be explicitly typed as `T?` (e.g., `@bio : String?`) and default to `nil`.
+
+### 7.3 Initialization (`new`)
+
+Rugby separates allocation from initialization, but exposes a unified `new` class method.
+
+*   `User.new(...)` is automatically generated.
+*   It allocates the struct (Go zero value).
+*   It calls `initialize(...)` on the new instance.
 
 ```ruby
-class User
-  def initialize(name : String)
-    @name = name
-  end
-  
-  def set_age(age : Int)
-    @age = age  # @age inferred as Int, added to struct
-  end
-end
+# Source
+u = User.new("Alice", "a@b.com", 30)
+
+# Generated Go
+func NewUser(name string, email string, age int) *User {
+    u := &User{}
+    u.Initialize(name, email, age)
+    return u
+}
 ```
 
-Rules:
-* All assignments to the same `@var` must have consistent types.
-* Fields implied by non-`initialize` methods are created with Go's zero value.
-* It is good practice, but not strictly required, to initialize all fields in `initialize`.
+### 7.4 Accessors (Properties)
 
-### 7.3 Constructors
+Rugby provides macros to reduce boilerplate, inspired by Crystal:
 
-* `initialize` generates a constructor function
-* `User.new(...)` rewrites to constructor call
-* If class is `pub`: `NewUser(...) *User`
-* If internal: `newUser(...) *User`
+*   `getter name : String` → Generates `def name -> String`
+*   `setter name : String` → Generates `def name=(v : String)`
+*   `property name : String` → Generates both.
 
-**Note:** Constructors always return pointers (`*T`) for consistency. This allows mutation methods (`!`) to work without reassignment.
+These compile to idiomatic Go methods:
+*   `getter` → `func (r *T) Name() T`
+*   `setter` → `func (r *T) SetName(v T)` (Standard Go setter pattern)
 
-### 7.4 Methods and receivers
+### 7.5 Methods and receivers
 
 **Rule:** All methods use **pointer receivers** (`func (r *T)`) by default.
 * This ensures Ruby-like reference semantics (modifying `@field` always works).
@@ -672,7 +668,7 @@ end
 
 Compiles to: `func (u *User) name() string { ... }`
 
-### 7.5 Methods with `!`
+### 7.6 Methods with `!`
 
 In Rugby, `!` is a **naming convention** only. It does not change compilation semantics (since all methods are already pointer receivers).
 
@@ -688,35 +684,54 @@ end
 
 This allows Rugby code to communicate "danger/mutation" (`save!`) while generating standard Go names.
 
-### 7.6 Embedding (composition)
+### 7.7 Inheritance & Specialization
+
+Rugby supports code reuse through **Specialization**. While it uses Go's struct embedding for data layout, it ensures Ruby-like method dispatch by specializing inherited methods.
 
 ```ruby
-class Service < Logger, Authenticator
-  def run
-    info("running")
-    authenticate!
+class Parent
+  def hello
+    puts "Hello, #{name}" # Calls name() on self
+  end
+  def name; "Parent"; end
+end
+
+class Child < Parent
+  def name; "Child"; end
+end
+
+Child.new.hello # Output: "Hello, Child"
+```
+
+**Semantics:**
+*   **Data Layout:** `class Child < Parent` embeds the `Parent` struct into `Child` (Standard Go embedding).
+*   **Method Specialization:** The compiler automatically "clones" methods from `Parent` into `Child`.
+    *   During cloning, the receiver (`self`) is updated from `*Parent` to `*Child`.
+    *   This ensures that any calls to `self.method` within an inherited method correctly resolve to the child's overrides.
+*   **Dispatch:** Unlike Go's default embedding behavior (where the parent method is static and only knows about the parent), Rugby's specialization provides **Dynamic Dispatch** semantics with **Static Cost**.
+
+**Super:**
+The `super` keyword is used to call the implementation of the method as defined in the parent class.
+```ruby
+class Child < Parent
+  def hello
+    print "Child says: "
+    super # Calls Parent#hello
   end
 end
 ```
 
-Compiles to:
+**Construction:**
+*   `Child.new` automatically initializes embedded parents if they have zero-arg initializers.
+*   If parents require arguments, `initialize` must call `super(args...)` (mapped to parent initializers).
 
-```go
-type Service struct {
-    Logger
-    Authenticator
-}
-```
+### 7.8 Polymorphism & Interfaces
 
-* `<` means embedding (Go struct embedding).
-* Multiple embedding is supported (comma-separated).
-* Name collisions in embedded types follow Go's rules (explicit selector required if ambiguous).
+Rugby uses **Specialization** for code reuse and **Interfaces** for type-based polymorphism.
+*   If a variable needs to hold different types (e.g., `Array[Speaker]`), use an Interface.
+*   If you just want to share code between classes, use Inheritance or Modules.
 
-### 7.7 No inheritance
-
-Rugby does **not** support Ruby inheritance semantics.
-
-### 7.8 Special Methods
+### 7.9 Special Methods
 
 **String Conversion (`to_s`):**
 * `def to_s` compiles to `String() string`
@@ -730,27 +745,61 @@ Rugby does **not** support Ruby inheritance semantics.
     1. If `a` has an `Equal(interface{})` method, call `a.Equal(b)`.
     2. Else if `a` and `b` are slices/maps, perform a deep comparison.
     3. Else, use standard Go `==` (identity/primitive equality).
-* This allows Rugby to support both semantic equality (user-defined) and safe deep equality for Go types.
 
-### 7.9 The `self` keyword
+### 7.10 The `self` keyword
 
 * `self` refers to the current instance (the method receiver).
 * It allows method chaining (`return self`) and disambiguation (`self.name` vs local `name`).
 * Compiles to the generated receiver variable name (e.g., `u` in `func (u *User)...`).
 
+---
+
+## 8. Modules (Mixins)
+
+Modules are the primary mechanism for sharing behavior across classes, functioning exactly like Ruby modules and compiling to Go struct embedding.
+
+### 8.1 Definition
+
 ```ruby
-def with_name(n)
-  @name = n
-  self
+module Callable
+  def call
+    puts "calling..."
+  end
+end
+
+module Named
+  property name : String
 end
 ```
 
+*   **Stateless Modules:** Compile to a type with methods.
+*   **Stateful Modules:** Can define properties/fields. When included, these fields are embedded into the host class.
+
+### 8.2 Including Modules
+
+```ruby
+class Worker
+  include Callable
+  include Named
+  
+  def work
+    call()        # Calls Callable#call
+    self.name = "Job" # Accesses Named#name
+  end
+end
+```
+
+**Compilation:**
+*   `include T` is semantically identical to `class C < T`.
+*   It embeds the Module's generated struct into the Class.
+*   **Specialization:** Just like inheritance, all methods from the Module are **specialized** for the host class. This allows a Module to call methods that are expected to be provided by the host class (Mixins).
+*   This provides true **Multiple Inheritance of Implementation**.
 
 ---
 
-## 8. Interfaces
+## 9. Interfaces
 
-### 8.1 Declaration
+### 9.1 Declaration
 
 ```ruby
 interface Speaker
@@ -777,9 +826,9 @@ type Speaker interface { Speak() string }
 
 ---
 
-## 9. Visibility & Naming
+## 10. Visibility & Naming
 
-### 9.1 Core principle
+### 10.1 Core principle
 
 **Inside a Rugby module, everything is usable.**
 
@@ -790,7 +839,7 @@ The `pub` keyword controls what becomes visible when the compiled Go package is 
 
 There is no Ruby-style `private`/`public`.
 
-### 9.2 What can be `pub`
+### 10.2 What can be `pub`
 
 **Functions:**
 
@@ -826,7 +875,7 @@ pub interface Greeter
 end
 ```
 
-### 9.3 Rugby naming conventions
+### 10.3 Rugby naming conventions
 
 These are **style rules**, not visibility rules:
 
@@ -834,7 +883,7 @@ These are **style rules**, not visibility rules:
 * Functions, methods, variables → `snake_case`
 * Capitalization in Rugby **never** controls visibility
 
-### 9.4 Go name generation
+### 10.4 Go name generation
 
 Rugby names are rewritten to idiomatic Go names:
 
@@ -845,11 +894,11 @@ Rugby names are rewritten to idiomatic Go names:
 | `def user_id` | no | `userID` |
 | `pub def user_id` | yes | `UserID` |
 
-### 9.5 Acronym list
+### 10.5 Acronym list
 
 To keep output Go-idiomatic, the compiler uses an acronym table.
 
-**Default MVP acronyms:**
+**Standard acronyms:**
 
 `id`, `url`, `uri`, `http`, `https`, `json`, `xml`, `api`, `uuid`, `ip`, `tcp`, `udp`, `sql`, `tls`, `ssh`, `cpu`, `gpu`
 
@@ -858,9 +907,9 @@ Rules:
 * Exported: `id` → `ID`, `http` → `HTTP`
 * Unexported: first-part acronym `http_*` → `http*`, later-part `*_id` → `*ID`
 
-Configurable via compiler config later; hardcoded for MVP.
+These mappings are currently standardized in the compiler.
 
-### 9.6 Name collision rules
+### 10.6 Name collision rules
 
 Collisions occur when different Rugby identifiers normalize to the same Go identifier:
 
@@ -873,7 +922,7 @@ Collisions occur when different Rugby identifiers normalize to the same Go ident
 * The resulting Go name
 * Suggested fix
 
-### 9.7 Reserved words
+### 10.7 Reserved words
 
 If a Go identifier would be a keyword (`type`, `var`, `func`) or conflict with generated names (`main`, `init`, `NewTypeName`):
 
@@ -882,9 +931,9 @@ If a Go identifier would be a keyword (`type`, `var`, `func`) or conflict with g
 
 ---
 
-## 10. Go Interop
+## 11. Go Interop
 
-### 10.1 Imports
+### 11.1 Imports
 
 ```ruby
 import net/http
@@ -894,7 +943,7 @@ import encoding/json as json
 * `import a/b` → Go `import "a/b"`
 * `import a/b as x` → Go `import x "a/b"`
 
-### 10.2 Calling Go functions
+### 11.2 Calling Go functions
 
 Rugby calls Go packages with dot syntax:
 
@@ -915,12 +964,12 @@ Rules:
 * Mapping is compile-time only
 * Compiler error if ambiguous
 
-### 10.3 Struct fields and methods
+### 11.3 Struct fields and methods
 
 * `resp.Body` allowed as-is
 * Optional: `resp.body` → `resp.Body` for Go types
 
-### 10.4 Defer
+### 11.4 Defer
 
 ```ruby
 defer resp.Body.Close
@@ -936,18 +985,18 @@ Rule: `defer <callable>` compiles to `defer f()`.
 
 ---
 
-## 11. Runtime Package
+## 12. Runtime Package
 
 Rugby provides a Go runtime package (`rugby/runtime`) that gives Ruby-like ergonomics to Go's built-in types. This is what makes Rugby feel like Ruby while compiling to idiomatic Go.
 
-### 11.1 Design principles
+### 12.1 Design principles
 
 * **Wrap, don't reinvent:** Functions wrap Go stdlib, adding Ruby-style APIs
 * **Type-safe generics:** Use Go 1.18+ generics for collections
 * **Zero-cost when unused:** Only imported when Rugby code uses these methods
 * **Predictable mapping:** Each Rugby method maps to a clear runtime function
 
-### 11.2 Package organization
+### 12.2 Package organization
 
 ```
 runtime/
@@ -960,7 +1009,7 @@ runtime/
 └── conv.go       # Type conversions
 ```
 
-### 11.3 Array methods (`Array[T]`)
+### 12.3 Array methods (`Array[T]`)
 
 **Iteration:**
 * `each { |x| }` → `runtime.Each(arr, fn)`
@@ -999,7 +1048,7 @@ runtime/
 * `reverse` → `runtime.Reversed(arr)` → new slice
 * `sort` → `runtime.Sorted(arr)` → new slice
 
-### 11.4 Map methods (`Map[K, V]`)
+### 12.4 Map methods (`Map[K, V]`)
 
 **Iteration:**
 * `each { |k, v| }` → `runtime.MapEach(m, fn)`
@@ -1019,7 +1068,7 @@ runtime/
 * `reject { |k, v| }` → `runtime.MapReject(m, fn)` → `Map[K, V]`
 * `merge(other)` → `runtime.Merge(m, other)` → `Map[K, V]`
 
-### 11.5 String methods
+### 12.5 String methods
 
 **Query:**
 * `length` / `size` → `len(s)` (inlined, byte length)
@@ -1048,7 +1097,7 @@ runtime/
 * `to_i?` → `runtime.StringToInt(s)` → `Int?`
 * `to_f?` → `runtime.StringToFloat(s)` → `Float?`
 
-### 11.6 Integer methods
+### 12.6 Integer methods
 
 **Predicates:**
 * `even?` → `n % 2 == 0` (inlined)
@@ -1070,7 +1119,7 @@ runtime/
 * `to_s` → `strconv.Itoa(n)` (inlined)
 * `to_f` → `float64(n)` (inlined)
 
-### 11.7 Float methods
+### 12.7 Float methods
 
 **Rounding:**
 * `floor` → `math.Floor` (inlined)
@@ -1088,7 +1137,7 @@ runtime/
 * `to_i` → `int(f)` (inlined)
 * `to_s` → `strconv.FormatFloat` (inlined)
 
-### 11.8 Codegen integration
+### 12.8 Codegen integration
 
 The compiler recognizes Rugby method calls and either:
 1. **Inlines** simple operations (predicates, length, type casts)
@@ -1108,7 +1157,7 @@ evens := runtime.Select(nums, func(n int) bool { return n % 2 == 0 })
 sum := runtime.Reduce(evens, 0, func(acc, n int) int { return acc + n })
 ```
 
-### 11.9 Global functions (kernel)
+### 12.9 Global functions (kernel)
 
 Rugby provides top-level functions similar to Ruby's Kernel methods. These are available without qualification and compile to `runtime.*` calls.
 
@@ -1129,13 +1178,66 @@ Rugby provides top-level functions similar to Ruby's Kernel methods. These are a
 * `rand(n)` → `runtime.RandInt(n)` - random int [0, n)
 * `rand` → `runtime.RandFloat()` - random float [0.0, 1.0)
 
-### 11.10 Import generation
+### 12.10 Import generation
 
 The compiler automatically adds `import "rugby/runtime"` when any runtime functions are used. All kernel functions and stdlib methods go through the runtime package for consistency.
 
+## 13. Concurrency
+
+Rugby treats Go's concurrency primitives as first-class citizens, providing Ruby-like syntax for high-performance concurrent programming.
+
+### 13.1 Goroutines (`go`)
+
+The `go` keyword executes a call in a new goroutine.
+
+```ruby
+go fetch_url(url)
+go do
+  puts "running in background"
+end
+```
+
+**Compilation:**
+*   `go func_call()` → `go funcCall()`
+*   `go do ... end` → `go func() { ... }() (anonymous goroutine)`
+
+### 13.2 Channels (`Chan[T]`)
+
+Channels are typed pipes used for communication and synchronization.
+
+**Syntax:**
+*   `ch = Chan[Int].new(buffer_size)` (Buffered)
+*   `ch = Chan[Int].new` (Unbuffered)
+*   `ch << val` (Send)
+*   `val = ch.receive` (Receive)
+*   `val, ok = ch.receive?` (Safe receive)
+
+**Compilation:**
+*   `make(chan T, n)`
+*   `ch <- val`
+*   `val := <-ch`
+
+### 13.3 Select
+
+The `select` statement allows a goroutine to wait on multiple communication operations.
+
+```ruby
+select
+when val = ch1.receive
+  puts "received #{val}"
+when ch2 << 42
+  puts "sent to ch2"
+else
+  puts "no communication"
+end
+```
+
+**Compilation:**
+Maps directly to Go's `select` block.
+
 ---
 
-## 12. Diagnostics
+## 14. Diagnostics
 
 * Type errors and unresolved identifiers are compile-time errors
 * Interop mapping errors (e.g., `io.read_all` not found) must show:
@@ -1143,30 +1245,4 @@ The compiler automatically adds `import "rugby/runtime"` when any runtime functi
   * Intended Go package/type
   * Suggested candidates (`ReadAll`)
 
----
 
-## 13. MVP Scope
-
-### Parser + AST
-
-* imports
-* defs (functions)
-* classes with initialize + methods
-* if/else/elsif
-* while loops
-* each blocks
-
-### Type inference
-
-* locals, params, returns
-* optional `T?` inference
-
-### Go emitter
-
-* generates `.go` files + prelude
-* preserves readable formatting
-
-### Go interop resolver
-
-* package member resolution
-* snake_case → CamelCase mapping
