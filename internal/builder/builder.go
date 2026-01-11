@@ -109,6 +109,18 @@ func (b *Builder) compileFile(inputPath string) (string, bool, error) {
 		return "", false, fmt.Errorf("invalid path %s: %w", inputPath, err)
 	}
 
+	outputPath := b.project.GenPath(absPath)
+
+	// Check if we can skip compilation (output newer than source)
+	if b.isUpToDate(absPath, outputPath) {
+		if b.verbose {
+			b.logger.Debug("up to date, skipping", "file", b.project.RelPath(absPath))
+		}
+		// Still need to check for top-level statements by reading existing output
+		// For now, assume it might have top-level (conservative)
+		return outputPath, true, nil
+	}
+
 	source, err := os.ReadFile(absPath)
 	if err != nil {
 		return "", false, fmt.Errorf("error reading %s: %w", inputPath, err)
@@ -136,7 +148,6 @@ func (b *Builder) compileFile(inputPath string) (string, bool, error) {
 	}
 
 	// Write to .rugby/gen/
-	outputPath := b.project.GenPath(absPath)
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0755); err != nil {
 		return "", false, fmt.Errorf("error creating directory: %w", err)
 	}
@@ -149,6 +160,21 @@ func (b *Builder) compileFile(inputPath string) (string, bool, error) {
 	}
 
 	return outputPath, hasTopLevel, nil
+}
+
+// isUpToDate checks if the output file is newer than the source file.
+func (b *Builder) isUpToDate(sourcePath, outputPath string) bool {
+	sourceInfo, err := os.Stat(sourcePath)
+	if err != nil {
+		return false
+	}
+
+	outputInfo, err := os.Stat(outputPath)
+	if err != nil {
+		return false // output doesn't exist
+	}
+
+	return outputInfo.ModTime().After(sourceInfo.ModTime())
 }
 
 // hasTopLevelStatements checks if a program contains executable top-level statements
@@ -184,9 +210,11 @@ const RuntimeModule = "github.com/nchapman/rugby"
 // Generates .rugby/go.mod from rugby.mod (if present) + injects runtime dep.
 func (b *Builder) setupGenDir() error {
 	goModPath := filepath.Join(b.project.GenDir, "go.mod")
+	goSumPath := filepath.Join(b.project.GenDir, "go.sum")
 
 	// Check if we need to regenerate go.mod
-	if !b.needsGoModUpdate(goModPath) {
+	needsUpdate := b.needsGoModUpdate(goModPath)
+	if !needsUpdate {
 		if b.verbose {
 			b.logger.Debug("go.mod up to date, skipping regeneration")
 		}
@@ -203,14 +231,35 @@ func (b *Builder) setupGenDir() error {
 		b.logger.Info("generated", "file", ".rugby/go.mod")
 	}
 
-	// Run go mod tidy to resolve dependencies
-	cmd := exec.Command("go", "mod", "tidy")
-	cmd.Dir = b.project.GenDir
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("go mod tidy failed: %s", string(output))
+	// Only run go mod tidy if go.sum doesn't exist or go.mod is newer
+	if b.needsModTidy(goModPath, goSumPath) {
+		if b.verbose {
+			b.logger.Debug("running go mod tidy")
+		}
+		cmd := exec.Command("go", "mod", "tidy")
+		cmd.Dir = b.project.GenDir
+		if output, err := cmd.CombinedOutput(); err != nil {
+			return fmt.Errorf("go mod tidy failed: %s", string(output))
+		}
 	}
 
 	return nil
+}
+
+// needsModTidy checks if go mod tidy needs to run.
+func (b *Builder) needsModTidy(goModPath, goSumPath string) bool {
+	goSumInfo, err := os.Stat(goSumPath)
+	if err != nil {
+		return true // go.sum doesn't exist
+	}
+
+	goModInfo, err := os.Stat(goModPath)
+	if err != nil {
+		return true // go.mod doesn't exist (shouldn't happen)
+	}
+
+	// Run tidy if go.mod is newer than go.sum
+	return goModInfo.ModTime().After(goSumInfo.ModTime())
 }
 
 // needsGoModUpdate checks if .rugby/go.mod needs to be regenerated.
@@ -339,12 +388,53 @@ func (b *Builder) Run(file string, args []string) error {
 	binName := strings.TrimSuffix(base, filepath.Ext(base))
 	binPath := b.project.BinPath(binName)
 
-	if err := b.goBuild(result.GenFiles, binPath); err != nil {
-		return err
+	// Skip build if binary is up to date
+	if !b.needsRebuild(result.GenFiles, binPath) {
+		if b.verbose {
+			b.logger.Debug("binary up to date, skipping build")
+		}
+	} else {
+		if err := b.goBuild(result.GenFiles, binPath); err != nil {
+			return err
+		}
 	}
 
 	// Execute
 	return b.execute(binPath, args)
+}
+
+// needsRebuild checks if the binary needs to be rebuilt.
+// Returns true if binary doesn't exist or any source file is newer.
+func (b *Builder) needsRebuild(genFiles []string, binPath string) bool {
+	binInfo, err := os.Stat(binPath)
+	if err != nil {
+		return true // binary doesn't exist
+	}
+	binTime := binInfo.ModTime()
+
+	// Check if any generated file is newer than the binary
+	for _, genFile := range genFiles {
+		genInfo, err := os.Stat(genFile)
+		if err != nil {
+			return true // can't stat, rebuild to be safe
+		}
+		if genInfo.ModTime().After(binTime) {
+			return true
+		}
+	}
+
+	// Also check go.mod and go.sum
+	goModPath := filepath.Join(b.project.GenDir, "go.mod")
+	if info, err := os.Stat(goModPath); err == nil && info.ModTime().After(binTime) {
+		return true
+	}
+
+	goSumPath := filepath.Join(b.project.GenDir, "go.sum")
+	if info, err := os.Stat(goSumPath); err == nil && info.ModTime().After(binTime) {
+		return true
+	}
+
+	return false
 }
 
 // goBuild runs go build in the gen directory.
