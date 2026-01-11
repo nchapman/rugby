@@ -84,26 +84,26 @@ type MethodDef struct {
 // ReceiverType -> MethodName -> MethodDef
 var stdLib = map[string]map[string]MethodDef{
 	"Array": {
-		"join":    {RuntimeFunc: "runtime.Join", ReturnType: "String"},
-		"flatten": {RuntimeFunc: "runtime.Flatten", ReturnType: "Array"},
-		"uniq":    {RuntimeFunc: "runtime.Uniq", ReturnType: "Array"},
-		"sort":    {RuntimeFunc: "runtime.Sort", ReturnType: "Array"},
-		"shuffle": {RuntimeFunc: "runtime.Shuffle", ReturnType: "Array"},
-		"sample":  {RuntimeFunc: "runtime.Sample", ReturnType: ""}, // T
-		"first":   {RuntimeFunc: "runtime.First", ReturnType: ""},  // T
-		"last":    {RuntimeFunc: "runtime.Last", ReturnType: ""},   // T
-		"reverse": {RuntimeFunc: "runtime.Reversed", ReturnType: "Array"},
-		"rotate":  {RuntimeFunc: "runtime.Rotate", ReturnType: "Array"},
+		"join":     {RuntimeFunc: "runtime.Join", ReturnType: "String"},
+		"flatten":  {RuntimeFunc: "runtime.Flatten", ReturnType: "Array"},
+		"uniq":     {RuntimeFunc: "runtime.Uniq", ReturnType: "Array"},
+		"sort":     {RuntimeFunc: "runtime.Sort", ReturnType: "Array"},
+		"shuffle":  {RuntimeFunc: "runtime.Shuffle", ReturnType: "Array"},
+		"sample":   {RuntimeFunc: "runtime.Sample", ReturnType: ""}, // T
+		"first":    {RuntimeFunc: "runtime.First", ReturnType: ""},  // T
+		"last":     {RuntimeFunc: "runtime.Last", ReturnType: ""},   // T
+		"reverse":  {RuntimeFunc: "runtime.Reversed", ReturnType: "Array"},
+		"rotate":   {RuntimeFunc: "runtime.Rotate", ReturnType: "Array"},
 		"include?": {RuntimeFunc: "runtime.Contains", ReturnType: "Bool"},
 	},
 	"Map": {
-		"keys":    {RuntimeFunc: "runtime.Keys", ReturnType: "Array"},
-		"values":  {RuntimeFunc: "runtime.Values", ReturnType: "Array"},
+		"keys":     {RuntimeFunc: "runtime.Keys", ReturnType: "Array"},
+		"values":   {RuntimeFunc: "runtime.Values", ReturnType: "Array"},
 		"has_key?": {RuntimeFunc: "runtime.MapHasKey", ReturnType: "Bool"},
-		"delete":  {RuntimeFunc: "runtime.MapDelete", ReturnType: ""}, // V
-		"clear":   {RuntimeFunc: "runtime.MapClear", ReturnType: ""},
-		"invert":  {RuntimeFunc: "runtime.MapInvert", ReturnType: "Map"},
-		"merge":   {RuntimeFunc: "runtime.Merge", ReturnType: "Map"},
+		"delete":   {RuntimeFunc: "runtime.MapDelete", ReturnType: ""}, // V
+		"clear":    {RuntimeFunc: "runtime.MapClear", ReturnType: ""},
+		"invert":   {RuntimeFunc: "runtime.MapInvert", ReturnType: "Map"},
+		"merge":    {RuntimeFunc: "runtime.Merge", ReturnType: "Map"},
 	},
 	"String": {
 		"split":      {RuntimeFunc: "runtime.Split", ReturnType: "Array"},
@@ -804,19 +804,19 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 	if g.currentClass != "" {
 		recv := receiverName(g.currentClass)
 		g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, s.Name))
-		
+
 		// Check for optional wrapping
 		fieldType := g.classFields[s.Name]
 		sourceType := g.inferTypeFromExpr(s.Value)
 		needsWrap := false
-		
+
 		if isValueTypeOptional(fieldType) {
 			baseType := strings.TrimSuffix(fieldType, "?")
 			if sourceType == baseType {
 				needsWrap = true
 			}
 		}
-		
+
 		if needsWrap {
 			baseType := strings.TrimSuffix(fieldType, "?")
 			g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
@@ -845,25 +845,18 @@ func (g *Generator) genOrAssignStmt(s *ast.OrAssignStmt) {
 		// Variable exists: generate check
 		g.writeIndent()
 		g.buf.WriteString("if ")
-		
+
 		declaredType := g.vars[s.Name]
-		if isValueTypeOptional(declaredType) {
-			// Value type optional: check !x.Valid
-			g.buf.WriteString("!")
-			g.buf.WriteString(s.Name)
-			g.buf.WriteString(".Valid")
-		} else {
-			// Reference type or standard: check x == nil
-			g.buf.WriteString(s.Name)
-			g.buf.WriteString(" == nil")
-		}
-		
+		// Check if nil
+		g.buf.WriteString(s.Name)
+		g.buf.WriteString(" == nil")
+
 		g.buf.WriteString(" {\n")
 		g.indent++
 		g.writeIndent()
 		g.buf.WriteString(s.Name)
 		g.buf.WriteString(" = ")
-		
+
 		// Check for optional wrapping
 		sourceType := g.inferTypeFromExpr(s.Value)
 		needsWrap := false
@@ -916,24 +909,17 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 	// Generate check
 	g.writeIndent()
 	g.buf.WriteString("if ")
-	
-	if isValueTypeOptional(fieldType) {
-		// Value type optional: check !field.Valid
-		g.buf.WriteString("!")
-		g.buf.WriteString(field)
-		g.buf.WriteString(".Valid")
-	} else {
-		// Reference type: check field == nil
-		g.buf.WriteString(field)
-		g.buf.WriteString(" == nil")
-	}
-	
+
+	// Check if nil
+	g.buf.WriteString(field)
+	g.buf.WriteString(" == nil")
+
 	g.buf.WriteString(" {\n")
 	g.indent++
 	g.writeIndent()
 	g.buf.WriteString(field)
 	g.buf.WriteString(" = ")
-	
+
 	// Check for optional wrapping
 	sourceType := g.inferTypeFromExpr(s.Value)
 	needsWrap := false
@@ -943,7 +929,7 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 			needsWrap = true
 		}
 	}
-	
+
 	if needsWrap {
 		baseType := strings.TrimSuffix(fieldType, "?")
 		g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
@@ -967,7 +953,7 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 	if isOptionalMethodCall(s.Value) {
 		var receiver ast.Expression
 		var method string
-		
+
 		if call, ok := s.Value.(*ast.CallExpr); ok {
 			if sel, ok := call.Func.(*ast.SelectorExpr); ok {
 				receiver = sel.X
@@ -980,13 +966,29 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 
 		if receiver != nil {
 			om := optionalMethods[method]
-			g.buf.WriteString(s.Name)
-			g.buf.WriteString(", _ := ")
+			// runtime.ToOptionalInt(runtime.StringToInt(...))
+			baseType := om.resultType // "Int", "Float"
+
+			if s.Type != "" {
+				// Typed declaration
+				g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
+				g.vars[s.Name] = s.Type
+			} else if !g.isDeclared(s.Name) {
+				// New variable - infer as OptionalT
+				g.buf.WriteString(s.Name)
+				g.buf.WriteString(" := ")
+				g.vars[s.Name] = baseType + "?"
+			} else {
+				// Assignment
+				g.buf.WriteString(s.Name)
+				g.buf.WriteString(" = ")
+			}
+
+			g.buf.WriteString(fmt.Sprintf("runtime.ToOptional%s(", baseType))
 			g.buf.WriteString(om.runtimeFunc)
 			g.buf.WriteString("(")
 			g.genExpr(receiver)
-			g.buf.WriteString(")\n")
-			g.vars[s.Name] = om.resultType
+			g.buf.WriteString("))\n")
 			return
 		}
 	}
@@ -1007,7 +1009,7 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 
 	if isNilAssignment && isValueTypeOptional(targetType) {
 		baseType := strings.TrimSuffix(targetType, "?")
-		
+
 		if s.Type != "" && !g.isDeclared(s.Name) {
 			// Typed declaration: var x Int? = nil
 			g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
@@ -1022,7 +1024,7 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 			g.buf.WriteString(" := ")
 			g.vars[s.Name] = ""
 		}
-		
+
 		g.buf.WriteString(fmt.Sprintf("runtime.None%s()", baseType))
 		g.buf.WriteString("\n")
 		return
@@ -1070,12 +1072,7 @@ func (g *Generator) genCondition(cond ast.Expression) {
 	// Check if condition is a simple identifier
 	if ident, ok := cond.(*ast.Ident); ok {
 		if varType, exists := g.vars[ident.Name]; exists && isOptionalType(varType) {
-			if isValueTypeOptional(varType) {
-				// Value type optional: check .Valid
-				g.buf.WriteString(ident.Name + ".Valid")
-				return
-			}
-			// Reference type optional: check != nil
+			// Optional type: check != nil
 			g.buf.WriteString(ident.Name + " != nil")
 			return
 		}
@@ -1273,11 +1270,11 @@ func (g *Generator) genForRangeVarLoop(varName string, rangeVar string, body []a
 	g.buf.WriteString(" := ")
 	g.buf.WriteString(rangeVar)
 	g.buf.WriteString(".Start; ")
-	
+
 	// Condition: (r.Exclusive && i < r.End) || (!r.Exclusive && i <= r.End)
-	g.buf.WriteString(fmt.Sprintf("(%s.Exclusive && %s < %s.End) || (!%s.Exclusive && %s <= %s.End)", 
+	g.buf.WriteString(fmt.Sprintf("(%s.Exclusive && %s < %s.End) || (!%s.Exclusive && %s <= %s.End)",
 		rangeVar, varName, rangeVar, rangeVar, varName, rangeVar))
-	
+
 	g.buf.WriteString("; ")
 	g.buf.WriteString(varName)
 	g.buf.WriteString("++ {\n")
@@ -2589,8 +2586,8 @@ func mapType(rubyType string) string {
 	if strings.HasSuffix(rubyType, "?") {
 		baseType := strings.TrimSuffix(rubyType, "?")
 		if valueTypes[baseType] {
-			// Value type optional -> runtime.OptionalT
-			return "runtime.Optional" + baseType
+			// Value type optional -> *T
+			return "*" + mapType(baseType)
 		}
 		// Reference types: slices/maps are already nullable, classes use pointer
 		goBase := mapType(baseType)

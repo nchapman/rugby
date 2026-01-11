@@ -143,8 +143,8 @@ func (b *BoolLit) exprNode() {}
 // NilLit represents the nil literal
 type NilLit struct{}
 
-func (n *NilLit) node()     {}
-func (n *NilLit) exprNode() {}
+func (n *NilLit) node()          {}
+func (n *NilLit) exprNode()      {}
 func (n *NilLit) String() string { return "nil" }
 
 // SymbolLit represents a symbol literal (:foo, :status, etc.)
@@ -381,7 +381,7 @@ func (i *InstanceVar) exprNode() {}
 
 // InstanceVarAssign represents @name = value
 type InstanceVarAssign struct {
-	Name  string     // variable name without @
+	Name  string // variable name without @
 	Value Expression
 }
 
@@ -390,7 +390,7 @@ func (i *InstanceVarAssign) stmtNode() {}
 
 // InstanceVarOrAssign represents @name ||= value
 type InstanceVarOrAssign struct {
-	Name  string     // variable name without @
+	Name  string // variable name without @
 	Value Expression
 }
 
@@ -399,9 +399,9 @@ func (i *InstanceVarOrAssign) stmtNode() {}
 
 // InterfaceDecl represents an interface definition
 type InterfaceDecl struct {
-	Name    string        // interface name (e.g., "Speaker")
-	Methods []*MethodSig  // method signatures (no body)
-	Pub     bool          // true if exported (pub interface)
+	Name    string       // interface name (e.g., "Speaker")
+	Methods []*MethodSig // method signatures (no body)
+	Pub     bool         // true if exported (pub interface)
 }
 
 func (i *InterfaceDecl) node()     {}

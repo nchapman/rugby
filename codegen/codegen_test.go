@@ -791,71 +791,38 @@ end`
 }
 
 func TestBraceBlockCodegen(t *testing.T) {
-
 	input := `def main
-
   arr.each { |x| puts x }
-
 end`
 
-
-
 	output := compile(t, input)
-
-
 
 	assertContains(t, output, `runtime.Each(arr, func(x interface{}) bool {`)
-
 	assertContains(t, output, `runtime.Puts(x)`)
-
 	assertContains(t, output, `return true`)
-
 }
-
-
 
 func TestBraceBlockMapCodegen(t *testing.T) {
-
 	input := `def main
-
   result = arr.map { |x| x * 2 }
-
 end`
 
-
-
 	output := compile(t, input)
-
-
 
 	assertContains(t, output, `runtime.Map(arr, func(x interface{}) (interface{}, bool, bool) {`)
-
 	assertContains(t, output, `return (x * 2), true, true`)
-
 }
 
-
-
 func TestBraceBlockTimesCodegen(t *testing.T) {
-
 	input := `def main
-
   5.times { |i| puts i }
-
 end`
-
-
 
 	output := compile(t, input)
 
-
-
 	assertContains(t, output, `runtime.Times(5, func(i int) bool {`)
-
 	assertContains(t, output, `runtime.Puts(i)`)
-
 	assertContains(t, output, `return true`)
-
 }
 
 func TestEmptyClassCodegen(t *testing.T) {
@@ -2025,8 +1992,8 @@ end`
 
 	output := compile(t, input)
 
-	// Value type optionals use runtime.OptionalT
-	assertContains(t, output, "func find(id runtime.OptionalInt) runtime.OptionalString")
+	// Value type optionals use *T (pointers)
+	assertContains(t, output, "func find(id *int) *string")
 }
 
 func TestOptionalReferenceType(t *testing.T) {
@@ -2050,7 +2017,7 @@ end`
 	output := compile(t, input)
 
 	// Variable with optional type should use NoneInt()
-	assertContains(t, output, "var x runtime.OptionalInt = runtime.NoneInt()")
+	assertContains(t, output, "var x *int = runtime.NoneInt()")
 }
 
 func TestOptionalValueTypeInCondition(t *testing.T) {
@@ -2063,8 +2030,8 @@ end`
 
 	output := compile(t, input)
 
-	// Value type optional in condition checks .Valid
-	assertContains(t, output, "if x.Valid {")
+	// Value type optional in condition checks != nil
+	assertContains(t, output, "if x != nil {")
 }
 
 func TestOptionalReferenceTypeInCondition(t *testing.T) {
@@ -2096,9 +2063,9 @@ end`
 
 	output := compile(t, input)
 
-	// Both if and elsif should use .Valid for value type optionals
-	assertContains(t, output, "if x.Valid {")
-	assertContains(t, output, "} else if y.Valid {")
+	// Both if and elsif should use != nil for value type optionals
+	assertContains(t, output, "if x != nil {")
+	assertContains(t, output, "} else if y != nil {")
 }
 
 func TestNonOptionalInCondition(t *testing.T) {
@@ -2134,8 +2101,8 @@ end`
 
 	output := compile(t, input)
 
-	// to_i? should map to runtime.StringToInt, discarding the boolean
-	assertContains(t, output, "n, _ := runtime.StringToInt(s)")
+	// to_i? should map to runtime.ToOptionalInt(runtime.StringToInt(s))
+	assertContains(t, output, "n := runtime.ToOptionalInt(runtime.StringToInt(s))")
 }
 
 func TestOptionalMethodToFloat(t *testing.T) {
@@ -2146,8 +2113,8 @@ end`
 
 	output := compile(t, input)
 
-	// to_f? should map to runtime.StringToFloat, discarding the boolean
-	assertContains(t, output, "n, _ := runtime.StringToFloat(s)")
+	// to_f? should map to runtime.ToOptionalFloat(runtime.StringToFloat(s))
+	assertContains(t, output, "n := runtime.ToOptionalFloat(runtime.StringToFloat(s))")
 }
 
 func TestAssignmentInCondition(t *testing.T) {

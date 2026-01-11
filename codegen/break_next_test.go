@@ -22,11 +22,7 @@ func TestBreakInEachBlock(t *testing.T) {
 
 end`
 
-
-
 	output := compile(t, input)
-
-
 
 	assertContains(t, output, `runtime.Each([]int{1, 2, 3}, func(x interface{}) bool {`)
 
@@ -39,8 +35,6 @@ end`
 	assertContains(t, output, `return true`)
 
 }
-
-
 
 func TestNextInEachBlock(t *testing.T) {
 
@@ -60,11 +54,7 @@ func TestNextInEachBlock(t *testing.T) {
 
 end`
 
-
-
 	output := compile(t, input)
-
-
 
 	assertContains(t, output, `if runtime.Equal(x, 2) {`)
 
@@ -75,8 +65,6 @@ end`
 	assertContains(t, output, `return true`)
 
 }
-
-
 
 func TestBreakInMapBlock(t *testing.T) {
 
@@ -96,11 +84,7 @@ func TestBreakInMapBlock(t *testing.T) {
 
 end`
 
-
-
 	output := compile(t, input)
-
-
 
 	assertContains(t, output, `runtime.Map([]int{1, 2, 3}, func(x interface{}) (interface{}, bool, bool) {`)
 
@@ -111,8 +95,6 @@ end`
 	assertContains(t, output, `return (x * 10), true, true`)
 
 }
-
-
 
 func TestNextInMapBlock(t *testing.T) {
 
@@ -132,11 +114,7 @@ func TestNextInMapBlock(t *testing.T) {
 
 end`
 
-
-
 	output := compile(t, input)
-
-
 
 	assertContains(t, output, `if runtime.Equal(x, 2) {`)
 
@@ -145,8 +123,6 @@ end`
 	assertContains(t, output, `return (x * 10), true, true`)
 
 }
-
-
 
 func TestBreakInSelectBlock(t *testing.T) {
 
@@ -166,11 +142,7 @@ func TestBreakInSelectBlock(t *testing.T) {
 
 end`
 
-
-
 	output := compile(t, input)
-
-
 
 	assertContains(t, output, `runtime.Select([]int{1, 2, 3}, func(x interface{}) (bool, bool) {`)
 
@@ -181,8 +153,6 @@ end`
 	assertContains(t, output, `return (x > 1), true`)
 
 }
-
-
 
 func TestNextInMapSkipsElement(t *testing.T) {
 	input := `def main
@@ -260,11 +230,7 @@ func TestNestedLoopAndBlockBreak(t *testing.T) {
 
 end`
 
-
-
 	output := compile(t, input)
-
-
 
 	// Inner block break should be return false
 
@@ -273,8 +239,6 @@ end`
 	assertContains(t, output, `if runtime.Equal(j, 20) {`)
 
 	assertContains(t, output, `return false`)
-
-
 
 	// Outer loop break should be break
 

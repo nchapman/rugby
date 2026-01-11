@@ -392,16 +392,16 @@ func TestBuildProgram(t *testing.T) {
 			expected: []string{"x = 5", "p(x)"},
 		},
 		{
-			name:     "void call not wrapped",
-			input:    "puts x",
-			expected: []string{"puts x"},
+			name:      "void call not wrapped",
+			input:     "puts x",
+			expected:  []string{"puts x"},
 			notExpect: []string{"p(puts"},
 		},
 		{
-			name:      "with prior imports",
-			imports:   []string{"import fmt"},
-			input:     "42",
-			expected:  []string{"import fmt", "p(42)"},
+			name:     "with prior imports",
+			imports:  []string{"import fmt"},
+			input:    "42",
+			expected: []string{"import fmt", "p(42)"},
 		},
 		{
 			name:      "with function definitions",

@@ -1,76 +1,89 @@
 package runtime
 
-// Optional types for value types that need (T, valid) semantics.
-// Reference types (classes, slices, maps) use nil instead.
+// Optional types are now represented as pointers (*T) for storage.
+// Helper functions for creating optionals.
 
-// OptionalInt represents an optional int value
-type OptionalInt struct {
-	Value int
-	Valid bool
+// Int helpers
+
+func SomeInt(v int) *int {
+	return &v
 }
 
-// OptionalInt64 represents an optional int64 value
-type OptionalInt64 struct {
-	Value int64
-	Valid bool
+func NoneInt() *int {
+	return nil
 }
 
-// OptionalFloat represents an optional float64 value
-type OptionalFloat struct {
-	Value float64
-	Valid bool
+func ToOptionalInt(v int, ok bool) *int {
+	if !ok {
+		return nil
+	}
+	return &v
 }
 
-// OptionalString represents an optional string value
-type OptionalString struct {
-	Value string
-	Valid bool
+// Int64 helpers
+
+func SomeInt64(v int64) *int64 {
+	return &v
 }
 
-// OptionalBool represents an optional bool value
-type OptionalBool struct {
-	Value bool
-	Valid bool
+func NoneInt64() *int64 {
+	return nil
 }
 
-// Helper functions for creating optionals
-
-func SomeInt(v int) OptionalInt {
-	return OptionalInt{Value: v, Valid: true}
+func ToOptionalInt64(v int64, ok bool) *int64 {
+	if !ok {
+		return nil
+	}
+	return &v
 }
 
-func NoneInt() OptionalInt {
-	return OptionalInt{Valid: false}
+// Float helpers
+
+func SomeFloat(v float64) *float64 {
+	return &v
 }
 
-func SomeInt64(v int64) OptionalInt64 {
-	return OptionalInt64{Value: v, Valid: true}
+func NoneFloat() *float64 {
+	return nil
 }
 
-func NoneInt64() OptionalInt64 {
-	return OptionalInt64{Valid: false}
+func ToOptionalFloat(v float64, ok bool) *float64 {
+	if !ok {
+		return nil
+	}
+	return &v
 }
 
-func SomeFloat(v float64) OptionalFloat {
-	return OptionalFloat{Value: v, Valid: true}
+// String helpers
+
+func SomeString(v string) *string {
+	return &v
 }
 
-func NoneFloat() OptionalFloat {
-	return OptionalFloat{Valid: false}
+func NoneString() *string {
+	return nil
 }
 
-func SomeString(v string) OptionalString {
-	return OptionalString{Value: v, Valid: true}
+func ToOptionalString(v string, ok bool) *string {
+	if !ok {
+		return nil
+	}
+	return &v
 }
 
-func NoneString() OptionalString {
-	return OptionalString{Valid: false}
+// Bool helpers
+
+func SomeBool(v bool) *bool {
+	return &v
 }
 
-func SomeBool(v bool) OptionalBool {
-	return OptionalBool{Value: v, Valid: true}
+func NoneBool() *bool {
+	return nil
 }
 
-func NoneBool() OptionalBool {
-	return OptionalBool{Valid: false}
+func ToOptionalBool(v bool, ok bool) *bool {
+	if !ok {
+		return nil
+	}
+	return &v
 }

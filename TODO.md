@@ -297,7 +297,7 @@ First-class Range values (see spec.md Section 4.2.1).
   - Reference types (`User?`) → `*User` pointer
   - Slices/maps already nullable, passed through
 - [x] Runtime: `optional.go` with OptionalInt, OptionalString, etc.
-- [ ] Refactor value type optionals to use `*T` instead of `runtime.OptionalT` (per updated spec)
+- [x] Refactor value type optionals to use `*T` instead of `runtime.OptionalT` (per updated spec)
 
 ### Optional Types - Phases B & C
 - [x] Phase B: `if x` checks - value types check `.Valid`, reference types check `!= nil`

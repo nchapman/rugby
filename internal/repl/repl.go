@@ -56,12 +56,12 @@ type Model struct {
 	blockDepth int
 
 	// Async evaluation state
-	evaluating    bool
-	pendingInput  string // input being evaluated
+	evaluating   bool
+	pendingInput string // input being evaluated
 
-	project *builder.Project
-	counter int // for unique temp file names
-	err     error
+	project  *builder.Project
+	counter  int // for unique temp file names
+	err      error
 	quitting bool
 }
 

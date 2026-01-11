@@ -10,8 +10,8 @@ func TestOptionalIntCodeGen(t *testing.T) {
 end`
 	output := compile(t, input)
 
-	// We expect runtime.OptionalInt usage
-	assertContains(t, output, `runtime.OptionalInt`)
+	// We expect *int usage
+	assertContains(t, output, `var x *int`)
 	assertContains(t, output, `runtime.SomeInt(5)`)
 }
 
@@ -22,8 +22,8 @@ func TestOptionalStringOrAssign(t *testing.T) {
 end`
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.OptionalString`)
-	assertContains(t, output, `if !x.Valid {`)
+	assertContains(t, output, `var x *string`)
+	assertContains(t, output, `if x == nil {`)
 	assertContains(t, output, `x = runtime.SomeString("default")`)
 }
 
@@ -50,7 +50,7 @@ func TestOptionalReturn(t *testing.T) {
 end`
 	output := compile(t, input)
 
-	assertContains(t, output, `func find(n int) runtime.OptionalInt`)
+	assertContains(t, output, `func find(n int) *int`)
 	assertContains(t, output, `return runtime.NoneInt()`)
 	assertContains(t, output, `return runtime.SomeInt(n)`)
 }
