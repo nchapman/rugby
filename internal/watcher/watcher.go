@@ -206,8 +206,7 @@ func (w *Watcher) Close() error {
 
 // isRelevantFile returns true if the file should trigger a rebuild.
 func isRelevantFile(path string) bool {
-	ext := filepath.Ext(path)
-	return ext == ".rg" || ext == ".go"
+	return filepath.Ext(path) == ".rg"
 }
 
 // ClearScreen prints ANSI escape codes to clear the terminal.

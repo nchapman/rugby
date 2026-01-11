@@ -145,8 +145,8 @@ func TestIsRelevantFile(t *testing.T) {
 	}{
 		{"main.rg", true},
 		{"src/app.rg", true},
-		{"helper.go", true},
-		{"main.go", true},
+		{"helper.go", false},
+		{"main.go", false},
 		{"readme.md", false},
 		{"config.toml", false},
 		{"data.json", false},
