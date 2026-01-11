@@ -7,7 +7,7 @@ import (
 
 func TestFormatBasicFunction(t *testing.T) {
 	input := `def hello
-puts "Hello"
+puts("Hello")
 end`
 
 	expected := `def hello
@@ -27,9 +27,9 @@ end
 
 func TestFormatWithComments(t *testing.T) {
 	input := `# This is a comment
-def greet(name: String)
+def greet(name : String)
   # Say hello
-  puts "Hello, #{name}"
+  puts("Hello, #{name}")
 end`
 
 	result, err := Format(input)
@@ -46,7 +46,7 @@ end`
 }
 
 func TestFormatIdempotent(t *testing.T) {
-	input := `def add(a: Int, b: Int) -> Int
+	input := `def add(a : Int, b : Int) -> Int
   return a + b
 end
 `
@@ -68,11 +68,11 @@ end
 
 func TestFormatClass(t *testing.T) {
 	input := `class User
-def initialize(name: String)
+def initialize(name : String)
 @name = name
 end
 def greet
-puts @name
+puts(@name)
 end
 end`
 
@@ -92,11 +92,11 @@ end`
 
 func TestFormatIfStatement(t *testing.T) {
 	input := `if x > 0
-puts "positive"
+puts("positive")
 elsif x < 0
-puts "negative"
+puts("negative")
 else
-puts "zero"
+puts("zero")
 end`
 
 	result, err := Format(input)
@@ -117,7 +117,7 @@ end`
 
 func TestFormatForLoop(t *testing.T) {
 	input := `for i in 1..10
-puts i
+puts(i)
 end`
 
 	result, err := Format(input)
@@ -136,7 +136,7 @@ end`
 func TestFormatBlock(t *testing.T) {
 	// Single-statement blocks use {} style
 	input := `items.each do |x|
-puts x
+puts(x)
 end`
 
 	result, err := Format(input)
@@ -153,8 +153,8 @@ end`
 func TestFormatMultiLineBlock(t *testing.T) {
 	// Multi-statement blocks use do...end style
 	input := `items.each do |x|
-puts x
-puts x * 2
+puts(x)
+puts(x * 2)
 end`
 
 	result, err := Format(input)
@@ -172,7 +172,7 @@ func TestFormatImport(t *testing.T) {
 import net/http as http
 
 def main
-puts "hello"
+puts("hello")
 end`
 
 	result, err := Format(input)
@@ -265,7 +265,7 @@ func TestFormatMultiLineDocComment(t *testing.T) {
 	input := `# This is the first line of documentation
 # This is the second line
 # And this is the third line
-def greet(name: String)
+def greet(name : String)
   puts("Hello, " + name)
 end`
 
@@ -341,7 +341,7 @@ func TestFormatClassWithMethodComments(t *testing.T) {
 	input := `# User class represents a user
 class User
   # Initialize with a name
-  def initialize(name: String)
+  def initialize(name : String)
     @name = name
   end
 

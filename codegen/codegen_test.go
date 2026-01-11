@@ -10,7 +10,7 @@ import (
 
 func TestGenerateHello(t *testing.T) {
 	input := `def main
-  puts "hello"
+  puts("hello")
 end`
 
 	output := compile(t, input)
@@ -25,7 +25,7 @@ end`
 func TestGenerateArithmetic(t *testing.T) {
 	input := `def main
   x = 2 + 3 * 4
-  puts x
+  puts(x)
 end`
 
 	output := compile(t, input)
@@ -39,9 +39,9 @@ func TestGenerateIfElse(t *testing.T) {
 	input := `def main
   x = 5
   if x > 3
-    puts "big"
+    puts("big")
   else
-    puts "small"
+    puts("small")
   end
 end`
 
@@ -57,7 +57,7 @@ func TestGenerateWhile(t *testing.T) {
 	input := `def main
   i = 0
   while i < 5
-    puts i
+    puts(i)
     i = i + 1
   end
 end`
@@ -109,7 +109,7 @@ end`
 }
 
 func TestGenerateFunctionParams(t *testing.T) {
-	input := `def add(a, b)
+	input := `def add(a : any, b : any)
   x = a
   a = b
   return a
@@ -127,7 +127,7 @@ end`
 }
 
 func TestGenerateReturnType(t *testing.T) {
-	input := `def add(a, b) -> Int
+	input := `def add(a : any, b : any) -> Int
   return 42
 end
 
@@ -146,7 +146,7 @@ end`
 }
 
 func TestGenerateMultipleReturnTypes(t *testing.T) {
-	input := `def parse(s) -> (Int, Bool)
+	input := `def parse(s : any) -> (Int, Bool)
   return 42, true
 end
 
@@ -462,7 +462,7 @@ end`
 func TestGenerateEachBlock(t *testing.T) {
 	input := `def main
   arr.each do |x|
-    puts x
+    puts(x)
   end
 end`
 
@@ -476,7 +476,7 @@ end`
 func TestGenerateEachWithIndex(t *testing.T) {
 	input := `def main
   arr.each_with_index do |v, i|
-    puts v
+    puts(v)
   end
 end`
 
@@ -504,7 +504,7 @@ end`
 func TestBlockWithNoParams(t *testing.T) {
 	input := `def main
   items.each do ||
-    puts "hello"
+    puts("hello")
   end
 end`
 
@@ -518,8 +518,8 @@ end`
 
 func TestBlockOnMethodCall(t *testing.T) {
 	input := `def main
-  get_items().each do |x|
-    puts x
+  getItems().each do |x|
+    puts(x)
   end
 end`
 
@@ -534,7 +534,7 @@ func TestNestedBlocks(t *testing.T) {
 	input := `def main
   matrix.each do |row|
     row.each do |x|
-      puts x
+      puts(x)
     end
   end
 end`
@@ -640,9 +640,9 @@ end`
 
 func TestKernelFunctions(t *testing.T) {
 	input := `def main
-  puts "hello"
-  print "world"
-  p x
+  puts("hello")
+  print("world")
+  p(x)
   name = gets
   exit(1)
   sleep(2)
@@ -666,7 +666,7 @@ end`
 func TestTimesBlock(t *testing.T) {
 	input := `def main
   5.times do |i|
-    puts i
+    puts(i)
   end
 end`
 
@@ -680,7 +680,7 @@ end`
 func TestTimesBlockWithExpression(t *testing.T) {
 	input := `def main
   n.times do |i|
-    puts i
+    puts(i)
   end
 end`
 
@@ -694,7 +694,7 @@ end`
 func TestUptoBlock(t *testing.T) {
 	input := `def main
   1.upto(5) do |i|
-    puts i
+    puts(i)
   end
 end`
 
@@ -708,7 +708,7 @@ end`
 func TestUptoBlockWithVariables(t *testing.T) {
 	input := `def main
   start.upto(finish) do |i|
-    puts i
+    puts(i)
   end
 end`
 
@@ -722,7 +722,7 @@ end`
 func TestDowntoBlock(t *testing.T) {
 	input := `def main
   5.downto(1) do |i|
-    puts i
+    puts(i)
   end
 end`
 
@@ -736,7 +736,7 @@ end`
 func TestDowntoBlockWithVariables(t *testing.T) {
 	input := `def main
   high.downto(low) do |i|
-    puts i
+    puts(i)
   end
 end`
 
@@ -750,7 +750,7 @@ end`
 func TestTimesBlockNoParam(t *testing.T) {
 	input := `def main
   3.times do ||
-    puts "hello"
+    puts("hello")
   end
 end`
 
@@ -765,7 +765,7 @@ end`
 func TestUptoBlockNoParam(t *testing.T) {
 	input := `def main
   1.upto(3) do ||
-    puts "hello"
+    puts("hello")
   end
 end`
 
@@ -779,7 +779,7 @@ end`
 func TestDowntoBlockNoParam(t *testing.T) {
 	input := `def main
   3.downto(1) do ||
-    puts "hello"
+    puts("hello")
   end
 end`
 
@@ -792,7 +792,7 @@ end`
 
 func TestBraceBlockCodegen(t *testing.T) {
 	input := `def main
-  arr.each { |x| puts x }
+  arr.each { |x| puts(x) }
 end`
 
 	output := compile(t, input)
@@ -815,7 +815,7 @@ end`
 
 func TestBraceBlockTimesCodegen(t *testing.T) {
 	input := `def main
-  5.times { |i| puts i }
+  5.times { |i| puts(i) }
 end`
 
 	output := compile(t, input)
@@ -840,7 +840,7 @@ end`
 func TestClassWithMethodCodegen(t *testing.T) {
 	input := `class User
   def greet
-    puts "hello"
+    puts("hello")
   end
 end
 
@@ -856,7 +856,7 @@ end`
 
 func TestClassMethodWithParams(t *testing.T) {
 	input := `class Calculator
-  def add(a, b) -> Int
+  def add(a : any, b : any) -> Int
     return a + b
   end
 end
@@ -889,11 +889,11 @@ end`
 func TestClassWithMultipleMethods(t *testing.T) {
 	input := `class Counter
   def inc
-    puts "inc"
+    puts("inc")
   end
 
   def dec
-    puts "dec"
+    puts("dec")
   end
 end
 
@@ -910,7 +910,7 @@ end`
 func TestClassWithEmbedding(t *testing.T) {
 	input := `class Service < Logger
   def run
-    puts "running"
+    puts("running")
   end
 end
 
@@ -927,7 +927,7 @@ end`
 func TestClassWithMultipleEmbedding(t *testing.T) {
 	input := `class Service < Logger, Authenticator
   def run
-    puts "running"
+    puts("running")
   end
 end
 
@@ -961,7 +961,7 @@ end`
 
 func TestClassWithInstanceVariables(t *testing.T) {
 	input := `class User
-  def initialize(name, age)
+  def initialize(name : any, age : any)
     @name = name
     @age = age
   end
@@ -984,7 +984,7 @@ end`
 
 func TestClassMethodAccessingInstanceVar(t *testing.T) {
 	input := `class User
-  def initialize(name)
+  def initialize(name : any)
     @name = name
   end
 
@@ -1004,7 +1004,7 @@ end`
 
 func TestClassNewSyntax(t *testing.T) {
 	input := `class User
-  def initialize(name)
+  def initialize(name : any)
     @name = name
   end
 end
@@ -1021,7 +1021,7 @@ end`
 
 func TestClassNewWithMultipleArgs(t *testing.T) {
 	input := `class Point
-  def initialize(x, y)
+  def initialize(x : any, y : any)
     @x = x
     @y = y
   end
@@ -1061,7 +1061,7 @@ end`
 }
 
 func TestGenerateMixedParams(t *testing.T) {
-	input := `def foo(a : Int, b, c : String)
+	input := `def foo(a : Int, b : any, c : String)
 end
 
 def main
@@ -1111,7 +1111,7 @@ end`
 }
 
 func TestGenerateUntypedStillWorks(t *testing.T) {
-	input := `def add(a, b)
+	input := `def add(a : any, b : any)
   return a
 end
 
@@ -1144,7 +1144,7 @@ end`
 func TestGenerateForLoop(t *testing.T) {
 	input := `def main
   for item in items
-    puts item
+    puts(item)
   end
 end`
 
@@ -1189,7 +1189,7 @@ func TestForLoopWithControlFlow(t *testing.T) {
     if item == 3
       next
     end
-    puts item
+    puts(item)
   end
 end`
 
@@ -1206,7 +1206,7 @@ end`
 func TestClassMethodWithBangSuffix(t *testing.T) {
 	input := `class Counter
   def inc!
-    puts "incremented"
+    puts("incremented")
   end
 end
 
@@ -1285,7 +1285,7 @@ func TestSelfKeyword(t *testing.T) {
   def initialize
   end
 
-  def with_name(n)
+  def with_name(n : any)
     @name = n
     self
   end
@@ -1313,7 +1313,7 @@ func TestSelfInMethodChain(t *testing.T) {
   def initialize
   end
 
-  def set_value(v)
+  def set_value(v : any)
     @value = v
     self
   end
@@ -1321,7 +1321,7 @@ end
 
 def main
   c = Config.new()
-  c.set_value(1).set_value(2)
+  c.setValue(1).setValue(2)
 end`
 
 	output := compile(t, input)
@@ -1494,7 +1494,7 @@ func TestCustomEqualityMethod(t *testing.T) {
     @y = y
   end
 
-  def ==(other)
+  def ==(other : any)
     @x == other.x and @y == other.y
   end
 end
@@ -1782,7 +1782,7 @@ end`
 func TestForLoopWithInclusiveRange(t *testing.T) {
 	input := `def main
   for i in 0..5
-    puts i
+    puts(i)
   end
 end`
 
@@ -1796,7 +1796,7 @@ end`
 func TestForLoopWithExclusiveRange(t *testing.T) {
 	input := `def main
   for i in 0...5
-    puts i
+    puts(i)
   end
 end`
 
@@ -1811,7 +1811,7 @@ func TestForLoopWithRangeVariables(t *testing.T) {
   start = 1
   finish = 10
   for i in start..finish
-    puts i
+    puts(i)
   end
 end`
 
@@ -1825,7 +1825,7 @@ func TestForLoopWithRangeObjectVariable(t *testing.T) {
 	input := `def main
   r = 1..10
   for i in r
-    puts i
+    puts(i)
   end
 end`
 
@@ -1869,7 +1869,7 @@ end`
 func TestRangeEachBlock(t *testing.T) {
 	input := `def main
   (1..5).each do |i|
-    puts i
+    puts(i)
   end
 end`
 
@@ -2055,9 +2055,9 @@ func TestOptionalInElsifCondition(t *testing.T) {
   x : Int? = nil
   y : String? = nil
   if x
-    puts "x"
+    puts("x")
   elsif y
-    puts "y"
+    puts("y")
   end
 end`
 
@@ -2072,7 +2072,7 @@ func TestNonOptionalInCondition(t *testing.T) {
 	input := `def main
   x : Bool = true
   if x
-    puts "yes"
+    puts("yes")
   end
 end`
 
@@ -2121,7 +2121,7 @@ func TestAssignmentInCondition(t *testing.T) {
 	input := `def main
   s = "42"
   if (n = s.to_i?())
-    puts n
+    puts(n)
   end
 end`
 
@@ -2134,7 +2134,7 @@ end`
 // --- Bare Script Tests ---
 
 func TestBareScriptSimple(t *testing.T) {
-	input := `puts "hello"`
+	input := `puts("hello")`
 
 	output := compile(t, input)
 
@@ -2145,7 +2145,7 @@ func TestBareScriptSimple(t *testing.T) {
 
 func TestBareScriptWithFunction(t *testing.T) {
 	input := `def greet(name : String)
-  puts name
+  puts(name)
 end
 
 greet("World")`
@@ -2171,7 +2171,7 @@ func TestBareScriptWithClass(t *testing.T) {
 end
 
 c = Counter.new(5)
-puts c.value`
+puts(c.value)`
 
 	output := compile(t, input)
 
@@ -2187,7 +2187,7 @@ func TestBareScriptMultipleStatements(t *testing.T) {
 	input := `x = 1
 y = 2
 z = x + y
-puts z`
+puts(z)`
 
 	output := compile(t, input)
 
@@ -2201,7 +2201,7 @@ puts z`
 func TestBareScriptWithControlFlow(t *testing.T) {
 	input := `x = 5
 if x > 3
-  puts "big"
+  puts("big")
 end`
 
 	output := compile(t, input)
@@ -2214,10 +2214,10 @@ end`
 
 func TestBareScriptConflictError(t *testing.T) {
 	input := `def main
-  puts "in main"
+  puts("in main")
 end
 
-puts "top-level"`
+puts("top-level")`
 
 	l := lexer.New(input)
 	p := parser.New(l)
@@ -2240,7 +2240,7 @@ puts "top-level"`
 
 func TestExplicitMainStillWorks(t *testing.T) {
 	input := `def main
-  puts "hello"
+  puts("hello")
 end`
 
 	output := compile(t, input)
@@ -2287,7 +2287,7 @@ fmt.Println("hello")`
 
 func TestBareScriptWithForLoop(t *testing.T) {
 	input := `for i in 1..3
-  puts i
+  puts(i)
 end`
 
 	output := compile(t, input)
@@ -2313,7 +2313,7 @@ end`
 
 func TestBareScriptWithBlock(t *testing.T) {
 	input := `[1, 2, 3].each do |x|
-  puts x
+  puts(x)
 end`
 
 	output := compile(t, input)
@@ -2324,14 +2324,14 @@ end`
 }
 
 func TestBareScriptMixedOrdering(t *testing.T) {
-	input := `puts "start"
+	input := `puts("start")
 
 def helper(x : Int) -> Int
   return x * 2
 end
 
 result = helper(5)
-puts result`
+puts(result)`
 
 	output := compile(t, input)
 
@@ -2382,7 +2382,7 @@ func TestBareScriptVariableScoping(t *testing.T) {
 end
 
 y = 20
-puts y`
+puts(y)`
 
 	output := compile(t, input)
 
@@ -2427,7 +2427,7 @@ end`,
 		{
 			name: "symbol as function argument",
 			input: `def main
-  puts :hello
+  puts(:hello)
 end`,
 			expected: []string{
 				`runtime.Puts("hello")`,
@@ -2450,11 +2450,11 @@ func TestGenerateCaseStatement(t *testing.T) {
   x = 2
   case x
   when 1
-    puts "one"
+    puts("one")
   when 2, 3
-    puts "two or three"
+    puts("two or three")
   else
-    puts "other"
+    puts("other")
   end
 end`
 
@@ -2474,9 +2474,9 @@ func TestGenerateCaseStatementNoElse(t *testing.T) {
   status = 200
   case status
   when 200
-    puts "ok"
+    puts("ok")
   when 404
-    puts "not found"
+    puts("not found")
   end
 end`
 
@@ -2493,11 +2493,11 @@ func TestGenerateCaseStatementNoSubject(t *testing.T) {
   x = 15
   case
   when x > 10
-    puts "big"
+    puts("big")
   when x > 5
-    puts "medium"
+    puts("medium")
   else
-    puts "small"
+    puts("small")
   end
 end`
 
@@ -2514,11 +2514,11 @@ func TestGenerateCaseWithStringsAndSymbols(t *testing.T) {
   status = "active"
   case status
   when "active"
-    puts "running"
+    puts("running")
   when :stopped
-    puts "halted"
+    puts("halted")
   else
-    puts "unknown"
+    puts("unknown")
   end
 end`
 

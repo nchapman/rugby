@@ -1,38 +1,38 @@
 # Symbol literals demonstration
 # Symbols are lightweight identifiers that compile to strings
 
-def check_status(status)
+def check_status(status : any)
   if status == :ok
-    puts "Everything is working!"
+    puts("Everything is working!")
   elsif status == :error
-    puts "Something went wrong"
+    puts("Something went wrong")
   elsif status == :pending
-    puts "Still processing..."
+    puts("Still processing...")
   else
-    puts "Unknown status"
+    puts("Unknown status")
   end
 end
 
 def main
   # Basic symbol usage
   current = :ok
-  puts current
+  puts(current)
 
   # Symbols in arrays
   states = [:pending, :active, :completed]
-  puts "Available states:"
+  puts("Available states:")
   states.each do |s|
-    puts s
+    puts(s)
   end
 
   # Symbols as function arguments
-  check_status :ok
-  check_status :error
-  check_status :pending
-  check_status :unknown
+  check_status(:ok)
+  check_status(:error)
+  check_status(:pending)
+  check_status(:unknown)
 
   # Symbol comparison
   if :success == :success
-    puts "Symbols compare correctly"
+    puts("Symbols compare correctly")
   end
 end

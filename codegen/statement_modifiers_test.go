@@ -24,7 +24,7 @@ func TestStatementModifierCodegen(t *testing.T) {
 		},
 		{
 			name:  "next unless",
-			input: "for i in 0..10\n  next unless i % 2 == 0\n  puts i\nend",
+			input: "for i in 0..10\n  next unless i % 2 == 0\n  puts(i)\nend",
 			contains: []string{
 				"if !",
 				"continue",
@@ -44,7 +44,7 @@ end`,
 		},
 		{
 			name:  "puts unless",
-			input: "puts \"hello\" unless false",
+			input: "puts(\"hello\") unless false",
 			contains: []string{
 				"if !(false)",
 				"runtime.Puts",
@@ -87,7 +87,7 @@ func TestUnlessStatementCodegen(t *testing.T) {
 			name: "unless without else",
 			input: `
 unless x == 0
-  puts "not zero"
+  puts("not zero")
 end`,
 			contains: []string{
 				"if !runtime.Equal(x, 0)",
@@ -98,9 +98,9 @@ end`,
 			name: "unless with else",
 			input: `
 unless valid
-  puts "invalid"
+  puts("invalid")
 else
-  puts "valid"
+  puts("valid")
 end`,
 			contains: []string{
 				"if !valid",
@@ -113,7 +113,7 @@ end`,
 			name: "unless with complex condition",
 			input: `
 unless x > 10 and y < 5
-  puts "condition false"
+  puts("condition false")
 end`,
 			contains: []string{
 				"if !((x > 10) && (y < 5))",

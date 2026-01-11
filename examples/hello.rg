@@ -1,3 +1,3 @@
 def main
-  puts "hi"
+  puts("hi")
 end

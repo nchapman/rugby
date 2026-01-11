@@ -10,13 +10,13 @@ import (
 
 // TestGeneratedCodeModernization ensures the generated Go code follows modern best practices
 func TestGeneratedCodeModernization(t *testing.T) {
-	input := `def greet(name)
-  puts "Hello, #{name}!"
+	input := `def greet(name : any)
+  puts("Hello, #{name}!")
 end
 
-def process(items)
+def process(items : any)
   items.each do |item|
-    puts item
+    puts(item)
   end
 
   items.map do |x|
@@ -28,7 +28,7 @@ def main
   greet("World")
   nums = [1, 2, 3]
   result = process(nums)
-  puts result
+  puts(result)
 end`
 
 	output := compile(t, input)
@@ -44,7 +44,7 @@ func TestRangeOverIntOptimization(t *testing.T) {
 	// Exclusive range 0...n should use range-over-int
 	exclusiveInput := `def main
   for i in 0...5
-    puts i
+    puts(i)
   end
 end`
 	exclusiveOutput := compile(t, exclusiveInput)
@@ -54,7 +54,7 @@ end`
 	// Inclusive range 0..n should use traditional for loop
 	inclusiveInput := `def main
   for i in 0..5
-    puts i
+    puts(i)
   end
 end`
 	inclusiveOutput := compile(t, inclusiveInput)
@@ -64,7 +64,7 @@ end`
 	// Non-zero start should use traditional for loop
 	nonZeroInput := `def main
   for i in 1...5
-    puts i
+    puts(i)
   end
 end`
 	nonZeroOutput := compile(t, nonZeroInput)
@@ -79,7 +79,7 @@ func TestGeneratedCodeLints(t *testing.T) {
 		t.Skip("golangci-lint not installed, skipping generated code lint test")
 	}
 
-	input := `def process(items)
+	input := `def process(items : any)
   result = []
   items.each do |item|
     result = result + [item * 2]
@@ -91,7 +91,7 @@ def main
   nums = [1, 2, 3, 4, 5]
   doubled = process(nums)
   doubled.each do |n|
-    puts n
+    puts(n)
   end
 end`
 

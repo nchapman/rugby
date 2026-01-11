@@ -41,7 +41,7 @@ func TestStatementModifiers(t *testing.T) {
 			},
 		},
 		{
-			input: "puts x unless y == 0",
+			input: "puts(x) unless y == 0",
 			testFunc: func(p *ast.Program) bool {
 				stmt := p.Declarations[0].(*ast.ExprStmt)
 				return stmt.Condition != nil && stmt.IsUnless
@@ -72,9 +72,9 @@ func TestStatementModifiers(t *testing.T) {
 func TestUnlessStatement(t *testing.T) {
 	input := `
 unless x > 10
-  puts "small"
+  puts("small")
 else
-  puts "large"
+  puts("large")
 end
 `
 

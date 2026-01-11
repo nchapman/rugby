@@ -24,17 +24,17 @@ Features in implementation order, building incrementally.
 ## Phase 17: Crispness Polish (Strictness & Safety)
 **Goal:** Reduce ambiguity and enforce deterministic behavior.
 
-### 17.1 Strict Syntax & Parsing
-- [ ] **Strict Method Calls:** Update Parser to require parentheses for all method calls (remove "Ruby-style" call parsing).
+### 17.1 Strict Syntax & Parsing ✓
+- [x] **Strict Method Calls:** Parser requires parentheses for all method calls.
   - Exception: Property accessors (getters/setters).
-- [ ] **Pure Blocks:** Update Parser to reject `break` and `next` keywords inside blocks.
-- [ ] **Explicit Parameters:** Update Parser to require type annotations for all function parameters (unless `any`).
+- [x] **Pure Blocks:** Parser rejects `break` and `next` keywords inside blocks.
+- [x] **Explicit Parameters:** Parser requires type annotations for all function parameters (use `: any` for untyped).
 - [ ] **Explicit Fields:**
   - Update Parser to parse field declarations in class body (`@x : Int`).
   - Update Parser/Builder to require all used `@ivars` to be declared.
   - Remove implicit field inference from `initialize`.
 
-### 17.2 strict Semantics & Codegen
+### 17.2 Strict Semantics & Codegen
 - [ ] **Strict Conditionals:**
   - Update Codegen to validate that `if`/`while` conditions evaluate to `Bool`.
   - Remove implicit truthiness logic.
@@ -52,3 +52,23 @@ Features in implementation order, building incrementally.
 ## Phase 18: Standard Library Polish
 - [ ] **String Interpolation:** Ensure all interpolations compile to `fmt.Sprintf` (or `String()` calls).
 - [ ] **Range Constraints:** Restrict `Range` to `Int` only.
+
+---
+
+## Recently Completed
+
+### Parser Restructure
+Split the monolithic `parser.go` (2,569 lines) into focused modules:
+- `parser.go` - Core infrastructure (238 lines)
+- `declarations.go` - Function, class, interface declarations
+- `statements.go` - Control flow statements
+- `expressions.go` - Pratt parser for expressions
+- `blocks.go` - Block parsing (do/end, braces)
+- `literals.go` - Literal parsing (int, float, string, array, map)
+- `errors.go` - Structured ParseError with hints
+- `precedence.go` - Operator precedence definitions
+- `testing.go` - Test DSL parsing (describe, it, test, table)
+
+### Builder Enhancement
+- Added `isInRugbyRepo()` to auto-detect development environment
+- Auto-injects `replace` directive for local runtime during development

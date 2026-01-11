@@ -4,17 +4,17 @@
 def describe_status(status : Int)
   case status
   when 200
-    puts "OK"
+    puts("OK")
   when 201
-    puts "Created"
+    puts("Created")
   when 400
-    puts "Bad Request"
+    puts("Bad Request")
   when 404
-    puts "Not Found"
+    puts("Not Found")
   when 500, 502, 503
-    puts "Server Error"
+    puts("Server Error")
   else
-    puts "Unknown"
+    puts("Unknown")
   end
 end
 
@@ -22,30 +22,30 @@ def grade(score : Int)
   # Case without subject (like switch true)
   case
   when score >= 90
-    puts "A"
+    puts("A")
   when score >= 80
-    puts "B"
+    puts("B")
   when score >= 70
-    puts "C"
+    puts("C")
   when score >= 60
-    puts "D"
+    puts("D")
   else
-    puts "F"
+    puts("F")
   end
 end
 
 def main
   # Test status codes
-  puts "Status descriptions:"
+  puts("Status descriptions:")
   describe_status(200)
   describe_status(404)
   describe_status(502)
   describe_status(999)
 
-  puts ""
+  puts("")
 
   # Test grades
-  puts "Grades:"
+  puts("Grades:")
   grade(95)
   grade(85)
   grade(75)

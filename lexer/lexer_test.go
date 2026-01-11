@@ -606,7 +606,7 @@ func TestInterfaceKeyword(t *testing.T) {
 }
 
 func TestPubKeyword(t *testing.T) {
-	input := `pub def add(a, b) end`
+	input := `pub def add(a : Int, b : Int) end`
 
 	tests := []struct {
 		expectedType    token.TokenType
@@ -617,8 +617,12 @@ func TestPubKeyword(t *testing.T) {
 		{token.IDENT, "add"},
 		{token.LPAREN, "("},
 		{token.IDENT, "a"},
+		{token.COLON, ":"},
+		{token.IDENT, "Int"},
 		{token.COMMA, ","},
 		{token.IDENT, "b"},
+		{token.COLON, ":"},
+		{token.IDENT, "Int"},
 		{token.RPAREN, ")"},
 		{token.END, "end"},
 		{token.EOF, ""},

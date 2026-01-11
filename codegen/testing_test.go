@@ -18,7 +18,7 @@ func TestDescribeCodegen(t *testing.T) {
 			name: "simple describe",
 			input: `describe "User" do
   it "has a name" do |t|
-    puts "test"
+    puts("test")
   end
 end`,
 			contains: []string{
@@ -31,7 +31,7 @@ end`,
 			name: "describe with special chars",
 			input: `describe "String#to_i?" do
   it "parses valid ints" do |t|
-    puts "ok"
+    puts("ok")
   end
 end`,
 			contains: []string{
@@ -44,7 +44,7 @@ end`,
 			input: `describe "User" do
   describe "Validation" do
     it "requires name" do |t|
-      puts "test"
+      puts("test")
     end
   end
 end`,
@@ -84,7 +84,7 @@ end`,
 func TestTestCodegen(t *testing.T) {
 	input := `test "math/add" do |t|
   x = 1 + 2
-  puts x
+  puts(x)
 end`
 
 	l := lexer.New(input)

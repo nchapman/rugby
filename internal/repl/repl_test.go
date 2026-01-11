@@ -61,15 +61,15 @@ func TestCalculateBlockDepth(t *testing.T) {
 
 		// Control structures
 		{"if opens block", "if x > 0", 1},
-		{"if closed", "if x > 0\n  puts x\nend", 0},
+		{"if closed", "if x > 0\n  puts(x)\nend", 0},
 		{"while opens block", "while true", 1},
 		{"while closed", "while true\n  break\nend", 0},
 		{"for opens block", "for x in items", 1},
-		{"for closed", "for x in items\n  puts x\nend", 0},
+		{"for closed", "for x in items\n  puts(x)\nend", 0},
 
 		// Blocks with do
 		{"do opens block", "items.each do |x|", 1},
-		{"do closed", "items.each do |x|\n  puts x\nend", 0},
+		{"do closed", "items.each do |x|\n  puts(x)\nend", 0},
 
 		// Braces
 		{"open brace", "items.map { |x|", 1},
@@ -79,7 +79,7 @@ func TestCalculateBlockDepth(t *testing.T) {
 		{"mixed nesting", "def foo\n  if bar\n    while baz", 3},
 		{"partial close", "def foo\n  if bar\n  end", 1},
 		{"class with method", "class User\n  def initialize", 2},
-		{"class with method closed", "class User\n  def initialize(name)\n    @name = name\n  end\nend", 0},
+		{"class with method closed", "class User\n  def initialize(name : any)\n    @name = name\n  end\nend", 0},
 	}
 
 	for _, tt := range tests {
@@ -116,11 +116,11 @@ func TestIsExpression(t *testing.T) {
 		{"function call", "calculate(5)", true},
 
 		// Void function calls - should NOT be wrapped
-		{"puts call", "puts x", false},
-		{"print call", "print x", false},
-		{"p call", "p x", false},
-		{"exit call", "exit 0", false},
-		{"sleep call", "sleep 1", false},
+		{"puts call", "puts(x)", false},
+		{"print call", "print(x)", false},
+		{"p call", "p(x)", false},
+		{"exit call", "exit(0)", false},
+		{"sleep call", "sleep(1)", false},
 
 		// Statements - not expressions
 		{"assignment", "x = 5", false},
@@ -132,7 +132,7 @@ func TestIsExpression(t *testing.T) {
 		// Edge cases
 		{"puts with parens", "puts(x)", false},
 		// each with block IS an expression (returns the array)
-		{"each with block", "arr.each { |x| puts x }", true},
+		{"each with block", "arr.each { |x| puts(x) }", true},
 	}
 
 	for _, tt := range tests {
@@ -191,7 +191,7 @@ func TestIsFunctionDef(t *testing.T) {
 		expected bool
 	}{
 		{"simple def", "def foo", true},
-		{"def with params", "def foo(x, y)", true},
+		{"def with params", "def foo(x : any, y : any)", true},
 		{"def with return type", "def foo -> Int", true},
 		{"pub def", "pub def foo", true},
 		{"pub def with params", "pub def foo(x : Int)", true},
@@ -314,7 +314,7 @@ func TestIsAssignment(t *testing.T) {
 		{"comparison", "x == 5", false},
 		{"expression", "1 + 2", false},
 		{"function call", "foo()", false},
-		{"puts", "puts x", false},
+		{"puts", "puts(x)", false},
 		{"or-assign", "x ||= 5", false},
 		{"compound-assign", "x += 5", false},
 	}
@@ -393,8 +393,8 @@ func TestBuildProgram(t *testing.T) {
 		},
 		{
 			name:      "void call not wrapped",
-			input:     "puts x",
-			expected:  []string{"puts x"},
+			input:     "puts(x)",
+			expected:  []string{"puts(x)"},
 			notExpect: []string{"p(puts"},
 		},
 		{
@@ -418,7 +418,7 @@ func TestBuildProgram(t *testing.T) {
 		{
 			name:       "full context",
 			imports:    []string{"import fmt"},
-			functions:  []string{"def double(n)\n  n * 2\nend"},
+			functions:  []string{"def double(n : any)\n  n * 2\nend"},
 			statements: []string{"base = 5"},
 			input:      "double(base)",
 			expected:   []string{"import fmt", "def double", "base = 5", "p(double(base))"},
@@ -759,7 +759,7 @@ func TestWrapForParsing(t *testing.T) {
 		expected string
 	}{
 		{"x = 5", "def replwrap\nx = 5\nend"},
-		{"puts x", "def replwrap\nputs x\nend"},
+		{"puts(x)", "def replwrap\nputs(x)\nend"},
 		{"1 + 2", "def replwrap\n1 + 2\nend"},
 	}
 
@@ -786,7 +786,7 @@ func TestParseStatement(t *testing.T) {
 		isNil bool
 	}{
 		{"x = 5", false},
-		{"puts x", false},
+		{"puts(x)", false},
 		{"1 + 2", false},
 	}
 

@@ -109,11 +109,11 @@ func TestBinaryExpression(t *testing.T) {
 func TestIfStatement(t *testing.T) {
 	input := `def main
   if x > 5
-    puts "big"
+    puts("big")
   elsif x > 2
-    puts "medium"
+    puts("medium")
   else
-    puts "small"
+    puts("small")
   end
 end`
 
@@ -180,7 +180,7 @@ end`
 
 func TestFunctionCall(t *testing.T) {
 	input := `def main
-  puts "hello"
+  puts("hello")
 end`
 
 	l := lexer.New(input)
@@ -288,10 +288,10 @@ func TestFunctionParams(t *testing.T) {
 	}{
 		{"def foo\nend", nil},
 		{"def foo()\nend", nil},
-		{"def foo(a)\nend", []string{"a"}},
-		{"def foo(a, b)\nend", []string{"a", "b"}},
-		{"def foo(a, b, c)\nend", []string{"a", "b", "c"}},
-		{"def foo(a, b,)\nend", []string{"a", "b"}}, // trailing comma allowed
+		{"def foo(a : any)\nend", []string{"a"}},
+		{"def foo(a : any, b : any)\nend", []string{"a", "b"}},
+		{"def foo(a : any, b : any, c : any)\nend", []string{"a", "b", "c"}},
+		{"def foo(a : any, b : any,)\nend", []string{"a", "b"}}, // trailing comma allowed
 	}
 
 	for _, tt := range tests {
@@ -323,7 +323,7 @@ func TestFunctionParams(t *testing.T) {
 }
 
 func TestDuplicateParams(t *testing.T) {
-	input := `def foo(a, a)
+	input := `def foo(a : any, a : any)
 end`
 
 	l := lexer.New(input)
@@ -408,8 +408,8 @@ func TestReturnType(t *testing.T) {
 		{"def foo\nend", nil},
 		{"def foo()\nend", nil},
 		{"def foo() -> Int\nend", []string{"Int"}},
-		{"def foo(a, b) -> String\nend", []string{"String"}},
-		{"def foo(x) -> Bool\nend", []string{"Bool"}},
+		{"def foo(a : any, b : any) -> String\nend", []string{"String"}},
+		{"def foo(x : any) -> Bool\nend", []string{"Bool"}},
 		{"def foo -> Int\nend", []string{"Int"}}, // no parens
 		{"def foo() -> (Int, Bool)\nend", []string{"Int", "Bool"}},
 		{"def foo() -> (String, Int, Bool)\nend", []string{"String", "Int", "Bool"}},
@@ -1013,7 +1013,7 @@ end`
 func TestEachBlock(t *testing.T) {
 	input := `def main
   arr.each do |x|
-    puts x
+    puts(x)
   end
 end`
 
@@ -1064,7 +1064,7 @@ end`
 func TestEachWithIndexBlock(t *testing.T) {
 	input := `def main
   arr.each_with_index do |v, i|
-    puts v
+    puts(v)
   end
 end`
 
@@ -1165,7 +1165,7 @@ end`
 func TestBlockWithNoParams(t *testing.T) {
 	input := `def main
   items.each do ||
-    puts "hello"
+    puts("hello")
   end
 end`
 
@@ -1198,7 +1198,7 @@ end`
 func TestGenericBlockOnAnyMethod(t *testing.T) {
 	input := `def main
   items.custom_method do |x, y, z|
-    puts x
+    puts(x)
   end
 end`
 
@@ -1247,7 +1247,7 @@ end`
 func TestDuplicateBlockParameter(t *testing.T) {
 	input := `def main
   items.each do |x, x|
-    puts x
+    puts(x)
   end
 end`
 
@@ -1269,7 +1269,7 @@ func TestNestedBlocks(t *testing.T) {
 	input := `def main
   matrix.each do |row|
     row.each do |x|
-      puts x
+      puts(x)
     end
   end
 end`
@@ -1325,7 +1325,7 @@ end`
 
 func TestBraceBlockSyntax(t *testing.T) {
 	input := `def main
-  arr.each {|x| puts x }
+  arr.each {|x| puts(x) }
 end`
 
 	l := lexer.New(input)
@@ -1369,7 +1369,7 @@ end`
 
 func TestBraceBlockMultipleParams(t *testing.T) {
 	input := `def main
-  arr.each_with_index {|v, i| puts v }
+  arr.each_with_index {|v, i| puts(v) }
 end`
 
 	l := lexer.New(input)
@@ -1396,7 +1396,7 @@ end`
 
 func TestBraceBlockNoParams(t *testing.T) {
 	input := `def main
-  3.times {|| puts "hello" }
+  3.times {|| puts("hello") }
 end`
 
 	l := lexer.New(input)
@@ -1475,7 +1475,7 @@ end`
 func TestClassWithMethod(t *testing.T) {
 	input := `class User
   def greet
-    puts "hello"
+    puts("hello")
   end
 end`
 
@@ -1506,7 +1506,7 @@ end`
 
 func TestClassWithMethodParams(t *testing.T) {
 	input := `class Calculator
-  def add(a, b) -> Int
+  def add(a : any, b : any) -> Int
     a + b
   end
 end`
@@ -1543,11 +1543,11 @@ end`
 func TestClassWithMultipleMethods(t *testing.T) {
 	input := `class Counter
   def inc
-    puts "increment"
+    puts("increment")
   end
 
   def dec
-    puts "decrement"
+    puts("decrement")
   end
 
   def value -> Int
@@ -1577,7 +1577,7 @@ end`
 func TestClassWithEmbed(t *testing.T) {
 	input := `class Service < Logger
   def run
-    puts "running"
+    puts("running")
   end
 end`
 
@@ -1600,7 +1600,7 @@ end`
 func TestClassWithMultipleEmbeds(t *testing.T) {
 	input := `class Service < Logger, Authenticator
   def run
-    puts "running"
+    puts("running")
   end
 end`
 
@@ -1674,7 +1674,7 @@ func TestClassMissingName(t *testing.T) {
 
 func TestClassDuplicateMethodParams(t *testing.T) {
 	input := `class User
-  def add(a, a)
+  def add(a : any, a : any)
   end
 end`
 
@@ -1689,7 +1689,7 @@ end`
 
 func TestClassWithInitialize(t *testing.T) {
 	input := `class User
-  def initialize(name, age)
+  def initialize(name : any, age : any)
     @name = name
     @age = age
   end
@@ -1721,7 +1721,7 @@ end`
 
 func TestInstanceVariableAssignment(t *testing.T) {
 	input := `class User
-  def initialize(name)
+  def initialize(name : any)
     @name = name
   end
 end`
@@ -1750,7 +1750,7 @@ end`
 
 func TestInstanceVariableReference(t *testing.T) {
 	input := `class User
-  def initialize(name)
+  def initialize(name : any)
     @name = name
   end
 
@@ -1871,7 +1871,7 @@ end`
 }
 
 func TestMixedTypedUntypedParams(t *testing.T) {
-	input := `def foo(a : Int, b, c : String)
+	input := `def foo(a : Int, b : any, c : String)
 end
 
 def main
@@ -1896,9 +1896,9 @@ end`
 		t.Errorf("param 0: expected a:Int, got %s:%s", fn.Params[0].Name, fn.Params[0].Type)
 	}
 
-	// b (untyped)
-	if fn.Params[1].Name != "b" || fn.Params[1].Type != "" {
-		t.Errorf("param 1: expected b:(empty), got %s:%s", fn.Params[1].Name, fn.Params[1].Type)
+	// b : any
+	if fn.Params[1].Name != "b" || fn.Params[1].Type != "any" {
+		t.Errorf("param 1: expected b:any, got %s:%s", fn.Params[1].Name, fn.Params[1].Type)
 	}
 
 	// c : String
@@ -2026,7 +2026,7 @@ end`
 func TestForStatement(t *testing.T) {
 	input := `def main
   for item in items
-    puts item
+    puts(item)
   end
 end`
 
@@ -2120,7 +2120,7 @@ func TestForLoopWithControlFlow(t *testing.T) {
     if item == 3
       next
     end
-    puts item
+    puts(item)
   end
 end`
 
@@ -2145,7 +2145,7 @@ func TestSelfKeyword(t *testing.T) {
   def initialize
   end
 
-  def with_name(n)
+  def with_name(n : any)
     @name = n
     self
   end
@@ -2301,7 +2301,7 @@ func TestCustomEqualityMethod(t *testing.T) {
     @y = y
   end
 
-  def ==(other)
+  def ==(other : any)
     @x == other.x and @y == other.y
   end
 end`
@@ -2685,7 +2685,7 @@ func TestRangeLiteral(t *testing.T) {
 func TestRangeInForLoop(t *testing.T) {
 	input := `def main
   for i in 0..5
-    puts i
+    puts(i)
   end
 end`
 
@@ -2975,7 +2975,7 @@ end`
 // --- Bare Script Tests ---
 
 func TestBareScriptSimple(t *testing.T) {
-	input := `puts "hello"`
+	input := `puts("hello")`
 
 	l := lexer.New(input)
 	p := New(l)
@@ -3007,7 +3007,7 @@ func TestBareScriptSimple(t *testing.T) {
 
 func TestBareScriptWithFunctions(t *testing.T) {
 	input := `def greet(name : String)
-  puts "Hello!"
+  puts("Hello!")
 end
 
 greet("World")`
@@ -3058,7 +3058,7 @@ func TestBareScriptWithClass(t *testing.T) {
 end
 
 c = Counter.new(0)
-puts c`
+puts(c)`
 
 	l := lexer.New(input)
 	p := New(l)
@@ -3097,7 +3097,7 @@ puts c`
 func TestBareScriptMultipleStatements(t *testing.T) {
 	input := `x = 1
 y = 2
-puts x`
+puts(x)`
 
 	l := lexer.New(input)
 	p := New(l)
@@ -3134,7 +3134,7 @@ puts x`
 func TestBareScriptWithControlFlow(t *testing.T) {
 	input := `x = 5
 if x > 3
-  puts "big"
+  puts("big")
 end`
 
 	l := lexer.New(input)
@@ -3188,7 +3188,7 @@ fmt.Println("hello")`
 
 func TestBareScriptWithForLoop(t *testing.T) {
 	input := `for i in 1..5
-  puts i
+  puts(i)
 end`
 
 	l := lexer.New(input)
@@ -3238,7 +3238,7 @@ end`
 
 func TestBareScriptWithBlock(t *testing.T) {
 	input := `[1, 2, 3].each do |x|
-  puts x
+  puts(x)
 end`
 
 	l := lexer.New(input)
@@ -3270,14 +3270,14 @@ end`
 }
 
 func TestBareScriptMixedOrdering(t *testing.T) {
-	input := `puts "start"
+	input := `puts("start")
 
 def helper(x : Int) -> Int
   x * 2
 end
 
 result = helper(5)
-puts result
+puts(result)
 
 class Counter
   def initialize(n : Int)
@@ -3286,7 +3286,7 @@ class Counter
 end
 
 c = Counter.new(0)
-puts "done"`
+puts("done")`
 
 	l := lexer.New(input)
 	p := New(l)
@@ -3416,11 +3416,11 @@ func TestCaseStatement(t *testing.T) {
   x = 2
   case x
   when 1
-    puts "one"
+    puts("one")
   when 2, 3
-    puts "two or three"
+    puts("two or three")
   else
-    puts "other"
+    puts("other")
   end
 end`
 
@@ -3462,9 +3462,9 @@ func TestCaseStatementNoElse(t *testing.T) {
 	input := `def main
   case status
   when 200
-    puts "ok"
+    puts("ok")
   when 404
-    puts "not found"
+    puts("not found")
   end
 end`
 
@@ -3496,11 +3496,11 @@ func TestCaseStatementNoSubject(t *testing.T) {
 	input := `def main
   case
   when x > 10
-    puts "big"
+    puts("big")
   when x > 5
-    puts "medium"
+    puts("medium")
   else
-    puts "small"
+    puts("small")
   end
 end`
 

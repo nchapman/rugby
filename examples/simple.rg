@@ -1,6 +1,4 @@
-import fmt
-
 def main
   x = 5
-  puts x
+  puts(x)
 end

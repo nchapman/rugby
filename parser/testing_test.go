@@ -18,7 +18,7 @@ func TestParseDescribe(t *testing.T) {
 			name: "simple describe",
 			input: `describe "User" do
   it "has a name" do |t|
-    puts "test"
+    puts("test")
   end
 end`,
 			wantName:    "User",
@@ -28,10 +28,10 @@ end`,
 			name: "describe with multiple its",
 			input: `describe "Math" do
   it "adds numbers" do |t|
-    puts "add"
+    puts("add")
   end
   it "subtracts numbers" do |t|
-    puts "sub"
+    puts("sub")
   end
 end`,
 			wantName:    "Math",
@@ -42,7 +42,7 @@ end`,
 			input: `describe "User" do
   describe "Validation" do
     it "requires name" do |t|
-      puts "test"
+      puts("test")
     end
   end
 end`,
@@ -91,7 +91,7 @@ end`,
 func TestParseTest(t *testing.T) {
 	input := `test "math/add" do |t|
   x = 1 + 2
-  puts x
+  puts(x)
 end`
 
 	l := lexer.New(input)
@@ -122,7 +122,7 @@ end`
 
 func TestParseTable(t *testing.T) {
 	input := `table "String#to_i?" do |tt|
-  puts "case 1"
+  puts("case 1")
 end`
 
 	l := lexer.New(input)
@@ -150,15 +150,15 @@ end`
 func TestParseBeforeAfter(t *testing.T) {
 	input := `describe "Database" do
   before do |t|
-    puts "setup"
+    puts("setup")
   end
 
   after do |t|
-    puts "teardown"
+    puts("teardown")
   end
 
   it "works" do |t|
-    puts "test"
+    puts("test")
   end
 end`
 

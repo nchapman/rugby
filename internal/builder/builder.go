@@ -229,6 +229,38 @@ func (b *Builder) formatParseErrors(file string, errors []string) error {
 // RuntimeModule is the Go module that contains the Rugby runtime.
 const RuntimeModule = "github.com/nchapman/rugby"
 
+// isInRugbyRepo checks if we're running from within the rugby repository.
+// Returns (true, repoPath) if we're in the repo, (false, "") otherwise.
+// This enables local development by auto-injecting a replace directive.
+func isInRugbyRepo() (bool, string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return false, ""
+	}
+
+	// Walk up the directory tree looking for go.mod with our module
+	dir := cwd
+	for {
+		goModPath := filepath.Join(dir, "go.mod")
+		if data, err := os.ReadFile(goModPath); err == nil {
+			// Check if this is the rugby module
+			if strings.Contains(string(data), "module "+RuntimeModule) {
+				return true, dir
+			}
+		}
+
+		// Move up one directory
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached root
+			break
+		}
+		dir = parent
+	}
+
+	return false, ""
+}
+
 // SetupGenDir prepares the gen directory for go build.
 // Generates .rugby/go.mod from rugby.mod (if present) + injects runtime dep.
 func (b *Builder) SetupGenDir() error {
@@ -315,12 +347,17 @@ func (b *Builder) generateGoMod() string {
 	rugbyModContent, err := os.ReadFile(rugbyModPath)
 	if err != nil {
 		// No rugby.mod - generate minimal go.mod
-		return fmt.Sprintf(`module main
+		result := fmt.Sprintf(`module main
 
 go 1.25
 
 require %s v0.0.2
 `, RuntimeModule)
+		// Auto-detect local development and inject replace directive
+		if inRepo, repoPath := isInRugbyRepo(); inRepo {
+			result += fmt.Sprintf("\nreplace %s => %s\n", RuntimeModule, repoPath)
+		}
+		return result
 	}
 
 	// Parse rugby.mod and augment it
@@ -364,6 +401,11 @@ require %s v0.0.2
 	// Handle single-line require statement (require foo v1.0.0)
 	if !hasRuntimeDep && strings.Contains(result, "require ") && !strings.Contains(result, "require (") {
 		result += fmt.Sprintf("require %s v0.0.2\n", RuntimeModule)
+	}
+
+	// Auto-detect local development and inject replace directive
+	if inRepo, repoPath := isInRugbyRepo(); inRepo {
+		result += fmt.Sprintf("\nreplace %s => %s\n", RuntimeModule, repoPath)
 	}
 
 	return result

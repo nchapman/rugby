@@ -16,7 +16,7 @@ func TestBreakInEachBlock(t *testing.T) {
 
     end
 
-    puts x
+    puts(x)
 
   end
 
@@ -48,7 +48,7 @@ func TestNextInEachBlock(t *testing.T) {
 
     end
 
-    puts x
+    puts(x)
 
   end
 
@@ -216,7 +216,7 @@ func TestNestedLoopAndBlockBreak(t *testing.T) {
 
       end
 
-      puts j
+      puts(j)
 
     end
 
