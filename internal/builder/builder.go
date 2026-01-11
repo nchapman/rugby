@@ -519,3 +519,202 @@ func (b *Builder) execute(binPath string, args []string) error {
 	}
 	return nil
 }
+
+// Test compiles and runs Rugby tests.
+// Patterns can be directories or file glob patterns.
+func (b *Builder) Test(patterns []string, goTestArgs []string) error {
+	// Find all *_test.rg files matching patterns
+	testFiles, err := b.findTestFiles(patterns)
+	if err != nil {
+		return err
+	}
+
+	if len(testFiles) == 0 {
+		b.logger.Info("no test files found")
+		return nil
+	}
+
+	// Also compile non-test files (the code being tested)
+	sourceFiles, err := b.findSourceFiles(patterns)
+	if err != nil {
+		return err
+	}
+
+	// Compile all files (tests + sources)
+	allFiles := append(sourceFiles, testFiles...)
+	if len(allFiles) > 0 {
+		_, err = b.Compile(allFiles)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Run go test
+	return b.GoTest(goTestArgs)
+}
+
+// findTestFiles finds all *_test.rg files in the given patterns.
+func (b *Builder) findTestFiles(patterns []string) ([]string, error) {
+	var result []string
+
+	for _, pattern := range patterns {
+		// Handle recursive pattern ./...
+		if dir, found := strings.CutSuffix(pattern, "/..."); found {
+			if dir == "." || dir == "" {
+				dir = b.project.Root
+			}
+			files, err := b.walkTestFiles(dir)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, files...)
+			continue
+		}
+
+		// Handle direct file
+		if strings.HasSuffix(pattern, "_test.rg") {
+			result = append(result, pattern)
+			continue
+		}
+
+		// Handle directory - find *_test.rg files in it
+		info, err := os.Stat(pattern)
+		if err != nil {
+			return nil, err
+		}
+		if info.IsDir() {
+			entries, err := os.ReadDir(pattern)
+			if err != nil {
+				return nil, err
+			}
+			for _, entry := range entries {
+				if !entry.IsDir() && strings.HasSuffix(entry.Name(), "_test.rg") {
+					result = append(result, filepath.Join(pattern, entry.Name()))
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// walkTestFiles recursively finds all *_test.rg files in a directory.
+func (b *Builder) walkTestFiles(dir string) ([]string, error) {
+	var result []string
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		// Skip .rugby directory
+		if info.IsDir() && info.Name() == ".rugby" {
+			return filepath.SkipDir
+		}
+		if !info.IsDir() && strings.HasSuffix(info.Name(), "_test.rg") {
+			result = append(result, path)
+		}
+		return nil
+	})
+	return result, err
+}
+
+// findSourceFiles finds all .rg source files (non-test) in the given patterns.
+func (b *Builder) findSourceFiles(patterns []string) ([]string, error) {
+	var result []string
+
+	for _, pattern := range patterns {
+		// Handle recursive pattern ./...
+		if dir, found := strings.CutSuffix(pattern, "/..."); found {
+			if dir == "." || dir == "" {
+				dir = b.project.Root
+			}
+			files, err := b.walkSourceFiles(dir)
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, files...)
+			continue
+		}
+
+		// Handle direct file
+		if strings.HasSuffix(pattern, ".rg") && !strings.HasSuffix(pattern, "_test.rg") {
+			result = append(result, pattern)
+			continue
+		}
+
+		// Handle directory - find .rg files (non-test) in it
+		info, err := os.Stat(pattern)
+		if err != nil {
+			return nil, err
+		}
+		if info.IsDir() {
+			entries, err := os.ReadDir(pattern)
+			if err != nil {
+				return nil, err
+			}
+			for _, entry := range entries {
+				name := entry.Name()
+				if !entry.IsDir() && strings.HasSuffix(name, ".rg") && !strings.HasSuffix(name, "_test.rg") {
+					result = append(result, filepath.Join(pattern, name))
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// walkSourceFiles recursively finds all .rg source files (non-test) in a directory.
+func (b *Builder) walkSourceFiles(dir string) ([]string, error) {
+	var result []string
+	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		// Skip .rugby directory
+		if info.IsDir() && info.Name() == ".rugby" {
+			return filepath.SkipDir
+		}
+		name := info.Name()
+		if !info.IsDir() && strings.HasSuffix(name, ".rg") && !strings.HasSuffix(name, "_test.rg") {
+			result = append(result, path)
+		}
+		return nil
+	})
+	return result, err
+}
+
+// GoTest runs go test in the gen directory.
+func (b *Builder) GoTest(args []string) error {
+	// Build the command
+	testArgs := []string{"test"}
+	testArgs = append(testArgs, args...)
+
+	// Only append ./... if no package pattern is specified
+	hasPackagePattern := false
+	for _, arg := range args {
+		// Package patterns start with . or contain /
+		if strings.HasPrefix(arg, ".") || strings.Contains(arg, "/") {
+			hasPackagePattern = true
+			break
+		}
+	}
+	if !hasPackagePattern {
+		testArgs = append(testArgs, "./...")
+	}
+
+	cmd := exec.Command("go", testArgs...)
+	cmd.Dir = b.project.GenDir
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Env = os.Environ()
+
+	if err := cmd.Run(); err != nil {
+		// Preserve the exit code from go test
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			os.Exit(exitErr.ExitCode())
+		}
+		return err
+	}
+	return nil
+}

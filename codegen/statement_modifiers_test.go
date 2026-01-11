@@ -33,7 +33,7 @@ func TestStatementModifierCodegen(t *testing.T) {
 		{
 			name: "return if",
 			input: `
-def test(x : Int) -> String
+def check(x : Int) -> String
   return "negative" if x < 0
   "positive"
 end`,

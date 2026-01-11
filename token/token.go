@@ -88,6 +88,14 @@ const (
 	SELF      TokenType = "SELF"
 	INTERFACE TokenType = "INTERFACE"
 	PUB       TokenType = "PUB"
+
+	// Testing keywords
+	DESCRIBE TokenType = "DESCRIBE"
+	IT       TokenType = "IT"
+	TEST     TokenType = "TEST"
+	TABLE    TokenType = "TABLE"
+	BEFORE   TokenType = "BEFORE"
+	AFTER    TokenType = "AFTER"
 )
 
 type Token struct {
@@ -126,6 +134,13 @@ var keywords = map[string]TokenType{
 	"self":      SELF,
 	"interface": INTERFACE,
 	"pub":       PUB,
+	// Testing keywords
+	"describe": DESCRIBE,
+	"it":       IT,
+	"test":     TEST,
+	"table":    TABLE,
+	"before":   BEFORE,
+	"after":    AFTER,
 }
 
 func LookupIdent(ident string) TokenType {

@@ -481,3 +481,68 @@ type MethodSig struct {
 	Params      []*Param // parameters
 	ReturnTypes []string // return types
 }
+
+// DescribeStmt represents a describe block for grouping tests
+// describe "name" do ... end
+type DescribeStmt struct {
+	Name   string        // description string
+	Body   []Statement   // test cases (it, describe, before, after)
+	Line   int           // source line number
+	Parent *DescribeStmt // parent describe block for nesting (nil if top-level)
+}
+
+func (d *DescribeStmt) node()     {}
+func (d *DescribeStmt) stmtNode() {}
+
+// ItStmt represents a single test case inside a describe block
+// it "description" do |t| ... end
+type ItStmt struct {
+	Name string      // test description
+	Body []Statement // test body
+	Line int         // source line number
+}
+
+func (i *ItStmt) node()     {}
+func (i *ItStmt) stmtNode() {}
+
+// TestStmt represents a standalone test (top-level, no describe)
+// test "name" do |t| ... end
+type TestStmt struct {
+	Name string      // test name
+	Body []Statement // test body
+	Line int         // source line number
+}
+
+func (t *TestStmt) node()     {}
+func (t *TestStmt) stmtNode() {}
+
+// TableStmt represents a table-driven test
+// table "name" do |tt| ... end
+type TableStmt struct {
+	Name string      // test name
+	Body []Statement // table test body (contains tt.case and tt.run calls)
+	Line int         // source line number
+}
+
+func (t *TableStmt) node()     {}
+func (t *TableStmt) stmtNode() {}
+
+// BeforeStmt represents a before hook for test setup
+// before do |t| ... end
+type BeforeStmt struct {
+	Body []Statement // setup code
+	Line int         // source line number
+}
+
+func (b *BeforeStmt) node()     {}
+func (b *BeforeStmt) stmtNode() {}
+
+// AfterStmt represents an after hook for test teardown
+// after do |t, ctx| ... end
+type AfterStmt struct {
+	Body []Statement // teardown code
+	Line int         // source line number
+}
+
+func (a *AfterStmt) node()     {}
+func (a *AfterStmt) stmtNode() {}
