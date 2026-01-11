@@ -154,16 +154,16 @@ do ... end   # preferred
 
 ```ruby
 "normal string"
-"interpolation: #{name}"  # compiles to fmt.Sprintf or concat
+"interpolation: #{name}"  # compiles to fmt.Sprintf
 ```
 
 String interpolation rules:
 * Any expression is allowed inside `#{}`
-* Non-string types use `fmt.Sprintf` with `%v` formatting
+* Always compiles to `fmt.Sprintf` for consistency
 * Examples:
-  * `"count: #{items.length}"` - method call
-  * `"sum: #{a + b}"` - arithmetic
-  * `"user: #{user.to_s}"` - explicit conversion
+  * `"count: #{items.length}"`
+  * `"sum: #{a + b}"`
+  * `"user: #{user}"` (calls `String()` if implemented, else `%v`)
 
 ---
 
@@ -248,10 +248,10 @@ y : Int64 = 5   # y is Int64
 ```
 
 **Function Parameters:**
-Parameters can be explicitly typed or left untyped (inferred as `interface{}`).
+Parameters **must** be explicitly typed. Use `any` for dynamic types (empty interface).
 ```ruby
 def add(a : Int, b : Int)  # a, b are Int
-def log(msg)               # msg is interface{}
+def log(msg : any)         # msg is any
 ```
 
 **Instance Variables:**
@@ -264,46 +264,36 @@ If an instance variable is not assigned in `initialize` and not explicitly decla
 
 ### 4.4 Optionals (`T?`)
 
-**Syntax:** `T?` is the universal syntax for "nullable" or "optional" values. The compiler abstracts the underlying Go representation to ensure idiomatic usage.
+**Syntax:** `T?` is the universal syntax for "nullable" or "optional" values.
 
 **Representation:**
 
-1.  **Value Types** (`Int`, `Float`, `Bool`, `String`, Structs):
-    *   **Return Values:** Compiles to `(T, bool)` (standard Go "comma-ok" idiom).
-    *   **Storage (Fields, Arrays, Maps):** Compiles to `*T` (pointer to value) to represent nullability in data structures.
-    *   **Local Variables:** Compiler determines representation (unpacked `val, ok` or `*T`).
-    *   Example: `Int?` → `(int, bool)` (return) or `*int` (storage).
+To ensure deterministic behavior and Go-idiomatic ergonomics, optionals are unified:
 
-2.  **Reference Types** (`Array`, `Map`, Classes, Interfaces):
-    *   Compiles to the underlying pointer/slice/map type.
-    *   Uses Go's `nil` to represent absence.
-    *   Example: `User?` → `*User` (where `User` compiles to `struct`)
+1.  **Return Values:** Compiles to `(T, bool)` (standard Go "comma-ok" idiom).
+2.  **Storage (Fields, Arrays, Maps):** Compiles to `runtime.Option[T]` struct:
+    ```go
+    type Option[T any] struct {
+        Value T
+        Ok    bool
+    }
+    ```
 
 **Usage:**
 
-Conditionals unify these differences. `if x` checks for presence:
+Rugby requires explicit boolean checks. "Truthiness" of optionals is **not** supported (see 5.2).
+
+*   **Check:** `if val.ok?` (or `present?`)
+*   **Unwrap:** Use `if let` pattern.
+
+**Assignment with check (`if let`):**
 
 ```ruby
-# Works for both value types and reference types
-def process(u : User?, score : Int?)
-  if u        # Checks u != nil
-    puts u.name
-  end
-
-  if score    # Checks the boolean flag
-    puts score
-  end
-end
-```
-
-**Assignment with check:**
-
-```ruby
-if (n = s.to_i?)
+if let n = s.to_i?
   puts n
 end
 ```
-Compiles to `if n, ok := strconv.Atoi(s); ok { ... }`
+Compiles to `if n, ok := runtime.StringToInt(s); ok { ... }`
 
 ---
 
@@ -344,13 +334,26 @@ Semantics depend on the type of `x`:
 
 ### 5.2 Conditionals
 
+Conditionals in Rugby are **strict**. Only `Bool` values are allowed in `if`, `unless`, and `while` conditions. There is no implicit "truthiness" for objects, numbers, or strings.
+
 ```ruby
-if cond
-  ...
-elsif other
-  ...
-else
-  ...
+if valid?     # OK (returns Bool)
+if x > 0      # OK (returns Bool)
+if user       # ERROR: User is not Bool
+if user.ok?   # OK (explicit check)
+```
+
+**Unwrapping (`if let`):**
+
+Use `if let` to handle optionals and type assertions safeley.
+
+```ruby
+if let user = find_user(id)
+  puts user.name
+end
+
+if let w = obj.as?(Writer)
+  w.write("hello")
 end
 ```
 
@@ -366,26 +369,31 @@ else
 end
 ```
 
-**Case Expressions:**
+**Case Expressions (Value Switch):**
 
-Rugby supports `case` for pattern matching.
+Matches values using `==`.
 
 ```ruby
 case status
-when 200
+when 200, 201
   puts "ok"
-when 404
-  puts "not found"
 else
   puts "error"
 end
 ```
 
-**Compilation:**
-Compiles to Go `switch` statement.
-*   Values map to `case val:`
-*   Multiple values `when 1, 2` map to `case 1, 2:`
-*   Type matching: `when String` maps to a Go type switch.
+**Type Switch:**
+
+Use `case_type` (or `case type`) to match types.
+
+```ruby
+case_type x
+when String
+  puts "string"
+when Int
+  puts "int"
+end
+```
 
 ### 5.3 Imperative Loops (Statements)
 
@@ -428,7 +436,7 @@ Compiles to: `for cond { ... }`
 
 ### 5.4 Functional Blocks (Expressions)
 
-Use blocks when you need to **transform data** or chain operations. Blocks in Rugby are strictly **anonymous functions** (lambdas).
+Use blocks when you need to **transform data** or chain operations. Blocks in Rugby are strictly **anonymous pure functions** (lambdas).
 
 **Syntax:**
 * `do ... end`: Preferred for multi-line blocks.
@@ -436,36 +444,28 @@ Use blocks when you need to **transform data** or chain operations. Blocks in Ru
 
 **Semantics:**
 * **Scope:** Creates a new local scope (Go function literal).
-* **Return:** `return` exits the **block only** (returns a value to the iterator), unlike Ruby where it returns from the enclosing method.
-* **Break/Next:** Supported via boolean return signals in the generated Go code.
+* **Return:** `return` exits the **block only** (returns a value to the iterator).
+* **No Control Flow:** `break` and `next` are **not supported** inside blocks. Use iterator methods like `take_while` or `find` for early exit.
 
 ```ruby
 names = users.map do |u|
-  break if u.is_admin? # Stops iteration
-  next if u.inactive?  # Skips to next item
   u.name
 end
 ```
 
 **Compilation:**
+Blocks compile directly to Go function literals passed to runtime helpers.
 
-1. **Iterative Blocks** (`each`, `times`, `upto`, `downto`):
-   The callback returns `bool`. `false` signals `break`, `true` signals `next` (continue).
-   ```go
-   runtime.Each(items, func(item interface{}) bool {
-       if condition { return false } // break
-       return true // next
-   })
-   ```
+```ruby
+items.each { |x| puts x }
+```
 
-2. **Transformation Blocks** (`map`, `select`, `reject`, `find`, `reduce`):
-   The callback returns `(T, bool)` where the second value signals continuation.
-   ```go
-   runtime.Map(items, func(item interface{}) (interface{}, bool) {
-       if condition { return nil, false } // break
-       return result, true // next
-   })
-   ```
+Compiles to:
+```go
+runtime.Each(items, func(x any) {
+    runtime.Puts(x)
+})
+```
 
 ### 5.5 Statement Modifiers
 
@@ -577,7 +577,13 @@ def read(path : String) -> (Bytes, error)
 end
 ```
 
-The language focuses on explicit error handling consistent with Go's philosophy.
+### 6.5 Calling Convention
+
+To avoid ambiguity, Rugby requires parentheses for method calls that are not property accessors.
+
+*   **Valid:** `inc()`, `add(1, 2)`, `puts("hi")`
+*   **Invalid:** `inc` (ambiguous with function value), `add 1, 2` (except in top-level scripts where relaxed parsing may apply).
+*   **Properties:** `user.age` (getter) and `user.age = 5` (setter) do not use parentheses.
 
 ---
 
@@ -587,38 +593,38 @@ Classes in Rugby describe the shape of objects (Go structs) and their behavior (
 
 ### 7.1 Definition
 
+All instance variables **must** be explicitly declared in the class body.
+
 ```ruby
-class User
-  # Explicit field declaration (Crystal-style)
+class User implements Identifiable
+  # Explicit field declaration
   @email : String
-  
-  # Properties (generates getter/setter + field)
-  property age : Int
+  @name : String
+  @age : Int
 
-  # Inferred field (via parameter promotion)
-  def initialize(@name : String, email : String, age : Int)
+  # Initialize can still infer assignment, but fields must exist
+  def initialize(@name : String, email : String, @age : Int)
     @email = email
-    @age = age
   end
-
-  def greet -> String
-    "hi #{@name}, #{@age}"
-  end
-end
 ```
 
 ### 7.2 Instance Variables & Layout
 
-Rugby classes compile directly to Go structs. The fields of the struct are determined by:
-
-1.  **Explicit Declarations:** `@field : Type` at the class level.
-2.  **Initialize Inference:** Assignments to `@field` inside `initialize`.
-3.  **Parameter Promotion:** `def initialize(@field : Type)` shortcut automatically assigns the argument to the instance variable.
+Rugby classes compile directly to Go structs.
 
 **Rules:**
-*   Every instance variable MUST have a resolvable type.
-*   If a variable is used in other methods but not declared/initialized, it is an error.
-*   Nilable fields must be explicitly typed as `T?` (e.g., `@bio : String?`) and default to `nil`.
+1.  **Explicit Declaration:** Every instance variable (`@foo`) used in the class must be declared at the class level with a type.
+2.  **Parameter Promotion:** `def initialize(@field : Type)` is syntax sugar for `self.field = field`, but the field must still be declared.
+
+```ruby
+class Point
+  @x : Int
+  @y : Int
+
+  def initialize(@x : Int, @y : Int)
+  end
+end
+```
 
 ### 7.3 Initialization (`new`)
 
@@ -710,10 +716,31 @@ Concrete types are **invariant**. A variable of type `Parent` cannot hold a `Chi
 *   Invalid: `p : Parent = Child.new()`
 *   Valid: `p : Interface = Child.new()` (See 7.8)
 
+**Important:** This mechanism is for **composition and code reuse**, not traditional OOP inheritance. Use interfaces for polymorphism.
+
 **Performance Note:**
 Specialization increases binary size (code duplication) and compile time but ensures **zero runtime overhead** for method calls (no vtable lookups).
 
-### 7.8 Polymorphism & Interfaces
+### 7.9 Explicit Implementation (Optional)
+
+While Rugby uses structural typing (implicit satisfaction), classes may explicitly declare conformance to an interface using `implements`. This serves as documentation and a compile-time assertion.
+
+```ruby
+interface Runnable
+  def run
+end
+
+class Job implements Runnable
+  def run
+    puts "working"
+  end
+end
+```
+
+**Compilation:**
+The compiler verifies that `Job` satisfies `Runnable`. If a method is missing or signatures don't match, compilation fails with a descriptive error. This produces no runtime code overhead.
+
+### 7.10 Polymorphism & Interfaces
 
 Rugby uses **Interfaces** for polymorphism. Since concrete inheritance is for code reuse (not subtyping), you must use Interfaces to treat different classes uniformly.
 
@@ -761,30 +788,104 @@ end
 
 ## 9. Interfaces
 
+Interfaces define **capabilities**. They are pure contracts describing a set of behaviors (methods) without implementation or state.
+
 ### 9.1 Declaration
+
+Interfaces are defined using the `interface` keyword and contain one or more method signatures.
 
 ```ruby
 interface Speaker
   def speak -> String
 end
+
+interface Calculator
+  def add(a : Int, b : Int) -> Int
+end
 ```
 
-Compiles to:
+**Syntax Rules:**
+*   Methods in an interface **cannot** have a body.
+*   Method signatures follow the same rules as `def` (parameters and return types).
+*   Interface names must be `CamelCase`.
 
+**Go Compilation:**
+Interface methods are **implicitly exported** (PascalCase in Go) to allow for cross-package satisfaction.
 ```go
-type Speaker interface { Speak() string }
+type Speaker interface {
+    Speak() string
+}
 ```
 
-**Important:** Interface methods are **implicitly exported** (uppercase in Go). This is required for cross-package interface satisfaction in Go.
+### 9.2 Interface Inheritance (Composition)
 
-* `def speak` in an interface → `Speak()` in Go
-* Interfaces should be marked `pub` to be usable from other packages
-* Methods use the exported name transformation regardless of `pub`
+Interfaces can inherit from (embed) other interfaces using the `<` operator.
 
-### 8.2 Structural conformance
+```ruby
+interface Reader
+  def read -> String
+end
 
-* A class satisfies an interface if it has the required methods (like Go)
-* No `implements` keyword required
+interface Writer
+  def write(data : String)
+end
+
+# IO requires methods from both Reader and Writer, plus its own
+interface IO < Reader, Writer
+  def close
+end
+```
+
+**Semantics:**
+*   A type satisfies `IO` only if it implements `read`, `write`, and `close`.
+*   This compiles directly to **Interface Embedding** in Go.
+
+### 9.3 Satisfaction & `implements`
+
+Rugby uses **Structural Typing** (like Go). A class satisfies an interface automatically if it has the required methods. 
+
+However, a class can **explicitly** declare its intent using the `implements` keyword.
+
+```ruby
+class User implements Speaker, Serializable
+  def speak
+    "Hello"
+  end
+end
+```
+
+**Rules for `implements`:**
+*   It is a **compile-time assertion**. The compiler will error if the class does not actually satisfy the interface.
+*   It serves as documentation for developers.
+*   It has **zero runtime overhead**.
+
+### 9.4 The `any` Type
+
+The empty interface `interface{}` is represented by the keyword `any`. 
+
+```ruby
+def log(thing : any)
+  puts thing.to_s
+end
+```
+
+### 9.5 Runtime Casting (`as` and `is_a?`)
+
+Rugby provides safe mechanisms to work with interfaces at runtime.
+
+*   **`obj.is_a?(Interface)`**: Returns `Bool`. Compiles to Go type assertion `_, ok := obj.(Interface)`.
+*   **`obj.as?(Interface)`**: Returns an optional `Interface?`. Returns `nil` if the cast fails.
+*   **`obj.as(Interface)`**: Force-casts to the interface. **Panics** if the cast fails.
+
+### 9.6 Standard Interfaces
+
+Rugby maps common Ruby concepts to idiomatic Go interfaces:
+
+| Rugby Interface | Go Equivalent | Method |
+|-----------------|---------------|--------|
+| `Stringer`      | `fmt.Stringer`| `to_s` -> `String()` |
+| `Error`         | `error`       | `message` -> `Error()` |
+| `Closer`        | `io.Closer`   | `close` -> `Close()` |
 
 ---
 
@@ -933,7 +1034,7 @@ Rules:
 ### 11.4 Defer
 
 ```ruby
-defer resp.Body.Close
+defer resp.Body.Close()
 ```
 
 Compiles to:
@@ -942,7 +1043,7 @@ Compiles to:
 defer resp.Body.Close()
 ```
 
-Rule: `defer <callable>` compiles to `defer f()`.
+Rule: `defer` requires a call expression with parentheses.
 
 ---
 
