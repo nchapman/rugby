@@ -261,6 +261,60 @@ end`
 	assertContains(t, output, `io.ReadAll(r)`)
 }
 
+func TestRugbyStdlibImport(t *testing.T) {
+	input := `import rugby/http
+
+def main
+  http.Get("http://example.com")
+end`
+
+	output := compile(t, input)
+
+	// Should transform rugby/http to full module path
+	assertContains(t, output, `"github.com/nchapman/rugby/stdlib/http"`)
+	assertNotContains(t, output, `"rugby/http"`)
+}
+
+func TestRugbyStdlibImportWithAlias(t *testing.T) {
+	input := `import rugby/http as h
+
+def main
+  h.Get("http://example.com")
+end`
+
+	output := compile(t, input)
+
+	// Should transform and preserve alias
+	assertContains(t, output, `h "github.com/nchapman/rugby/stdlib/http"`)
+}
+
+func TestRugbyJsonImport(t *testing.T) {
+	input := `import rugby/json
+
+def main
+  json.Parse("{}")
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `"github.com/nchapman/rugby/stdlib/json"`)
+}
+
+func TestRugbyRuntimeImportSpecialCase(t *testing.T) {
+	// rugby/runtime should go to root, not stdlib
+	input := `import rugby/runtime
+
+def main
+  runtime.Puts("test")
+end`
+
+	output := compile(t, input)
+
+	// Should NOT be in stdlib
+	assertContains(t, output, `"github.com/nchapman/rugby/runtime"`)
+	assertNotContains(t, output, `stdlib/runtime`)
+}
+
 func TestGenerateDefer(t *testing.T) {
 	input := `def main
   defer resp.Body.Close

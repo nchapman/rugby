@@ -10,6 +10,25 @@ import (
 	"github.com/nchapman/rugby/ast"
 )
 
+// Rugby module prefix for stdlib imports
+const rugbyModulePrefix = "github.com/nchapman/rugby"
+
+// transformImportPath converts Rugby import paths to Go import paths.
+// rugby/http -> github.com/nchapman/rugby/stdlib/http
+// rugby/json -> github.com/nchapman/rugby/stdlib/json
+// Other paths pass through unchanged.
+func transformImportPath(path string) string {
+	if subpath, found := strings.CutPrefix(path, "rugby/"); found {
+		// Special cases: runtime and test are in the root, not stdlib
+		if subpath == "runtime" || subpath == "test" {
+			return rugbyModulePrefix + "/" + subpath
+		}
+		// All other rugby/* imports go to stdlib
+		return rugbyModulePrefix + "/stdlib/" + subpath
+	}
+	return path
+}
+
 // kernelFunc describes a Rugby kernel function mapping to runtime
 type kernelFunc struct {
 	runtimeFunc string
@@ -420,10 +439,10 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	var out strings.Builder
 	out.WriteString("package main\n\n")
 
-	// Track user imports to avoid duplicates
+	// Track user imports to avoid duplicates (use transformed paths)
 	userImports := make(map[string]bool)
 	for _, imp := range program.Imports {
-		userImports[imp.Path] = true
+		userImports[transformImportPath(imp.Path)] = true
 	}
 
 	// Collect all imports
@@ -439,10 +458,11 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 		out.WriteString("import (\n")
 		// User-specified imports
 		for _, imp := range program.Imports {
+			goPath := transformImportPath(imp.Path)
 			if imp.Alias != "" {
-				out.WriteString(fmt.Sprintf("\t%s %q\n", imp.Alias, imp.Path))
+				out.WriteString(fmt.Sprintf("\t%s %q\n", imp.Alias, goPath))
 			} else {
-				out.WriteString(fmt.Sprintf("\t%q\n", imp.Path))
+				out.WriteString(fmt.Sprintf("\t%q\n", goPath))
 			}
 		}
 		// Auto-imports (only if not already imported by user)
