@@ -315,19 +315,232 @@ To ensure deterministic behavior and Go-idiomatic ergonomics, optionals are unif
 
 **Usage:**
 
-Rugby requires explicit boolean checks. "Truthiness" of optionals is **not** supported (see 5.2).
+Rugby requires explicit handling of optionals. "Truthiness" is **not** supported (see 5.2). Instead, use operators and patterns below.
 
-*   **Check:** `if val.ok?` (or `present?`)
-*   **Unwrap:** Use `if let` pattern.
+#### 4.4.1 Optional Operators
 
-**Assignment with check (`if let`):**
+Rugby provides two operators for working with optionals:
+
+| Operator | Name | Description |
+|----------|------|-------------|
+| `??` | Nil coalescing | Unwrap or use default: `T? ?? T → T` |
+| `&.` | Safe navigation | Call method if present: `T?&.method → R?` |
+
+**Examples:**
 
 ```ruby
-if let n = s.to_i?
-  puts n
+# Nil coalescing - unwrap or default
+name = find_user(id)&.name ?? "Anonymous"
+port = config.get("port") ?? 8080
+user = find_user(id) ?? guest_user
+
+# Safe navigation - chain through optionals
+city = user&.address&.city ?? "Unknown"
+len = input&.strip&.length ?? 0
+
+# Combined
+title = article&.author&.name ?? "Unknown Author"
+```
+
+**Lowering:**
+
+```go
+// name = find_user(id)&.name ?? "Anonymous"
+tmp := findUser(id)
+var name string
+if tmp.Ok {
+    name = tmp.Value.Name
+} else {
+    name = "Anonymous"
+}
+```
+
+**Rules:**
+* `??` requires left side to be `T?` and right side to be `T`
+* `&.` requires left side to be `T?`, returns `R?`
+* Using `??` or `&.` on non-optional types is a compile error
+
+#### 4.4.2 Optional Methods
+
+For more complex operations, optionals provide methods:
+
+| Method | Returns | Description |
+|--------|---------|-------------|
+| `ok?` / `present?` | `Bool` | Is value present? |
+| `nil?` / `absent?` | `Bool` | Is value absent? |
+| `unwrap!` | `T` | Unwrap, panic if absent |
+| `map { \|x\| expr }` | `R?` | Transform if present |
+| `flat_map { \|x\| expr }` | `R?` | Chain optionals (expr returns `R?`) |
+| `each { \|x\| ... }` | `nil` | Execute block if present |
+
+**Examples:**
+
+```ruby
+# Transform value if present
+upper = name&.upcase  # simpler with &.
+upper = name.map { |n| n.upcase }  # equivalent with method
+
+# Chain optionals
+city = user.flat_map { |u| u.address }.flat_map { |a| a.city }
+
+# Side effect if present
+user.each { |u| log.info("Found: #{u.name}") }
+
+# Unwrap or panic (use sparingly)
+value = required_field.unwrap!
+```
+
+#### 4.4.3 The `if let` Pattern
+
+For conditional unwrapping with a scoped binding, use `if let`:
+
+```ruby
+if let user = find_user(id)
+  puts user.name
 end
 ```
-Compiles to `if n, ok := runtime.StringToInt(s); ok { ... }`
+
+Compiles to `if user, ok := findUser(id); ok { ... }`
+
+This is the preferred pattern when you need to use the unwrapped value conditionally.
+
+#### 4.4.4 Tuple Unpacking
+
+Optionals can be unpacked into a value and boolean using tuple assignment:
+
+```ruby
+user, ok = find_user(id)
+if ok
+  puts user.name
+end
+```
+
+**Semantics:**
+- `find_user(id)` returns `User?`
+- Single assignment: `user = find_user(id)` → `user : User?`
+- Tuple assignment: `user, ok = find_user(id)` → `user : User, ok : Bool`
+
+When unpacked, `user` is the unwrapped type (not optional). If `ok` is false, `user` holds the zero value.
+
+**Lowering:**
+```go
+user, ok := findUser(id)
+if ok {
+    fmt.Println(user.Name)
+}
+```
+
+This mirrors Go's comma-ok idiom and avoids needing `.unwrap!` after checking.
+
+#### 4.4.5 Choosing a Pattern
+
+| Pattern | Best for |
+|---------|----------|
+| `expr ?? default` | Providing a fallback value |
+| `expr&.method` | Safe navigation through optionals |
+| `if let u = expr` | Conditional use with scoped binding |
+| `val, ok = expr` | When you need the boolean separately |
+| `expr.unwrap!` | When absence is a bug (will panic) |
+| `expr.map { }` | Complex transformations |
+
+### 4.5 The `nil` Keyword
+
+Rugby has a `nil` keyword representing absence. Unlike Ruby where any value can be `nil`, Rugby restricts where `nil` is valid.
+
+#### 4.5.1 Where `nil` is Valid
+
+| Type | Can be `nil`? | Notes |
+|------|---------------|-------|
+| Value types (`Int`, `String`, `Bool`, `Float`) | No | Use `T?` for optional values |
+| Reference types (`User`, `Writer`) | No | Use `T?` for optional references |
+| Optional types (`T?`) | Yes | `nil` means absent |
+| `error` | Yes | `nil` means no error (success) |
+
+#### 4.5.2 Examples
+
+**Optional types:**
+```ruby
+def find_user(id : Int) -> User?
+  if id < 0
+    return nil  # OK: User? can be nil
+  end
+  User.new("Alice")
+end
+
+user : User? = nil  # OK
+name : String? = nil  # OK
+```
+
+**Non-optional types (compile errors):**
+```ruby
+def get_user -> User
+  nil  # ERROR: User cannot be nil, use User?
+end
+
+x : Int = nil  # ERROR: Int cannot be nil, use Int?
+```
+
+**Error type (special case):**
+```ruby
+def save(data : String) -> error
+  if data.empty?
+    return fmt.errorf("empty data")
+  end
+  nil  # OK: nil means success
+end
+```
+
+#### 4.5.3 Checking for `nil`
+
+For optional types, use tuple unpacking or `if let`:
+
+```ruby
+# Tuple unpacking (preferred)
+user, ok = find_user(5)
+if ok
+  puts user.name
+else
+  puts "not found"
+end
+
+# Or if let
+if let user = find_user(5)
+  puts user.name
+else
+  puts "not found"
+end
+
+# Or check nil directly
+result = find_user(5)
+if result.nil?
+  puts "not found"
+end
+```
+
+For the `error` type, use direct comparison:
+
+```ruby
+err = save("data")
+if err != nil
+  puts "failed: #{err}"
+end
+
+if err == nil
+  puts "success"
+end
+```
+
+#### 4.5.4 Why This Design?
+
+1. **Safety:** Forcing `T?` for optional values makes nullability explicit in the type system.
+2. **Go compatibility:** Maps cleanly to Go's zero values and pointer semantics.
+3. **Ruby familiarity:** `nil` keyword is familiar, but scoped to where it makes sense.
+4. **Error convention:** `error` being nullable matches Go's idiomatic error handling.
+
+**Lowering:**
+
+* `T?` with `nil` → `Option[T]{Ok: false}` or `(T{}, false)`
+* `error` with `nil` → Go `nil` directly
 
 ---
 
@@ -385,10 +598,20 @@ Use `if let` to handle optionals and type assertions safeley.
 if let user = find_user(id)
   puts user.name
 end
+```
 
-if let w = obj.as?(Writer)
+**Type assertion with `as`:**
+
+```ruby
+if let w = obj.as(Writer)
   w.write("hello")
 end
+
+# Or with default
+w = obj.as(Writer) ?? fallback_writer
+
+# Or unwrap (panics if wrong type)
+w = obj.as(Writer).unwrap!
 ```
 
 **Unless:**
@@ -932,8 +1155,35 @@ end
 Rugby provides safe mechanisms to work with interfaces at runtime.
 
 *   **`obj.is_a?(Interface)`**: Returns `Bool`. Compiles to Go type assertion `_, ok := obj.(Interface)`.
-*   **`obj.as?(Interface)`**: Returns an optional `Interface?`. Returns `nil` if the cast fails.
-*   **`obj.as(Interface)`**: Force-casts to the interface. **Panics** if the cast fails.
+*   **`obj.as(Interface)`**: Returns `Interface?` (optional). Use with `if let`, `??`, or `.unwrap!`.
+
+```ruby
+# Check type (predicate)
+if obj.is_a?(Writer)
+  puts "it's a writer"
+end
+
+# Cast with if let (preferred)
+if let w = obj.as(Writer)
+  w.write("hello")
+end
+
+# Cast with fallback
+w = obj.as(Writer) ?? default_writer
+
+# Cast with unwrap (panics if wrong type)
+w = obj.as(Writer).unwrap!
+```
+
+**Lowering:**
+
+```go
+// obj.as(Writer) compiles to:
+func asWriter(obj any) (Writer, bool) {
+    w, ok := obj.(Writer)
+    return w, ok
+}
+```
 
 ### 9.6 Standard Interfaces
 
@@ -1002,6 +1252,29 @@ These are **style rules**, not visibility rules:
 
 * Types (`class`, `interface`) → `CamelCase`
 * Functions, methods, variables → `snake_case`
+* Predicate methods → `snake_case?` (must return `Bool`)
+
+**The `?` suffix rule:**
+
+Method names ending in `?` **must** return `Bool`. This is strictly enforced:
+
+```ruby
+def empty? -> Bool    # OK: predicate
+def valid? -> Bool    # OK: predicate
+def even? -> Bool     # OK: predicate
+```
+
+For operations that might fail, use error returns instead:
+
+```ruby
+def to_i -> (Int, error)     # fallible conversion
+def parse -> (Data, error)   # fallible parsing
+```
+
+This keeps `?` unambiguous: when you see `method?`, you know it returns a boolean.
+
+**Other conventions:**
+
 * Capitalization in Rugby **never** controls visibility
 
 ### 10.4 Go name generation
@@ -1213,9 +1486,14 @@ runtime/
 * `bytes` → `[]byte(s)` (inlined)
 
 **Conversion:**
-* `to_i` → `runtime.MustAtoi(s)` (panics on failure)
-* `to_i?` → `runtime.StringToInt(s)` → `Int?`
-* `to_f?` → `runtime.StringToFloat(s)` → `Float?`
+* `to_i` → `runtime.StringToInt(s)` → `(Int, error)`
+* `to_f` → `runtime.StringToFloat(s)` → `(Float, error)`
+
+Use with `!` or `rescue`:
+```ruby
+n = s.to_i()!           # propagate error
+n = s.to_i() rescue 0   # default on failure
+```
 
 ### 12.6 Integer methods
 
@@ -1329,8 +1607,8 @@ Channels are typed pipes used for communication and synchronization.
 *   `ch = Chan[Int].new(buffer_size)` (Buffered)
 *   `ch = Chan[Int].new` (Unbuffered)
 *   `ch << val` (Send)
-*   `val = ch.receive` (Receive)
-*   `val, ok = ch.receive?` (Safe receive)
+*   `val = ch.receive` (Receive, blocks)
+*   `val, ok = ch.try_receive` (Safe receive, returns `(T, Bool)`)
 
 **Compilation:**
 *   `make(chan T, n)`
@@ -1365,4 +1643,476 @@ Maps directly to Go's `select` block.
   * Intended Go package/type
   * Suggested candidates (`ReadAll`)
 
+---
+
+## 15. Errors
+
+Rugby follows Go's philosophy: **errors are values**, returned explicitly from functions and handled locally. Rugby does **not** use exceptions for ordinary failures.
+
+Rugby provides syntax sugar to keep error handling concise while compiling to idiomatic Go.
+
+---
+
+### 15.1 The `error` Type
+
+Rugby includes a built-in `error` type that maps directly to Go's `error` interface.
+
+**Rules:**
+* A function may return `error` as a sole return value, or as part of a multi-return tuple.
+* `nil` represents "no error."
+
+```ruby
+def write_file(path : String, data : Bytes) -> error
+  os.write_file(path, data)
+end
+
+def read_file(path : String) -> (Bytes, error)
+  os.read_file(path)
+end
+```
+
+---
+
+### 15.2 Fallible Function Signatures
+
+The standard pattern for fallible operations:
+
+* `-> (T, error)` — functions that produce a value or an error
+* `-> error` — procedures that may fail
+
+```ruby
+def parse_int(s : String) -> (Int, error)
+  # ...
+end
+
+def close -> error
+  # ...
+end
+```
+
+---
+
+### 15.3 Postfix Bang Operator (`!`)
+
+Rugby provides a postfix `!` operator for concise error propagation. This is inspired by Ruby's "bang means strict/dangerous" convention, but the semantics follow Go's early-return pattern.
+
+#### 15.3.1 Syntax
+
+```ruby
+call_expr!
+```
+
+Examples:
+
+```ruby
+data = os.read_file(path)!
+os.mkdir_all(dir)!
+```
+
+#### 15.3.2 Valid Operands
+
+Postfix `!` is valid only on **call expressions** with explicit parentheses, whose return type includes a trailing `error`:
+
+* `error`
+* `(T, error)`
+* `(A, B, ..., error)`
+
+**Compile-time errors:**
+* Using `!` on a non-call expression (e.g., `x!` where `x` is a variable)
+* Using `!` on a call that does not return `error`
+* Using `!` without parentheses (e.g., `f!` is parsed as a method name, not `f()!`)
+
+#### 15.3.3 Enclosing Function Requirement
+
+Using `!` requires the enclosing function to return `error`:
+
+* `-> error`
+* `-> (T, error)`
+* `-> (A, B, ..., error)`
+
+If the enclosing function does not return `error`, using `!` is a compile-time error.
+
+**Exception:** In `main` or top-level script context, `!` has special behavior (see 15.6).
+
+#### 15.3.4 Semantics
+
+* If the call succeeds (`err == nil`), execution continues.
+* If the call fails (`err != nil`), the current function returns immediately with that error.
+
+**Unwrapping:**
+* `(T, error)` → `call!` evaluates to the unwrapped `T`
+* `error` → `call!` is used only for control-flow effect
+
+#### 15.3.5 Precedence
+
+Postfix `!` binds tighter than all operators except member access and calls. It applies to the completed call expression:
+
+* `foo(bar)!` — call, then bang
+* `a.b().c()!` — bang applies to `c()`
+* `!foo()!` — prefix negation of unwrapped value (valid only if result is `Bool`)
+
+#### 15.3.6 Chained Calls
+
+Multiple `!` operators can appear in a chain:
+
+```ruby
+user = load_file(path)!.parse_json()!.get_user()!
+```
+
+Each `!` unwraps its call before the next selector executes.
+
+**Lowering:**
+
+The compiler generates sequential temporaries:
+
+```go
+tmp1, err := loadFile(path)
+if err != nil {
+    return User{}, err
+}
+tmp2, err := tmp1.parseJSON()
+if err != nil {
+    return User{}, err
+}
+user, err := tmp2.getUser()
+if err != nil {
+    return User{}, err
+}
+```
+
+---
+
+### 15.4 The `rescue` Keyword
+
+Rugby provides `rescue` for inline error handling when you need more control than simple propagation.
+
+#### 15.4.1 Inline Default Form
+
+Provide a fallback value when a call fails:
+
+```ruby
+expr = fallible_call() rescue default_expr
+```
+
+If the call returns an error, `default_expr` is evaluated and used instead. Execution continues.
+
+```ruby
+port = env.get("PORT").to_i() rescue 8080
+config = parse_json(text) rescue {}
+data = os.read_file(path) rescue default_bytes
+```
+
+**Lowering:**
+```go
+port, err := strconv.Atoi(env.Get("PORT"))
+if err != nil {
+    port = 8080
+}
+```
+
+**Type rule:** `default_expr` must match the success type `T`.
+
+#### 15.4.2 Block Form
+
+For multi-statement error handling, use `rescue do ... end`:
+
+```ruby
+expr = fallible_call() rescue do
+  log.warn("operation failed")
+  compute_fallback()
+end
+```
+
+The block's last expression becomes the value. Alternatively, use `return` for early exit.
+
+```ruby
+data = os.read_file(path) rescue do
+  log.warn("using default config")
+  default_config
+end
+```
+
+**Lowering:**
+```go
+data, err := os.ReadFile(path)
+if err != nil {
+    log.Warn("using default config")
+    data = defaultConfig
+}
+```
+
+#### 15.4.3 Block Form with Error Binding
+
+Bind the error to a variable using `=> name`:
+
+```ruby
+expr = fallible_call() rescue => err do
+  log.warn("failed: #{err}")
+  return nil, fmt.errorf("context: %w", err)
+end
+```
+
+The variable `err` is in scope within the block.
+
+```ruby
+data = os.read_file(path) rescue => err do
+  log.warn("read failed: #{err}")
+  return nil, fmt.errorf("load_config: %w", err)
+end
+```
+
+**Lowering:**
+```go
+data, err := os.ReadFile(path)
+if err != nil {
+    log.Warn(fmt.Sprintf("read failed: %v", err))
+    return nil, fmt.Errorf("load_config: %w", err)
+}
+```
+
+#### 15.4.4 Rules
+
+1. `rescue` applies to call expressions returning `error` or `(T, error)`.
+2. In inline form, `default_expr` must match type `T`.
+3. In block form, the last expression becomes the value (unless `return` is used).
+4. `rescue` and `!` are mutually exclusive on the same call.
+5. The `=> name` binding creates a new variable scoped to the block, shadowing any outer variable with the same name.
+
+#### 15.4.5 `rescue` on `error`-only Returns
+
+For calls returning only `error` (no value), `rescue` executes for side effects:
+
+```ruby
+os.mkdir_all(dir) rescue => err do
+  log.warn("mkdir failed: #{err}")
+  # no value needed
+end
+```
+
+**Lowering:**
+```go
+if err := os.MkdirAll(dir, 0755); err != nil {
+    log.Warn(fmt.Sprintf("mkdir failed: %v", err))
+}
+```
+
+The inline form is not allowed for `error`-only calls (no value to replace):
+
+```ruby
+os.mkdir_all(dir) rescue nil   # ERROR: inline rescue requires (T, error) return
+```
+
+---
+
+### 15.5 Lowering Rules
+
+#### A) `call!` where call returns `(T, error)`
+
+Rugby:
+```ruby
+x = f(a, b)!
+```
+
+Go:
+```go
+x, err := f(a, b)
+if err != nil {
+    return <zero-values>, err
+}
+```
+
+#### B) `call!` where call returns `error`
+
+Rugby:
+```ruby
+f(a, b)!
+```
+
+Go:
+```go
+if err := f(a, b); err != nil {
+    return <zero-values>, err
+}
+```
+
+#### C) Multiple return values
+
+If the enclosing function returns multiple values, the compiler constructs appropriate zero values:
+
+Rugby:
+```ruby
+def open_user(id : Int) -> (User, Bool, error)
+  u = load_user(id)!
+  u, true, nil
+end
+```
+
+Go:
+```go
+func openUser(id int) (User, bool, error) {
+    u, err := loadUser(id)
+    if err != nil {
+        return User{}, false, err
+    }
+    return u, true, nil
+}
+```
+
+**Zero values:**
+* Numeric: `0`
+* Bool: `false`
+* String: `""`
+* Slices, maps, funcs, interfaces, pointers: `nil`
+* Structs: `T{}`
+
+---
+
+### 15.6 Script Mode and `main`
+
+In bare script mode (see 2.1) and inside `def main`, there is no enclosing function that returns `error`.
+
+**Rule:** `call!` prints the error to stderr and exits with status code `1`.
+
+```ruby
+# script.rg
+data = os.read_file("config.json")!
+puts data.length
+```
+
+**Lowering:**
+```go
+func main() {
+    data, err := os.ReadFile("config.json")
+    if err != nil {
+        runtime.Fatal(err)
+    }
+    runtime.Puts(len(data))
+}
+```
+
+`runtime.Fatal(err)` prints a readable error message to stderr and calls `os.Exit(1)`.
+
+---
+
+### 15.7 Explicit Handling
+
+For cases where `!` and `rescue` don't fit, handle errors explicitly:
+
+```ruby
+data, err = os.read_file(path)
+if err != nil
+  log.error("failed to read #{path}: #{err}")
+  return nil, err
+end
+```
+
+This is standard Go-style error handling and always works.
+
+---
+
+### 15.8 Panics (Programmer Errors)
+
+For unrecoverable programmer errors or impossible states, use `raise`:
+
+```ruby
+raise "unreachable"
+raise "invalid state: #{state}"
+```
+
+**Lowering:**
+```go
+panic("unreachable")
+panic(fmt.Sprintf("invalid state: %v", state))
+```
+
+**Guideline:** Use `raise` only for invariants and bugs. Use returned `error` for expected failures.
+
+---
+
+### 15.9 Error Utilities
+
+Rugby exposes common Go error utilities via the runtime:
+
+**`error_is?(err, target)`**
+
+Tests if an error matches a target (wrapping-aware):
+
+```ruby
+if error_is?(err, os.ErrNotExist)
+  puts "file not found"
+end
+```
+
+Compiles to `errors.Is(err, target)`.
+
+**`error_as(err, Type)`**
+
+Extracts a specific error type. Returns `Type?` (optional):
+
+```ruby
+if let path_err = error_as(err, os.PathError)
+  puts "path error: #{path_err.path}"
+end
+```
+
+Compiles to:
+```go
+var pathErr *os.PathError
+if errors.As(err, &pathErr) {
+    // use pathErr
+}
+```
+
+Note: `error_as` returns an optional (not an error), so use `if let` for unwrapping.
+
+---
+
+### 15.10 Common Patterns
+
+**Retry with fallback:**
+```ruby
+def fetch_config -> (Config, error)
+  data = http.get(primary_url) rescue => err do
+    log.warn("primary failed: #{err}")
+    http.get(backup_url)!
+  end
+  parse_config(data)!
+end
+```
+
+**Wrap and propagate:**
+```ruby
+def load_user(id : Int) -> (User, error)
+  row = db.query_row(sql, id) rescue => err do
+    return nil, fmt.errorf("load_user(%d): %w", id, err)
+  end
+  parse_user(row)!
+end
+```
+
+**Cleanup on error:**
+```ruby
+def process_file(path : String) -> error
+  f = os.open(path)!
+  defer f.close()
+
+  process(f) rescue => err do
+    log.error("processing failed: #{err}")
+    return err
+  end
+
+  nil
+end
+```
+
+**Ignore error, use default:**
+```ruby
+timeout = config.get("timeout").to_i() rescue 30
+```
+
+---
+
+### 15.11 Determinism
+
+All error handling is compile-time, explicit, and deterministic. There is no implicit exception control flow, stack unwinding, or reflection-based error handling.
 

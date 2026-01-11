@@ -4,12 +4,15 @@ Features in implementation order, building incrementally.
 
 **Recent spec updates (see spec.md):**
 - **Strict Conditionals (5.2):** Only `Bool` allowed in `if`/`while`. No implicit truthiness.
-- **Unified Optionals (4.4):** `T?` always maps to `Option[T]` struct (storage) or `(T, bool)` (return).
+- **Unified Optionals (4.4):** `T?` with operators (`??`, `&.`) and methods (`ok?`, `unwrap!`, `map`, etc.).
+- **The `nil` Keyword (4.5):** Only `T?` and `error` can be `nil`. Value/reference types require `T?` for nullability.
 - **Explicit Typing (6.1):** Function parameters must be explicitly typed (except `any`).
 - **Strict Field Inference (7.2):** Fields inferred from `initialize` or declared explicitly; new fields outside `initialize` are errors.
 - **Pure Blocks (5.4):** No `break`/`next` in blocks. `return` exits block only.
 - **Strict Calls (6.5):** Parentheses required for method calls (except properties).
-- **Interface Evolution (9):** `implements`, `any`, interface inheritance, `is_a?`, `as`.
+- **Interface Evolution (9):** `implements`, `any`, interface inheritance, `is_a?`, `as` (returns `T?`).
+- **Error Handling (15):** `error` type, postfix `!` propagation, `rescue` keyword, `raise` for panics.
+- **Strict `?` Suffix (10.3):** Methods ending in `?` must return `Bool`. No `to_i?`/`as?` patterns.
 
 ## Phase 16: Interface System Evolution (In Progress)
 **Goal:** Align interfaces with the refined class model and provide safe runtime polymorphism.
@@ -17,8 +20,8 @@ Features in implementation order, building incrementally.
 - [ ] **`implements` Keyword:** Support `class User implements Speaker` for compile-time conformance checks.
 - [ ] **`any` Keyword:** Map `any` to Go's `any` (empty interface).
 - [ ] **Runtime Casting:**
-  - [ ] Implement `is_a?(Interface)` → Go type assertion.
-  - [ ] Implement `as(Interface)` and `as?(Interface)` casting.
+  - [ ] Implement `is_a?(Interface)` → Go type assertion returning `Bool`.
+  - [ ] Implement `as(Interface)` → returns `Interface?` (optional), use with `if let`, `.or()`, `.unwrap!`.
 - [ ] **Standard Interface Mapping:** Ensure `to_s` satisfies `fmt.Stringer` and `message` satisfies `error`.
 
 ## Phase 17: Crispness Polish (Strictness & Safety)
@@ -41,17 +44,89 @@ Features in implementation order, building incrementally.
 - [ ] **Unified Optionals:**
   - Add `runtime.Option[T]` struct.
   - Update Codegen to use `Option[T]` for `T?` fields and variables.
-  - Update `runtime/optional.go` helpers.
   - Implement `if let` pattern in Parser and Codegen.
+  - Implement tuple unpacking: `val, ok = optional_expr` → `(T, Bool)`.
+  - Implement optional operators:
+    - `??` (nil coalescing): `T? ?? T → T`
+    - `&.` (safe navigation): `T?&.method → R?`
+  - Implement optional methods in runtime:
+    - `ok?` / `present?` → Bool
+    - `nil?` / `absent?` → Bool
+    - `unwrap!` → T (panic if absent)
+    - `map { |x| }` → R?
+    - `flat_map { |x| }` → R?
+    - `each { |x| }` → nil
 
 ### 17.3 Type System Refinement
 - [ ] **Case vs Type Switch:**
   - Introduce `case_type` (or `case type`) syntax for type switching.
   - Restrict standard `case` to value matching (`==`).
 
+### 17.4 Strict `?` Suffix
+- [ ] **Predicate Enforcement:** Methods ending in `?` must return `Bool`.
+  - Parser/Codegen validates return type of `?`-suffixed methods.
+  - Compile error if `def foo? -> Int` or similar.
+- [ ] **Remove Optional-Returning `?` Methods:**
+  - `to_i` returns `(Int, error)` instead of `to_i?` returning `Int?`.
+  - `to_f` returns `(Float, error)` instead of `to_f?` returning `Float?`.
+  - Update runtime string conversion functions accordingly.
+
 ## Phase 18: Standard Library Polish
 - [ ] **String Interpolation:** Ensure all interpolations compile to `fmt.Sprintf` (or `String()` calls).
 - [ ] **Range Constraints:** Restrict `Range` to `Int` only.
+
+## Phase 19: Error Handling
+**Goal:** Implement Go-style error handling with ergonomic syntax sugar.
+
+### 19.1 Core Error Support
+- [ ] **`error` Type:** Map Rugby `error` to Go's `error` interface.
+- [ ] **Error Returns:** Support `-> error` and `-> (T, error)` return signatures.
+- [ ] **`nil` as No Error:** Allow `nil` as valid error value.
+
+### 19.2 Postfix Bang Operator (`!`)
+- [ ] **Lexer:** Add `BANG` token recognition for postfix `!` on call expressions.
+- [ ] **Parser:** Parse `call_expr!` as error propagation.
+  - Only valid on call expressions with parentheses.
+  - `f!` is a method name, `f()!` is propagation.
+- [ ] **Codegen:** Lower `call!` to Go error check pattern:
+  ```go
+  result, err := call()
+  if err != nil { return <zero-values>, err }
+  ```
+- [ ] **Enclosing Function Check:** Compile error if `!` used in function not returning `error`.
+- [ ] **Chained Calls:** Support `a()!.b()!.c()!` with sequential unwrapping.
+
+### 19.3 Script Mode / Main
+- [ ] **`runtime.Fatal`:** Implement `Fatal(err)` that prints to stderr and exits with code 1.
+- [ ] **Main Lowering:** In `def main` or top-level scripts, `call!` lowers to `runtime.Fatal(err)`.
+
+### 19.4 Rescue Keyword
+- [ ] **Lexer:** Add `RESCUE` and `FATARROW` (`=>`) tokens.
+- [ ] **Parser:** Parse three forms:
+  - Inline: `call() rescue default_expr`
+  - Block: `call() rescue do ... end`
+  - Block with binding: `call() rescue => err do ... end`
+- [ ] **Codegen:**
+  - Inline: `if err != nil { result = default }`
+  - Block: `if err != nil { <block statements>; result = <last expr> }`
+  - Binding: `if err != nil { err := err; <block> }`
+- [ ] **Mutual Exclusion:** Compile error if `!` and `rescue` both appear on same call.
+
+### 19.5 Raise (Panics)
+- [ ] **Lexer:** Add `RAISE` token.
+- [ ] **Parser:** Parse `raise expr` as panic statement.
+- [ ] **Codegen:** Lower to `panic(expr)` or `panic(fmt.Sprintf(...))` for interpolated strings.
+
+### 19.6 Error Utilities
+- [ ] **`error_is?(err, target)`:** Compile to `errors.Is(err, target)`, returns `Bool`.
+- [ ] **`error_as(err, Type)`:** Compile to `errors.As` pattern, returns `Type?` (optional).
+  - Use with `if let` for unwrapping.
+
+### 19.7 Runtime Updates
+- [ ] Add `runtime.Fatal(err error)` function.
+- [ ] Update `runtime.StringToInt` to return `(int, error)` instead of optional.
+- [ ] Update `runtime.StringToFloat` to return `(float64, error)` instead of optional.
+- [ ] Add `import "errors"` when `error_is?` or `error_as` are used.
 
 ---
 
