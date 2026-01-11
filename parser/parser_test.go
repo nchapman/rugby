@@ -673,6 +673,93 @@ end`
 	}
 }
 
+func TestRaiseStatement(t *testing.T) {
+	input := `def main
+  raise "something went wrong"
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	raiseStmt, ok := fn.Body[0].(*ast.RaiseStmt)
+	if !ok {
+		t.Fatalf("expected RaiseStmt, got %T", fn.Body[0])
+	}
+
+	strLit, ok := raiseStmt.Message.(*ast.StringLit)
+	if !ok {
+		t.Fatalf("expected StringLit message, got %T", raiseStmt.Message)
+	}
+
+	if strLit.Value != "something went wrong" {
+		t.Errorf("expected message 'something went wrong', got %q", strLit.Value)
+	}
+}
+
+func TestBangExpression(t *testing.T) {
+	input := `def main
+  data = read_file("test.txt")!
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	assignStmt, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
+
+	bangExpr, ok := assignStmt.Value.(*ast.BangExpr)
+	if !ok {
+		t.Fatalf("expected BangExpr as value, got %T", assignStmt.Value)
+	}
+
+	callExpr, ok := bangExpr.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr inside BangExpr, got %T", bangExpr.Expr)
+	}
+
+	ident, ok := callExpr.Func.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident as func, got %T", callExpr.Func)
+	}
+
+	if ident.Name != "read_file" {
+		t.Errorf("expected function name 'read_file', got %q", ident.Name)
+	}
+}
+
+func TestBangExpressionOnNonCall(t *testing.T) {
+	// Note: `x!` parses as identifier "x!" (valid method name)
+	// We test with a literal followed by ! to trigger the error
+	input := `def main
+  y = 42!
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	// Should have an error because ! can only follow a call expression
+	if len(p.Errors()) == 0 {
+		t.Fatal("expected parse error for '!' on non-call expression (literal)")
+	}
+}
+
 func TestArrayLiteral(t *testing.T) {
 	input := `def main
   x = [1, 2, 3]

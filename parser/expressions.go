@@ -32,7 +32,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseArrayLiteral()
 	case token.LBRACE:
 		left = p.parseMapLiteral()
-	case token.MINUS, token.NOT:
+	case token.MINUS, token.NOT, token.BANG:
 		left = p.parsePrefixExpr()
 	case token.AT:
 		left = p.parseInstanceVar()
@@ -63,6 +63,12 @@ infixLoop:
 		case token.LBRACKET:
 			p.nextToken()
 			left = p.parseIndexExpr(left)
+		case token.BANG:
+			p.nextToken()
+			left = p.parseBangExpr(left)
+		case token.RESCUE:
+			p.nextToken()
+			left = p.parseRescueExpr(left)
 		default:
 			break infixLoop
 		}
@@ -144,13 +150,66 @@ func (p *Parser) parseGroupedExpr() ast.Expression {
 // parsePrefixExpr parses a prefix expression: -x, !x.
 func (p *Parser) parsePrefixExpr() ast.Expression {
 	op := p.curToken.Literal
-	if p.curToken.Type == token.NOT {
+	if p.curToken.Type == token.NOT || p.curToken.Type == token.BANG {
 		op = "!"
 	}
 	p.nextToken()
 
 	expr := p.parseExpression(prefix)
 	return &ast.UnaryExpr{Op: op, Expr: expr}
+}
+
+// parseBangExpr parses postfix error propagation: call()!
+func (p *Parser) parseBangExpr(left ast.Expression) ast.Expression {
+	// Validate that left is a CallExpr
+	if _, ok := left.(*ast.CallExpr); !ok {
+		p.errorWithHint("'!' can only follow a call expression",
+			"add parentheses: foo()!")
+		return left
+	}
+	return &ast.BangExpr{Expr: left}
+}
+
+// parseRescueExpr parses error recovery: call() rescue default
+// curToken is RESCUE when this is called
+func (p *Parser) parseRescueExpr(left ast.Expression) ast.Expression {
+	// Validate that left is a CallExpr
+	if _, ok := left.(*ast.CallExpr); !ok {
+		p.errorWithHint("'rescue' can only follow a call expression",
+			"use 'if err != nil' for explicit handling")
+		return left
+	}
+
+	rescue := &ast.RescueExpr{Expr: left}
+
+	// Move past 'rescue' to see what comes next
+	p.nextToken()
+
+	// Check for error binding: rescue => err do
+	if p.curTokenIs(token.HASHROCKET) {
+		p.nextToken() // consume '=>'
+		if !p.curTokenIs(token.IDENT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '=>'")
+			return left
+		}
+		rescue.ErrName = p.curToken.Literal
+		p.nextToken() // consume identifier
+
+		// Must be followed by 'do'
+		if !p.curTokenIs(token.DO) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after error binding")
+			return left
+		}
+		rescue.Block = p.parseBlock(token.END)
+	} else if p.curTokenIs(token.DO) {
+		// Block form: rescue do ... end
+		rescue.Block = p.parseBlock(token.END)
+	} else {
+		// Inline form: rescue default_expr
+		rescue.Default = p.parseExpression(rescuePrec + 1) // parse with higher precedence to get just the default
+	}
+
+	return rescue
 }
 
 // parseInfixExpr parses a binary expression: a + b, a && b.

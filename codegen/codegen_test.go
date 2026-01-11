@@ -2536,3 +2536,236 @@ end`
 	assertContains(t, output, `runtime.Puts("running")`)
 	assertContains(t, output, `runtime.Puts("halted")`)
 }
+
+// Error handling tests (Phase 19)
+
+func TestGenerateErrorReturnType(t *testing.T) {
+	input := `def save(path : String) -> error
+  nil
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func save(path string) error`)
+	assertContains(t, output, `return nil`)
+}
+
+func TestGenerateValueAndErrorReturnType(t *testing.T) {
+	input := `def read_file(path : String) -> (String, error)
+  return "content", nil
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func readFile(path string) (string, error)`)
+	assertContains(t, output, `return "content", nil`)
+}
+
+func TestGenerateMultipleValuesAndErrorReturnType(t *testing.T) {
+	input := `def parse(s : String) -> (Int, Bool, error)
+  return 42, true, nil
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `func parse(s string) (int, bool, error)`)
+	assertContains(t, output, `return 42, true, nil`)
+}
+
+func TestGenerateRaiseStatement(t *testing.T) {
+	input := `def main
+  raise "something went wrong"
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `panic("something went wrong")`)
+}
+
+func TestGenerateRaiseWithInterpolation(t *testing.T) {
+	input := `def main
+  state = "invalid"
+  raise "bad state: #{state}"
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `panic(fmt.Sprintf("bad state: %v", state))`)
+}
+
+func TestGenerateRaiseWithVariable(t *testing.T) {
+	input := `def main
+  msg = "error occurred"
+  raise msg
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `panic(msg)`)
+}
+
+func TestGenerateBangInMain(t *testing.T) {
+	input := `def read_file(path : String) -> (String, error)
+  return "content", nil
+end
+
+def main
+  data = read_file("test.txt")!
+  puts(data)
+end`
+
+	output := compile(t, input)
+
+	// Should use runtime.Fatal in main
+	assertContains(t, output, `data, _err := readFile("test.txt")`)
+	assertContains(t, output, `if _err != nil {`)
+	assertContains(t, output, `runtime.Fatal(_err)`)
+}
+
+func TestGenerateBangInErrorFunction(t *testing.T) {
+	input := `def read_file(path : String) -> (String, error)
+  return "content", nil
+end
+
+def load(path : String) -> (String, error)
+  data = read_file(path)!
+  return data, nil
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should propagate error in error-returning function
+	assertContains(t, output, `data, _err := readFile(path)`)
+	assertContains(t, output, `if _err != nil {`)
+	assertContains(t, output, `return "", _err`)
+}
+
+func TestGenerateBangAsStatement(t *testing.T) {
+	input := `def do_something() -> error
+  return nil
+end
+
+def main
+  do_something()!
+end`
+
+	output := compile(t, input)
+
+	// Should generate inline if for statement bang
+	assertContains(t, output, `if _err := doSomething(); _err != nil {`)
+	assertContains(t, output, `runtime.Fatal(_err)`)
+}
+
+func TestGenerateBangWithMultiReturnError(t *testing.T) {
+	// Test error propagation in a function that returns (T, T, error)
+	input := `def fetch(url : String) -> (String, error)
+  return "data", nil
+end
+
+def process(url : String) -> (String, Int, error)
+  data = fetch(url)!
+  return data, 200, nil
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should generate zero values for all non-error returns
+	assertContains(t, output, `data, _err := fetch(url)`)
+	assertContains(t, output, `return "", 0, _err`)
+}
+
+func TestGenerateBangWithInterfaceReturn(t *testing.T) {
+	input := `def parse(s : String) -> (any, error)
+  return nil, nil
+end
+
+def process(s : String) -> (any, error)
+  obj = parse(s)!
+  return obj, nil
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should use nil as zero value for 'any' (interface)
+	assertContains(t, output, `obj, _err := parse(s)`)
+	assertContains(t, output, `return nil, _err`)
+}
+
+func TestGenerateRescueInline(t *testing.T) {
+	input := `def read_config(path : String) -> (String, error)
+  return "config", nil
+end
+
+def main
+  config = read_config("app.yml") rescue "default"
+  puts(config)
+end`
+
+	output := compile(t, input)
+
+	// Should generate inline rescue with default value
+	assertContains(t, output, `config, _err := readConfig("app.yml")`)
+	assertContains(t, output, `if _err != nil {`)
+	assertContains(t, output, `config = "default"`)
+}
+
+func TestGenerateRescueBlock(t *testing.T) {
+	input := `def load_data(path : String) -> (String, error)
+  return "data", nil
+end
+
+def main
+  data = load_data("file.txt") rescue do
+    puts("load failed")
+    "fallback"
+  end
+end`
+
+	output := compile(t, input)
+
+	// Should generate block rescue
+	assertContains(t, output, `data, _err := loadData("file.txt")`)
+	assertContains(t, output, `if _err != nil {`)
+	assertContains(t, output, `runtime.Puts("load failed")`)
+	assertContains(t, output, `data = "fallback"`)
+}
+
+func TestGenerateRescueWithErrorBinding(t *testing.T) {
+	input := `def fetch_url(url : String) -> (String, error)
+  return "response", nil
+end
+
+def main
+  result = fetch_url("http://example.com") rescue => err do
+    puts("error: #{err}")
+    "error"
+  end
+end`
+
+	output := compile(t, input)
+
+	// Should generate error binding
+	assertContains(t, output, `result, _err := fetchURL("http://example.com")`)
+	assertContains(t, output, `if _err != nil {`)
+	assertContains(t, output, `err := _err`)
+	assertContains(t, output, `runtime.Puts(fmt.Sprintf("error: %v", err))`)
+	assertContains(t, output, `result = "error"`)
+}

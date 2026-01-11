@@ -245,7 +245,7 @@ func (l *Lexer) NextToken() token.Token {
 			l.readChar()
 			tok = l.newToken(token.NE, "!=")
 		} else {
-			tok = l.newToken(token.NOT, "!")
+			tok = l.newToken(token.BANG, "!")
 		}
 	case '<':
 		if l.peekChar() == '=' {

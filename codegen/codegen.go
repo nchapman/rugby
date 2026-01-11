@@ -187,6 +187,15 @@ type Generator struct {
 	emitLineDir        bool              // whether to emit //line directives
 	currentReturnTypes []string          // return types of the current function/method
 	contexts           []loopContext     // stack of loop/block contexts
+	inMainFunc         bool              // true when generating code inside main() function
+}
+
+// returnsError checks if the current function returns error as its last type
+func (g *Generator) returnsError() bool {
+	if len(g.currentReturnTypes) == 0 {
+		return false
+	}
+	return g.currentReturnTypes[len(g.currentReturnTypes)-1] == "error"
 }
 
 func (g *Generator) pushContext(kind contextType) {
@@ -483,6 +492,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genNextStmt(s)
 	case *ast.ReturnStmt:
 		g.genReturnStmt(s)
+	case *ast.RaiseStmt:
+		g.genRaiseStmt(s)
 	case *ast.DeferStmt:
 		g.genDeferStmt(s)
 	// Testing constructs
@@ -500,6 +511,7 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	clear(g.vars) // reset vars for each function
 	g.currentReturnTypes = fn.ReturnTypes
+	g.inMainFunc = fn.Name == "main"
 
 	// Mark parameters as declared variables with their types
 	for _, param := range fn.Params {
@@ -563,6 +575,7 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	g.indent--
 	g.buf.WriteString("}\n")
 	g.currentReturnTypes = nil
+	g.inMainFunc = false
 }
 
 func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
@@ -1006,6 +1019,18 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 }
 
 func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
+	// Handle BangExpr: x = call()! -> x, _err := call(); if _err != nil { ... }
+	if bangExpr, ok := s.Value.(*ast.BangExpr); ok {
+		g.genBangAssign(s.Name, s.Type, bangExpr)
+		return
+	}
+
+	// Handle RescueExpr: x = call() rescue default
+	if rescueExpr, ok := s.Value.(*ast.RescueExpr); ok {
+		g.genRescueAssign(s.Name, s.Type, rescueExpr)
+		return
+	}
+
 	g.writeIndent()
 
 	// Handle optional method calls like s.to_i?() which return (T, bool)
@@ -1124,6 +1149,211 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 		g.genExpr(s.Value)
 	}
 	g.buf.WriteString("\n")
+}
+
+// genBangAssign generates code for: x = call()!
+// Produces: x, _err := call(); if _err != nil { return/Fatal }
+func (g *Generator) genBangAssign(name string, _ string, bang *ast.BangExpr) {
+	call, ok := bang.Expr.(*ast.CallExpr)
+	if !ok {
+		// This should never happen - parser validates this
+		return
+	}
+
+	// Generate: name, _err := call()
+	g.writeIndent()
+	if g.isDeclared(name) {
+		// Reassignment needs a temp for error
+		g.buf.WriteString(fmt.Sprintf("%s, _err = ", name))
+	} else {
+		g.buf.WriteString(fmt.Sprintf("%s, _err := ", name))
+		g.vars[name] = "" // mark as declared (type unknown for now)
+	}
+	g.genCallExpr(call)
+	g.buf.WriteString("\n")
+
+	// Generate error check
+	g.genBangErrorCheck()
+}
+
+// genBangStmt generates code for a standalone: call()!
+// Produces: if _err := call(); _err != nil { return/Fatal }
+func (g *Generator) genBangStmt(bang *ast.BangExpr) {
+	call, ok := bang.Expr.(*ast.CallExpr)
+	if !ok {
+		// This should never happen - parser validates this
+		return
+	}
+
+	// Generate: if _err := call(); _err != nil { ... }
+	g.writeIndent()
+	g.buf.WriteString("if _err := ")
+	g.genCallExpr(call)
+	g.buf.WriteString("; _err != nil {\n")
+	g.indent++
+	g.genBangErrorBody()
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+// genRescueAssign generates code for: x = call() rescue default
+// Produces: x, _err := call(); if _err != nil { x = default }
+func (g *Generator) genRescueAssign(name string, _ string, rescue *ast.RescueExpr) {
+	call, ok := rescue.Expr.(*ast.CallExpr)
+	if !ok {
+		// Parser should validate this
+		return
+	}
+
+	// Generate: name, _err := call()
+	g.writeIndent()
+	if g.isDeclared(name) {
+		g.buf.WriteString(fmt.Sprintf("%s, _err = ", name))
+	} else {
+		g.buf.WriteString(fmt.Sprintf("%s, _err := ", name))
+		g.vars[name] = "" // mark as declared
+	}
+	g.genCallExpr(call)
+	g.buf.WriteString("\n")
+
+	// Generate error handling
+	g.writeIndent()
+	g.buf.WriteString("if _err != nil {\n")
+	g.indent++
+
+	if rescue.Block != nil {
+		// Block form
+		if rescue.ErrName != "" {
+			// Bind error to variable
+			g.writeIndent()
+			g.buf.WriteString(fmt.Sprintf("%s := _err\n", rescue.ErrName))
+		}
+		// Generate block body
+		for i, stmt := range rescue.Block.Body {
+			isLast := i == len(rescue.Block.Body)-1
+			if isLast {
+				// Last expression becomes the value
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString(fmt.Sprintf("%s = ", name))
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+					continue
+				}
+			}
+			g.genStatement(stmt)
+		}
+	} else {
+		// Inline form: name = default
+		g.writeIndent()
+		g.buf.WriteString(fmt.Sprintf("%s = ", name))
+		g.genExpr(rescue.Default)
+		g.buf.WriteString("\n")
+	}
+
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+// genRescueStmt generates code for a standalone: call() rescue do ... end
+// Used when rescue appears in statement context
+func (g *Generator) genRescueStmt(rescue *ast.RescueExpr) {
+	call, ok := rescue.Expr.(*ast.CallExpr)
+	if !ok {
+		return
+	}
+
+	// For statement context, we just need to handle the error
+	g.writeIndent()
+	g.buf.WriteString("if _err := ")
+	g.genCallExpr(call)
+	g.buf.WriteString("; _err != nil {\n")
+	g.indent++
+
+	if rescue.Block != nil {
+		if rescue.ErrName != "" {
+			g.writeIndent()
+			g.buf.WriteString(fmt.Sprintf("%s := _err\n", rescue.ErrName))
+		}
+		for _, stmt := range rescue.Block.Body {
+			g.genStatement(stmt)
+		}
+	} else if rescue.Default != nil {
+		// Inline default in statement context - just evaluate it
+		g.writeIndent()
+		g.genExpr(rescue.Default)
+		g.buf.WriteString("\n")
+	}
+
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+// genBangErrorCheck generates the if _err != nil check after an assignment
+func (g *Generator) genBangErrorCheck() {
+	g.writeIndent()
+	g.buf.WriteString("if _err != nil {\n")
+	g.indent++
+	g.genBangErrorBody()
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+// genBangErrorBody generates the body of the error check
+func (g *Generator) genBangErrorBody() {
+	g.writeIndent()
+	if g.inMainFunc {
+		// In main: call runtime.Fatal
+		g.needsRuntime = true
+		g.buf.WriteString("runtime.Fatal(_err)\n")
+	} else if g.returnsError() {
+		// In error-returning function: propagate the error
+		g.buf.WriteString("return ")
+		// Generate zero values for all return types except error
+		for i := range len(g.currentReturnTypes) - 1 {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+			g.buf.WriteString(zeroValue(g.currentReturnTypes[i]))
+		}
+		if len(g.currentReturnTypes) > 1 {
+			g.buf.WriteString(", ")
+		}
+		g.buf.WriteString("_err\n")
+	} else {
+		// Not in main and doesn't return error - this is an error
+		// For now, emit a comment indicating the problem
+		g.buf.WriteString("/* ERROR: ! used in function that doesn't return error */\n")
+		g.buf.WriteString("panic(_err)\n")
+	}
+}
+
+// zeroValue returns the Go zero value for a Rugby type
+func zeroValue(rubyType string) string {
+	goType := mapType(rubyType)
+	switch goType {
+	case "int", "int64", "float64":
+		return "0"
+	case "bool":
+		return "false"
+	case "string":
+		return "\"\""
+	case "error", "any":
+		return "nil" // interfaces
+	default:
+		if strings.HasPrefix(goType, "[]") || strings.HasPrefix(goType, "map[") {
+			return "nil"
+		}
+		if strings.HasPrefix(goType, "*") {
+			return "nil"
+		}
+		// For unknown types, assume struct (may need refinement for custom interfaces)
+		return goType + "{}"
+	}
 }
 
 // genCondition generates a condition expression, handling optional types.
@@ -1417,6 +1647,18 @@ func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.
 }
 
 func (g *Generator) genExprStmt(s *ast.ExprStmt) {
+	// Handle BangExpr: call()! as a statement
+	if bangExpr, ok := s.Expr.(*ast.BangExpr); ok {
+		g.genBangStmt(bangExpr)
+		return
+	}
+
+	// Handle RescueExpr: call() rescue do ... end as a statement
+	if rescueExpr, ok := s.Expr.(*ast.RescueExpr); ok {
+		g.genRescueStmt(rescueExpr)
+		return
+	}
+
 	if s.Condition != nil {
 		// Wrap in if/unless block
 		g.writeIndent()
@@ -1610,6 +1852,13 @@ func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
 		g.writeIndent()
 		g.buf.WriteString("}\n")
 	}
+}
+
+func (g *Generator) genRaiseStmt(s *ast.RaiseStmt) {
+	g.writeIndent()
+	g.buf.WriteString("panic(")
+	g.genExpr(s.Message)
+	g.buf.WriteString(")\n")
 }
 
 func (g *Generator) genExpr(expr ast.Expression) {
@@ -2701,6 +2950,8 @@ func mapType(rubyType string) string {
 		return "[]any"
 	case "Map":
 		return "map[any]any"
+	case "error":
+		return "error"
 	default:
 		return rubyType // pass through unknown types (e.g., user-defined)
 	}

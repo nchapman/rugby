@@ -63,6 +63,13 @@ func Exit(code int) {
 	os.Exit(code)
 }
 
+// Fatal prints an error to stderr and exits with status code 1.
+// Used by error propagation (!) in main/scripts.
+func Fatal(err error) {
+	fmt.Fprintln(os.Stderr, err)
+	os.Exit(1)
+}
+
 // Sleep pauses execution for the given number of seconds.
 // Ruby: sleep(seconds)
 func Sleep(seconds float64) {

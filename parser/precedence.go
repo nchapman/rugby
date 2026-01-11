@@ -8,6 +8,7 @@ import "github.com/nchapman/rugby/token"
 const (
 	_ int = iota
 	lowest
+	rescuePrec  // call() rescue default (very low precedence)
 	rangePrec   // .., ... (ranges)
 	orPrec      // or
 	andPrec     // and
@@ -17,11 +18,13 @@ const (
 	product     // *, /, %
 	prefix      // -x, not x
 	call        // f(x)
+	bang        // call()! (error propagation)
 	member      // x.y (highest)
 )
 
 // precedences maps token types to their precedence levels.
 var precedences = map[token.TokenType]int{
+	token.RESCUE:    rescuePrec,
 	token.DOTDOT:    rangePrec,
 	token.TRIPLEDOT: rangePrec,
 	token.OR:        orPrec,
@@ -39,6 +42,7 @@ var precedences = map[token.TokenType]int{
 	token.PERCENT:   product,
 	token.LPAREN:    call,
 	token.LBRACKET:  call, // array indexing has same precedence as function calls
+	token.BANG:      bang, // postfix ! for error propagation
 	token.DOT:       member,
 }
 

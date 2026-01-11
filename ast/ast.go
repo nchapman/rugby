@@ -256,6 +256,26 @@ type UnaryExpr struct {
 func (u *UnaryExpr) node()     {}
 func (u *UnaryExpr) exprNode() {}
 
+// BangExpr represents error propagation: call()!
+// Unwraps (T, error) and propagates error on failure
+type BangExpr struct {
+	Expr Expression // must be a CallExpr
+}
+
+func (b *BangExpr) node()     {}
+func (b *BangExpr) exprNode() {}
+
+// RescueExpr represents error recovery: call() rescue default
+type RescueExpr struct {
+	Expr    Expression // the fallible call
+	Default Expression // default value (for inline form), nil for block form
+	Block   *BlockExpr // block form (nil for inline)
+	ErrName string     // error binding name (for => err do form), empty if no binding
+}
+
+func (r *RescueExpr) node()     {}
+func (r *RescueExpr) exprNode() {}
+
 // AssignStmt represents variable assignment
 type AssignStmt struct {
 	Name    string
@@ -391,6 +411,15 @@ type ReturnStmt struct {
 
 func (r *ReturnStmt) node()     {}
 func (r *ReturnStmt) stmtNode() {}
+
+// RaiseStmt represents a panic: raise "message"
+type RaiseStmt struct {
+	Message Expression // the panic message/value
+	Line    int        // source line number
+}
+
+func (r *RaiseStmt) node()     {}
+func (r *RaiseStmt) stmtNode() {}
 
 // DeferStmt represents a defer statement
 type DeferStmt struct {

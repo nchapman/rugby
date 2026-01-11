@@ -22,6 +22,7 @@ const (
 	STAR    TokenType = "*"
 	SLASH   TokenType = "/"
 	PERCENT TokenType = "%"
+	BANG    TokenType = "!"
 
 	// Comparison
 	EQ TokenType = "=="
@@ -75,6 +76,8 @@ const (
 	BREAK     TokenType = "BREAK"
 	NEXT      TokenType = "NEXT"
 	RETURN    TokenType = "RETURN"
+	RAISE     TokenType = "RAISE"
+	RESCUE    TokenType = "RESCUE"
 	TRUE      TokenType = "TRUE"
 	FALSE     TokenType = "FALSE"
 	NIL       TokenType = "NIL"
@@ -121,6 +124,8 @@ var keywords = map[string]TokenType{
 	"break":     BREAK,
 	"next":      NEXT,
 	"return":    RETURN,
+	"raise":     RAISE,
+	"rescue":    RESCUE,
 	"true":      TRUE,
 	"false":     FALSE,
 	"nil":       NIL,

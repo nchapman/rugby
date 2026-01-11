@@ -25,6 +25,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseNextStmt()
 	case token.RETURN:
 		return p.parseReturnStmt()
+	case token.RAISE:
+		return p.parseRaiseStmt()
 	case token.DEFER:
 		return p.parseDeferStmt()
 	case token.IDENT:
@@ -474,6 +476,24 @@ func (p *Parser) parseReturnStmt() *ast.ReturnStmt {
 
 	// Check for statement modifier
 	stmt.Condition, stmt.IsUnless = p.parseStatementModifier()
+	p.skipNewlines()
+	return stmt
+}
+
+func (p *Parser) parseRaiseStmt() *ast.RaiseStmt {
+	line := p.curToken.Line
+	p.nextToken() // consume 'raise'
+
+	stmt := &ast.RaiseStmt{Line: line}
+
+	// raise requires a message expression
+	if p.curTokenIs(token.NEWLINE) || p.curTokenIs(token.END) || p.curTokenIs(token.EOF) {
+		p.errorAt(line, p.curToken.Column, "expected expression after raise")
+		return stmt
+	}
+
+	stmt.Message = p.parseExpression(lowest)
+	p.nextToken() // move past expression
 	p.skipNewlines()
 	return stmt
 }
