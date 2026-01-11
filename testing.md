@@ -1,4 +1,4 @@
-# Rugby Testing Spec (MVP)
+# Rugby Testing Specification
 
 **Goal:** A testing framework that feels like RSpec but compiles to idiomatic Go `testing` package code. Zero reflection, zero magic, full `go test` compatibility.
 
@@ -12,7 +12,6 @@
 
 *   **Naming:** Files ending in `_test.rg` are treated as test files.
 *   **Package:** Tests live in the same package as the code they test (white-box testing).
-    *   *Future:* Support `package foo_test` (black-box testing) via explicit directive.
 *   **Compilation Target:**
     *   `math_test.rg` → `math_test.go`
     *   These files are only compiled during `rugby test` (which invokes `go test`).
@@ -160,7 +159,7 @@ Hooks allow you to set up and tear down state for your tests without global muta
 ### 5.1 Context Passing
 
 `before` hooks return a value (the context) which is passed to both `it` and `after` blocks.
-*   **Return Type:** Inferred by the compiler from the block's return value. (Explicit arrow syntax `-> T` for blocks is not yet supported).
+*   **Return Type:** Inferred by the compiler from the block's return value. (Explicit arrow syntax `-> T` for blocks is supported).
 *   **Teardown (Option A):** Use an `after` block. It receives the same context object.
 *   **Teardown (Option B):** Use `t.cleanup { ... }` inside the `before` block (Go-style).
 
@@ -197,10 +196,9 @@ before do |t|
 end
 ```
 
-**MVP Restriction (No Cascading):**
-To keep the compiler predictable and avoid breaking changes later:
+**Scope Restriction:**
 *   `before` and `after` blocks only apply to `it` blocks *directly* within the same `describe` scope.
-*   Nested `describe` blocks do **not** inherit or cascade context from parent blocks in the MVP.
+*   Nested `describe` blocks do **not** inherit or cascade context from parent blocks.
 
 **Compilation:**
 1.  `before` block becomes a local function `setup(t)`.
@@ -216,17 +214,3 @@ Standard Go testing features are available directly on `t`.
 
 *   `t.parallel()` → `t.Parallel()`
 *   `t.skip("reason")` → `t.Skip("reason")`
-
-## 7. MVP Scope
-
-### 7.1 Compiler Support
-*   [ ] Recognizes `*_test.rg` files.
-*   [ ] Lowers `describe` / `it` / `test` to `func Test...` / `t.Run`.
-*   [ ] Generates deterministic names for test functions.
-
-### 7.2 Runtime Library (`rugby/test`)
-*   [ ] Implement basic `assert` functions (`Equal`, `True`, `Nil`, `NoError`).
-*   [ ] Implement `require` variants.
-
-### 7.3 Tooling
-*   [ ] `rugby test` command acts as a passthrough to `go test`.

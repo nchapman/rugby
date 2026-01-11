@@ -1,11 +1,11 @@
-# Rugby MVP TODO
+# Rugby Development Roadmap
 
 Features in implementation order, building incrementally.
 
 **Recent spec updates (see spec.md):**
 - **Runtime package (11):** Full Go runtime with Ruby-like stdlib ergonomics
 - **Loop semantics (5.3-5.4):** Clear distinction between imperative loops (`for`/`while` with `break`/`next`/`return` exits function) and functional blocks (`each`/`map` where `return` exits block only)
-- **Range type (4.2.1):** First-class Range values with `..`/`...` syntax, methods, and loop integration (Phase 10)
+- **Range type (4.2.1):** First-class Range values with `..`/`...` syntax, methods, and loop integration
 - **Special methods (7.8):** `def to_s` → `String() string`; `def ==(other)` → `Equal()` method; `==` operator uses `runtime.Equal` with dispatch logic
 - **self keyword (7.9):** `self` refers to receiver, enables method chaining
 - Return statements (6.3): explicit + implicit returns
@@ -194,8 +194,8 @@ Create `runtime/` Go package providing Ruby-like stdlib ergonomics (see spec.md 
 - [x] Constructor (`def initialize`) - generates `New*` functions
 - [x] `Class.new(...)` syntax
 - [x] Methods with pointer receivers (for mutation support)
-- [x] Embedding via `<` (`class Service < Logger`) - single parent only for MVP
-- [x] Pointer receiver methods (`def mutate!`) - `!` suffix stripped in Go output
+- [x] Embedding via `<` (`class Service < Logger`)
+- [x] Pointer receiver methods (`def mutate`) - all methods are pointer receivers
 - [x] Methods are lowercase (private) by default - `pub` enables uppercase exports
 - [x] `self` keyword → compiles to receiver variable (e.g., `u` in `func (u *User)`)
 - [x] Special method `to_s` → `String() string` (satisfies `fmt.Stringer`)
@@ -309,7 +309,7 @@ First-class Range values (see spec.md Section 4.2.1).
 - [x] Enforce single-entry rule: only one file with top-level statements per package (spec 2.1)
 - [x] Implement `break` and `next` in functional blocks (spec 5.4)
   - [x] Update `runtime` iterative methods (`Each`, `Times`, etc.) to use `bool` return for control
-  - [x] Update `runtime` transformation methods (`Map`, `Select`, etc.) to use `(T, bool)` return for control
+  - [x] Update `runtime` transformation methods (`Map`, `Select`, etc.) to use `(T, bool) ` return for control
   - [x] Update codegen to track "in block" state and emit `return true/false` instead of `break/continue`
   - [x] Add tests for `break`/`next` in various block types
 - [x] Implement Statement Modifiers (`if`/`unless`) (spec 5.5)
@@ -342,13 +342,28 @@ First-class Range values (see spec.md Section 4.2.1).
   - [x] Support case without subject (`case when x > 10`)
   - [x] Add comprehensive tests and examples/case.rg
 
-## Phase 14: Class System Overhaul (v0.2)
+## Phase 14: Class System Evolution
 Refining the class system based on Crystal's model.
 - [ ] `attr_accessor` / `property` macros with types
 - [ ] Class-level constants
 - [ ] Static methods (`def self.method`)
+- [ ] **Method Specialization:** Implement "Copy-Down" inheritance where parent methods are cloned into the child scope with updated `self` receivers to support dynamic dispatch semantics.
+- [ ] Apply Method Specialization to Modules (`include M`).
+- [ ] **Enforce Single Inheritance:** Restrict `<` to a single parent. Update parser to reject `< A, B`. Move multiple-behavior logic strictly to `include`.
 
+## Phase 15: Type System Evolution
+- [ ] **Flow-Sensitive Type Inference:** Infer local variable types from assignments.
+- [ ] **Strict Instance Variable Resolution:** Enforce `@field` types via explicit declaration or `initialize` assignment.
+- [ ] **Nil Safety:** Enforce `T?` for nullable fields and strictly check initialization.
 
+---
 
+### Deferred to later phases:
 
-
+- [ ] Generics support for user-defined types (currently only in runtime)
+- [ ] User-defined `operator` overloading (beyond `==`)
+- [ ] Advanced pattern matching in `case`
+- [ ] `try` / `catch` or `?` sugar for errors
+- [ ] Macro system (beyond built-in properties)
+- [ ] Cross-package symbol interning optimization
+- [ ] Black-box testing (`package foo_test`) support

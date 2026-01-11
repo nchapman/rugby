@@ -98,7 +98,7 @@ class Counter
     @n = n
   end
 
-  def inc!
+  def inc
     @n += 1
   end
 
@@ -108,8 +108,8 @@ class Counter
 end
 
 c = Counter.new(0)
-c.inc!
-c.inc!
+c.inc()
+c.inc()
 puts c.value
 ```
 
@@ -668,22 +668,6 @@ end
 
 Compiles to: `func (u *User) name() string { ... }`
 
-### 7.6 Methods with `!`
-
-In Rugby, `!` is a **naming convention** only. It does not change compilation semantics (since all methods are already pointer receivers).
-
-```ruby
-def inc!
-  @n += 1
-end
-```
-
-* `!` is stripped from the generated Go function name to match Go idioms.
-* `def inc!` → `func (c *Counter) inc()`
-* `pub def inc!` → `func (c *Counter) Inc()`
-
-This allows Rugby code to communicate "danger/mutation" (`save!`) while generating standard Go names.
-
 ### 7.7 Inheritance & Specialization
 
 Rugby supports code reuse through **Specialization**. While it uses Go's struct embedding for data layout, it ensures Ruby-like method dispatch by specializing inherited methods.
@@ -691,7 +675,7 @@ Rugby supports code reuse through **Specialization**. While it uses Go's struct 
 ```ruby
 class Parent
   def hello
-    puts "Hello, #{name}" # Calls name() on self
+    puts "Hello, #{name}" # Implicitly self.name()
   end
   def name; "Parent"; end
 end
@@ -704,59 +688,40 @@ Child.new.hello # Output: "Hello, Child"
 ```
 
 **Semantics:**
-*   **Data Layout:** `class Child < Parent` embeds the `Parent` struct into `Child` (Standard Go embedding).
+*   **Single Inheritance:** A class may inherit from only **one** parent class (`class Child < Parent`).
+*   **Data Layout:** `class Child < Parent` embeds the `Parent` struct into `Child`.
 *   **Method Specialization:** The compiler automatically "clones" methods from `Parent` into `Child`.
-    *   During cloning, the receiver (`self`) is updated from `*Parent` to `*Child`.
-    *   This ensures that any calls to `self.method` within an inherited method correctly resolve to the child's overrides.
-*   **Dispatch:** Unlike Go's default embedding behavior (where the parent method is static and only knows about the parent), Rugby's specialization provides **Dynamic Dispatch** semantics with **Static Cost**.
+    *   **Dispatch:** Inside a specialized method, implicit calls (`foo()`) are treated as `self.foo()`. They dispatch against the **Child's** method set.
+    *   **Receiver Update:** The receiver (`self`) is updated from `*Parent` to `*Child`.
 
 **Super:**
-The `super` keyword is used to call the implementation of the method as defined in the parent class.
+The `super` keyword statically binds to the **Parent's original implementation**. It does not call the specialized clone, preventing recursion.
+
 ```ruby
 class Child < Parent
   def hello
-    print "Child says: "
-    super # Calls Parent#hello
+    super # Calls Parent.hello(*Parent) embedded field
   end
 end
 ```
 
-**Construction:**
-*   `Child.new` automatically initializes embedded parents if they have zero-arg initializers.
-*   If parents require arguments, `initialize` must call `super(args...)` (mapped to parent initializers).
+**Strict Typing (No Subtype Polymorphism):**
+Concrete types are **invariant**. A variable of type `Parent` cannot hold a `Child`.
+*   Invalid: `p : Parent = Child.new()`
+*   Valid: `p : Interface = Child.new()` (See 7.8)
+
+**Performance Note:**
+Specialization increases binary size (code duplication) and compile time but ensures **zero runtime overhead** for method calls (no vtable lookups).
 
 ### 7.8 Polymorphism & Interfaces
 
-Rugby uses **Specialization** for code reuse and **Interfaces** for type-based polymorphism.
-*   If a variable needs to hold different types (e.g., `Array[Speaker]`), use an Interface.
-*   If you just want to share code between classes, use Inheritance or Modules.
-
-### 7.9 Special Methods
-
-**String Conversion (`to_s`):**
-* `def to_s` compiles to `String() string`
-* Automatically satisfies Go's `fmt.Stringer` interface
-* `puts user` uses this method automatically
-
-**Equality (`==`):**
-* Rugby `==` compiles to `runtime.Equal(a, b)`
-* **Custom Equality:** If a class defines `def ==(other)`, it compiles to `Equal(other interface{}) bool`.
-* **Runtime Dispatch:** `runtime.Equal` follows this logic:
-    1. If `a` has an `Equal(interface{})` method, call `a.Equal(b)`.
-    2. Else if `a` and `b` are slices/maps, perform a deep comparison.
-    3. Else, use standard Go `==` (identity/primitive equality).
-
-### 7.10 The `self` keyword
-
-* `self` refers to the current instance (the method receiver).
-* It allows method chaining (`return self`) and disambiguation (`self.name` vs local `name`).
-* Compiles to the generated receiver variable name (e.g., `u` in `func (u *User)...`).
+Rugby uses **Interfaces** for polymorphism. Since concrete inheritance is for code reuse (not subtyping), you must use Interfaces to treat different classes uniformly.
 
 ---
 
 ## 8. Modules (Mixins)
 
-Modules are the primary mechanism for sharing behavior across classes, functioning exactly like Ruby modules and compiling to Go struct embedding.
+Modules are the primary mechanism for sharing behavior across classes.
 
 ### 8.1 Definition
 
@@ -772,9 +737,6 @@ module Named
 end
 ```
 
-*   **Stateless Modules:** Compile to a type with methods.
-*   **Stateful Modules:** Can define properties/fields. When included, these fields are embedded into the host class.
-
 ### 8.2 Including Modules
 
 ```ruby
@@ -783,17 +745,17 @@ class Worker
   include Named
   
   def work
-    call()        # Calls Callable#call
-    self.name = "Job" # Accesses Named#name
+    call()        # Calls specialized Callable#call
+    self.name = "Job" 
   end
 end
 ```
 
-**Compilation:**
-*   `include T` is semantically identical to `class C < T`.
-*   It embeds the Module's generated struct into the Class.
-*   **Specialization:** Just like inheritance, all methods from the Module are **specialized** for the host class. This allows a Module to call methods that are expected to be provided by the host class (Mixins).
-*   This provides true **Multiple Inheritance of Implementation**.
+**Semantics:**
+*   **Composition:** `include M` embeds the Module's fields into the host class.
+*   **Specialization:** Methods are specialized (cloned) into the host class, allowing them to call host methods.
+*   **Collisions:** If two modules (or a module and parent) define the same method/field, it is a **compile-time error** unless the host class explicitly overrides it.
+
 
 ---
 
@@ -857,7 +819,7 @@ end
 
 ```ruby
 pub class Counter
-  pub def inc!
+  pub def inc
     @n += 1
   end
 end
@@ -914,7 +876,6 @@ These mappings are currently standardized in the compiler.
 Collisions occur when different Rugby identifiers normalize to the same Go identifier:
 
 * `foo_bar` and `foo__bar`
-* `inc` and `inc!`
 
 **Rule:** Collisions are compile-time errors showing:
 
