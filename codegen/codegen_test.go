@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"rugby/lexer"
-	"rugby/parser"
+	"github.com/nchapman/rugby/lexer"
+	"github.com/nchapman/rugby/parser"
 )
 
 func TestGenerateHello(t *testing.T) {
@@ -17,7 +17,7 @@ end`
 
 	assertContains(t, output, `package main`)
 	assertContains(t, output, `import`)
-	assertContains(t, output, `"rugby/runtime"`)
+	assertContains(t, output, `"github.com/nchapman/rugby/runtime"`)
 	assertContains(t, output, `func main()`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
@@ -652,7 +652,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `"rugby/runtime"`)
+	assertContains(t, output, `"github.com/nchapman/rugby/runtime"`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 	assertContains(t, output, `runtime.Print("world")`)
 	assertContains(t, output, `runtime.P(x)`)
@@ -1526,7 +1526,7 @@ end`
 	// Variable equality should use runtime.Equal
 	assertContains(t, output, `runtime.Equal(a, b)`)
 	// Should import runtime
-	assertContains(t, output, `"rugby/runtime"`)
+	assertContains(t, output, `"github.com/nchapman/rugby/runtime"`)
 }
 
 func TestEqualityWithLiteralsStaysDirect(t *testing.T) {

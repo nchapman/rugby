@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"strings"
 
-	"rugby/ast"
-	"rugby/lexer"
-	"rugby/token"
+	"github.com/nchapman/rugby/ast"
+	"github.com/nchapman/rugby/lexer"
+	"github.com/nchapman/rugby/token"
 )
 
 // Precedence levels

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"rugby/lexer"
-	"rugby/parser"
+	"github.com/nchapman/rugby/lexer"
+	"github.com/nchapman/rugby/parser"
 )
 
 func TestStatementModifierCodegen(t *testing.T) {

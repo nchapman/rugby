@@ -2,7 +2,7 @@
 package lexer
 
 import (
-	"rugby/token"
+	"github.com/nchapman/rugby/token"
 )
 
 type Lexer struct {

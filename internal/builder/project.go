@@ -51,8 +51,9 @@ func FindProjectFrom(startPath string) (*Project, error) {
 func findProjectRoot(startDir string) string {
 	dir := startDir
 	for {
-		goModPath := filepath.Join(dir, "go.mod")
-		if _, err := os.Stat(goModPath); err == nil {
+		// Look for rugby.mod (user's dependency file)
+		rugbyModPath := filepath.Join(dir, "rugby.mod")
+		if _, err := os.Stat(rugbyModPath); err == nil {
 			return dir
 		}
 
@@ -121,4 +122,32 @@ func (p *Project) RelPath(absPath string) string {
 		return absPath
 	}
 	return rel
+}
+
+// RugbyModPath returns the path to rugby.mod in the project root.
+func (p *Project) RugbyModPath() string {
+	return filepath.Join(p.Root, "rugby.mod")
+}
+
+// HasRugbyMod checks if a rugby.mod file exists in the project root.
+func (p *Project) HasRugbyMod() bool {
+	_, err := os.Stat(p.RugbyModPath())
+	return err == nil
+}
+
+// ModuleName extracts the module name from rugby.mod.
+// Returns "main" if rugby.mod doesn't exist or can't be parsed.
+func (p *Project) ModuleName() string {
+	content, err := os.ReadFile(p.RugbyModPath())
+	if err != nil {
+		return "main"
+	}
+
+	// Parse "module <name>" line
+	for line := range strings.SplitSeq(string(content), "\n") {
+		if modName, found := strings.CutPrefix(strings.TrimSpace(line), "module "); found {
+			return strings.TrimSpace(modName)
+		}
+	}
+	return "main"
 }

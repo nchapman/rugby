@@ -3,7 +3,7 @@ package lexer
 import (
 	"testing"
 
-	"rugby/token"
+	"github.com/nchapman/rugby/token"
 )
 
 func TestEdgeCases(t *testing.T) {

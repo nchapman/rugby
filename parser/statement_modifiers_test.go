@@ -3,8 +3,8 @@ package parser
 import (
 	"testing"
 
-	"rugby/ast"
-	"rugby/lexer"
+	"github.com/nchapman/rugby/ast"
+	"github.com/nchapman/rugby/lexer"
 )
 
 func TestStatementModifiers(t *testing.T) {

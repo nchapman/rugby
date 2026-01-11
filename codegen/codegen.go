@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"rugby/ast"
+	"github.com/nchapman/rugby/ast"
 )
 
 // kernelFunc describes a Rugby kernel function mapping to runtime
@@ -387,7 +387,8 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	}
 
 	// Collect all imports
-	needsRuntimeImport := g.needsRuntime && !userImports["rugby/runtime"]
+	const runtimeImport = "github.com/nchapman/rugby/runtime"
+	needsRuntimeImport := g.needsRuntime && !userImports[runtimeImport]
 	needsFmtImport := g.needsFmt && !userImports["fmt"]
 	hasImports := len(program.Imports) > 0 || needsRuntimeImport || needsFmtImport
 	if hasImports {
@@ -405,7 +406,7 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 			out.WriteString("\t\"fmt\"\n")
 		}
 		if needsRuntimeImport {
-			out.WriteString("\t\"rugby/runtime\"\n")
+			out.WriteString(fmt.Sprintf("\t%q\n", runtimeImport))
 		}
 		out.WriteString(")\n\n")
 	}

@@ -1,4 +1,4 @@
-module rugby
+module github.com/nchapman/rugby
 
 go 1.25.3
 

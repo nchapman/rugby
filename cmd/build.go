@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"rugby/internal/builder"
+	"github.com/nchapman/rugby/internal/builder"
 )
 
 var outputName string

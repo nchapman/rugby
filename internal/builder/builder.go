@@ -11,10 +11,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/log"
 
-	"rugby/ast"
-	"rugby/codegen"
-	"rugby/lexer"
-	"rugby/parser"
+	"github.com/nchapman/rugby/ast"
+	"github.com/nchapman/rugby/codegen"
+	"github.com/nchapman/rugby/lexer"
+	"github.com/nchapman/rugby/parser"
 )
 
 // Styles for pretty output
@@ -177,21 +177,30 @@ func (b *Builder) formatParseErrors(file string, errors []string) error {
 	return fmt.Errorf("%s", msg.String())
 }
 
+// RuntimeModule is the Go module that contains the Rugby runtime.
+const RuntimeModule = "github.com/nchapman/rugby"
+
 // setupGenDir prepares the gen directory for go build.
+// Generates .rugby/go.mod from rugby.mod (if present) + injects runtime dep.
 func (b *Builder) setupGenDir() error {
-	// Create go.mod in gen directory that references the parent
-	goModContent := fmt.Sprintf(`module main
-
-go 1.25
-
-require rugby v0.0.0
-
-replace rugby => %s
-`, b.project.Root)
-
 	goModPath := filepath.Join(b.project.GenDir, "go.mod")
+
+	// Check if we need to regenerate go.mod
+	if !b.needsGoModUpdate(goModPath) {
+		if b.verbose {
+			b.logger.Debug("go.mod up to date, skipping regeneration")
+		}
+		return nil
+	}
+
+	goModContent := b.generateGoMod()
+
 	if err := os.WriteFile(goModPath, []byte(goModContent), 0644); err != nil {
 		return fmt.Errorf("error creating go.mod: %w", err)
+	}
+
+	if b.verbose {
+		b.logger.Info("generated", "file", ".rugby/go.mod")
 	}
 
 	// Run go mod tidy to resolve dependencies
@@ -202,6 +211,90 @@ replace rugby => %s
 	}
 
 	return nil
+}
+
+// needsGoModUpdate checks if .rugby/go.mod needs to be regenerated.
+// Returns true if rugby.mod is newer than .rugby/go.mod or if .rugby/go.mod doesn't exist.
+func (b *Builder) needsGoModUpdate(goModPath string) bool {
+	goModInfo, err := os.Stat(goModPath)
+	if err != nil {
+		// .rugby/go.mod doesn't exist, need to create it
+		return true
+	}
+
+	// If rugby.mod exists, check if it's newer than .rugby/go.mod
+	rugbyModPath := b.project.RugbyModPath()
+	rugbyModInfo, err := os.Stat(rugbyModPath)
+	if err != nil {
+		// No rugby.mod, but we still need go.mod - only regenerate if missing
+		return false
+	}
+
+	// Regenerate if rugby.mod is newer than .rugby/go.mod
+	return rugbyModInfo.ModTime().After(goModInfo.ModTime())
+}
+
+// generateGoMod creates the go.mod content for .rugby/go.mod.
+// Reads rugby.mod if present and injects the runtime dependency.
+func (b *Builder) generateGoMod() string {
+	rugbyModPath := b.project.RugbyModPath()
+
+	// Read rugby.mod if it exists
+	rugbyModContent, err := os.ReadFile(rugbyModPath)
+	if err != nil {
+		// No rugby.mod - generate minimal go.mod
+		return fmt.Sprintf(`module main
+
+go 1.25
+
+require %s v0.0.1
+`, RuntimeModule)
+	}
+
+	// Parse rugby.mod and augment it
+	var out strings.Builder
+	lines := strings.Split(string(rugbyModContent), "\n")
+
+	hasRuntimeDep := false
+	inRequireBlock := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Check if runtime is already in rugby.mod (unlikely but possible)
+		if strings.Contains(trimmed, RuntimeModule) {
+			hasRuntimeDep = true
+		}
+
+		// Track require block state
+		if trimmed == "require (" {
+			inRequireBlock = true
+		}
+		if inRequireBlock && trimmed == ")" {
+			// Inject runtime before closing the require block
+			if !hasRuntimeDep {
+				out.WriteString(fmt.Sprintf("\t%s v0.0.1\n", RuntimeModule))
+			}
+			inRequireBlock = false
+		}
+
+		out.WriteString(line)
+		out.WriteString("\n")
+	}
+
+	result := out.String()
+
+	// If no require block exists, add one with the runtime
+	if !hasRuntimeDep && !strings.Contains(result, "require") {
+		result += fmt.Sprintf("\nrequire %s v0.0.1\n", RuntimeModule)
+	}
+
+	// Handle single-line require statement (require foo v1.0.0)
+	if !hasRuntimeDep && strings.Contains(result, "require ") && !strings.Contains(result, "require (") {
+		result += fmt.Sprintf("require %s v0.0.1\n", RuntimeModule)
+	}
+
+	return result
 }
 
 // Build compiles and links the program, producing a binary.

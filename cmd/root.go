@@ -7,7 +7,7 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
 
-	"rugby/internal/builder"
+	"github.com/nchapman/rugby/internal/builder"
 )
 
 var (
@@ -22,9 +22,12 @@ var rootCmd = &cobra.Command{
 It provides a joyful developer experience with zero configuration.
 
 Commands:
+  init    Initialize a new Rugby project
   run     Compile and run a Rugby file
   build   Produce an optimized binary
-  clean   Remove build artifacts`,
+  add     Add a dependency to rugby.mod
+  clean   Remove build artifacts
+  repl    Interactive Rugby shell`,
 	// Handle bare 'rugby file.rg' for backward compatibility
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

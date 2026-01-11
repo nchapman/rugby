@@ -3,7 +3,7 @@ package cmd
 import (
 	"github.com/spf13/cobra"
 
-	"rugby/internal/builder"
+	"github.com/nchapman/rugby/internal/builder"
 )
 
 var cleanCmd = &cobra.Command{

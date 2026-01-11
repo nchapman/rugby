@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"rugby/ast"
-	"rugby/lexer"
+	"github.com/nchapman/rugby/ast"
+	"github.com/nchapman/rugby/lexer"
 )
 
 func TestAssignStatement(t *testing.T) {

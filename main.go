@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"rugby/cmd"
+	"github.com/nchapman/rugby/cmd"
 )
 
 func main() {

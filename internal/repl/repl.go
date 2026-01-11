@@ -14,12 +14,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"rugby/ast"
-	"rugby/codegen"
-	"rugby/internal/builder"
-	"rugby/lexer"
-	"rugby/parser"
-	"rugby/token"
+	"github.com/nchapman/rugby/ast"
+	"github.com/nchapman/rugby/codegen"
+	"github.com/nchapman/rugby/internal/builder"
+	"github.com/nchapman/rugby/lexer"
+	"github.com/nchapman/rugby/parser"
+	"github.com/nchapman/rugby/token"
 )
 
 // Styles
