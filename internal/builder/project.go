@@ -128,26 +128,3 @@ func (p *Project) RelPath(absPath string) string {
 func (p *Project) RugbyModPath() string {
 	return filepath.Join(p.Root, "rugby.mod")
 }
-
-// HasRugbyMod checks if a rugby.mod file exists in the project root.
-func (p *Project) HasRugbyMod() bool {
-	_, err := os.Stat(p.RugbyModPath())
-	return err == nil
-}
-
-// ModuleName extracts the module name from rugby.mod.
-// Returns "main" if rugby.mod doesn't exist or can't be parsed.
-func (p *Project) ModuleName() string {
-	content, err := os.ReadFile(p.RugbyModPath())
-	if err != nil {
-		return "main"
-	}
-
-	// Parse "module <name>" line
-	for line := range strings.SplitSeq(string(content), "\n") {
-		if modName, found := strings.CutPrefix(strings.TrimSpace(line), "module "); found {
-			return strings.TrimSpace(modName)
-		}
-	}
-	return "main"
-}

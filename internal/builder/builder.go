@@ -110,15 +110,16 @@ func (b *Builder) compileFile(inputPath string) (string, bool, error) {
 	}
 
 	outputPath := b.project.GenPath(absPath)
+	metaPath := outputPath + ".meta"
 
 	// Check if we can skip compilation (output newer than source)
 	if b.isUpToDate(absPath, outputPath) {
 		if b.verbose {
 			b.logger.Debug("up to date, skipping", "file", b.project.RelPath(absPath))
 		}
-		// Still need to check for top-level statements by reading existing output
-		// For now, assume it might have top-level (conservative)
-		return outputPath, true, nil
+		// Read cached metadata to get hasTopLevel
+		hasTopLevel := b.readCachedMeta(metaPath)
+		return outputPath, hasTopLevel, nil
 	}
 
 	source, err := os.ReadFile(absPath)
@@ -155,11 +156,33 @@ func (b *Builder) compileFile(inputPath string) (string, bool, error) {
 		return "", false, fmt.Errorf("error writing %s: %w", outputPath, err)
 	}
 
+	// Save metadata for cache
+	b.writeCachedMeta(metaPath, hasTopLevel)
+
 	if b.verbose {
 		b.logger.Info("compiled", "file", b.project.RelPath(absPath))
 	}
 
 	return outputPath, hasTopLevel, nil
+}
+
+// readCachedMeta reads the hasTopLevel metadata from a cache file.
+func (b *Builder) readCachedMeta(metaPath string) bool {
+	data, err := os.ReadFile(metaPath)
+	if err != nil {
+		return false // conservative default if no cache
+	}
+	return strings.TrimSpace(string(data)) == "toplevel=true"
+}
+
+// writeCachedMeta writes the hasTopLevel metadata to a cache file.
+func (b *Builder) writeCachedMeta(metaPath string, hasTopLevel bool) {
+	content := "toplevel=false"
+	if hasTopLevel {
+		content = "toplevel=true"
+	}
+	// Ignore errors - cache is best-effort
+	_ = os.WriteFile(metaPath, []byte(content), 0644)
 }
 
 // isUpToDate checks if the output file is newer than the source file.

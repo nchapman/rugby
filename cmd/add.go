@@ -37,8 +37,8 @@ Examples:
 			return fmt.Errorf("failed to read rugby.mod: %w", err)
 		}
 
-		// Check if package already exists
-		if strings.Contains(string(content), pkg) {
+		// Check if exact package already exists (not just substring match)
+		if packageExists(string(content), pkg) {
 			logger.Warn("Package already in rugby.mod", "package", pkg)
 			return nil
 		}
@@ -83,18 +83,35 @@ func findRugbyMod() (string, error) {
 	}
 }
 
+// packageExists checks if an exact package (not substring) exists in rugby.mod.
+func packageExists(content, pkg string) bool {
+	for line := range strings.SplitSeq(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		fields := strings.Fields(trimmed)
+
+		// Check for package as first field (inside require block)
+		if len(fields) >= 1 && fields[0] == pkg {
+			return true
+		}
+		// Check for single-line require: "require github.com/foo/bar v1.0.0"
+		if len(fields) >= 2 && fields[0] == "require" && fields[1] == pkg {
+			return true
+		}
+	}
+	return false
+}
+
 // addDependency adds a package to the rugby.mod content.
 func addDependency(content, pkg, version string) string {
-	// Normalize version
-	if version == "" {
-		version = "latest"
-	}
-	if !strings.HasPrefix(version, "v") && version != "latest" {
+	// Normalize version - treat empty or "latest" as no version (let Go resolve)
+	if version == "" || version == "latest" {
+		version = ""
+	} else if !strings.HasPrefix(version, "v") {
 		version = "v" + version
 	}
 
 	depLine := pkg
-	if version != "latest" {
+	if version != "" {
 		depLine = fmt.Sprintf("%s %s", pkg, version)
 	}
 

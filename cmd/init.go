@@ -39,6 +39,11 @@ Otherwise, initializes in the current directory.`,
 			moduleName = filepath.Base(cwd)
 		}
 
+		// Validate module name
+		if strings.ContainsAny(moduleName, " \t") {
+			return fmt.Errorf("project name %q contains spaces; please use a name without spaces", moduleName)
+		}
+
 		// Check if rugby.mod already exists
 		rugbyModPath := filepath.Join(projectDir, "rugby.mod")
 		if _, err := os.Stat(rugbyModPath); err == nil {
@@ -76,7 +81,9 @@ puts "Hello, Rugby!"
 			if strings.Contains(string(existing), ".rugby/") {
 				gitignoreContent = "" // Already has it, skip
 			} else {
-				gitignoreContent = string(existing) + "\n# Rugby build artifacts\n.rugby/\n"
+				// Normalize trailing newlines before appending
+				existingStr := strings.TrimRight(string(existing), "\n\r")
+				gitignoreContent = existingStr + "\n\n# Rugby build artifacts\n.rugby/\n"
 			}
 		} else {
 			// Create new .gitignore
