@@ -661,9 +661,27 @@ func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
 func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub bool) {
 	clear(g.vars)
 
+	// Separate promoted parameters (@field : Type) from regular parameters
+	var promotedParams []struct {
+		fieldName string
+		paramName string
+		paramType string
+	}
+
 	// Mark parameters as declared variables
 	for _, param := range method.Params {
-		g.vars[param.Name] = param.Type
+		if len(param.Name) > 0 && param.Name[0] == '@' {
+			// Parameter promotion: @name : Type
+			fieldName := param.Name[1:] // strip @
+			promotedParams = append(promotedParams, struct {
+				fieldName string
+				paramName string
+				paramType string
+			}{fieldName, fieldName, param.Type})
+			g.vars[fieldName] = param.Type
+		} else {
+			g.vars[param.Name] = param.Type
+		}
 	}
 
 	// Receiver name for field assignments
@@ -679,16 +697,26 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 		if i > 0 {
 			g.buf.WriteString(", ")
 		}
+		// Use field name (without @) for promoted parameters
+		paramName := param.Name
+		if len(paramName) > 0 && paramName[0] == '@' {
+			paramName = paramName[1:]
+		}
 		if param.Type != "" {
-			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, mapType(param.Type)))
+			g.buf.WriteString(fmt.Sprintf("%s %s", paramName, mapType(param.Type)))
 		} else {
-			g.buf.WriteString(fmt.Sprintf("%s any", param.Name))
+			g.buf.WriteString(fmt.Sprintf("%s any", paramName))
 		}
 	}
 	g.buf.WriteString(fmt.Sprintf(") *%s {\n", className))
 
 	// Create instance
 	g.buf.WriteString(fmt.Sprintf("\t%s := &%s{}\n", recv, className))
+
+	// Auto-assign promoted parameters
+	for _, promoted := range promotedParams {
+		g.buf.WriteString(fmt.Sprintf("\t%s.%s = %s\n", recv, promoted.fieldName, promoted.paramName))
+	}
 
 	// Generate body (instance var assignments become field sets)
 	g.indent++
@@ -708,7 +736,12 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 
 	// Mark parameters as declared variables with their types
 	for _, param := range method.Params {
-		g.vars[param.Name] = param.Type
+		// Handle promoted parameters (shouldn't appear in regular methods, but be safe)
+		paramName := param.Name
+		if len(paramName) > 0 && paramName[0] == '@' {
+			paramName = paramName[1:]
+		}
+		g.vars[paramName] = param.Type
 	}
 
 	// Receiver name: first letter of class, lowercase

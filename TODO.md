@@ -6,7 +6,7 @@ Features in implementation order, building incrementally.
 - **Strict Conditionals (5.2):** Only `Bool` allowed in `if`/`while`. No implicit truthiness.
 - **Unified Optionals (4.4):** `T?` always maps to `Option[T]` struct (storage) or `(T, bool)` (return).
 - **Explicit Typing (6.1):** Function parameters must be explicitly typed (except `any`).
-- **Explicit Fields (7.1):** All instance variables must be declared in class body.
+- **Strict Field Inference (7.2):** Fields inferred from `initialize` or declared explicitly; new fields outside `initialize` are errors.
 - **Pure Blocks (5.4):** No `break`/`next` in blocks. `return` exits block only.
 - **Strict Calls (6.5):** Parentheses required for method calls (except properties).
 - **Interface Evolution (9):** `implements`, `any`, interface inheritance, `is_a?`, `as`.
@@ -29,10 +29,10 @@ Features in implementation order, building incrementally.
   - Exception: Property accessors (getters/setters).
 - [x] **Pure Blocks:** Parser rejects `break` and `next` keywords inside blocks.
 - [x] **Explicit Parameters:** Parser requires type annotations for all function parameters (use `: any` for untyped).
-- [ ] **Explicit Fields:**
-  - Update Parser to parse field declarations in class body (`@x : Int`).
-  - Update Parser/Builder to require all used `@ivars` to be declared.
-  - Remove implicit field inference from `initialize`.
+- [x] **Strict Field Inference:**
+  - Parser parses field declarations in class body (`@x : Type`).
+  - Fields can be introduced via: explicit declaration, parameter promotion, or first assignment in `initialize`.
+  - New fields outside `initialize` are compile-time errors.
 
 ### 17.2 Strict Semantics & Codegen
 - [ ] **Strict Conditionals:**
@@ -56,6 +56,13 @@ Features in implementation order, building incrementally.
 ---
 
 ## Recently Completed
+
+### Strict Field Inference (Phase 17.1)
+- Parser now supports explicit field declarations (`@field : Type` in class body)
+- Implemented parameter promotion syntax (`def initialize(@field : Type)`)
+- Fields inferred from first assignment in `initialize` method
+- Validation: methods other than `initialize` cannot introduce new instance variables
+- Formatter updated to display field declarations with proper indentation
 
 ### Parser Restructure
 Split the monolithic `parser.go` (2,569 lines) into focused modules:

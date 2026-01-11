@@ -1909,6 +1909,9 @@ end`
 
 func TestClassFieldTypeInference(t *testing.T) {
 	input := `class User
+  @name : String
+  @age : Int
+
   def initialize(name : String, age : Int)
     @name = name
     @age = age
@@ -1932,7 +1935,7 @@ end`
 		t.Fatalf("expected 2 fields, got %d", len(cls.Fields))
 	}
 
-	// Check field types are inferred from parameter types
+	// Check field types from explicit declarations
 	fieldTypes := make(map[string]string)
 	for _, f := range cls.Fields {
 		fieldTypes[f.Name] = f.Type
@@ -1943,6 +1946,87 @@ end`
 	}
 	if fieldTypes["age"] != "Int" {
 		t.Errorf("expected field 'age' to have type 'Int', got %q", fieldTypes["age"])
+	}
+}
+
+func TestParameterPromotion(t *testing.T) {
+	input := `class Point
+  def initialize(@x : Int, @y : Int)
+  end
+end
+
+def main
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls, ok := program.Declarations[0].(*ast.ClassDecl)
+	if !ok {
+		t.Fatalf("expected ClassDecl, got %T", program.Declarations[0])
+	}
+
+	// Should have 2 fields inferred from promoted parameters
+	if len(cls.Fields) != 2 {
+		t.Fatalf("expected 2 fields from parameter promotion, got %d", len(cls.Fields))
+	}
+
+	fieldTypes := make(map[string]string)
+	for _, f := range cls.Fields {
+		fieldTypes[f.Name] = f.Type
+	}
+
+	if fieldTypes["x"] != "Int" {
+		t.Errorf("expected field 'x' to have type 'Int', got %q", fieldTypes["x"])
+	}
+
+	if fieldTypes["y"] != "Int" {
+		t.Errorf("expected field 'y' to have type 'Int', got %q", fieldTypes["y"])
+	}
+
+	// Check that initialize has promoted parameters
+	initMethod := cls.Methods[0]
+	if len(initMethod.Params) != 2 {
+		t.Fatalf("expected 2 params, got %d", len(initMethod.Params))
+	}
+
+	if initMethod.Params[0].Name != "@x" {
+		t.Errorf("expected promoted param '@x', got %q", initMethod.Params[0].Name)
+	}
+
+	if initMethod.Params[1].Name != "@y" {
+		t.Errorf("expected promoted param '@y', got %q", initMethod.Params[1].Name)
+	}
+}
+
+func TestNewFieldOutsideInitializeError(t *testing.T) {
+	input := `class User
+  def initialize(name : String)
+    @name = name
+  end
+
+  def birthday
+    @age = 0  # ERROR: cannot introduce new field
+  end
+end
+
+def main
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	_ = p.ParseProgram()
+
+	// Should have an error about introducing new field outside initialize
+	if len(p.Errors()) == 0 {
+		t.Fatal("expected error for new field outside initialize, got none")
+	}
+
+	errorMsg := p.Errors()[0]
+	if !strings.Contains(errorMsg, "cannot introduce new instance variable @age outside initialize") {
+		t.Errorf("expected error about new field, got: %s", errorMsg)
 	}
 }
 
@@ -2143,6 +2227,7 @@ end`
 func TestSelfKeyword(t *testing.T) {
 	input := `class Builder
   def initialize
+    @name = ""
   end
 
   def with_name(n : any)
@@ -2856,6 +2941,10 @@ end`
 
 func TestInstanceVarOrAssign(t *testing.T) {
 	input := `class User
+  def initialize
+    @cache = nil
+  end
+
   def get_cache
     @cache ||= load_cache()
   end
@@ -2867,11 +2956,12 @@ end`
 	checkParserErrors(t, p)
 
 	cls := program.Declarations[0].(*ast.ClassDecl)
-	method := cls.Methods[0]
+	// get_cache is the second method (after initialize)
+	getCacheMethod := cls.Methods[1]
 
-	orAssign, ok := method.Body[0].(*ast.InstanceVarOrAssign)
+	orAssign, ok := getCacheMethod.Body[0].(*ast.InstanceVarOrAssign)
 	if !ok {
-		t.Fatalf("expected InstanceVarOrAssign, got %T", method.Body[0])
+		t.Fatalf("expected InstanceVarOrAssign, got %T", getCacheMethod.Body[0])
 	}
 
 	if orAssign.Name != "cache" {
@@ -3603,7 +3693,7 @@ end`
 func TestClassDocComment(t *testing.T) {
 	input := `# User represents a user in the system
 class User
-  def initialize(name: String)
+  def initialize(name : String)
     @name = name
   end
 end`

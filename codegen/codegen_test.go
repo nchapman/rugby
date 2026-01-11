@@ -1283,6 +1283,7 @@ end`
 func TestSelfKeyword(t *testing.T) {
 	input := `class Builder
   def initialize
+    @name = ""
   end
 
   def with_name(n : any)
@@ -1311,6 +1312,7 @@ end`
 func TestSelfInMethodChain(t *testing.T) {
 	input := `class Config
   def initialize
+    @value = nil
   end
 
   def set_value(v : any)
@@ -1920,6 +1922,10 @@ end`
 
 func TestInstanceVarOrAssign(t *testing.T) {
 	input := `class Service
+  def initialize
+    @cache = nil
+  end
+
   def get_cache
     @cache ||= load_cache()
   end

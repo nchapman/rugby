@@ -260,6 +260,17 @@ func (f *Formatter) formatClassDecl(cls *ast.ClassDecl) {
 	f.write("\n")
 
 	f.indent++
+
+	// Format field declarations
+	for _, field := range cls.Fields {
+		f.formatFieldDecl(field)
+	}
+
+	// Add blank line between fields and methods if both exist
+	if len(cls.Fields) > 0 && len(cls.Methods) > 0 {
+		f.write("\n")
+	}
+
 	for _, method := range cls.Methods {
 		f.formatMethodDecl(method)
 	}
@@ -267,6 +278,21 @@ func (f *Formatter) formatClassDecl(cls *ast.ClassDecl) {
 
 	f.writeIndent()
 	f.writeLine("end")
+}
+
+// formatFieldDecl formats a field declaration.
+// Only outputs fields with explicit types (inferred fields without types are not formatted).
+func (f *Formatter) formatFieldDecl(field *ast.FieldDecl) {
+	// Skip fields with no type (they were inferred and shouldn't be explicitly formatted)
+	if field.Type == "" {
+		return
+	}
+	f.writeIndent()
+	f.write("@")
+	f.write(field.Name)
+	f.write(" : ")
+	f.write(field.Type)
+	f.write("\n")
 }
 
 // formatInterfaceDecl formats an interface declaration.

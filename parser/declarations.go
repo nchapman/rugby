@@ -75,12 +75,27 @@ func (p *Parser) parseImport() *ast.ImportDecl {
 }
 
 // parseTypedParam parses a parameter with optional type annotation: name or name : Type
+// Also supports parameter promotion: @name : Type
 func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
+	// Check for parameter promotion (@name : Type)
+	isPromoted := false
+	if p.curTokenIs(token.AT) {
+		isPromoted = true
+		p.nextToken() // consume '@'
+	}
+
 	if !p.curTokenIs(token.IDENT) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected parameter name")
 		return nil
 	}
+
 	name := p.curToken.Literal
+	if isPromoted {
+		// Prefix with @ to mark as promoted parameter. Codegen strips this
+		// to generate both the parameter name and the auto-assignment.
+		name = "@" + name
+	}
+
 	if seen[name] {
 		p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("duplicate parameter name %q", name))
 		return nil
@@ -301,7 +316,7 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 
 	p.skipNewlines()
 
-	// Parse methods until 'end'
+	// Parse field declarations and methods until 'end'
 	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
 		p.skipNewlines()
 		if p.curTokenIs(token.END) {
@@ -309,6 +324,11 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 		}
 
 		switch p.curToken.Type {
+		case token.AT:
+			// Field declaration: @name : Type
+			if field := p.parseFieldDecl(); field != nil {
+				cls.Fields = append(cls.Fields, field)
+			}
 		case token.PUB:
 			pubLine := p.curToken.Line
 			methodDoc := p.leadingComments(pubLine)
@@ -327,7 +347,7 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 				cls.Methods = append(cls.Methods, method)
 			}
 		default:
-			p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("unexpected token %s in class body, expected 'def', 'pub def', or 'end'", p.curToken.Type))
+			p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("unexpected token %s in class body, expected '@field', 'def', 'pub def', or 'end'", p.curToken.Type))
 			p.nextToken()
 		}
 	}
@@ -338,11 +358,32 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 	}
 	p.nextToken() // consume 'end'
 
-	// Extract fields from initialize method
+	// Merge explicit field declarations with inferred fields from initialize
 	for _, method := range cls.Methods {
 		if method.Name == "initialize" {
-			cls.Fields = extractFields(method)
+			inferredFields := extractFields(method)
+			// Add inferred fields that weren't explicitly declared
+			explicitNames := make(map[string]bool)
+			for _, field := range cls.Fields {
+				explicitNames[field.Name] = true
+			}
+			for _, inferred := range inferredFields {
+				if !explicitNames[inferred.Name] {
+					cls.Fields = append(cls.Fields, inferred)
+				}
+			}
 			break
+		}
+	}
+
+	// Validate: methods other than initialize cannot introduce new instance variables
+	knownFields := make(map[string]bool)
+	for _, field := range cls.Fields {
+		knownFields[field.Name] = true
+	}
+	for _, method := range cls.Methods {
+		if method.Name != "initialize" {
+			p.validateNoNewFields(method.Body, knownFields)
 		}
 	}
 
@@ -488,8 +529,36 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 	return sig
 }
 
-// extractFields extracts field declarations from instance variable assignments in a method.
-// It infers field types from typed parameters when @field = param_name.
+// parseFieldDecl parses an explicit field declaration: @name : Type
+func (p *Parser) parseFieldDecl() *ast.FieldDecl {
+	p.nextToken() // consume '@'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected field name after '@'")
+		return nil
+	}
+
+	name := p.curToken.Literal
+	p.nextToken() // consume field name
+
+	if !p.curTokenIs(token.COLON) {
+		p.errorWithHint("field type required",
+			fmt.Sprintf("add type annotation: @%s : Type", name))
+		return nil
+	}
+	p.nextToken() // consume ':'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
+		return nil
+	}
+
+	fieldType := p.parseTypeName()
+	return &ast.FieldDecl{Name: name, Type: fieldType}
+}
+
+// extractFields extracts field declarations from instance variable assignments and
+// parameter promotions in the initialize method.
 func extractFields(method *ast.MethodDecl) []*ast.FieldDecl {
 	seen := make(map[string]bool)
 	var fields []*ast.FieldDecl
@@ -502,35 +571,96 @@ func extractFields(method *ast.MethodDecl) []*ast.FieldDecl {
 		}
 	}
 
-	for _, stmt := range method.Body {
-		if assign, ok := stmt.(*ast.InstanceVarAssign); ok {
-			if !seen[assign.Name] {
-				seen[assign.Name] = true
-
-				// Infer type from assignment source
-				fieldType := ""
-				if ident, ok := assign.Value.(*ast.Ident); ok {
-					// If assigned from a parameter, use its type
-					if pt, ok := paramTypes[ident.Name]; ok {
-						fieldType = pt
-					}
-				}
-
-				fields = append(fields, &ast.FieldDecl{Name: assign.Name, Type: fieldType})
-			}
-		}
-		// Also handle ||= assignments
-		if assign, ok := stmt.(*ast.InstanceVarOrAssign); ok {
-			if !seen[assign.Name] {
-				seen[assign.Name] = true
-				// Type inference for ||= is harder since value is conditional
-				// For now, use empty type (interface{})
-				fields = append(fields, &ast.FieldDecl{Name: assign.Name, Type: ""})
+	// Handle parameter promotion: def initialize(@name : String)
+	// Parameters starting with @ are promoted to instance variables
+	for _, param := range method.Params {
+		if len(param.Name) > 0 && param.Name[0] == '@' {
+			// This is parameter promotion
+			fieldName := param.Name[1:] // strip @
+			if !seen[fieldName] {
+				seen[fieldName] = true
+				fields = append(fields, &ast.FieldDecl{Name: fieldName, Type: param.Type})
+				// Also add to paramTypes so assignments work
+				paramTypes[fieldName] = param.Type
 			}
 		}
 	}
 
+	// Recursively scan initialize body for @field = value assignments
+	// This handles fields initialized in nested control flow (if, while, for)
+	var scanStatements func(stmts []ast.Statement)
+	scanStatements = func(stmts []ast.Statement) {
+		for _, stmt := range stmts {
+			switch s := stmt.(type) {
+			case *ast.InstanceVarAssign:
+				if !seen[s.Name] {
+					seen[s.Name] = true
+
+					// Infer type from assignment source
+					fieldType := ""
+					if ident, ok := s.Value.(*ast.Ident); ok {
+						// If assigned from a parameter, use its type
+						if pt, ok := paramTypes[ident.Name]; ok {
+							fieldType = pt
+						}
+					}
+
+					fields = append(fields, &ast.FieldDecl{Name: s.Name, Type: fieldType})
+				}
+			case *ast.InstanceVarOrAssign:
+				if !seen[s.Name] {
+					seen[s.Name] = true
+					// Type inference for ||= is harder since value is conditional
+					// For now, use empty type (interface{})
+					fields = append(fields, &ast.FieldDecl{Name: s.Name, Type: ""})
+				}
+			case *ast.IfStmt:
+				scanStatements(s.Then)
+				scanStatements(s.Else)
+				for _, elsif := range s.ElseIfs {
+					scanStatements(elsif.Body)
+				}
+			case *ast.WhileStmt:
+				scanStatements(s.Body)
+			case *ast.ForStmt:
+				scanStatements(s.Body)
+			}
+		}
+	}
+	scanStatements(method.Body)
+
 	return fields
+}
+
+// validateNoNewFields checks that methods don't introduce new instance variables.
+// Only initialize (and explicit declarations) can create new fields.
+func (p *Parser) validateNoNewFields(stmts []ast.Statement, knownFields map[string]bool) {
+	for _, stmt := range stmts {
+		switch s := stmt.(type) {
+		case *ast.InstanceVarAssign:
+			if !knownFields[s.Name] {
+				p.errorWithHint(
+					fmt.Sprintf("cannot introduce new instance variable @%s outside initialize", s.Name),
+					fmt.Sprintf("move @%s assignment to initialize method or add explicit field declaration", s.Name))
+			}
+		case *ast.InstanceVarOrAssign:
+			if !knownFields[s.Name] {
+				p.errorWithHint(
+					fmt.Sprintf("cannot introduce new instance variable @%s outside initialize", s.Name),
+					fmt.Sprintf("move @%s assignment to initialize method or add explicit field declaration", s.Name))
+			}
+		case *ast.IfStmt:
+			p.validateNoNewFields(s.Then, knownFields)
+			p.validateNoNewFields(s.Else, knownFields)
+			for _, elsif := range s.ElseIfs {
+				p.validateNoNewFields(elsif.Body, knownFields)
+			}
+		case *ast.WhileStmt:
+			p.validateNoNewFields(s.Body, knownFields)
+		case *ast.ForStmt:
+			p.validateNoNewFields(s.Body, knownFields)
+		}
+	}
 }
 
 func (p *Parser) parseMethodDecl() *ast.MethodDecl {
