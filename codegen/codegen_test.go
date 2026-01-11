@@ -1802,8 +1802,8 @@ end`
 
 	output := compile(t, input)
 
-	// Should use < for exclusive range
-	assertContains(t, output, `for i := 0; i < 5; i++ {`)
+	// Should use range over int (Go 1.22) for 0...n
+	assertContains(t, output, `for i := range 5 {`)
 }
 
 func TestForLoopWithRangeVariables(t *testing.T) {

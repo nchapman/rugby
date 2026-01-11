@@ -258,18 +258,14 @@ func Last[T any](slice []T) (T, bool) {
 // Reverse reverses the slice in-place.
 // Ruby: arr.reverse!
 func Reverse[T any](slice []T) {
-	for i, j := 0, len(slice)-1; i < j; i, j = i+1, j-1 {
-		slice[i], slice[j] = slice[j], slice[i]
-	}
+	slices.Reverse(slice)
 }
 
 // Reversed returns a new slice with elements in reverse order.
 // Ruby: arr.reverse
 func Reversed[T any](slice []T) []T {
-	result := make([]T, len(slice))
-	for i, v := range slice {
-		result[len(slice)-1-i] = v
-	}
+	result := slices.Clone(slice)
+	slices.Reverse(result)
 	return result
 }
 
@@ -415,15 +411,9 @@ func FirstN[T any](slice []T, n int) []T {
 		return []T{}
 	}
 	if n >= len(slice) {
-		// Return copy? Or slice? Slice is fine.
-		// Ruby returns new array.
-		res := make([]T, len(slice))
-		copy(res, slice)
-		return res
+		return slices.Clone(slice)
 	}
-	res := make([]T, n)
-	copy(res, slice[:n])
-	return res
+	return slices.Clone(slice[:n])
 }
 
 // LastN returns the last n elements.
@@ -433,13 +423,9 @@ func LastN[T any](slice []T, n int) []T {
 	}
 	l := len(slice)
 	if n >= l {
-		res := make([]T, l)
-		copy(res, slice)
-		return res
+		return slices.Clone(slice)
 	}
-	res := make([]T, n)
-	copy(res, slice[l-n:])
-	return res
+	return slices.Clone(slice[l-n:])
 }
 
 // Rotate returns a new slice rotated by n.
@@ -454,12 +440,7 @@ func Rotate[T any](slice []T, n int) []T {
 		n += l
 	}
 	if n == 0 {
-		res := make([]T, l)
-		copy(res, slice)
-		return res
+		return slices.Clone(slice)
 	}
-	res := make([]T, 0, l)
-	res = append(res, slice[n:]...)
-	res = append(res, slice[:n]...)
-	return res
+	return slices.Concat(slice[n:], slice[:n])
 }

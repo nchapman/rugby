@@ -1303,24 +1303,40 @@ func (g *Generator) genForRangeVarLoop(varName string, rangeVar string, body []a
 }
 
 func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.Statement, wasDefinedBefore bool, prevType string) {
-	// Generate: for i := start; i <= end; i++ { ... }
-	// or:       for i := start; i < end; i++ { ... } (exclusive)
-	g.writeIndent()
-	g.buf.WriteString("for ")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" := ")
-	g.genExpr(r.Start)
-	g.buf.WriteString("; ")
-	g.buf.WriteString(varName)
-	if r.Exclusive {
-		g.buf.WriteString(" < ")
-	} else {
-		g.buf.WriteString(" <= ")
+	// Optimization: use Go 1.22 range-over-int for 0...n loops
+	// Check if start is 0
+	isStartZero := false
+	if intLit, ok := r.Start.(*ast.IntLit); ok && intLit.Value == 0 {
+		isStartZero = true
 	}
-	g.genExpr(r.End)
-	g.buf.WriteString("; ")
-	g.buf.WriteString(varName)
-	g.buf.WriteString("++ {\n")
+
+	g.writeIndent()
+	if isStartZero && r.Exclusive {
+		// Generate: for i := range end { ... }
+		g.buf.WriteString("for ")
+		g.buf.WriteString(varName)
+		g.buf.WriteString(" := range ")
+		g.genExpr(r.End)
+		g.buf.WriteString(" {\n")
+	} else {
+		// Generate: for i := start; i <= end; i++ { ... }
+		// or:       for i := start; i < end; i++ { ... } (exclusive)
+		g.buf.WriteString("for ")
+		g.buf.WriteString(varName)
+		g.buf.WriteString(" := ")
+		g.genExpr(r.Start)
+		g.buf.WriteString("; ")
+		g.buf.WriteString(varName)
+		if r.Exclusive {
+			g.buf.WriteString(" < ")
+		} else {
+			g.buf.WriteString(" <= ")
+		}
+		g.genExpr(r.End)
+		g.buf.WriteString("; ")
+		g.buf.WriteString(varName)
+		g.buf.WriteString("++ {\n")
+	}
 
 	g.vars[varName] = "Int" // range loop variable is always Int
 

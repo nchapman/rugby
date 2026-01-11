@@ -37,11 +37,10 @@ func RangeToArray(r Range) []int {
 	if size <= 0 {
 		return []int{}
 	}
-	result := make([]int, 0, size)
-	RangeEach(r, func(i int) bool {
-		result = append(result, i)
-		return true
-	})
+	result := make([]int, size)
+	for i := 0; i < size; i++ {
+		result[i] = r.Start + i
+	}
 	return result
 }
 

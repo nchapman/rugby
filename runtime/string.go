@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -10,12 +11,7 @@ import (
 // Chars splits a string into individual characters (as strings).
 // Ruby: str.chars
 func Chars(s string) []string {
-	runes := []rune(s)
-	result := make([]string, len(runes))
-	for i, r := range runes {
-		result[i] = string(r)
-	}
-	return result
+	return strings.Split(s, "")
 }
 
 // CharLength returns the number of characters (runes) in the string.
@@ -30,9 +26,7 @@ func CharLength(s string) int {
 // multi-rune grapheme clusters (e.g., some emoji with modifiers).
 func StringReverse(s string) string {
 	runes := []rune(s)
-	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
-		runes[i], runes[j] = runes[j], runes[i]
-	}
+	slices.Reverse(runes)
 	return string(runes)
 }
 
