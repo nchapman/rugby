@@ -2,35 +2,46 @@
 package lexer
 
 import (
+	"github.com/nchapman/rugby/ast"
 	"github.com/nchapman/rugby/token"
 )
 
+// Comment represents a comment in the source code.
+type Comment struct {
+	Text   string // the comment text including the leading #
+	Line   int    // 1-indexed line number
+	Column int    // 0-indexed column position
+}
+
 type Lexer struct {
-	input   string
-	pos     int  // current position in input
-	readPos int  // next position to read
-	ch      byte // current char
-	line    int
-	column  int
+	input    string
+	pos      int  // current position in input
+	readPos  int  // next position to read
+	ch       byte // current char
+	line     int
+	column   int
+	Comments []Comment // collected comments during lexing
 }
 
 // LexerState holds lexer state for save/restore
 type LexerState struct {
-	pos     int
-	readPos int
-	ch      byte
-	line    int
-	column  int
+	pos         int
+	readPos     int
+	ch          byte
+	line        int
+	column      int
+	commentsLen int
 }
 
 // SaveState returns the current lexer state
 func (l *Lexer) SaveState() LexerState {
 	return LexerState{
-		pos:     l.pos,
-		readPos: l.readPos,
-		ch:      l.ch,
-		line:    l.line,
-		column:  l.column,
+		pos:         l.pos,
+		readPos:     l.readPos,
+		ch:          l.ch,
+		line:        l.line,
+		column:      l.column,
+		commentsLen: len(l.Comments),
 	}
 }
 
@@ -41,6 +52,10 @@ func (l *Lexer) RestoreState(s LexerState) {
 	l.ch = s.ch
 	l.line = s.line
 	l.column = s.column
+	// Truncate comments that might have been added during the speculative execution
+	if len(l.Comments) > s.commentsLen {
+		l.Comments = l.Comments[:s.commentsLen]
+	}
 }
 
 func New(input string) *Lexer {
@@ -120,7 +135,7 @@ func (l *Lexer) NextToken() token.Token {
 		tok.Column = l.column
 		return tok
 	case '#':
-		l.skipComment()
+		l.readComment()
 		return l.NextToken()
 	case '+':
 		if l.peekChar() == '=' {
@@ -345,10 +360,62 @@ func (l *Lexer) skipWhitespace() {
 	}
 }
 
-func (l *Lexer) skipComment() {
+// readComment reads a comment and stores it in the Comments slice.
+// Comments start with # and extend to end of line.
+func (l *Lexer) readComment() {
+	startCol := l.column
+	startLine := l.line
+	pos := l.pos
 	for l.ch != '\n' && l.ch != 0 {
 		l.readChar()
 	}
+	l.Comments = append(l.Comments, Comment{
+		Text:   l.input[pos:l.pos],
+		Line:   startLine,
+		Column: startCol,
+	})
+}
+
+// CollectComments groups consecutive comments into CommentGroups.
+// Comments on consecutive lines (no blank lines between) form a single group.
+func (l *Lexer) CollectComments() []*ast.CommentGroup {
+	if len(l.Comments) == 0 {
+		return nil
+	}
+
+	var groups []*ast.CommentGroup
+	var current []*ast.Comment
+
+	for i, c := range l.Comments {
+		astComment := &ast.Comment{
+			Text: c.Text,
+			Line: c.Line,
+			Col:  c.Column,
+		}
+
+		if i == 0 {
+			current = []*ast.Comment{astComment}
+			continue
+		}
+
+		// Check if this comment is on the next line after the previous one
+		prevLine := l.Comments[i-1].Line
+		if c.Line == prevLine+1 {
+			// Consecutive - add to current group
+			current = append(current, astComment)
+		} else {
+			// Not consecutive - finish current group and start new one
+			groups = append(groups, &ast.CommentGroup{List: current})
+			current = []*ast.Comment{astComment}
+		}
+	}
+
+	// Don't forget the last group
+	if len(current) > 0 {
+		groups = append(groups, &ast.CommentGroup{List: current})
+	}
+
+	return groups
 }
 
 func isLetter(ch byte) bool {

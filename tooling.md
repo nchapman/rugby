@@ -100,10 +100,10 @@ rugby install
 
 *   **Behavior:** Ensures all dependencies in `go.mod` are downloaded (wrapper for `go mod download`).
 
-### 3.3 Formatting (`rugby fmt`)
+### 3.3 Formatting (`rugby format`)
 
 ```bash
-rugby fmt
+rugby format
 ```
 
 *   **Philosophy:** One standard style (like `gofmt` or `prettier`). No arguments.

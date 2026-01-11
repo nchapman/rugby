@@ -3527,3 +3527,214 @@ end`
 		t.Errorf("expected 1 else statement, got %d", len(caseStmt.Else))
 	}
 }
+
+func TestDocCommentAttachment(t *testing.T) {
+	input := `# This is a doc comment
+def hello
+  puts("hi")
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	if fn.Doc == nil {
+		t.Fatal("expected Doc comment, got nil")
+	}
+
+	if len(fn.Doc.List) != 1 {
+		t.Errorf("expected 1 doc comment, got %d", len(fn.Doc.List))
+	}
+
+	if fn.Doc.List[0].Text != "# This is a doc comment" {
+		t.Errorf("doc comment text = %q, want %q", fn.Doc.List[0].Text, "# This is a doc comment")
+	}
+}
+
+func TestMultiLineDocComment(t *testing.T) {
+	input := `# First line of doc
+# Second line of doc
+# Third line of doc
+def hello
+  puts("hi")
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	if fn.Doc == nil {
+		t.Fatal("expected Doc comment, got nil")
+	}
+
+	if len(fn.Doc.List) != 3 {
+		t.Errorf("expected 3 doc comments, got %d", len(fn.Doc.List))
+	}
+
+	expectedTexts := []string{
+		"# First line of doc",
+		"# Second line of doc",
+		"# Third line of doc",
+	}
+
+	for i, exp := range expectedTexts {
+		if fn.Doc.List[i].Text != exp {
+			t.Errorf("doc comment %d: text = %q, want %q", i, fn.Doc.List[i].Text, exp)
+		}
+	}
+}
+
+func TestClassDocComment(t *testing.T) {
+	input := `# User represents a user in the system
+class User
+  def initialize(name: String)
+    @name = name
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls, ok := program.Declarations[0].(*ast.ClassDecl)
+	if !ok {
+		t.Fatalf("expected ClassDecl, got %T", program.Declarations[0])
+	}
+
+	if cls.Doc == nil {
+		t.Fatal("expected Doc comment on class, got nil")
+	}
+
+	if len(cls.Doc.List) != 1 {
+		t.Errorf("expected 1 doc comment, got %d", len(cls.Doc.List))
+	}
+}
+
+func TestMethodDocComment(t *testing.T) {
+	input := `class User
+  # Greets the user by name
+  def greet
+    puts(@name)
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	cls, ok := program.Declarations[0].(*ast.ClassDecl)
+	if !ok {
+		t.Fatalf("expected ClassDecl, got %T", program.Declarations[0])
+	}
+
+	if len(cls.Methods) != 1 {
+		t.Fatalf("expected 1 method, got %d", len(cls.Methods))
+	}
+
+	method := cls.Methods[0]
+	if method.Doc == nil {
+		t.Fatal("expected Doc comment on method, got nil")
+	}
+
+	if method.Doc.List[0].Text != "# Greets the user by name" {
+		t.Errorf("method doc = %q, want %q", method.Doc.List[0].Text, "# Greets the user by name")
+	}
+}
+
+func TestImportDocComment(t *testing.T) {
+	input := `# Standard library import
+import fmt
+
+def main
+  puts("hello")
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Imports) != 1 {
+		t.Fatalf("expected 1 import, got %d", len(program.Imports))
+	}
+
+	imp := program.Imports[0]
+	if imp.Doc == nil {
+		t.Fatal("expected Doc comment on import, got nil")
+	}
+
+	if imp.Doc.List[0].Text != "# Standard library import" {
+		t.Errorf("import doc = %q, want %q", imp.Doc.List[0].Text, "# Standard library import")
+	}
+}
+
+func TestFreeFloatingCommentNotAttached(t *testing.T) {
+	input := `# Free floating comment
+
+# Doc for function
+def hello
+  puts("hi")
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	// The free floating comment should NOT be attached (it's separated by blank line)
+	// Only the doc comment should be attached
+	if fn.Doc == nil {
+		t.Fatal("expected Doc comment, got nil")
+	}
+
+	if len(fn.Doc.List) != 1 {
+		t.Errorf("expected 1 doc comment (not free floating), got %d", len(fn.Doc.List))
+	}
+
+	if fn.Doc.List[0].Text != "# Doc for function" {
+		t.Errorf("doc = %q, want %q", fn.Doc.List[0].Text, "# Doc for function")
+	}
+}
+
+func TestProgramCommentsCollected(t *testing.T) {
+	input := `# Comment 1
+# Comment 2
+def hello
+  # Body comment
+  puts("hi")
+end
+# End comment`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	// Program.Comments should contain all comment groups
+	if len(program.Comments) == 0 {
+		t.Fatal("expected Program.Comments to be populated")
+	}
+}

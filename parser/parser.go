@@ -49,16 +49,21 @@ var precedences = map[token.TokenType]int{
 }
 
 type Parser struct {
-	l         *lexer.Lexer
-	curToken  token.Token
-	peekToken token.Token
-	errors    []string
+	l            *lexer.Lexer
+	curToken     token.Token
+	peekToken    token.Token
+	errors       []string
+	commentIndex int // current position in lexer.Comments slice
 }
 
 func New(l *lexer.Lexer) *Parser {
 	p := &Parser{l: l}
 	p.nextToken()
 	p.nextToken()
+	// Note: comments are collected during lexing (as tokens are skipped)
+	// and accessed via p.l.CollectComments() after parsing completes.
+	// The p.leadingComments/p.trailingComment methods consume from p.comments,
+	// which will be populated when we need it. For now, we defer collecting.
 	return p
 }
 
@@ -119,6 +124,59 @@ func (p *Parser) skipNewlines() {
 	}
 }
 
+// leadingComments returns a group of consecutive comments that end immediately
+// before the given line. Multi-line doc comments are collected as a group.
+// Returns nil if no leading comments.
+func (p *Parser) leadingComments(line int) *ast.CommentGroup {
+	comments := p.l.Comments
+	if p.commentIndex >= len(comments) {
+		return nil
+	}
+
+	// Skip comments that are too early (free-floating)
+	for p.commentIndex < len(comments) && comments[p.commentIndex].Line < line-1 {
+		// Check if this could be the start of a consecutive group ending at line-1
+		startIdx := p.commentIndex
+		endIdx := startIdx
+
+		// Find the end of consecutive comments
+		for endIdx+1 < len(comments) && comments[endIdx+1].Line == comments[endIdx].Line+1 {
+			endIdx++
+		}
+
+		// If this group ends at line-1, collect it
+		if comments[endIdx].Line == line-1 {
+			var result []*ast.Comment
+			for i := startIdx; i <= endIdx; i++ {
+				c := comments[i]
+				result = append(result, &ast.Comment{
+					Text: c.Text,
+					Line: c.Line,
+					Col:  c.Column,
+				})
+			}
+			p.commentIndex = endIdx + 1
+			return &ast.CommentGroup{List: result}
+		}
+
+		// Otherwise skip this comment and continue
+		p.commentIndex++
+	}
+
+	// Check for a single comment on line-1
+	if p.commentIndex < len(comments) && comments[p.commentIndex].Line == line-1 {
+		c := comments[p.commentIndex]
+		p.commentIndex++
+		return &ast.CommentGroup{List: []*ast.Comment{{
+			Text: c.Text,
+			Line: c.Line,
+			Col:  c.Column,
+		}}}
+	}
+
+	return nil
+}
+
 // ParseProgram parses the entire program
 func (p *Parser) ParseProgram() *ast.Program {
 	program := &ast.Program{}
@@ -135,20 +193,22 @@ func (p *Parser) ParseProgram() *ast.Program {
 				program.Imports = append(program.Imports, imp)
 			}
 		case token.PUB:
+			pubLine := p.curToken.Line
+			doc := p.leadingComments(pubLine)
 			p.nextToken() // consume 'pub'
 			switch p.curToken.Type {
 			case token.DEF:
-				if fn := p.parseFuncDecl(); fn != nil {
+				if fn := p.parseFuncDeclWithDoc(doc); fn != nil {
 					fn.Pub = true
 					program.Declarations = append(program.Declarations, fn)
 				}
 			case token.CLASS:
-				if cls := p.parseClassDecl(); cls != nil {
+				if cls := p.parseClassDeclWithDoc(doc); cls != nil {
 					cls.Pub = true
 					program.Declarations = append(program.Declarations, cls)
 				}
 			case token.INTERFACE:
-				if iface := p.parseInterfaceDecl(); iface != nil {
+				if iface := p.parseInterfaceDeclWithDoc(doc); iface != nil {
 					iface.Pub = true
 					program.Declarations = append(program.Declarations, iface)
 				}
@@ -188,10 +248,15 @@ func (p *Parser) ParseProgram() *ast.Program {
 		}
 	}
 
+	// Collect all comments for free-floating comment handling
+	program.Comments = p.l.CollectComments()
+
 	return program
 }
 
 func (p *Parser) parseImport() *ast.ImportDecl {
+	line := p.curToken.Line
+	doc := p.leadingComments(line)
 	p.nextToken() // consume 'import'
 
 	var path strings.Builder
@@ -240,7 +305,7 @@ func (p *Parser) parseImport() *ast.ImportDecl {
 		return nil
 	}
 
-	imp := &ast.ImportDecl{Path: path.String()}
+	imp := &ast.ImportDecl{Path: path.String(), Line: line, Doc: doc}
 
 	// Check for optional alias: import foo/bar as baz
 	if p.curTokenIs(token.AS) {
@@ -328,6 +393,13 @@ func (p *Parser) parseTypeName() string {
 }
 
 func (p *Parser) parseFuncDecl() *ast.FuncDecl {
+	line := p.curToken.Line
+	doc := p.leadingComments(line)
+	return p.parseFuncDeclWithDoc(doc)
+}
+
+func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
+	line := p.curToken.Line
 	p.nextToken() // consume 'def'
 
 	if !p.curTokenIs(token.IDENT) {
@@ -336,7 +408,7 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 		return nil
 	}
 
-	fn := &ast.FuncDecl{Name: p.curToken.Literal}
+	fn := &ast.FuncDecl{Name: p.curToken.Literal, Line: line, Doc: doc}
 	p.nextToken()
 
 	// Parse optional parameter list
@@ -445,6 +517,13 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 }
 
 func (p *Parser) parseClassDecl() *ast.ClassDecl {
+	line := p.curToken.Line
+	doc := p.leadingComments(line)
+	return p.parseClassDeclWithDoc(doc)
+}
+
+func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
+	line := p.curToken.Line
 	p.nextToken() // consume 'class'
 
 	if !p.curTokenIs(token.IDENT) {
@@ -453,7 +532,7 @@ func (p *Parser) parseClassDecl() *ast.ClassDecl {
 		return nil
 	}
 
-	cls := &ast.ClassDecl{Name: p.curToken.Literal}
+	cls := &ast.ClassDecl{Name: p.curToken.Literal, Line: line, Doc: doc}
 	p.nextToken()
 
 	// Parse optional embedded types: class Service < Logger, Authenticator
@@ -491,9 +570,11 @@ func (p *Parser) parseClassDecl() *ast.ClassDecl {
 
 		switch p.curToken.Type {
 		case token.PUB:
+			pubLine := p.curToken.Line
+			methodDoc := p.leadingComments(pubLine)
 			p.nextToken() // consume 'pub'
 			if p.curTokenIs(token.DEF) {
-				if method := p.parseMethodDecl(); method != nil {
+				if method := p.parseMethodDeclWithDoc(methodDoc); method != nil {
 					method.Pub = true
 					cls.Methods = append(cls.Methods, method)
 				}
@@ -532,6 +613,13 @@ func (p *Parser) parseClassDecl() *ast.ClassDecl {
 }
 
 func (p *Parser) parseInterfaceDecl() *ast.InterfaceDecl {
+	line := p.curToken.Line
+	doc := p.leadingComments(line)
+	return p.parseInterfaceDeclWithDoc(doc)
+}
+
+func (p *Parser) parseInterfaceDeclWithDoc(doc *ast.CommentGroup) *ast.InterfaceDecl {
+	line := p.curToken.Line
 	p.nextToken() // consume 'interface'
 
 	if !p.curTokenIs(token.IDENT) {
@@ -540,7 +628,7 @@ func (p *Parser) parseInterfaceDecl() *ast.InterfaceDecl {
 		return nil
 	}
 
-	iface := &ast.InterfaceDecl{Name: p.curToken.Literal}
+	iface := &ast.InterfaceDecl{Name: p.curToken.Literal, Line: line, Doc: doc}
 	p.nextToken()
 	p.skipNewlines()
 
@@ -718,6 +806,13 @@ func extractFields(method *ast.MethodDecl) []*ast.FieldDecl {
 }
 
 func (p *Parser) parseMethodDecl() *ast.MethodDecl {
+	line := p.curToken.Line
+	doc := p.leadingComments(line)
+	return p.parseMethodDeclWithDoc(doc)
+}
+
+func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
+	line := p.curToken.Line
 	p.nextToken() // consume 'def'
 
 	// Accept regular identifiers or operator tokens (== for custom equality)
@@ -733,7 +828,7 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 		return nil
 	}
 
-	method := &ast.MethodDecl{Name: methodName}
+	method := &ast.MethodDecl{Name: methodName, Line: line, Doc: doc}
 	p.nextToken()
 
 	// Parse optional parameter list
@@ -842,6 +937,7 @@ func (p *Parser) parseMethodDecl() *ast.MethodDecl {
 }
 
 func (p *Parser) parseStatement() ast.Statement {
+	line := p.curToken.Line
 	switch p.curToken.Type {
 	case token.IF:
 		return p.parseIfStmt()
@@ -900,7 +996,7 @@ func (p *Parser) parseStatement() ast.Statement {
 		// Check for statement modifier (e.g., "puts x unless valid?")
 		cond, isUnless := p.parseStatementModifier()
 		p.skipNewlines()
-		return &ast.ExprStmt{Expr: expr, Condition: cond, IsUnless: isUnless}
+		return &ast.ExprStmt{Expr: expr, Condition: cond, IsUnless: isUnless, Line: line}
 	}
 	return nil
 }
@@ -1034,6 +1130,7 @@ func (p *Parser) skipTo(terminator token.TokenType) {
 }
 
 func (p *Parser) parseAssignStmt() *ast.AssignStmt {
+	line := p.curToken.Line
 	name := p.curToken.Literal
 	p.nextToken() // consume ident
 
@@ -1066,13 +1163,14 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	p.nextToken() // move past expression
 	p.skipNewlines()
 
-	return &ast.AssignStmt{Name: name, Type: typeAnnotation, Value: value}
+	return &ast.AssignStmt{Name: name, Type: typeAnnotation, Value: value, Line: line}
 }
 
 func (p *Parser) parseIfStmt() *ast.IfStmt {
+	line := p.curToken.Line
 	p.nextToken() // consume 'if'
 
-	stmt := &ast.IfStmt{}
+	stmt := &ast.IfStmt{Line: line}
 
 	// Check for assignment-in-condition pattern: if (name = expr)
 	if p.curTokenIs(token.LPAREN) {
@@ -1168,9 +1266,10 @@ func (p *Parser) parseIfStmt() *ast.IfStmt {
 
 func (p *Parser) parseUnlessStmt() *ast.IfStmt {
 	// Note: elsif is not supported with unless (matches Ruby behavior)
+	line := p.curToken.Line
 	p.nextToken() // consume 'unless'
 
-	stmt := &ast.IfStmt{IsUnless: true}
+	stmt := &ast.IfStmt{IsUnless: true, Line: line}
 
 	// Parse condition (unless doesn't support assignment pattern)
 	stmt.Cond = p.parseExpression(lowest)
@@ -1228,9 +1327,11 @@ func (p *Parser) parseUnlessStmt() *ast.IfStmt {
 }
 
 func (p *Parser) parseCaseStmt() *ast.CaseStmt {
+	line := p.curToken.Line
+	doc := p.leadingComments(line)
 	p.nextToken() // consume 'case'
 
-	stmt := &ast.CaseStmt{}
+	stmt := &ast.CaseStmt{Line: line, Doc: doc}
 
 	// Parse optional subject expression (before newline/when)
 	// If next token is NEWLINE or WHEN, it's case without subject
@@ -1314,9 +1415,10 @@ func (p *Parser) parseCaseStmt() *ast.CaseStmt {
 }
 
 func (p *Parser) parseWhileStmt() *ast.WhileStmt {
+	line := p.curToken.Line
 	p.nextToken() // consume 'while'
 
-	stmt := &ast.WhileStmt{}
+	stmt := &ast.WhileStmt{Line: line}
 	stmt.Cond = p.parseExpression(lowest)
 	p.nextToken() // move past condition
 	p.skipNewlines()
@@ -1343,6 +1445,7 @@ func (p *Parser) parseWhileStmt() *ast.WhileStmt {
 }
 
 func (p *Parser) parseForStmt() *ast.ForStmt {
+	line := p.curToken.Line
 	p.nextToken() // consume 'for'
 
 	if !p.curTokenIs(token.IDENT) {
@@ -1351,7 +1454,7 @@ func (p *Parser) parseForStmt() *ast.ForStmt {
 		return nil
 	}
 
-	stmt := &ast.ForStmt{Var: p.curToken.Literal}
+	stmt := &ast.ForStmt{Var: p.curToken.Literal, Line: line}
 	p.nextToken() // consume variable name
 
 	if !p.curTokenIs(token.IN) {
@@ -1417,9 +1520,10 @@ func (p *Parser) parseNextStmt() *ast.NextStmt {
 }
 
 func (p *Parser) parseReturnStmt() *ast.ReturnStmt {
+	line := p.curToken.Line
 	p.nextToken() // consume 'return'
 
-	stmt := &ast.ReturnStmt{}
+	stmt := &ast.ReturnStmt{Line: line}
 
 	// Check if there's a return value (not newline, end, or modifier keyword)
 	if !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) &&

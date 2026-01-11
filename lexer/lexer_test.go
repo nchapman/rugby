@@ -998,3 +998,112 @@ func TestSymbols(t *testing.T) {
 		})
 	}
 }
+
+func TestCommentCollection(t *testing.T) {
+	input := `# First comment
+x = 5 # trailing comment
+# Another comment
+y = 10`
+
+	l := New(input)
+	// Consume all tokens
+	for {
+		tok := l.NextToken()
+		if tok.Type == token.EOF {
+			break
+		}
+	}
+
+	// Check collected comments
+	if len(l.Comments) != 3 {
+		t.Fatalf("expected 3 comments, got %d", len(l.Comments))
+	}
+
+	tests := []struct {
+		text   string
+		line   int
+		column int
+	}{
+		{"# First comment", 1, 1},
+		{"# trailing comment", 2, 7},
+		{"# Another comment", 3, 1},
+	}
+
+	for i, tt := range tests {
+		c := l.Comments[i]
+		if c.Text != tt.text {
+			t.Errorf("comment %d: text = %q, want %q", i, c.Text, tt.text)
+		}
+		if c.Line != tt.line {
+			t.Errorf("comment %d: line = %d, want %d", i, c.Line, tt.line)
+		}
+		if c.Column != tt.column {
+			t.Errorf("comment %d: column = %d, want %d", i, c.Column, tt.column)
+		}
+	}
+}
+
+func TestCollectCommentsGrouping(t *testing.T) {
+	input := `# Group 1 line 1
+# Group 1 line 2
+x = 5
+
+# Group 2 (after blank line)
+y = 10
+# Group 3`
+
+	l := New(input)
+	// Consume all tokens
+	for {
+		tok := l.NextToken()
+		if tok.Type == token.EOF {
+			break
+		}
+	}
+
+	groups := l.CollectComments()
+
+	if len(groups) != 3 {
+		t.Fatalf("expected 3 comment groups, got %d", len(groups))
+	}
+
+	// Group 1 should have 2 comments
+	if len(groups[0].List) != 2 {
+		t.Errorf("group 0: expected 2 comments, got %d", len(groups[0].List))
+	}
+
+	// Group 2 should have 1 comment
+	if len(groups[1].List) != 1 {
+		t.Errorf("group 1: expected 1 comment, got %d", len(groups[1].List))
+	}
+
+	// Group 3 should have 1 comment
+	if len(groups[2].List) != 1 {
+		t.Errorf("group 2: expected 1 comment, got %d", len(groups[2].List))
+	}
+}
+
+func TestCommentGroupText(t *testing.T) {
+	input := `# Line one
+# Line two
+x = 5`
+
+	l := New(input)
+	for {
+		tok := l.NextToken()
+		if tok.Type == token.EOF {
+			break
+		}
+	}
+
+	groups := l.CollectComments()
+	if len(groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(groups))
+	}
+
+	text := groups[0].Text()
+	expected := "Line one\nLine two"
+	if text != expected {
+		t.Errorf("Text() = %q, want %q", text, expected)
+	}
+}

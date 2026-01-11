@@ -1,6 +1,36 @@
 // Package ast defines the abstract syntax tree nodes for Rugby programs.
 package ast
 
+import "strings"
+
+// Comment represents a single comment in the source code.
+type Comment struct {
+	Text string // the comment text including the # prefix
+	Line int    // 1-indexed line number
+	Col  int    // 0-indexed column position
+}
+
+// CommentGroup represents a sequence of comments with no blank lines between them.
+type CommentGroup struct {
+	List []*Comment
+}
+
+// Text returns the text of the comment group with # prefixes and leading space removed.
+func (g *CommentGroup) Text() string {
+	if g == nil || len(g.List) == 0 {
+		return ""
+	}
+	var lines []string
+	for _, c := range g.List {
+		text := c.Text
+		if after, found := strings.CutPrefix(text, "#"); found {
+			text = strings.TrimPrefix(after, " ") // remove single leading space
+		}
+		lines = append(lines, text)
+	}
+	return strings.Join(lines, "\n")
+}
+
 // Node is the base interface for all AST nodes
 type Node interface {
 	node()
@@ -22,14 +52,18 @@ type Expression interface {
 type Program struct {
 	Imports      []*ImportDecl
 	Declarations []Statement
+	Comments     []*CommentGroup // all comments in file, for free-floating comment handling
 }
 
 func (p *Program) node() {}
 
 // ImportDecl represents an import statement
 type ImportDecl struct {
-	Path  string
-	Alias string // optional alias
+	Path    string
+	Alias   string        // optional alias
+	Line    int           // source line number (1-indexed)
+	Doc     *CommentGroup // leading comments
+	Comment *CommentGroup // trailing comment on same line
 }
 
 func (i *ImportDecl) node()     {}
@@ -47,7 +81,10 @@ type FuncDecl struct {
 	Params      []*Param
 	ReturnTypes []string // empty if not specified
 	Body        []Statement
-	Pub         bool // true if exported (pub def)
+	Pub         bool          // true if exported (pub def)
+	Line        int           // source line number (1-indexed)
+	Doc         *CommentGroup // leading comments
+	Comment     *CommentGroup // trailing comment on same line
 }
 
 func (f *FuncDecl) node()     {}
@@ -57,8 +94,11 @@ func (f *FuncDecl) stmtNode() {}
 type ExprStmt struct {
 	Expr Expression
 	// Statement modifiers (e.g., "puts x unless valid?")
-	Condition Expression // nil if no modifier
-	IsUnless  bool       // true for "unless", false for "if"
+	Condition Expression    // nil if no modifier
+	IsUnless  bool          // true for "unless", false for "if"
+	Line      int           // source line number (1-indexed)
+	Doc       *CommentGroup // leading comments
+	Comment   *CommentGroup // trailing comment on same line
 }
 
 func (e *ExprStmt) node()     {}
@@ -218,9 +258,12 @@ func (u *UnaryExpr) exprNode() {}
 
 // AssignStmt represents variable assignment
 type AssignStmt struct {
-	Name  string
-	Type  string // optional type annotation, empty if not specified
-	Value Expression
+	Name    string
+	Type    string // optional type annotation, empty if not specified
+	Value   Expression
+	Line    int           // source line number (1-indexed)
+	Doc     *CommentGroup // leading comments
+	Comment *CommentGroup // trailing comment on same line
 }
 
 func (a *AssignStmt) node()     {}
@@ -257,6 +300,9 @@ type IfStmt struct {
 	Then     []Statement
 	ElseIfs  []ElseIfClause
 	Else     []Statement
+	Line     int           // source line number (1-indexed)
+	Doc      *CommentGroup // leading comments
+	Comment  *CommentGroup // trailing comment on same line
 }
 
 func (i *IfStmt) node()     {}
@@ -270,9 +316,12 @@ type ElseIfClause struct {
 
 // CaseStmt represents a case/when/else statement
 type CaseStmt struct {
-	Subject     Expression   // the expression being matched (nil for case without subject)
-	WhenClauses []WhenClause // one or more when branches
-	Else        []Statement  // optional else clause
+	Subject     Expression    // the expression being matched (nil for case without subject)
+	WhenClauses []WhenClause  // one or more when branches
+	Else        []Statement   // optional else clause
+	Line        int           // source line number (1-indexed)
+	Doc         *CommentGroup // leading comments
+	Comment     *CommentGroup // trailing comment on same line
 }
 
 func (c *CaseStmt) node()     {}
@@ -286,8 +335,11 @@ type WhenClause struct {
 
 // WhileStmt represents a while loop
 type WhileStmt struct {
-	Cond Expression
-	Body []Statement
+	Cond    Expression
+	Body    []Statement
+	Line    int           // source line number (1-indexed)
+	Doc     *CommentGroup // leading comments
+	Comment *CommentGroup // trailing comment on same line
 }
 
 func (w *WhileStmt) node()     {}
@@ -298,6 +350,9 @@ type ForStmt struct {
 	Var      string     // loop variable name
 	Iterable Expression // the collection to iterate over
 	Body     []Statement
+	Line     int           // source line number (1-indexed)
+	Doc      *CommentGroup // leading comments
+	Comment  *CommentGroup // trailing comment on same line
 }
 
 func (f *ForStmt) node()     {}
@@ -327,8 +382,11 @@ func (n *NextStmt) stmtNode() {}
 type ReturnStmt struct {
 	Values []Expression // empty if no return values
 	// Statement modifiers (e.g., "return if error")
-	Condition Expression // nil if no modifier
-	IsUnless  bool       // true for "unless", false for "if"
+	Condition Expression    // nil if no modifier
+	IsUnless  bool          // true for "unless", false for "if"
+	Line      int           // source line number (1-indexed)
+	Doc       *CommentGroup // leading comments
+	Comment   *CommentGroup // trailing comment on same line
 }
 
 func (r *ReturnStmt) node()     {}
@@ -349,6 +407,9 @@ type ClassDecl struct {
 	Fields  []*FieldDecl  // fields inferred from initialize
 	Methods []*MethodDecl // methods defined in class
 	Pub     bool          // true if exported (pub class)
+	Line    int           // source line number (1-indexed)
+	Doc     *CommentGroup // leading comments
+	Comment *CommentGroup // trailing comment on same line
 }
 
 func (c *ClassDecl) node()     {}
@@ -362,11 +423,14 @@ type FieldDecl struct {
 
 // MethodDecl represents a method definition within a class
 type MethodDecl struct {
-	Name        string      // method name (may end with ! for pointer receiver)
-	Params      []*Param    // parameters
-	ReturnTypes []string    // return types
-	Body        []Statement // method body
-	Pub         bool        // true if exported (pub def)
+	Name        string        // method name (may end with ! for pointer receiver)
+	Params      []*Param      // parameters
+	ReturnTypes []string      // return types
+	Body        []Statement   // method body
+	Pub         bool          // true if exported (pub def)
+	Line        int           // source line number (1-indexed)
+	Doc         *CommentGroup // leading comments
+	Comment     *CommentGroup // trailing comment on same line
 }
 
 func (m *MethodDecl) node()     {}
@@ -400,9 +464,12 @@ func (i *InstanceVarOrAssign) stmtNode() {}
 
 // InterfaceDecl represents an interface definition
 type InterfaceDecl struct {
-	Name    string       // interface name (e.g., "Speaker")
-	Methods []*MethodSig // method signatures (no body)
-	Pub     bool         // true if exported (pub interface)
+	Name    string        // interface name (e.g., "Speaker")
+	Methods []*MethodSig  // method signatures (no body)
+	Pub     bool          // true if exported (pub interface)
+	Line    int           // source line number (1-indexed)
+	Doc     *CommentGroup // leading comments
+	Comment *CommentGroup // trailing comment on same line
 }
 
 func (i *InterfaceDecl) node()     {}
