@@ -14,15 +14,15 @@ Features in implementation order, building incrementally.
 - **Error Handling (15):** `error` type, `error()` kernel function, postfix `!` propagation, `rescue` keyword, `panic` for unrecoverable errors.
 - **Strict `?` Suffix (10.3):** Methods ending in `?` must return `Bool`. No `to_i?`/`as?` patterns.
 
-## Phase 16: Interface System Evolution (In Progress)
+## Phase 16: Interface System Evolution ✓
 **Goal:** Align interfaces with the refined class model and provide safe runtime polymorphism.
-- [ ] **Interface Inheritance:** Support `interface IO < Reader, Writer` syntax and Go embedding.
-- [ ] **`implements` Keyword:** Support `class User implements Speaker` for compile-time conformance checks.
-- [ ] **`any` Keyword:** Map `any` to Go's `any` (empty interface).
-- [ ] **Runtime Casting:**
-  - [ ] Implement `is_a?(Interface)` → Go type assertion returning `Bool`.
-  - [ ] Implement `as(Interface)` → returns `Interface?` (optional), use with `if let`, `.or()`, `.unwrap!`.
-- [ ] **Standard Interface Mapping:** Ensure `to_s` satisfies `fmt.Stringer` and `message` satisfies `error`.
+- [x] **Interface Inheritance:** Support `interface IO < Reader, Writer` syntax and Go embedding.
+- [x] **`implements` Keyword:** Support `class User implements Speaker` for compile-time conformance checks.
+- [x] **`any` Keyword:** Map `any` to Go's `any` (empty interface).
+- [x] **Runtime Casting:**
+  - [x] Implement `is_a?(Interface)` → Go type assertion returning `Bool`.
+  - [x] Implement `as(Interface)` → returns `Interface?` (optional), use with `if let`, `??`, `.unwrap!`.
+- [x] **Standard Interface Mapping:** Ensure `to_s` satisfies `fmt.Stringer` and `message` satisfies `error`.
 
 ## Phase 17: Crispness Polish (Strictness & Safety)
 **Goal:** Reduce ambiguity and enforce deterministic behavior.
@@ -133,6 +133,20 @@ Features in implementation order, building incrementally.
 ---
 
 ## Recently Completed
+
+### Interface System Evolution (Phase 16)
+Complete interface support with inheritance, runtime polymorphism, and standard interface mapping:
+- **Interface Inheritance**: `interface IO < Reader, Writer` compiles to Go interface embedding
+- **`implements` Keyword**: `class User implements Speaker` generates compile-time conformance checks via `var _ Speaker = (*User)(nil)`
+- **`any` Keyword**: Maps to Go's `any` (empty interface) for generic parameters
+- **Runtime Casting**:
+  - `is_a?(Type)`: Type predicate returning `Bool`, compiles to Go type assertion with `_, ok := obj.(Type)`
+  - `as(Type)`: Type cast returning `(Type, bool)`, compiles to Go type assertion with value
+- **Standard Interface Mapping**:
+  - `to_s` → `String()` (satisfies `fmt.Stringer`)
+  - `message` → `Error()` (satisfies `error` interface)
+- Parser updated to accept `any` keyword in type positions and `as` in selector expressions
+- Comprehensive tests added in `codegen/interface_features_test.go`
 
 ### Error Handling (Phase 19)
 Complete Go-style error handling with Rugby-idiomatic syntax:

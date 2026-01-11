@@ -86,11 +86,13 @@ const (
 	NOT       TokenType = "NOT"
 	AS        TokenType = "AS"
 	DEFER     TokenType = "DEFER"
-	DO        TokenType = "DO"
-	CLASS     TokenType = "CLASS"
-	SELF      TokenType = "SELF"
-	INTERFACE TokenType = "INTERFACE"
-	PUB       TokenType = "PUB"
+	DO         TokenType = "DO"
+	CLASS      TokenType = "CLASS"
+	SELF       TokenType = "SELF"
+	INTERFACE  TokenType = "INTERFACE"
+	IMPLEMENTS TokenType = "IMPLEMENTS"
+	ANY        TokenType = "ANY"
+	PUB        TokenType = "PUB"
 
 	// Testing keywords
 	DESCRIBE TokenType = "DESCRIBE"
@@ -134,11 +136,13 @@ var keywords = map[string]TokenType{
 	"not":       NOT,
 	"as":        AS,
 	"defer":     DEFER,
-	"do":        DO,
-	"class":     CLASS,
-	"self":      SELF,
-	"interface": INTERFACE,
-	"pub":       PUB,
+	"do":         DO,
+	"class":      CLASS,
+	"self":       SELF,
+	"interface":  INTERFACE,
+	"implements": IMPLEMENTS,
+	"any":        ANY,
+	"pub":        PUB,
 	// Testing keywords
 	"describe": DESCRIBE,
 	"it":       IT,

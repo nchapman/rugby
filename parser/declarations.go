@@ -63,7 +63,7 @@ func (p *Parser) parseImport() *ast.ImportDecl {
 	// Check for optional alias: import foo/bar as baz
 	if p.curTokenIs(token.AS) {
 		p.nextToken() // consume 'as'
-		if !p.curTokenIs(token.IDENT) {
+		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected alias name after 'as'")
 			return nil
 		}
@@ -84,7 +84,7 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 		p.nextToken() // consume '@'
 	}
 
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected parameter name")
 		return nil
 	}
@@ -110,7 +110,7 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 		return nil
 	}
 	p.nextToken() // consume ':'
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 		return nil
 	}
@@ -167,7 +167,7 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 	line := p.curToken.Line
 	p.nextToken() // consume 'def'
 
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected function name after def")
 		return nil
 	}
@@ -219,7 +219,7 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 			// Multiple return types: (Type1, Type2, ...)
 			p.nextToken() // consume '('
 
-			if !p.curTokenIs(token.IDENT) {
+			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 				p.errorAt(p.curToken.Line, p.curToken.Column, "expected type in return type list")
 				return nil
 			}
@@ -231,7 +231,7 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 				if p.curTokenIs(token.RPAREN) {
 					break
 				}
-				if !p.curTokenIs(token.IDENT) {
+				if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 					p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after comma")
 					return nil
 				}
@@ -243,7 +243,7 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 				return nil
 			}
 			p.nextToken() // consume ')'
-		} else if p.curTokenIs(token.IDENT) {
+		} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
 			// Single return type
 			fn.ReturnTypes = append(fn.ReturnTypes, p.parseTypeName())
 		} else {
@@ -284,7 +284,7 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 	line := p.curToken.Line
 	p.nextToken() // consume 'class'
 
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected class name after 'class'")
 		return nil
 	}
@@ -295,7 +295,7 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 	// Parse optional embedded types: class Service < Logger, Authenticator
 	if p.curTokenIs(token.LT) {
 		p.nextToken() // consume '<'
-		if !p.curTokenIs(token.IDENT) {
+		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type name after '<'")
 			return nil
 		}
@@ -305,12 +305,29 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 		// Parse additional embedded types separated by commas
 		for p.curTokenIs(token.COMMA) {
 			p.nextToken() // consume ','
-			if !p.curTokenIs(token.IDENT) {
+			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 				p.errorAt(p.curToken.Line, p.curToken.Column, "expected type name after ','")
 				return nil
 			}
 			cls.Embeds = append(cls.Embeds, p.curToken.Literal)
 			p.nextToken()
+		}
+	}
+
+	// Parse optional implements: class User implements Speaker, Serializable
+	if p.curTokenIs(token.IMPLEMENTS) {
+		p.nextToken() // consume 'implements'
+		for {
+			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected interface name after 'implements'")
+				break
+			}
+			cls.Implements = append(cls.Implements, p.curToken.Literal)
+			p.nextToken()
+			if !p.curTokenIs(token.COMMA) {
+				break
+			}
+			p.nextToken() // consume comma
 		}
 	}
 
@@ -400,13 +417,31 @@ func (p *Parser) parseInterfaceDeclWithDoc(doc *ast.CommentGroup) *ast.Interface
 	line := p.curToken.Line
 	p.nextToken() // consume 'interface'
 
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected interface name after 'interface'")
 		return nil
 	}
 
 	iface := &ast.InterfaceDecl{Name: p.curToken.Literal, Line: line, Doc: doc}
 	p.nextToken()
+
+	// Parse parent interfaces if present (interface IO < Reader, Writer)
+	if p.curTokenIs(token.LT) {
+		p.nextToken() // consume '<'
+		for {
+			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected interface name after '<'")
+				break
+			}
+			iface.Parents = append(iface.Parents, p.curToken.Literal)
+			p.nextToken()
+			if !p.curTokenIs(token.COMMA) {
+				break
+			}
+			p.nextToken() // consume comma
+		}
+	}
+
 	p.skipNewlines()
 
 	// Parse method signatures until 'end'
@@ -439,7 +474,7 @@ func (p *Parser) parseInterfaceDeclWithDoc(doc *ast.CommentGroup) *ast.Interface
 func (p *Parser) parseMethodSig() *ast.MethodSig {
 	p.nextToken() // consume 'def'
 
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected method name after def")
 		return nil
 	}
@@ -491,7 +526,7 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 			// Multiple return types: (Type1, Type2, ...)
 			p.nextToken() // consume '('
 
-			if !p.curTokenIs(token.IDENT) {
+			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 				p.errorAt(p.curToken.Line, p.curToken.Column, "expected type in return type list")
 				return nil
 			}
@@ -503,7 +538,7 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 				if p.curTokenIs(token.RPAREN) {
 					break
 				}
-				if !p.curTokenIs(token.IDENT) {
+				if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 					p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after comma")
 					return nil
 				}
@@ -515,7 +550,7 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 				return nil
 			}
 			p.nextToken() // consume ')'
-		} else if p.curTokenIs(token.IDENT) {
+		} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
 			// Single return type
 			sig.ReturnTypes = append(sig.ReturnTypes, p.parseTypeName())
 		} else {
@@ -533,7 +568,7 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 func (p *Parser) parseFieldDecl() *ast.FieldDecl {
 	p.nextToken() // consume '@'
 
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected field name after '@'")
 		return nil
 	}
@@ -548,7 +583,7 @@ func (p *Parser) parseFieldDecl() *ast.FieldDecl {
 	}
 	p.nextToken() // consume ':'
 
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 		return nil
 	}
@@ -732,7 +767,7 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 			// Multiple return types: (Type1, Type2, ...)
 			p.nextToken() // consume '('
 
-			if !p.curTokenIs(token.IDENT) {
+			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 				p.errorAt(p.curToken.Line, p.curToken.Column, "expected type in return type list")
 				return nil
 			}
@@ -744,7 +779,7 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 				if p.curTokenIs(token.RPAREN) {
 					break
 				}
-				if !p.curTokenIs(token.IDENT) {
+				if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
 					p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after comma")
 					return nil
 				}
@@ -756,7 +791,7 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 				return nil
 			}
 			p.nextToken() // consume ')'
-		} else if p.curTokenIs(token.IDENT) {
+		} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
 			// Single return type
 			method.ReturnTypes = append(method.ReturnTypes, p.parseTypeName())
 		} else {

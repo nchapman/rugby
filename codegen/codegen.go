@@ -623,6 +623,14 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		}
 	}
 
+	// Emit compile-time interface conformance checks
+	for _, iface := range cls.Implements {
+		g.buf.WriteString(fmt.Sprintf("var _ %s = (*%s)(nil)\n", iface, className))
+	}
+	if len(cls.Implements) > 0 {
+		g.buf.WriteString("\n")
+	}
+
 	g.currentClass = ""
 	clear(g.classFields)
 }
@@ -630,6 +638,11 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
 	// Generate: type InterfaceName interface { ... }
 	g.buf.WriteString(fmt.Sprintf("type %s interface {\n", iface.Name))
+
+	// Embed parent interfaces
+	for _, parent := range iface.Parents {
+		g.buf.WriteString(fmt.Sprintf("\t%s\n", parent))
+	}
 
 	for _, method := range iface.Methods {
 		g.buf.WriteString("\t")
@@ -766,6 +779,20 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	// Only applies when to_s has no parameters
 	if method.Name == "to_s" && len(method.Params) == 0 {
 		g.buf.WriteString(fmt.Sprintf("func (%s *%s) String() string {\n", recv, className))
+		g.indent++
+		for _, stmt := range method.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+		g.buf.WriteString("}\n\n")
+		g.currentReturnTypes = nil
+		return
+	}
+
+	// message -> Error() string (satisfies error interface)
+	// Only applies when message has no parameters
+	if method.Name == "message" && len(method.Params) == 0 {
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s) Error() string {\n", recv, className))
 		g.indent++
 		for _, stmt := range method.Body {
 			g.genStatement(stmt)
@@ -2233,6 +2260,40 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			return
 		}
 
+		// Check for is_a? type predicate
+		if fn.Sel == "is_a?" {
+			if len(call.Args) != 1 {
+				// Generate valid but obviously wrong code for better error messages
+				g.buf.WriteString("false /* ERROR: is_a? requires exactly one type argument */")
+				return
+			}
+			// obj.is_a?(Type) -> _, ok := obj.(Type); ok
+			g.buf.WriteString("func() bool { _, ok := ")
+			g.genExpr(fn.X)
+			g.buf.WriteString(".(")
+			g.genExpr(call.Args[0])
+			g.buf.WriteString("); return ok }()")
+			return
+		}
+
+		// Check for as() type casting (returns optional)
+		if fn.Sel == "as" {
+			if len(call.Args) != 1 {
+				// Generate valid placeholder for better error messages
+				g.buf.WriteString("func() (any, bool) { return nil, false }() /* ERROR: as requires exactly one type argument */")
+				return
+			}
+			// obj.as(Type) -> func() (Type, bool) { v, ok := obj.(Type); return v, ok }()
+			g.buf.WriteString("func() (")
+			g.genExpr(call.Args[0])
+			g.buf.WriteString(", bool) { v, ok := ")
+			g.genExpr(fn.X)
+			g.buf.WriteString(".(")
+			g.genExpr(call.Args[0])
+			g.buf.WriteString("); return v, ok }()")
+			return
+		}
+
 		// Check for range method calls when receiver is a RangeLit
 		if _, ok := fn.X.(*ast.RangeLit); ok {
 			if g.genRangeMethodCall(fn.X, fn.Sel, call.Args) {
@@ -2951,6 +3012,8 @@ func mapType(rubyType string) string {
 		return "[]any"
 	case "Map":
 		return "map[any]any"
+	case "any":
+		return "any"
 	case "error":
 		return "error"
 	default:

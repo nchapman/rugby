@@ -246,7 +246,8 @@ func (p *Parser) parseSelectorExpr(x ast.Expression) ast.Expression {
 	// curToken is '.'
 	p.nextToken() // move past '.' to the selector
 
-	if !p.curTokenIs(token.IDENT) {
+	// Allow AS keyword as a method name (obj.as(Type))
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.AS) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '.'")
 		return nil
 	}

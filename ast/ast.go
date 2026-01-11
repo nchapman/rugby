@@ -431,14 +431,15 @@ func (d *DeferStmt) stmtNode() {}
 
 // ClassDecl represents a class definition
 type ClassDecl struct {
-	Name    string        // class name (e.g., "User")
-	Embeds  []string      // embedded types (Go struct embedding), empty if none
-	Fields  []*FieldDecl  // fields inferred from initialize
-	Methods []*MethodDecl // methods defined in class
-	Pub     bool          // true if exported (pub class)
-	Line    int           // source line number (1-indexed)
-	Doc     *CommentGroup // leading comments
-	Comment *CommentGroup // trailing comment on same line
+	Name       string        // class name (e.g., "User")
+	Embeds     []string      // embedded types (Go struct embedding), empty if none
+	Implements []string      // interfaces this class explicitly implements
+	Fields     []*FieldDecl  // fields inferred from initialize
+	Methods    []*MethodDecl // methods defined in class
+	Pub        bool          // true if exported (pub class)
+	Line       int           // source line number (1-indexed)
+	Doc        *CommentGroup // leading comments
+	Comment    *CommentGroup // trailing comment on same line
 }
 
 func (c *ClassDecl) node()     {}
@@ -494,6 +495,7 @@ func (i *InstanceVarOrAssign) stmtNode() {}
 // InterfaceDecl represents an interface definition
 type InterfaceDecl struct {
 	Name    string        // interface name (e.g., "Speaker")
+	Parents []string      // parent interfaces for embedding (e.g., ["Reader", "Writer"])
 	Methods []*MethodSig  // method signatures (no body)
 	Pub     bool          // true if exported (pub interface)
 	Line    int           // source line number (1-indexed)

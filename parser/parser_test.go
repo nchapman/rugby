@@ -3915,3 +3915,136 @@ end
 		t.Fatal("expected Program.Comments to be populated")
 	}
 }
+
+func TestInterfaceInheritance(t *testing.T) {
+	tests := []struct {
+		input   string
+		parents []string
+	}{
+		{
+			"interface IO < Reader\nend",
+			[]string{"Reader"},
+		},
+		{
+			"interface IO < Reader, Writer\nend",
+			[]string{"Reader", "Writer"},
+		},
+		{
+			"interface Complex < Reader, Writer, Closer\nend",
+			[]string{"Reader", "Writer", "Closer"},
+		},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Declarations) != 1 {
+			t.Fatalf("Expected 1 declaration, got %d", len(program.Declarations))
+		}
+
+		iface, ok := program.Declarations[0].(*ast.InterfaceDecl)
+		if !ok {
+			t.Fatalf("Expected InterfaceDecl, got %T", program.Declarations[0])
+		}
+
+		if len(iface.Parents) != len(tt.parents) {
+			t.Errorf("input %q: expected %d parents, got %d", tt.input, len(tt.parents), len(iface.Parents))
+			continue
+		}
+
+		for i, expected := range tt.parents {
+			if iface.Parents[i] != expected {
+				t.Errorf("input %q: parent %d expected %q, got %q", tt.input, i, expected, iface.Parents[i])
+			}
+		}
+	}
+}
+
+func TestClassImplements(t *testing.T) {
+	tests := []struct {
+		input      string
+		implements []string
+	}{
+		{
+			"class User implements Speaker\nend",
+			[]string{"Speaker"},
+		},
+		{
+			"class User implements Speaker, Serializable\nend",
+			[]string{"Speaker", "Serializable"},
+		},
+		{
+			"class Complex implements A, B, C\nend",
+			[]string{"A", "B", "C"},
+		},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Declarations) != 1 {
+			t.Fatalf("Expected 1 declaration, got %d", len(program.Declarations))
+		}
+
+		cls, ok := program.Declarations[0].(*ast.ClassDecl)
+		if !ok {
+			t.Fatalf("Expected ClassDecl, got %T", program.Declarations[0])
+		}
+
+		if len(cls.Implements) != len(tt.implements) {
+			t.Errorf("input %q: expected %d implements, got %d", tt.input, len(tt.implements), len(cls.Implements))
+			continue
+		}
+
+		for i, expected := range tt.implements {
+			if cls.Implements[i] != expected {
+				t.Errorf("input %q: implements %d expected %q, got %q", tt.input, i, expected, cls.Implements[i])
+			}
+		}
+	}
+}
+
+func TestAnyKeywordInParameters(t *testing.T) {
+	tests := []struct {
+		input     string
+		paramType string
+	}{
+		{"def log(thing : any)\nend", "any"},
+		{"def process(a : Int, b : any)\nend", "any"},
+		{"def identity(x : any) -> any\nend", "any"},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Declarations) != 1 {
+			t.Fatalf("Expected 1 declaration, got %d", len(program.Declarations))
+		}
+
+		fn, ok := program.Declarations[0].(*ast.FuncDecl)
+		if !ok {
+			t.Fatalf("Expected FuncDecl, got %T", program.Declarations[0])
+		}
+
+		// Check that at least one parameter has type 'any'
+		found := false
+		for _, param := range fn.Params {
+			if param.Type == "any" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("input %q: expected parameter with type 'any'", tt.input)
+		}
+	}
+}
