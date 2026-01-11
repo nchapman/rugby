@@ -94,7 +94,7 @@ func (b *Builder) Compile(files []string) (*CompileResult, error) {
 	}
 
 	// Set up the gen directory for building
-	if err := b.setupGenDir(); err != nil {
+	if err := b.SetupGenDir(); err != nil {
 		return nil, err
 	}
 
@@ -229,9 +229,9 @@ func (b *Builder) formatParseErrors(file string, errors []string) error {
 // RuntimeModule is the Go module that contains the Rugby runtime.
 const RuntimeModule = "github.com/nchapman/rugby"
 
-// setupGenDir prepares the gen directory for go build.
+// SetupGenDir prepares the gen directory for go build.
 // Generates .rugby/go.mod from rugby.mod (if present) + injects runtime dep.
-func (b *Builder) setupGenDir() error {
+func (b *Builder) SetupGenDir() error {
 	goModPath := filepath.Join(b.project.GenDir, "go.mod")
 	goSumPath := filepath.Join(b.project.GenDir, "go.sum")
 
