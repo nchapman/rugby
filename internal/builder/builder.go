@@ -391,7 +391,7 @@ func (b *Builder) Build(files []string, outputName string) error {
 	outputPath := filepath.Join(cwd, outputName)
 
 	// Run go build
-	if err := b.goBuild(result.GenFiles, outputPath); err != nil {
+	if err := b.GoBuild(result.GenFiles, outputPath); err != nil {
 		return err
 	}
 
@@ -417,7 +417,7 @@ func (b *Builder) Run(file string, args []string) error {
 			b.logger.Debug("binary up to date, skipping build")
 		}
 	} else {
-		if err := b.goBuild(result.GenFiles, binPath); err != nil {
+		if err := b.GoBuild(result.GenFiles, binPath); err != nil {
 			return err
 		}
 	}
@@ -460,8 +460,8 @@ func (b *Builder) needsRebuild(genFiles []string, binPath string) bool {
 	return false
 }
 
-// goBuild runs go build in the gen directory.
-func (b *Builder) goBuild(genFiles []string, outputPath string) error {
+// GoBuild runs go build in the gen directory.
+func (b *Builder) GoBuild(genFiles []string, outputPath string) error {
 	// Build args
 	args := []string{"build", "-o", outputPath}
 
