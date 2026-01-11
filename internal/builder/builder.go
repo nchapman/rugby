@@ -1,3 +1,4 @@
+// Package builder orchestrates the Rugby compilation process.
 package builder
 
 import (
@@ -21,7 +22,6 @@ var (
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
 	fileStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
-	mutedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
 )
 
 // Builder orchestrates the Rugby compilation process.

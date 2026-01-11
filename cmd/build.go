@@ -1,3 +1,4 @@
+// Package cmd implements the Rugby CLI commands.
 package cmd
 
 import (

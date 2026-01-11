@@ -9,7 +9,7 @@ import (
 
 func TestRandInt(t *testing.T) {
 	// Test bounds
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		r := RandInt(10)
 		if r < 0 || r >= 10 {
 			t.Errorf("RandInt(10) = %d, want [0, 10)", r)
@@ -25,7 +25,7 @@ func TestRandInt(t *testing.T) {
 	}
 
 	// RandInt(1) should always return 0
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if r := RandInt(1); r != 0 {
 			t.Errorf("RandInt(1) = %d, want 0", r)
 		}
@@ -33,7 +33,7 @@ func TestRandInt(t *testing.T) {
 }
 
 func TestRandFloat(t *testing.T) {
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		r := RandFloat()
 		if r < 0.0 || r >= 1.0 {
 			t.Errorf("RandFloat() = %f, want [0.0, 1.0)", r)
@@ -43,7 +43,7 @@ func TestRandFloat(t *testing.T) {
 
 func TestRandRange(t *testing.T) {
 	// Normal range
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		r := RandRange(5, 10)
 		if r < 5 || r > 10 {
 			t.Errorf("RandRange(5, 10) = %d, want [5, 10]", r)
@@ -51,7 +51,7 @@ func TestRandRange(t *testing.T) {
 	}
 
 	// Inverted range (should still work)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		r := RandRange(10, 5)
 		if r < 5 || r > 10 {
 			t.Errorf("RandRange(10, 5) = %d, want [5, 10]", r)
@@ -59,7 +59,7 @@ func TestRandRange(t *testing.T) {
 	}
 
 	// Single value range
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		if r := RandRange(7, 7); r != 7 {
 			t.Errorf("RandRange(7, 7) = %d, want 7", r)
 		}
@@ -80,11 +80,11 @@ func captureStdout(fn func()) string {
 
 	fn()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	return buf.String()
 }
 

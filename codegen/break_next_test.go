@@ -24,7 +24,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each([]int{1, 2, 3}, func(x interface{}) bool {`)
+	assertContains(t, output, `runtime.Each([]int{1, 2, 3}, func(x any) bool {`)
 
 	assertContains(t, output, `if runtime.Equal(x, 2) {`)
 
@@ -86,7 +86,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Map([]int{1, 2, 3}, func(x interface{}) (interface{}, bool, bool) {`)
+	assertContains(t, output, `runtime.Map([]int{1, 2, 3}, func(x any) (any, bool, bool) {`)
 
 	assertContains(t, output, `if runtime.Equal(x, 2) {`)
 
@@ -144,7 +144,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Select([]int{1, 2, 3}, func(x interface{}) (bool, bool) {`)
+	assertContains(t, output, `runtime.Select([]int{1, 2, 3}, func(x any) (bool, bool) {`)
 
 	assertContains(t, output, `if runtime.Equal(x, 2) {`)
 
@@ -181,7 +181,7 @@ func TestBreakInReduceBlock(t *testing.T) {
 end`
 
 	output := compile(t, input)
-	assertContains(t, output, `runtime.Reduce([]int{1, 2, 3}, 0, func(acc interface{}, x interface{}) (interface{}, bool) {`)
+	assertContains(t, output, `runtime.Reduce([]int{1, 2, 3}, 0, func(acc any, x any) (any, bool) {`)
 	assertContains(t, output, `if runtime.Equal(x, 3) {`)
 	assertContains(t, output, `return nil, false`)
 	assertContains(t, output, `return (acc + x), true`)
@@ -234,7 +234,7 @@ end`
 
 	// Inner block break should be return false
 
-	assertContains(t, output, `runtime.Each([]int{10, 20}, func(j interface{}) bool {`)
+	assertContains(t, output, `runtime.Each([]int{10, 20}, func(j any) bool {`)
 
 	assertContains(t, output, `if runtime.Equal(j, 20) {`)
 

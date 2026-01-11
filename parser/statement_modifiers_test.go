@@ -1,9 +1,10 @@
 package parser
 
 import (
+	"testing"
+
 	"rugby/ast"
 	"rugby/lexer"
-	"testing"
 )
 
 func TestStatementModifiers(t *testing.T) {

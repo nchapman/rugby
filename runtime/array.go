@@ -2,21 +2,20 @@
 package runtime
 
 import (
+	"cmp"
 	"fmt"
 	"math/rand"
 	"reflect"
-	"sort"
+	"slices"
 	"strings"
-
-	"golang.org/x/exp/constraints"
 )
 
 // Each iterates over a slice, calling the function for each element.
 // The callback returns false to break, true to continue.
-// Uses interface{} with type switches to support both typed and untyped slices.
-func Each(slice interface{}, fn func(interface{}) bool) {
+// Uses any with type switches to support both typed and untyped slices.
+func Each(slice any, fn func(any) bool) {
 	switch s := slice.(type) {
-	case []interface{}:
+	case []any:
 		for _, v := range s {
 			if !fn(v) {
 				break
@@ -52,7 +51,7 @@ func Each(slice interface{}, fn func(interface{}) bool) {
 		if val.Kind() != reflect.Slice {
 			panic(fmt.Sprintf("Each: expected slice, got %T", slice))
 		}
-		for i := 0; i < val.Len(); i++ {
+		for i := range val.Len() {
 			if !fn(val.Index(i).Interface()) {
 				break
 			}
@@ -62,10 +61,10 @@ func Each(slice interface{}, fn func(interface{}) bool) {
 
 // EachWithIndex iterates over a slice with index, calling the function for each element.
 // The callback returns false to break, true to continue.
-// Uses interface{} with type switches to support both typed and untyped slices.
-func EachWithIndex(slice interface{}, fn func(interface{}, int) bool) {
+// Uses any with type switches to support both typed and untyped slices.
+func EachWithIndex(slice any, fn func(any, int) bool) {
 	switch s := slice.(type) {
-	case []interface{}:
+	case []any:
 		for i, v := range s {
 			if !fn(v, i) {
 				break
@@ -101,7 +100,7 @@ func EachWithIndex(slice interface{}, fn func(interface{}, int) bool) {
 		if val.Kind() != reflect.Slice {
 			panic(fmt.Sprintf("EachWithIndex: expected slice, got %T", slice))
 		}
-		for i := 0; i < val.Len(); i++ {
+		for i := range val.Len() {
 			if !fn(val.Index(i).Interface(), i) {
 				break
 			}
@@ -233,12 +232,7 @@ func None[T any](slice []T, predicate func(T) (bool, bool)) bool {
 // Contains returns true if the slice contains the value.
 // Ruby: arr.include?(5)
 func Contains[T comparable](slice []T, value T) bool {
-	for _, v := range slice {
-		if v == value {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(slice, value)
 }
 
 // First returns the first element of the slice.
@@ -279,7 +273,7 @@ func Reversed[T any](slice []T) []T {
 	return result
 }
 
-// Sum returns the sum of all elements (for int slices).
+// SumInt returns the sum of all elements (for int slices).
 func SumInt(slice []int) int {
 	sum := 0
 	for _, v := range slice {
@@ -302,13 +296,7 @@ func MinInt(slice []int) (int, bool) {
 	if len(slice) == 0 {
 		return 0, false
 	}
-	min := slice[0]
-	for _, v := range slice[1:] {
-		if v < min {
-			min = v
-		}
-	}
-	return min, true
+	return slices.Min(slice), true
 }
 
 // MaxInt returns the maximum value in an int slice.
@@ -316,13 +304,7 @@ func MaxInt(slice []int) (int, bool) {
 	if len(slice) == 0 {
 		return 0, false
 	}
-	max := slice[0]
-	for _, v := range slice[1:] {
-		if v > max {
-			max = v
-		}
-	}
-	return max, true
+	return slices.Max(slice), true
 }
 
 // MinFloat returns the minimum value in a float64 slice.
@@ -331,13 +313,7 @@ func MinFloat(slice []float64) (float64, bool) {
 	if len(slice) == 0 {
 		return 0, false
 	}
-	min := slice[0]
-	for _, v := range slice[1:] {
-		if v < min {
-			min = v
-		}
-	}
-	return min, true
+	return slices.Min(slice), true
 }
 
 // MaxFloat returns the maximum value in a float64 slice.
@@ -346,13 +322,7 @@ func MaxFloat(slice []float64) (float64, bool) {
 	if len(slice) == 0 {
 		return 0, false
 	}
-	max := slice[0]
-	for _, v := range slice[1:] {
-		if v > max {
-			max = v
-		}
-	}
-	return max, true
+	return slices.Max(slice), true
 }
 
 // Join concatenates elements into a string using the separator.
@@ -372,17 +342,17 @@ func Join[T any](slice []T, sep string) string {
 }
 
 // Flatten flattens a slice of slices (one level or deep? Ruby default is deep, but arg is depth).
-// For now, let's just do a simple flattening if it's []interface{}.
+// For now, let's just do a simple flattening if it's []any.
 // Typed slices []int cannot be flattened further.
 // Ruby: arr.flatten
-func Flatten(slice interface{}) []interface{} {
-	result := make([]interface{}, 0)
+func Flatten(slice any) []any {
+	result := make([]any, 0)
 	val := reflect.ValueOf(slice)
 	if val.Kind() != reflect.Slice {
-		return []interface{}{slice}
+		return []any{slice}
 	}
 
-	for i := 0; i < val.Len(); i++ {
+	for i := range val.Len() {
 		elem := val.Index(i).Interface()
 		// If elem is slice, recurse
 		elemVal := reflect.ValueOf(elem)
@@ -411,12 +381,10 @@ func Uniq[T comparable](slice []T) []T {
 
 // Sort returns a new sorted slice.
 // Ruby: arr.sort
-func Sort[T constraints.Ordered](slice []T) []T {
+func Sort[T cmp.Ordered](slice []T) []T {
 	result := make([]T, len(slice))
 	copy(result, slice)
-	sort.Slice(result, func(i, j int) bool {
-		return result[i] < result[j]
-	})
+	slices.Sort(result)
 	return result
 }
 

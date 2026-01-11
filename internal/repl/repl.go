@@ -1,3 +1,4 @@
+// Package repl implements the interactive Rugby REPL.
 package repl
 
 import (
@@ -61,7 +62,6 @@ type Model struct {
 
 	project  *builder.Project
 	counter  int // for unique temp file names
-	err      error
 	quitting bool
 }
 
@@ -101,7 +101,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.output = append(m.output, errorStyle.Render(msg.err.Error()))
 		} else if msg.output != "" {
-			for _, line := range strings.Split(strings.TrimRight(msg.output, "\n"), "\n") {
+			for line := range strings.SplitSeq(strings.TrimRight(msg.output, "\n"), "\n") {
 				m.output = append(m.output, outputStyle.Render(line))
 			}
 		}
@@ -415,7 +415,8 @@ func (m *Model) eval(input string) (string, error) {
 
 	// Write Go file
 	goFile := filepath.Join(replDir, fmt.Sprintf("repl_%d.go", m.counter))
-	if err := os.WriteFile(goFile, []byte(goCode), 0644); err != nil {
+	err = os.WriteFile(goFile, []byte(goCode), 0644)
+	if err != nil {
 		return "", err
 	}
 
@@ -430,14 +431,15 @@ replace rugby => %s
 `, m.project.Root)
 
 	goModFile := filepath.Join(replDir, "go.mod")
-	if err := os.WriteFile(goModFile, []byte(goModContent), 0644); err != nil {
+	err = os.WriteFile(goModFile, []byte(goModContent), 0644)
+	if err != nil {
 		return "", err
 	}
 
-	// Run go mod tidy
+	// Run go mod tidy (ignore errors - it may fail if no dependencies needed)
 	tidyCmd := exec.Command("go", "mod", "tidy")
 	tidyCmd.Dir = replDir
-	tidyCmd.Run() // Ignore errors
+	_ = tidyCmd.Run()
 
 	// Compile
 	binFile := filepath.Join(replDir, fmt.Sprintf("repl_%d", m.counter))
@@ -523,7 +525,7 @@ func (m *Model) buildProgram(input string) string {
 		buf.WriteString("p(" + varName + ")\n")
 	} else {
 		// Output as-is (multi-line input)
-		for _, line := range strings.Split(input, "\n") {
+		for line := range strings.SplitSeq(input, "\n") {
 			buf.WriteString(line + "\n")
 		}
 	}

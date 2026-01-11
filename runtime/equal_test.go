@@ -7,7 +7,7 @@ type testPoint struct {
 	x, y int
 }
 
-func (p *testPoint) Equal(other interface{}) bool {
+func (p *testPoint) Equal(other any) bool {
 	o, ok := other.(*testPoint)
 	if !ok {
 		return false

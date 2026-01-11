@@ -1,3 +1,4 @@
+// Package lexer implements the tokenizer for Rugby source code.
 package lexer
 
 import (
@@ -58,7 +59,7 @@ func (l *Lexer) GetLine(lineNum int) string {
 	currentLine := 1
 	start := 0
 
-	for i := 0; i < len(l.input); i++ {
+	for i := range len(l.input) {
 		if l.input[i] == '\n' {
 			if currentLine == lineNum {
 				return l.input[start:i]
@@ -274,9 +275,10 @@ func (l *Lexer) readIdentifier() string {
 		l.readChar()
 	}
 	// Ruby-style method suffixes: ? for predicates, ! for mutating methods
-	if l.ch == '?' {
+	switch l.ch {
+	case '?':
 		l.readChar()
-	} else if l.ch == '!' {
+	case '!':
 		// Only consume ! if it's NOT followed by = (which would make it !=)
 		if l.peekChar() != '=' {
 			l.readChar()

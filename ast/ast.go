@@ -1,3 +1,4 @@
+// Package ast defines the abstract syntax tree nodes for Rugby programs.
 package ast
 
 // Node is the base interface for all AST nodes
@@ -102,7 +103,7 @@ func (s *StringLit) exprNode() {}
 // InterpolatedString represents a string with embedded expressions: "hello #{name}"
 // Parts alternate between string literals (string) and expressions (Expression)
 type InterpolatedString struct {
-	Parts []interface{} // string or Expression
+	Parts []any // string or Expression
 }
 
 func (i *InterpolatedString) node()     {}

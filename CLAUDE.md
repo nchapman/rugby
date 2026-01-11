@@ -4,29 +4,51 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 
+Common commands are available via `make`:
+
+```bash
+# See all available targets
+make help
+
+# Build the rugby compiler
+make build
+
+# Run tests and linters
+make check
+
+# Run all tests
+make test
+
+# Run linters
+make lint
+
+# Format code
+make fmt
+
+# Start the interactive REPL
+make repl
+
+# Run a Rugby file
+make run FILE=examples/hello.rg
+
+# Build a standalone binary from a Rugby file
+make build-rugby FILE=main.rg OUTPUT=myapp
+
+# Clean build artifacts
+make clean
+```
+
+Direct commands (without make):
+
 ```bash
 # Run a Rugby file directly
 go run . examples/hello.rg
-# Or with the built binary:
-rugby run examples/hello.rg
-
-# Build a standalone binary from a Rugby file
-rugby build main.rg -o myapp
-
-# Start the interactive REPL
-rugby repl
-
-# Build the compiler binary
-go build -o rugby .
-
-# Run all tests
-go test ./...
 
 # Run a single test file
 go test ./parser -run TestFunctionCall
 
-# Clean build artifacts
-rugby clean
+# Run tests with coverage
+go test -cover ./...
 ```
 
 ## Architecture
@@ -126,4 +148,5 @@ See `spec.md` for the full Rugby language specification. Key points:
 ## Rules
 * Commit messages should be concise and never include stats (number of files, changes, etc) or attribution to claude or claude code.
 * Always add tests for new features (lexer, parser, and codegen tests as appropriate).
+* Run `make check` before committing to ensure tests and linters pass.
 * Always run the code-reviewer agent before committing to catch issues early.

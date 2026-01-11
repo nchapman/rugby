@@ -6,15 +6,15 @@ import "reflect"
 // Equaler is the interface for types that implement custom equality.
 // Rugby classes with def ==(other) compile to this interface.
 type Equaler interface {
-	Equal(other interface{}) bool
+	Equal(other any) bool
 }
 
 // Equal compares two values with dispatch logic:
 // 1. If a implements Equaler, call a.Equal(b)
 // 2. If both are slices, perform deep comparison
 // 3. If both are maps, perform deep comparison
-// 4. Otherwise, use Go's == (via reflect.DeepEqual for interface{} safety)
-func Equal(a, b interface{}) bool {
+// 4. Otherwise, use Go's == (via reflect.DeepEqual for any safety)
+func Equal(a, b any) bool {
 	// Check if a implements custom equality
 	if eq, ok := a.(Equaler); ok {
 		return eq.Equal(b)
@@ -52,7 +52,7 @@ func sliceEqual(a, b reflect.Value) bool {
 	if a.Len() != b.Len() {
 		return false
 	}
-	for i := 0; i < a.Len(); i++ {
+	for i := range a.Len() {
 		if !Equal(a.Index(i).Interface(), b.Index(i).Interface()) {
 			return false
 		}

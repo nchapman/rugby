@@ -1,10 +1,11 @@
 package codegen
 
 import (
-	"rugby/lexer"
-	"rugby/parser"
 	"strings"
 	"testing"
+
+	"rugby/lexer"
+	"rugby/parser"
 )
 
 func TestStatementModifierCodegen(t *testing.T) {

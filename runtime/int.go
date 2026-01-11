@@ -3,7 +3,7 @@ package runtime
 // Times iterates n times, calling the function with the current index (0 to n-1).
 // The callback returns false to break, true to continue.
 func Times(n int, fn func(int) bool) {
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if !fn(i) {
 			break
 		}

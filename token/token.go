@@ -1,3 +1,4 @@
+// Package token defines the token types for the Rugby lexer.
 package token
 
 type TokenType string

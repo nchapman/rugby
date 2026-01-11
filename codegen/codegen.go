@@ -1,3 +1,4 @@
+// Package codegen generates Go code from Rugby AST.
 package codegen
 
 import (
@@ -43,20 +44,20 @@ var noParenKernelFuncs = map[string]string{
 // blockMethod describes a block method mapping
 type blockMethod struct {
 	runtimeFunc     string
-	returnType      string // "interface{}" or "bool"
+	returnType      string // "any" or "bool"
 	hasAccumulator  bool   // for reduce - takes 2 params (acc, elem) instead of 1
 	usesIncludeFlag bool   // for map - uses (value, include, continue) instead of (value, continue)
 }
 
 // Block method mappings - single source of truth
 var blockMethods = map[string]blockMethod{
-	"map":    {runtimeFunc: "runtime.Map", returnType: "interface{}", usesIncludeFlag: true},
+	"map":    {runtimeFunc: "runtime.Map", returnType: "any", usesIncludeFlag: true},
 	"select": {runtimeFunc: "runtime.Select", returnType: "bool"},
 	"filter": {runtimeFunc: "runtime.Select", returnType: "bool"},
 	"reject": {runtimeFunc: "runtime.Reject", returnType: "bool"},
 	"find":   {runtimeFunc: "runtime.Find", returnType: "bool"},
 	"detect": {runtimeFunc: "runtime.Find", returnType: "bool"},
-	"reduce": {runtimeFunc: "runtime.Reduce", returnType: "interface{}", hasAccumulator: true},
+	"reduce": {runtimeFunc: "runtime.Reduce", returnType: "any", hasAccumulator: true},
 	"any?":   {runtimeFunc: "runtime.Any", returnType: "bool"},
 	"all?":   {runtimeFunc: "runtime.All", returnType: "bool"},
 	"none?":  {runtimeFunc: "runtime.None", returnType: "bool"},
@@ -166,7 +167,7 @@ const (
 
 type loopContext struct {
 	kind            contextType
-	returnType      string // "interface{}", "bool", or empty for iterative
+	returnType      string // "any", "bool", or empty for iterative
 	usesIncludeFlag bool   // for map - uses three-value returns
 }
 
@@ -186,8 +187,8 @@ type Generator struct {
 	contexts           []loopContext     // stack of loop/block contexts
 }
 
-func (g *Generator) pushContext(kind contextType, returnType string) {
-	g.contexts = append(g.contexts, loopContext{kind: kind, returnType: returnType, usesIncludeFlag: false})
+func (g *Generator) pushContext(kind contextType) {
+	g.contexts = append(g.contexts, loopContext{kind: kind, returnType: "", usesIncludeFlag: false})
 }
 
 func (g *Generator) pushContextWithInclude(kind contextType, returnType string, usesInclude bool) {
@@ -420,13 +421,15 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	source := out.String()
 	formatted, err := format.Source([]byte(source))
 	if err != nil {
-		return source, nil // Return unformatted if gofmt fails
+		// Return unformatted source for debugging - intentionally no error
+		// so caller can inspect what was generated (e.g., error comments like /* self outside class */)
+		return source, nil //nolint:nilerr // intentional: return source for debugging
 	}
 	return string(formatted), nil
 }
 
 func (g *Generator) writeIndent() {
-	for i := 0; i < g.indent; i++ {
+	for range g.indent {
 		g.buf.WriteString("\t")
 	}
 }
@@ -482,7 +485,7 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	// Generate function name with proper casing
 	// pub def parse_json -> ParseJSON (exported)
 	// def parse_json -> parseJSON (unexported)
-	funcName := fn.Name
+	var funcName string
 	if fn.Pub {
 		funcName = snakeToPascalWithAcronyms(fn.Name)
 	} else {
@@ -498,7 +501,7 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 		if param.Type != "" {
 			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, mapType(param.Type)))
 		} else {
-			g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+			g.buf.WriteString(fmt.Sprintf("%s any", param.Name))
 		}
 	}
 	g.buf.WriteString(")")
@@ -559,7 +562,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			if field.Type != "" {
 				g.buf.WriteString(fmt.Sprintf("\t%s %s\n", field.Name, mapType(field.Type)))
 			} else {
-				g.buf.WriteString(fmt.Sprintf("\t%s interface{}\n", field.Name))
+				g.buf.WriteString(fmt.Sprintf("\t%s any\n", field.Name))
 			}
 		}
 		g.buf.WriteString("}\n\n")
@@ -605,7 +608,7 @@ func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
 			if param.Type != "" {
 				g.buf.WriteString(mapType(param.Type))
 			} else {
-				g.buf.WriteString("interface{}")
+				g.buf.WriteString("any")
 			}
 		}
 		g.buf.WriteString(")")
@@ -655,7 +658,7 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 		if param.Type != "" {
 			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, mapType(param.Type)))
 		} else {
-			g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+			g.buf.WriteString(fmt.Sprintf("%s any", param.Name))
 		}
 	}
 	g.buf.WriteString(fmt.Sprintf(") *%s {\n", className))
@@ -702,11 +705,11 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		return
 	}
 
-	// == -> Equal(other interface{}) bool (satisfies runtime.Equaler)
+	// == -> Equal(other any) bool (satisfies runtime.Equaler)
 	// Only applies when == has exactly one parameter
 	if method.Name == "==" && len(method.Params) == 1 {
 		param := method.Params[0]
-		g.buf.WriteString(fmt.Sprintf("func (%s *%s) Equal(other interface{}) bool {\n", recv, className))
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s) Equal(other any) bool {\n", recv, className))
 		g.indent++
 		// Create type assertion for the parameter
 		g.writeIndent()
@@ -759,7 +762,7 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		if param.Type != "" {
 			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, mapType(param.Type)))
 		} else {
-			g.buf.WriteString(fmt.Sprintf("%s interface{}", param.Name))
+			g.buf.WriteString(fmt.Sprintf("%s any", param.Name))
 		}
 	}
 	g.buf.WriteString(")")
@@ -1205,7 +1208,7 @@ func (g *Generator) genWhileStmt(s *ast.WhileStmt) {
 	g.genCondition(s.Cond)
 	g.buf.WriteString(" {\n")
 
-	g.pushContext(ctxLoop, "")
+	g.pushContext(ctxLoop)
 	g.indent++
 	for _, stmt := range s.Body {
 		g.genStatement(stmt)
@@ -1244,7 +1247,7 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 
 	g.vars[s.Var] = "" // loop variable, type unknown
 
-	g.pushContext(ctxLoop, "")
+	g.pushContext(ctxLoop)
 	g.indent++
 	for _, stmt := range s.Body {
 		g.genStatement(stmt)
@@ -1281,7 +1284,7 @@ func (g *Generator) genForRangeVarLoop(varName string, rangeVar string, body []a
 
 	g.vars[varName] = "Int"
 
-	g.pushContext(ctxLoop, "")
+	g.pushContext(ctxLoop)
 	g.indent++
 	for _, stmt := range body {
 		g.genStatement(stmt)
@@ -1321,7 +1324,7 @@ func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.
 
 	g.vars[varName] = "Int" // range loop variable is always Int
 
-	g.pushContext(ctxLoop, "")
+	g.pushContext(ctxLoop)
 	g.indent++
 	for _, stmt := range body {
 		g.genStatement(stmt)
@@ -1386,9 +1389,10 @@ func (g *Generator) genBreakStmt(s *ast.BreakStmt) {
 	g.writeIndent()
 	ctx, ok := g.currentContext()
 	if ok {
-		if ctx.kind == ctxIterBlock {
+		switch ctx.kind {
+		case ctxIterBlock:
 			g.buf.WriteString("return false\n")
-		} else if ctx.kind == ctxTransformBlock {
+		case ctxTransformBlock:
 			// Transform blocks with three values (map): return (value, include, continue)
 			if ctx.usesIncludeFlag {
 				g.buf.WriteString("return nil, false, false\n")
@@ -1400,7 +1404,7 @@ func (g *Generator) genBreakStmt(s *ast.BreakStmt) {
 					g.buf.WriteString("return nil, false\n")
 				}
 			}
-		} else {
+		default:
 			// Regular loop context
 			g.buf.WriteString("break\n")
 		}
@@ -1435,9 +1439,10 @@ func (g *Generator) genNextStmt(s *ast.NextStmt) {
 	g.writeIndent()
 	ctx, ok := g.currentContext()
 	if ok {
-		if ctx.kind == ctxIterBlock {
+		switch ctx.kind {
+		case ctxIterBlock:
 			g.buf.WriteString("return true\n")
-		} else if ctx.kind == ctxTransformBlock {
+		case ctxTransformBlock:
 			// next in transform blocks with three values (map): skip element, continue iteration
 			if ctx.usesIncludeFlag {
 				g.buf.WriteString("return nil, false, true\n")
@@ -1449,7 +1454,7 @@ func (g *Generator) genNextStmt(s *ast.NextStmt) {
 					g.buf.WriteString("return nil, true\n")
 				}
 			}
-		} else {
+		default:
 			// Regular loop context
 			g.buf.WriteString("continue\n")
 		}
@@ -1752,7 +1757,7 @@ func (g *Generator) genArrayLit(arr *ast.ArrayLit) {
 		goType := mapType(elemType)
 		g.buf.WriteString("[]" + goType + "{")
 	} else {
-		g.buf.WriteString("[]interface{}{")
+		g.buf.WriteString("[]any{")
 	}
 
 	for i, elem := range arr.Elements {
@@ -1773,7 +1778,7 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 
 func (g *Generator) genMapLit(m *ast.MapLit) {
 	// Emit untyped map; type inference will be added in Phase 7
-	g.buf.WriteString("map[interface{}]interface{}{")
+	g.buf.WriteString("map[any]any{")
 	for i, entry := range m.Entries {
 		if i > 0 {
 			g.buf.WriteString(", ")
@@ -1970,7 +1975,7 @@ func (g *Generator) genBlockCall(call *ast.CallExpr) {
 	g.buf.WriteString(fmt.Sprintf("/* unsupported block method: %s */", method))
 }
 
-// genEachBlock generates: runtime.Each(iterable, func(v interface{}) { body })
+// genEachBlock generates: runtime.Each(iterable, func(v any) { body })
 // Uses runtime call so that return inside block exits only the block, not enclosing function
 func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) {
 	// Check if iterable is a Range - use RangeEach for type-safe iteration
@@ -1993,13 +1998,13 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	g.genExpr(iterable)
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" interface{}) bool {\n")
+	g.buf.WriteString(" any) bool {\n")
 
 	if varName != "_" {
 		g.vars[varName] = "" // block param, type unknown
 	}
 
-	g.pushContext(ctxIterBlock, "")
+	g.pushContext(ctxIterBlock)
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
@@ -2043,7 +2048,7 @@ func (g *Generator) genRangeEachBlock(rangeExpr ast.Expression, block *ast.Block
 		g.vars[varName] = "Int" // range iteration is always int
 	}
 
-	g.pushContext(ctxIterBlock, "")
+	g.pushContext(ctxIterBlock)
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
@@ -2065,7 +2070,7 @@ func (g *Generator) genRangeEachBlock(rangeExpr ast.Expression, block *ast.Block
 	g.buf.WriteString("})")
 }
 
-// genEachWithIndexBlock generates: runtime.EachWithIndex(iterable, func(v interface{}, i int) { body })
+// genEachWithIndexBlock generates: runtime.EachWithIndex(iterable, func(v any, i int) { body })
 // Note: Rugby uses |value, index| order which matches runtime.EachWithIndex signature
 func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.BlockExpr) {
 	g.needsRuntime = true
@@ -2087,7 +2092,7 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 	g.genExpr(iterable)
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" interface{}, ")
+	g.buf.WriteString(" any, ")
 	g.buf.WriteString(indexName)
 	g.buf.WriteString(" int) bool {\n")
 
@@ -2098,7 +2103,7 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 		g.vars[indexName] = "Int" // index is always int
 	}
 
-	g.pushContext(ctxIterBlock, "")
+	g.pushContext(ctxIterBlock)
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
@@ -2149,7 +2154,7 @@ func (g *Generator) genTimesBlock(times ast.Expression, block *ast.BlockExpr) {
 		g.vars[varName] = "Int" // times iteration is always int
 	}
 
-	g.pushContext(ctxIterBlock, "")
+	g.pushContext(ctxIterBlock)
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
@@ -2198,7 +2203,7 @@ func (g *Generator) genUptoBlock(start ast.Expression, block *ast.BlockExpr, arg
 		g.vars[varName] = "Int" // upto iteration is always int
 	}
 
-	g.pushContext(ctxIterBlock, "")
+	g.pushContext(ctxIterBlock)
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
@@ -2247,7 +2252,7 @@ func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, a
 		g.vars[varName] = "Int" // downto iteration is always int
 	}
 
-	g.pushContext(ctxIterBlock, "")
+	g.pushContext(ctxIterBlock)
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
@@ -2317,12 +2322,12 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 	g.buf.WriteString(", func(")
 	if method.hasAccumulator {
 		g.buf.WriteString(param1Name)
-		g.buf.WriteString(" interface{}, ")
+		g.buf.WriteString(" any, ")
 		g.buf.WriteString(param2Name)
-		g.buf.WriteString(" interface{}")
+		g.buf.WriteString(" any")
 	} else {
 		g.buf.WriteString(param1Name)
-		g.buf.WriteString(" interface{}")
+		g.buf.WriteString(" any")
 	}
 	g.buf.WriteString(") (")
 	g.buf.WriteString(method.returnType)
@@ -2346,8 +2351,8 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 
 	// Generate block body with last statement as return
 	if len(block.Body) > 0 {
-		for i := 0; i < len(block.Body)-1; i++ {
-			g.genStatement(block.Body[i])
+		for _, stmt := range block.Body[:len(block.Body)-1] {
+			g.genStatement(stmt)
 		}
 		// Last statement should be an expression - return it
 		lastStmt := block.Body[len(block.Body)-1]
@@ -2583,8 +2588,7 @@ func mapType(rubyType string) string {
 	}
 
 	// Handle optional types (T?)
-	if strings.HasSuffix(rubyType, "?") {
-		baseType := strings.TrimSuffix(rubyType, "?")
+	if baseType, found := strings.CutSuffix(rubyType, "?"); found {
 		if valueTypes[baseType] {
 			// Value type optional -> *T
 			return "*" + mapType(baseType)
@@ -2611,9 +2615,9 @@ func mapType(rubyType string) string {
 	case "Bytes":
 		return "[]byte"
 	case "Array":
-		return "[]interface{}"
+		return "[]any"
 	case "Map":
-		return "map[interface{}]interface{}"
+		return "map[any]any"
 	default:
 		return rubyType // pass through unknown types (e.g., user-defined)
 	}

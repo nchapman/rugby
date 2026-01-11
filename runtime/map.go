@@ -1,5 +1,7 @@
 package runtime
 
+import "maps"
+
 // Keys returns all keys from the map.
 // Ruby: hash.keys
 func Keys[K comparable, V any](m map[K]V) []K {
@@ -25,12 +27,8 @@ func Values[K comparable, V any](m map[K]V) []V {
 // Ruby: hash.merge(other)
 func Merge[K comparable, V any](m1, m2 map[K]V) map[K]V {
 	result := make(map[K]V, len(m1)+len(m2))
-	for k, v := range m1 {
-		result[k] = v
-	}
-	for k, v := range m2 {
-		result[k] = v
-	}
+	maps.Copy(result, m1)
+	maps.Copy(result, m2)
 	return result
 }
 
@@ -101,9 +99,7 @@ func MapHasKey[K comparable, V any](m map[K]V, key K) bool {
 // MapClear removes all entries from the map.
 // Ruby: hash.clear
 func MapClear[K comparable, V any](m map[K]V) {
-	for k := range m {
-		delete(m, k)
-	}
+	clear(m)
 }
 
 // MapInvert returns a new map with keys and values swapped.

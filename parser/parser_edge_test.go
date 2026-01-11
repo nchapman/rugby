@@ -42,8 +42,14 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	decl := program.Declarations[0].(*ast.FuncDecl)
-	stmt := decl.Body[0].(*ast.ExprStmt)
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	stmt, ok := decl.Body[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", decl.Body[0])
+	}
 	binExpr, ok := stmt.Expr.(*ast.BinaryExpr)
 	if !ok {
 		t.Fatalf("expected BinaryExpr, got %T", stmt.Expr)
@@ -64,8 +70,14 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	decl := program.Declarations[0].(*ast.FuncDecl)
-	stmt := decl.Body[0].(*ast.ExprStmt)
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	stmt, ok := decl.Body[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", decl.Body[0])
+	}
 	binExpr, ok := stmt.Expr.(*ast.BinaryExpr)
 	if !ok {
 		t.Fatalf("expected BinaryExpr, got %T", stmt.Expr)
@@ -86,8 +98,14 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	decl := program.Declarations[0].(*ast.FuncDecl)
-	stmt := decl.Body[0].(*ast.ExprStmt)
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	stmt, ok := decl.Body[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", decl.Body[0])
+	}
 	binExpr, ok := stmt.Expr.(*ast.BinaryExpr)
 	if !ok {
 		t.Fatalf("expected BinaryExpr, got %T", stmt.Expr)

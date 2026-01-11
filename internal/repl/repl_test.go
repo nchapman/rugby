@@ -498,7 +498,7 @@ func TestHistoryNavigation(t *testing.T) {
 
 	// Press Up - should go to "third" (most recent)
 	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 	if m.historyIdx != 2 {
 		t.Errorf("After first Up, historyIdx = %d, want 2", m.historyIdx)
 	}
@@ -508,7 +508,7 @@ func TestHistoryNavigation(t *testing.T) {
 
 	// Press Up again - should go to "second"
 	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 	if m.historyIdx != 1 {
 		t.Errorf("After second Up, historyIdx = %d, want 1", m.historyIdx)
 	}
@@ -518,7 +518,7 @@ func TestHistoryNavigation(t *testing.T) {
 
 	// Press Down - should go back to "third"
 	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 	if m.historyIdx != 2 {
 		t.Errorf("After Down, historyIdx = %d, want 2", m.historyIdx)
 	}
@@ -528,7 +528,7 @@ func TestHistoryNavigation(t *testing.T) {
 
 	// Press Down again - should clear input (past history)
 	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 	if m.historyIdx != -1 {
 		t.Errorf("After going past history, historyIdx = %d, want -1", m.historyIdx)
 	}
@@ -544,7 +544,7 @@ func TestHistoryStaysAtBounds(t *testing.T) {
 
 	// Press Up at start of history - should stay at 0
 	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 	if m.historyIdx != 0 {
 		t.Errorf("historyIdx should stay at 0, got %d", m.historyIdx)
 	}
@@ -557,7 +557,7 @@ func TestHistoryEmptyDoesNothing(t *testing.T) {
 
 	// Press Up with empty history - should do nothing
 	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyUp})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 	if m.historyIdx != -1 {
 		t.Errorf("historyIdx should stay at -1 with empty history, got %d", m.historyIdx)
 	}
@@ -573,7 +573,7 @@ func TestMultiLineInputAccumulation(t *testing.T) {
 	// Type "def foo" and press enter
 	m.textInput.SetValue("def foo")
 	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 
 	// Block should be open (depth 1)
 	if m.blockDepth != 1 {
@@ -586,7 +586,7 @@ func TestMultiLineInputAccumulation(t *testing.T) {
 	// Type 'puts "hi"' and press enter
 	m.textInput.SetValue(`  puts "hi"`)
 	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 
 	// Still open
 	if m.blockDepth != 1 {
@@ -606,7 +606,7 @@ func TestNestedBlockDepth(t *testing.T) {
 	// Open class
 	m.textInput.SetValue("class User")
 	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 	if m.blockDepth != 1 {
 		t.Errorf("After 'class User', blockDepth = %d, want 1", m.blockDepth)
 	}
@@ -614,7 +614,7 @@ func TestNestedBlockDepth(t *testing.T) {
 	// Open method
 	m.textInput.SetValue("  def initialize")
 	newModel, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 	if m.blockDepth != 2 {
 		t.Errorf("After 'def initialize', blockDepth = %d, want 2", m.blockDepth)
 	}
@@ -687,7 +687,7 @@ func TestCtrlCQuits(t *testing.T) {
 	m := newTestModel()
 
 	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 
 	if !m.quitting {
 		t.Error("Ctrl+C should set quitting to true")
@@ -701,7 +701,7 @@ func TestCtrlDQuits(t *testing.T) {
 	m := newTestModel()
 
 	newModel, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 
 	if !m.quitting {
 		t.Error("Ctrl+D should set quitting to true")
@@ -723,7 +723,7 @@ func TestEmptyInputDoesNothing(t *testing.T) {
 	historyBefore := len(m.history)
 
 	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 
 	if len(m.output) != outputBefore {
 		t.Error("Empty input should not add to output")
@@ -740,7 +740,7 @@ func TestWhitespaceOnlyDoesNothing(t *testing.T) {
 	outputBefore := len(m.output)
 
 	newModel, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = newModel.(Model)
+	m, _ = newModel.(Model)
 
 	if len(m.output) != outputBefore {
 		t.Error("Whitespace-only input should not add to output")

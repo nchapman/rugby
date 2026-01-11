@@ -120,7 +120,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func add(a interface{}, b interface{})`)
+	assertContains(t, output, `func add(a any, b any)`)
 	assertContains(t, output, `x := a`) // new var uses :=
 	assertContains(t, output, `a = b`)  // param reassignment uses =
 	assertContains(t, output, `func main()`)
@@ -140,7 +140,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func add(a interface{}, b interface{}) int`)
+	assertContains(t, output, `func add(a any, b any) int`)
 	assertContains(t, output, `func greet() string`)
 	assertContains(t, output, `func main()`)
 }
@@ -159,7 +159,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func parse(s interface{}) (int, bool)`)
+	assertContains(t, output, `func parse(s any) (int, bool)`)
 	assertContains(t, output, `return 42, true`)
 	assertContains(t, output, `func fetch() (string, int, bool)`)
 	assertContains(t, output, `return "hello", 1, false`)
@@ -366,7 +366,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `x := []interface{}{}`)
+	assertContains(t, output, `x := []any{}`)
 }
 
 func TestGenerateArrayWithExpressions(t *testing.T) {
@@ -376,7 +376,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `[]interface{}{(1 + 2), (3 * 4)}`)
+	assertContains(t, output, `[]any{(1 + 2), (3 * 4)}`)
 }
 
 func TestGenerateArrayAsArg(t *testing.T) {
@@ -396,7 +396,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `[]interface{}{[]int{1, 2}, []int{3, 4}}`)
+	assertContains(t, output, `[]any{[]int{1, 2}, []int{3, 4}}`)
 }
 
 func TestGenerateArrayIndex(t *testing.T) {
@@ -436,7 +436,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `map[interface{}]interface{}{"a": 1, "b": 2}`)
+	assertContains(t, output, `map[any]any{"a": 1, "b": 2}`)
 }
 
 func TestGenerateEmptyMap(t *testing.T) {
@@ -446,7 +446,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `map[interface{}]interface{}{}`)
+	assertContains(t, output, `map[any]any{}`)
 }
 
 func TestGenerateMapAccess(t *testing.T) {
@@ -468,7 +468,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(arr, func(x interface{}) bool {`)
+	assertContains(t, output, `runtime.Each(arr, func(x any) bool {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 	assertContains(t, output, `return true`)
 }
@@ -482,7 +482,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.EachWithIndex(arr, func(v interface{}, i int) bool {`)
+	assertContains(t, output, `runtime.EachWithIndex(arr, func(v any, i int) bool {`)
 	assertContains(t, output, `runtime.Puts(v)`)
 	assertContains(t, output, `return true`)
 }
@@ -497,7 +497,7 @@ end`
 	output := compile(t, input)
 
 	// Map generates runtime.Map() call with function literal (three-value return)
-	assertContains(t, output, `runtime.Map(arr, func(x interface{}) (interface{}, bool, bool) {`)
+	assertContains(t, output, `runtime.Map(arr, func(x any) (any, bool, bool) {`)
 	assertContains(t, output, `return (x * 2), true, true`)
 }
 
@@ -511,7 +511,7 @@ end`
 	output := compile(t, input)
 
 	// Block with no params should use _ for the parameter
-	assertContains(t, output, `runtime.Each(items, func(_ interface{}) bool {`)
+	assertContains(t, output, `runtime.Each(items, func(_ any) bool {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 	assertContains(t, output, `return true`)
 }
@@ -525,7 +525,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(getItems(), func(x interface{}) bool {`)
+	assertContains(t, output, `runtime.Each(getItems(), func(x any) bool {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 	assertContains(t, output, `return true`)
 }
@@ -541,8 +541,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(matrix, func(row interface{}) bool {`)
-	assertContains(t, output, `runtime.Each(row, func(x interface{}) bool {`)
+	assertContains(t, output, `runtime.Each(matrix, func(row any) bool {`)
+	assertContains(t, output, `runtime.Each(row, func(x any) bool {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 	assertContains(t, output, `return true`)
 }
@@ -556,7 +556,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Select(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `runtime.Select(nums, func(n any) (bool, bool) {`)
 	assertContains(t, output, `return runtime.Equal((n % 2), 0), true`)
 }
 
@@ -569,7 +569,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Reject(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `runtime.Reject(nums, func(n any) (bool, bool) {`)
 	assertContains(t, output, `return runtime.Equal((n % 2), 0), true`)
 }
 
@@ -582,7 +582,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Reduce(nums, 0, func(acc interface{}, n interface{}) (interface{}, bool) {`)
+	assertContains(t, output, `runtime.Reduce(nums, 0, func(acc any, n any) (any, bool) {`)
 	assertContains(t, output, `return (acc + n), true`)
 }
 
@@ -595,7 +595,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Find(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `runtime.Find(nums, func(n any) (bool, bool) {`)
 	assertContains(t, output, `return runtime.Equal((n % 2), 0), true`)
 }
 
@@ -608,7 +608,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Any(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `runtime.Any(nums, func(n any) (bool, bool) {`)
 	assertContains(t, output, `return runtime.Equal((n % 2), 0), true`)
 }
 
@@ -621,7 +621,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.All(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `runtime.All(nums, func(n any) (bool, bool) {`)
 	assertContains(t, output, `return (n > 0), true`)
 }
 
@@ -634,7 +634,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.None(nums, func(n interface{}) (bool, bool) {`)
+	assertContains(t, output, `runtime.None(nums, func(n any) (bool, bool) {`)
 	assertContains(t, output, `return (n < 0), true`)
 }
 
@@ -797,7 +797,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(arr, func(x interface{}) bool {`)
+	assertContains(t, output, `runtime.Each(arr, func(x any) bool {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 	assertContains(t, output, `return true`)
 }
@@ -809,7 +809,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Map(arr, func(x interface{}) (interface{}, bool, bool) {`)
+	assertContains(t, output, `runtime.Map(arr, func(x any) (any, bool, bool) {`)
 	assertContains(t, output, `return (x * 2), true, true`)
 }
 
@@ -867,7 +867,7 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `type Calculator struct{}`)
-	assertContains(t, output, `func (c *Calculator) add(a interface{}, b interface{}) int`)
+	assertContains(t, output, `func (c *Calculator) add(a any, b any) int`)
 	assertContains(t, output, `return (a + b)`)
 }
 
@@ -973,9 +973,9 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `type User struct {`)
-	assertContains(t, output, `name interface{}`)
-	assertContains(t, output, `age interface{}`)
-	assertContains(t, output, `func newUser(name interface{}, age interface{}) *User`)
+	assertContains(t, output, `name any`)
+	assertContains(t, output, `age any`)
+	assertContains(t, output, `func newUser(name any, age any) *User`)
 	assertContains(t, output, `u := &User{}`)
 	assertContains(t, output, `u.name = name`)
 	assertContains(t, output, `u.age = age`)
@@ -1015,7 +1015,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func newUser(name interface{}) *User`)
+	assertContains(t, output, `func newUser(name any) *User`)
 	assertContains(t, output, `user := newUser("Alice")`)
 }
 
@@ -1033,7 +1033,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func newPoint(x interface{}, y interface{}) *Point`)
+	assertContains(t, output, `func newPoint(x any, y any) *Point`)
 	assertContains(t, output, `p := newPoint(10, 20)`)
 }
 
@@ -1069,7 +1069,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func foo(a int, b interface{}, c string)`)
+	assertContains(t, output, `func foo(a int, b any, c string)`)
 }
 
 func TestGenerateTypedInstanceVars(t *testing.T) {
@@ -1121,7 +1121,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `func add(a interface{}, b interface{})`)
+	assertContains(t, output, `func add(a any, b any)`)
 	assertContains(t, output, `x := 5`)
 }
 
@@ -1301,7 +1301,7 @@ end`
 	output := compile(t, input)
 
 	// 'self' should compile to receiver variable 'b' (first letter of Builder)
-	assertContains(t, output, `func (b *Builder) withName(n interface{})`)
+	assertContains(t, output, `func (b *Builder) withName(n any)`)
 	// Implicit return of self
 	assertContains(t, output, "return b\n}")
 	// Explicit return of self
@@ -1504,8 +1504,8 @@ end`
 
 	output := compile(t, input)
 
-	// def == should compile to Equal(other interface{}) bool
-	assertContains(t, output, `func (p *Point) Equal(other interface{}) bool {`)
+	// def == should compile to Equal(other any) bool
+	assertContains(t, output, `func (p *Point) Equal(other any) bool {`)
 	// Should include type assertion
 	assertContains(t, output, `other, ok := other.(*Point)`)
 	assertContains(t, output, `if !ok {`)

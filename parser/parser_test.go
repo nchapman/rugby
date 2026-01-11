@@ -71,14 +71,23 @@ func TestBinaryExpression(t *testing.T) {
 		program := p.ParseProgram()
 		checkParserErrors(t, p)
 
-		fn := program.Declarations[0].(*ast.FuncDecl)
-		assign := fn.Body[0].(*ast.AssignStmt)
+		fn, ok := program.Declarations[0].(*ast.FuncDecl)
+		if !ok {
+			t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+		}
+		assign, ok := fn.Body[0].(*ast.AssignStmt)
+		if !ok {
+			t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+		}
 		binExpr, ok := assign.Value.(*ast.BinaryExpr)
 		if !ok {
 			t.Fatalf("expected BinaryExpr, got %T", assign.Value)
 		}
 
-		leftInt := binExpr.Left.(*ast.IntLit)
+		leftInt, ok := binExpr.Left.(*ast.IntLit)
+		if !ok {
+			t.Fatalf("expected IntLit, got %T", binExpr.Left)
+		}
 		if leftInt.Value != tt.left {
 			t.Errorf("expected left %d, got %d", tt.left, leftInt.Value)
 		}
@@ -87,7 +96,10 @@ func TestBinaryExpression(t *testing.T) {
 			t.Errorf("expected operator %q, got %q", tt.operator, binExpr.Op)
 		}
 
-		rightInt := binExpr.Right.(*ast.IntLit)
+		rightInt, ok := binExpr.Right.(*ast.IntLit)
+		if !ok {
+			t.Fatalf("expected IntLit, got %T", binExpr.Right)
+		}
 		if rightInt.Value != tt.right {
 			t.Errorf("expected right %d, got %d", tt.right, rightInt.Value)
 		}
@@ -110,7 +122,10 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	fn := program.Declarations[0].(*ast.FuncDecl)
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
 	ifStmt, ok := fn.Body[0].(*ast.IfStmt)
 	if !ok {
 		t.Fatalf("expected IfStmt, got %T", fn.Body[0])
@@ -145,7 +160,10 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	fn := program.Declarations[0].(*ast.FuncDecl)
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
 	whileStmt, ok := fn.Body[0].(*ast.WhileStmt)
 	if !ok {
 		t.Fatalf("expected WhileStmt, got %T", fn.Body[0])
@@ -170,7 +188,10 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	fn := program.Declarations[0].(*ast.FuncDecl)
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
 	exprStmt, ok := fn.Body[0].(*ast.ExprStmt)
 	if !ok {
 		t.Fatalf("expected ExprStmt, got %T", fn.Body[0])
@@ -219,8 +240,14 @@ func TestOperatorPrecedence(t *testing.T) {
 		program := p.ParseProgram()
 		checkParserErrors(t, p)
 
-		fn := program.Declarations[0].(*ast.FuncDecl)
-		assign := fn.Body[0].(*ast.AssignStmt)
+		fn, ok := program.Declarations[0].(*ast.FuncDecl)
+		if !ok {
+			t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+		}
+		assign, ok := fn.Body[0].(*ast.AssignStmt)
+		if !ok {
+			t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+		}
 		actual := exprString(assign.Value)
 
 		if actual != tt.expected {
@@ -344,8 +371,14 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	fn := program.Declarations[0].(*ast.FuncDecl)
-	retStmt := fn.Body[0].(*ast.ReturnStmt)
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	retStmt, ok := fn.Body[0].(*ast.ReturnStmt)
+	if !ok {
+		t.Fatalf("expected ReturnStmt, got %T", fn.Body[0])
+	}
 
 	if len(retStmt.Values) != 3 {
 		t.Fatalf("expected 3 return values, got %d", len(retStmt.Values))
@@ -389,7 +422,10 @@ func TestReturnType(t *testing.T) {
 		program := p.ParseProgram()
 		checkParserErrors(t, p)
 
-		fn := program.Declarations[0].(*ast.FuncDecl)
+		fn, ok := program.Declarations[0].(*ast.FuncDecl)
+		if !ok {
+			t.Fatalf("input %q: expected FuncDecl, got %T", tt.input, program.Declarations[0])
+		}
 
 		if len(fn.ReturnTypes) != len(tt.returnTypes) {
 			t.Errorf("input %q: expected %d return types, got %d",
@@ -473,8 +509,14 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	fn := program.Declarations[0].(*ast.FuncDecl)
-	assign := fn.Body[0].(*ast.AssignStmt)
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assign, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
 
 	sel, ok := assign.Value.(*ast.SelectorExpr)
 	if !ok {
@@ -503,8 +545,14 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	fn := program.Declarations[0].(*ast.FuncDecl)
-	assign := fn.Body[0].(*ast.AssignStmt)
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assign, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
 
 	// resp.Body.Close
 	outer, ok := assign.Value.(*ast.SelectorExpr)
@@ -534,8 +582,14 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	fn := program.Declarations[0].(*ast.FuncDecl)
-	exprStmt := fn.Body[0].(*ast.ExprStmt)
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	exprStmt, ok := fn.Body[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", fn.Body[0])
+	}
 
 	call, ok := exprStmt.Expr.(*ast.CallExpr)
 	if !ok {
@@ -570,7 +624,10 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	fn := program.Declarations[0].(*ast.FuncDecl)
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
 
 	deferStmt, ok := fn.Body[0].(*ast.DeferStmt)
 	if !ok {
@@ -602,8 +659,14 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	fn := program.Declarations[0].(*ast.FuncDecl)
-	deferStmt := fn.Body[0].(*ast.DeferStmt)
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	deferStmt, ok := fn.Body[0].(*ast.DeferStmt)
+	if !ok {
+		t.Fatalf("expected DeferStmt, got %T", fn.Body[0])
+	}
 
 	if deferStmt.Call == nil {
 		t.Fatal("expected Call in DeferStmt")
@@ -620,8 +683,14 @@ end`
 	program := p.ParseProgram()
 	checkParserErrors(t, p)
 
-	fn := program.Declarations[0].(*ast.FuncDecl)
-	assign := fn.Body[0].(*ast.AssignStmt)
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assign, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
 
 	arr, ok := assign.Value.(*ast.ArrayLit)
 	if !ok {
@@ -2444,9 +2513,10 @@ end`
 	// Find methods
 	var getName, internalMethod *ast.MethodDecl
 	for _, m := range cls.Methods {
-		if m.Name == "get_name" {
+		switch m.Name {
+		case "get_name":
 			getName = m
-		} else if m.Name == "internal_method" {
+		case "internal_method":
 			internalMethod = m
 		}
 	}

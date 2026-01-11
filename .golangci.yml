@@ -1,0 +1,60 @@
+version: "2"
+
+run:
+  timeout: 5m
+  go: "1.25"
+
+linters:
+  default: none
+  enable:
+    # Core analyzers from go/analysis
+    - govet        # go vet checks
+    - staticcheck  # comprehensive static analysis (includes gosimple)
+    - ineffassign  # detects ineffective assignments
+    - unused       # unused code detection
+
+    # Additional useful analyzers
+    - errcheck     # unchecked errors
+    - misspell     # spelling mistakes in comments
+    - unconvert    # unnecessary type conversions
+    - unparam      # unused function parameters
+    - nilnil       # returning nil,nil on error paths
+    - nilerr       # returning nil when err != nil
+    - copyloopvar  # loop variable copy issues
+    - intrange     # suggest integer range loops
+    - modernize    # suggests modern Go idioms
+    - exptostd     # detects x/exp functions replaceable by std
+
+  settings:
+    govet:
+      enable-all: true
+      disable:
+        - fieldalignment
+
+    staticcheck:
+      checks:
+        - all
+
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+
+  exclusions:
+    rules:
+      # Disable type assertion checks in test files - panics give clear errors anyway
+      - path: '_test\.go'
+        linters:
+          - errcheck
+        text: "Error return value is not checked"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - rugby
+
+issues:
+  uniq-by-line: false
