@@ -247,7 +247,7 @@ func (b *Builder) generateGoMod() string {
 
 go 1.25
 
-require %s v0.0.1
+require %s v0.0.2
 `, RuntimeModule)
 	}
 
@@ -273,7 +273,7 @@ require %s v0.0.1
 		if inRequireBlock && trimmed == ")" {
 			// Inject runtime before closing the require block
 			if !hasRuntimeDep {
-				out.WriteString(fmt.Sprintf("\t%s v0.0.1\n", RuntimeModule))
+				out.WriteString(fmt.Sprintf("\t%s v0.0.2\n", RuntimeModule))
 			}
 			inRequireBlock = false
 		}
@@ -286,12 +286,12 @@ require %s v0.0.1
 
 	// If no require block exists, add one with the runtime
 	if !hasRuntimeDep && !strings.Contains(result, "require") {
-		result += fmt.Sprintf("\nrequire %s v0.0.1\n", RuntimeModule)
+		result += fmt.Sprintf("\nrequire %s v0.0.2\n", RuntimeModule)
 	}
 
 	// Handle single-line require statement (require foo v1.0.0)
 	if !hasRuntimeDep && strings.Contains(result, "require ") && !strings.Contains(result, "require (") {
-		result += fmt.Sprintf("require %s v0.0.1\n", RuntimeModule)
+		result += fmt.Sprintf("require %s v0.0.2\n", RuntimeModule)
 	}
 
 	return result
