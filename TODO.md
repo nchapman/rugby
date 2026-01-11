@@ -11,7 +11,7 @@ Features in implementation order, building incrementally.
 - **Pure Blocks (5.4):** No `break`/`next` in blocks. `return` exits block only.
 - **Strict Calls (6.5):** Parentheses required for method calls (except properties).
 - **Interface Evolution (9):** `implements`, `any`, interface inheritance, `is_a?`, `as` (returns `T?`).
-- **Error Handling (15):** `error` type, postfix `!` propagation, `rescue` keyword, `raise` for panics.
+- **Error Handling (15):** `error` type, `error()` kernel function, postfix `!` propagation, `rescue` keyword, `panic` for unrecoverable errors.
 - **Strict `?` Suffix (10.3):** Methods ending in `?` must return `Bool`. No `to_i?`/`as?` patterns.
 
 ## Phase 16: Interface System Evolution (In Progress)
@@ -75,47 +75,49 @@ Features in implementation order, building incrementally.
 - [ ] **String Interpolation:** Ensure all interpolations compile to `fmt.Sprintf` (or `String()` calls).
 - [ ] **Range Constraints:** Restrict `Range` to `Int` only.
 
-## Phase 19: Error Handling
+## Phase 19: Error Handling ✓
 **Goal:** Implement Go-style error handling with ergonomic syntax sugar.
 
-### 19.1 Core Error Support
-- [ ] **`error` Type:** Map Rugby `error` to Go's `error` interface.
-- [ ] **Error Returns:** Support `-> error` and `-> (T, error)` return signatures.
-- [ ] **`nil` as No Error:** Allow `nil` as valid error value.
+### 19.1 Core Error Support ✓
+- [x] **`error` Type:** Map Rugby `error` to Go's `error` interface.
+- [x] **Error Returns:** Support `-> error` and `-> (T, error)` return signatures.
+- [x] **`nil` as No Error:** Allow `nil` as valid error value.
+- [x] **`error()` Kernel Function:** Create error values with `error("message")` - maps to `runtime.Error()`.
 
-### 19.2 Postfix Bang Operator (`!`)
-- [ ] **Lexer:** Add `BANG` token recognition for postfix `!` on call expressions.
-- [ ] **Parser:** Parse `call_expr!` as error propagation.
+### 19.2 Postfix Bang Operator (`!`) ✓
+- [x] **Lexer:** Add `BANG` token recognition for postfix `!` on call expressions.
+- [x] **Parser:** Parse `call_expr!` as error propagation.
   - Only valid on call expressions with parentheses.
   - `f!` is a method name, `f()!` is propagation.
-- [ ] **Codegen:** Lower `call!` to Go error check pattern:
+- [x] **Codegen:** Lower `call!` to Go error check pattern:
   ```go
   result, err := call()
   if err != nil { return <zero-values>, err }
   ```
-- [ ] **Enclosing Function Check:** Compile error if `!` used in function not returning `error`.
-- [ ] **Chained Calls:** Support `a()!.b()!.c()!` with sequential unwrapping.
+- [x] **Enclosing Function Check:** Compile error if `!` used in function not returning `error`.
+- [x] **Chained Calls:** Support `a()!.b()!.c()!` with sequential unwrapping.
 
-### 19.3 Script Mode / Main
-- [ ] **`runtime.Fatal`:** Implement `Fatal(err)` that prints to stderr and exits with code 1.
-- [ ] **Main Lowering:** In `def main` or top-level scripts, `call!` lowers to `runtime.Fatal(err)`.
+### 19.3 Script Mode / Main ✓
+- [x] **`runtime.Fatal`:** Implement `Fatal(err)` that prints to stderr and exits with code 1.
+- [x] **Main Lowering:** In `def main` or top-level scripts, `call!` lowers to `runtime.Fatal(err)`.
 
-### 19.4 Rescue Keyword
-- [ ] **Lexer:** Add `RESCUE` and `FATARROW` (`=>`) tokens.
-- [ ] **Parser:** Parse three forms:
+### 19.4 Rescue Keyword ✓
+- [x] **Lexer:** Add `RESCUE` and `FATARROW` (`=>`) tokens.
+- [x] **Parser:** Parse three forms:
   - Inline: `call() rescue default_expr`
   - Block: `call() rescue do ... end`
   - Block with binding: `call() rescue => err do ... end`
-- [ ] **Codegen:**
+- [x] **Codegen:**
   - Inline: `if err != nil { result = default }`
   - Block: `if err != nil { <block statements>; result = <last expr> }`
   - Binding: `if err != nil { err := err; <block> }`
-- [ ] **Mutual Exclusion:** Compile error if `!` and `rescue` both appear on same call.
+- [x] **Mutual Exclusion:** Compile error if `!` and `rescue` both appear on same call.
 
-### 19.5 Raise (Panics)
-- [ ] **Lexer:** Add `RAISE` token.
-- [ ] **Parser:** Parse `raise expr` as panic statement.
-- [ ] **Codegen:** Lower to `panic(expr)` or `panic(fmt.Sprintf(...))` for interpolated strings.
+### 19.5 Panic (Unrecoverable Errors) ✓
+- [x] **Lexer:** Add `PANIC` token (changed from `RAISE` for clarity).
+- [x] **Parser:** Parse `panic expr` as panic statement.
+- [x] **Codegen:** Lower to `panic(expr)` or `panic(fmt.Sprintf(...))` for interpolated strings.
+- **Note:** Renamed from `raise` to `panic` to avoid confusion with Ruby's catchable exceptions.
 
 ### 19.6 Error Utilities
 - [ ] **`error_is?(err, target)`:** Compile to `errors.Is(err, target)`, returns `Bool`.
@@ -131,6 +133,23 @@ Features in implementation order, building incrementally.
 ---
 
 ## Recently Completed
+
+### Error Handling (Phase 19)
+Complete Go-style error handling with Rugby-idiomatic syntax:
+- **`error` type:** Maps to Go's `error` interface for function returns
+- **`error()` kernel function:** Creates error values (`error("message")`) - no imports needed
+- **Postfix `!` operator:** Error propagation with context-aware behavior
+  - In error-returning functions: early return with zero values
+  - In `main`/scripts: calls `runtime.Fatal()` and exits
+  - Supports chained calls: `a()!.b()!.c()!`
+- **`rescue` keyword:** Inline error recovery with three forms:
+  - Inline default: `call() rescue default_value`
+  - Block: `call() rescue do ... end`
+  - Block with error binding: `call() rescue => err do ... end`
+- **`panic` statement:** For unrecoverable programmer errors (not `raise`)
+  - Renamed from `raise` to avoid confusion with Ruby's catchable exceptions
+  - Compiles directly to Go's `panic()`
+- **`runtime.Fatal()`:** Prints error to stderr and exits with status 1
 
 ### Strict Field Inference (Phase 17.1)
 - Parser now supports explicit field declarations (`@field : Type` in class body)
