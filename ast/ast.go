@@ -317,6 +317,16 @@ type TernaryExpr struct {
 func (t *TernaryExpr) node()     {}
 func (t *TernaryExpr) exprNode() {}
 
+// SymbolToProcExpr represents the &:method syntax
+// Converts a method name into a block/lambda that calls that method on its argument
+// Example: names.map(&:upcase) → names.map { |x| x.upcase }
+type SymbolToProcExpr struct {
+	Method string // the method name (without leading colon)
+}
+
+func (s *SymbolToProcExpr) node()     {}
+func (s *SymbolToProcExpr) exprNode() {}
+
 // SafeNavExpr represents the &. operator: expr&.method
 // Calls method only if expr is present, returns optional
 type SafeNavExpr struct {

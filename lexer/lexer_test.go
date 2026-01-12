@@ -1367,3 +1367,69 @@ func TestDoubleStarToken(t *testing.T) {
 		}
 	}
 }
+
+func TestAmpersandTokens(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []struct {
+			tokType token.TokenType
+			literal string
+		}
+	}{
+		// Symbol-to-proc: &:method
+		{
+			input: `&:upcase`,
+			expected: []struct {
+				tokType token.TokenType
+				literal string
+			}{
+				{token.AMP, "&"},
+				{token.SYMBOL, "upcase"},
+				{token.EOF, ""},
+			},
+		},
+		// Safe navigation: &.method
+		{
+			input: `x&.foo`,
+			expected: []struct {
+				tokType token.TokenType
+				literal string
+			}{
+				{token.IDENT, "x"},
+				{token.AMPDOT, "&."},
+				{token.IDENT, "foo"},
+				{token.EOF, ""},
+			},
+		},
+		// Standalone ampersand
+		{
+			input: `& x`,
+			expected: []struct {
+				tokType token.TokenType
+				literal string
+			}{
+				{token.AMP, "&"},
+				{token.IDENT, "x"},
+				{token.EOF, ""},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+
+		for i, exp := range tt.expected {
+			tok := l.NextToken()
+
+			if tok.Type != exp.tokType {
+				t.Errorf("input %q: tests[%d] - tokentype wrong. expected=%q, got=%q",
+					tt.input, i, exp.tokType, tok.Type)
+			}
+
+			if tok.Literal != exp.literal {
+				t.Errorf("input %q: tests[%d] - literal wrong. expected=%q, got=%q",
+					tt.input, i, exp.literal, tok.Literal)
+			}
+		}
+	}
+}

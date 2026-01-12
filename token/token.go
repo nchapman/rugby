@@ -46,6 +46,7 @@ const (
 	// Type modifiers and optional operators
 	QUESTION         TokenType = "?"
 	QUESTIONQUESTION TokenType = "??"
+	AMP              TokenType = "&"
 	AMPDOT           TokenType = "&."
 
 	// Delimiters

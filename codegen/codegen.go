@@ -2304,6 +2304,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genSpawnExpr(e)
 	case *ast.AwaitExpr:
 		g.genAwaitExpr(e)
+	case *ast.SymbolToProcExpr:
+		g.genSymbolToProcExpr(e)
 	}
 }
 
@@ -2550,6 +2552,16 @@ func (g *Generator) genTernaryExpr(e *ast.TernaryExpr) {
 	g.buf.WriteString(" } else { return ")
 	g.genExpr(e.Else)
 	g.buf.WriteString(" } }()")
+}
+
+// genSymbolToProcExpr generates code for the &:method syntax.
+// Generates: func(x any) any { return runtime.CallMethod(x, "method") }
+// This creates a closure that calls the named method on its argument.
+func (g *Generator) genSymbolToProcExpr(e *ast.SymbolToProcExpr) {
+	g.needsRuntime = true
+	g.buf.WriteString("func(x any) any { return runtime.CallMethod(x, \"")
+	g.buf.WriteString(e.Method)
+	g.buf.WriteString("\") }")
 }
 
 // genSafeNavExpr generates code for the &. operator: x&.method
@@ -2841,6 +2853,19 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 	if call.Block != nil {
 		g.genBlockCall(call)
 		return
+	}
+
+	// Check if this is a block method with symbol-to-proc argument
+	// e.g., names.map(&:upcase) -> runtime.Map(names, func(x any) any { ... })
+	if sel, ok := call.Func.(*ast.SelectorExpr); ok {
+		if bm, isBlockMethod := blockMethods[sel.Sel]; isBlockMethod {
+			if len(call.Args) >= 1 {
+				if stp, ok := call.Args[0].(*ast.SymbolToProcExpr); ok {
+					g.genSymbolToProcBlockCall(sel.X, stp, bm)
+					return
+				}
+			}
+		}
 	}
 
 	// Check for assert.* and require.* calls (test assertions)
@@ -3497,6 +3522,24 @@ func (g *Generator) genScopedSpawnBlock(scope ast.Expression, block *ast.BlockEx
 
 	g.writeIndent()
 	g.buf.WriteString("})")
+}
+
+// genSymbolToProcBlockCall generates code for block methods called with symbol-to-proc.
+// e.g., names.map(&:upcase) -> runtime.Map(names, func(x any) (any, bool, bool) { return runtime.CallMethod(x, "upcase"), true, true })
+func (g *Generator) genSymbolToProcBlockCall(iterable ast.Expression, stp *ast.SymbolToProcExpr, method blockMethod) {
+	g.needsRuntime = true
+
+	// Generate: runtime.Method(iterable, func(x any) (returnType, bool, bool) { return runtime.CallMethod(x, "method"), true, true })
+	g.buf.WriteString(method.runtimeFunc)
+	g.buf.WriteString("(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", func(x any) (")
+	g.buf.WriteString(method.returnType)
+	g.buf.WriteString(", bool, bool) { return runtime.CallMethod(x, \"")
+	g.buf.WriteString(stp.Method)
+	g.buf.WriteString("\").(")
+	g.buf.WriteString(method.returnType)
+	g.buf.WriteString("), true, true })")
 }
 
 // genRuntimeBlock generates runtime block calls (map, select, reject, reduce, find)

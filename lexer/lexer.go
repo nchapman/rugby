@@ -257,7 +257,7 @@ func (l *Lexer) NextToken() token.Token {
 			l.readChar()
 			tok = l.newToken(token.AMPDOT, "&.")
 		} else {
-			tok = l.newToken(token.ILLEGAL, string(l.ch))
+			tok = l.newToken(token.AMP, "&")
 		}
 	case '=':
 		if l.peekChar() == '=' {

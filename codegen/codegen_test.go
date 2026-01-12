@@ -676,6 +676,40 @@ end`
 	assertContains(t, output, `runtime.Slice(s, runtime.Range{Start: 1, End: 3, Exclusive: false})`)
 }
 
+func TestGenerateSymbolToProc(t *testing.T) {
+	input := `def main
+  x = &:upcase
+end`
+
+	output := compile(t, input)
+
+	// Symbol-to-proc generates a closure that calls the method
+	assertContains(t, output, `func(x any) any { return runtime.CallMethod(x, "upcase") }`)
+}
+
+func TestGenerateSymbolToProcWithMap(t *testing.T) {
+	input := `def main
+  result = names.map(&:upcase)
+end`
+
+	output := compile(t, input)
+
+	// When passed to map, symbol-to-proc becomes a runtime.Map call with CallMethod
+	assertContains(t, output, `runtime.Map(names, func(x any)`)
+	assertContains(t, output, `runtime.CallMethod(x, "upcase")`)
+}
+
+func TestGenerateSymbolToProcSnakeCase(t *testing.T) {
+	input := `def main
+  x = &:to_upper
+end`
+
+	output := compile(t, input)
+
+	// Preserves snake_case - runtime.CallMethod handles conversion
+	assertContains(t, output, `runtime.CallMethod(x, "to_upper")`)
+}
+
 func TestGenerateChainedArrayIndex(t *testing.T) {
 	input := `def main
   x = matrix[0][1]

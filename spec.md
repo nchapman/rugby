@@ -936,6 +936,25 @@ runtime.Each(items, func(x any) {
 })
 ```
 
+**Symbol-to-Proc (`&:method`):**
+
+The symbol-to-proc shorthand converts a method name into a block that calls that method:
+
+```ruby
+names.map(&:upcase)       # Equivalent to: names.map { |x| x.upcase }
+users.select(&:active?)   # Equivalent to: users.select { |u| u.active? }
+```
+
+This compiles to a closure that uses reflection to call the named method:
+
+```go
+runtime.Map(names, func(x any) any {
+    return runtime.CallMethod(x, "upcase")
+})
+```
+
+The method name is converted from Ruby-style (`snake_case`, `predicate?`) to Go-style (`PascalCase`, `Predicate_PRED`) at runtime.
+
 ### 5.5 Statement Modifiers
 
 Rugby supports suffix `if` and `unless` modifiers for concise control flow.

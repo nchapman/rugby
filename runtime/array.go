@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"slices"
 	"strings"
+	"unicode"
 )
 
 // Each iterates over a slice, calling the function for each element.
@@ -725,4 +726,73 @@ func normalizeRangeIndices(start, end, length int, exclusive bool) (int, int) {
 	}
 
 	return start, end
+}
+
+// CallMethod calls a method on an object by name using reflection.
+// Used by symbol-to-proc (&:method) syntax.
+// Returns the method's return value, or panics if the method doesn't exist.
+func CallMethod(obj any, methodName string) any {
+	// Handle nil receiver
+	if obj == nil {
+		panic(fmt.Sprintf("CallMethod: cannot call %q on nil", methodName))
+	}
+
+	val := reflect.ValueOf(obj)
+
+	// Try to find the method on the value
+	method := val.MethodByName(toGoMethodName(methodName))
+	if !method.IsValid() {
+		// Try pointer receiver
+		if val.Kind() != reflect.Ptr && val.CanAddr() {
+			method = val.Addr().MethodByName(toGoMethodName(methodName))
+		}
+	}
+
+	if !method.IsValid() {
+		panic(fmt.Sprintf("CallMethod: method %q not found on %T", methodName, obj))
+	}
+
+	// Call the method with no arguments
+	results := method.Call(nil)
+
+	// Return the first result, or nil if no return values
+	if len(results) == 0 {
+		return nil
+	}
+	return results[0].Interface()
+}
+
+// toGoMethodName converts a Ruby-style method name to Go-style.
+// Examples: upcase -> Upcase, to_s -> ToS, empty? -> Empty_PRED
+func toGoMethodName(name string) string {
+	if len(name) == 0 {
+		return ""
+	}
+
+	// Handle predicate methods (ending in ?)
+	isPredicate := false
+	if name[len(name)-1] == '?' {
+		isPredicate = true
+		name = name[:len(name)-1]
+	}
+
+	// Convert snake_case to PascalCase
+	var result strings.Builder
+	capitalizeNext := true
+	for _, r := range name {
+		if r == '_' {
+			capitalizeNext = true
+		} else if capitalizeNext {
+			result.WriteRune(unicode.ToUpper(r))
+			capitalizeNext = false
+		} else {
+			result.WriteRune(r)
+		}
+	}
+
+	if isPredicate {
+		result.WriteString("_PRED")
+	}
+
+	return result.String()
 }

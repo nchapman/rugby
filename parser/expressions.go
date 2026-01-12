@@ -48,6 +48,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseSpawnExpr()
 	case token.AWAIT:
 		left = p.parseAwaitExpr()
+	case token.AMP:
+		left = p.parseSymbolToProc()
 	default:
 		return nil
 	}
@@ -464,6 +466,21 @@ func (p *Parser) parseAwaitExpr() ast.Expression {
 	}
 
 	return &ast.AwaitExpr{Task: task, Line: line}
+}
+
+// parseSymbolToProc parses the &:method syntax for symbol-to-proc conversion.
+// Example: &:upcase → creates a block/lambda that calls upcase on its argument
+func (p *Parser) parseSymbolToProc() ast.Expression {
+	// curToken is '&'
+	p.nextToken() // move to the symbol token
+
+	if !p.curTokenIs(token.SYMBOL) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected symbol after '&' (e.g., &:method)")
+		return nil
+	}
+
+	// Symbol token literal is just the method name (lexer strips the colon)
+	return &ast.SymbolToProcExpr{Method: p.curToken.Literal}
 }
 
 // isCallableExpr returns true if the expression can be called with command syntax.

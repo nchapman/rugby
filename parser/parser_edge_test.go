@@ -666,3 +666,67 @@ end`
 		t.Errorf("expected condition 'empty?', got %q", cond.Name)
 	}
 }
+
+func TestSymbolToProcParsing(t *testing.T) {
+	input := `def main
+  x = &:upcase
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assignStmt, ok := decl.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", decl.Body[0])
+	}
+	stp, ok := assignStmt.Value.(*ast.SymbolToProcExpr)
+	if !ok {
+		t.Fatalf("expected SymbolToProcExpr, got %T", assignStmt.Value)
+	}
+
+	if stp.Method != "upcase" {
+		t.Errorf("expected method 'upcase', got %q", stp.Method)
+	}
+}
+
+func TestSymbolToProcAsArgument(t *testing.T) {
+	input := `def main
+  result = names.map(&:upcase)
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assignStmt, ok := decl.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", decl.Body[0])
+	}
+
+	call, ok := assignStmt.Value.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", assignStmt.Value)
+	}
+
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 argument, got %d", len(call.Args))
+	}
+
+	stp, ok := call.Args[0].(*ast.SymbolToProcExpr)
+	if !ok {
+		t.Fatalf("expected SymbolToProcExpr argument, got %T", call.Args[0])
+	}
+
+	if stp.Method != "upcase" {
+		t.Errorf("expected method 'upcase', got %q", stp.Method)
+	}
+}

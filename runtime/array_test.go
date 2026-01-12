@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -886,5 +887,71 @@ func TestSliceUnicodeString(t *testing.T) {
 	result2 := Slice(str, Range{Start: 1, End: 1, Exclusive: false}).(string)
 	if result2 != "é" {
 		t.Errorf("Slice single Unicode char = %q; want \"é\"", result2)
+	}
+}
+
+// Helper type for testing CallMethod
+type testStringer struct {
+	value string
+}
+
+func (t testStringer) Upcase() string {
+	return strings.ToUpper(t.value)
+}
+
+func (t testStringer) Length() int {
+	return len(t.value)
+}
+
+func TestCallMethodBasic(t *testing.T) {
+	obj := testStringer{value: "hello"}
+
+	// Call Upcase method
+	result := CallMethod(obj, "upcase").(string)
+	if result != "HELLO" {
+		t.Errorf("CallMethod(obj, 'upcase') = %q; want \"HELLO\"", result)
+	}
+
+	// Call Length method
+	length := CallMethod(obj, "length").(int)
+	if length != 5 {
+		t.Errorf("CallMethod(obj, 'length') = %d; want 5", length)
+	}
+}
+
+func TestCallMethodSnakeCase(t *testing.T) {
+	// toGoMethodName should convert snake_case to PascalCase
+	name := toGoMethodName("to_upper")
+	if name != "ToUpper" {
+		t.Errorf("toGoMethodName('to_upper') = %q; want \"ToUpper\"", name)
+	}
+
+	name2 := toGoMethodName("get_user_id")
+	if name2 != "GetUserId" {
+		t.Errorf("toGoMethodName('get_user_id') = %q; want \"GetUserId\"", name2)
+	}
+}
+
+func TestCallMethodPredicates(t *testing.T) {
+	// Test predicate method naming (empty? -> Empty_PRED)
+	name := toGoMethodName("empty?")
+	if name != "Empty_PRED" {
+		t.Errorf("toGoMethodName('empty?') = %q; want \"Empty_PRED\"", name)
+	}
+}
+
+func TestCallMethodWithMapIntegration(t *testing.T) {
+	// Test symbol-to-proc with Map - simulates names.map(&:upcase)
+	names := []any{
+		testStringer{value: "alice"},
+		testStringer{value: "bob"},
+	}
+
+	result := Map(names, func(x any) (any, bool, bool) {
+		return CallMethod(x, "upcase"), true, true
+	})
+
+	if result[0] != "ALICE" || result[1] != "BOB" {
+		t.Errorf("Map with CallMethod = %v; want [ALICE, BOB]", result)
 	}
 }
