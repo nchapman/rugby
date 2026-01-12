@@ -1433,3 +1433,153 @@ func TestAmpersandTokens(t *testing.T) {
 		}
 	}
 }
+
+func TestHeredoc(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name: "basic heredoc",
+			input: `x = <<END
+hello
+world
+END`,
+			expected: "hello\nworld",
+		},
+		{
+			name: "heredoc with indented content",
+			input: `x = <<END
+  hello
+    world
+END`,
+			expected: "  hello\n    world",
+		},
+		{
+			name: "heredoc with dashes allows indented end",
+			input: `x = <<-END
+hello
+world
+  END`,
+			expected: "hello\nworld",
+		},
+		{
+			name: "squiggly heredoc strips leading whitespace",
+			input: `x = <<~END
+    hello
+    world
+  END`,
+			expected: "hello\nworld",
+		},
+		{
+			name: "squiggly heredoc with varying indent",
+			input: `x = <<~END
+    first
+      second
+    third
+  END`,
+			expected: "first\n  second\nthird",
+		},
+		{
+			name: "heredoc with empty lines",
+			input: `x = <<END
+hello
+
+world
+END`,
+			expected: "hello\n\nworld",
+		},
+		{
+			name: "heredoc with underscore delimiter",
+			input: `x = <<END_TEXT
+content
+END_TEXT`,
+			expected: "content",
+		},
+		{
+			name: "empty heredoc",
+			input: `x = <<END
+END`,
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := New(tt.input)
+
+			// Skip to HEREDOC token
+			for {
+				tok := l.NextToken()
+				if tok.Type == token.HEREDOC {
+					if tok.Literal != tt.expected {
+						t.Errorf("heredoc literal wrong.\nexpected:\n%q\ngot:\n%q",
+							tt.expected, tok.Literal)
+					}
+					return
+				}
+				if tok.Type == token.EOF {
+					t.Fatalf("did not find HEREDOC token")
+				}
+			}
+		})
+	}
+}
+
+func TestUnterminatedHeredoc(t *testing.T) {
+	input := `x = <<END
+hello world
+no closing delimiter`
+
+	l := New(input)
+
+	// Skip to HEREDOC/ILLEGAL token
+	for {
+		tok := l.NextToken()
+		if tok.Type == token.HEREDOC {
+			t.Fatalf("expected ILLEGAL token for unterminated heredoc, got HEREDOC")
+		}
+		if tok.Type == token.ILLEGAL {
+			if tok.Literal != "unterminated heredoc: missing END" {
+				t.Errorf("wrong error message: %q", tok.Literal)
+			}
+			return
+		}
+		if tok.Type == token.EOF {
+			t.Fatalf("did not find ILLEGAL token for unterminated heredoc")
+		}
+	}
+}
+
+func TestHeredocVsShovelLeft(t *testing.T) {
+	// Ensure << followed by non-identifier is still SHOVELLEFT for array append
+	tests := []struct {
+		input    string
+		expected []token.TokenType
+	}{
+		{
+			input:    `arr << 1`,
+			expected: []token.TokenType{token.IDENT, token.SHOVELLEFT, token.INT, token.EOF},
+		},
+		{
+			input:    `arr << "hello"`,
+			expected: []token.TokenType{token.IDENT, token.SHOVELLEFT, token.STRING, token.EOF},
+		},
+		{
+			input:    `arr<<1`,
+			expected: []token.TokenType{token.IDENT, token.SHOVELLEFT, token.INT, token.EOF},
+		},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		for i, exp := range tt.expected {
+			tok := l.NextToken()
+			if tok.Type != exp {
+				t.Errorf("input %q: token[%d] wrong. expected=%q, got=%q",
+					tt.input, i, exp, tok.Type)
+			}
+		}
+	}
+}

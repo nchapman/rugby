@@ -18,7 +18,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseIntLiteral()
 	case token.FLOAT:
 		left = p.parseFloatLiteral()
-	case token.STRING:
+	case token.STRING, token.HEREDOC:
 		left = p.parseStringLiteral()
 	case token.TRUE, token.FALSE:
 		left = p.parseBoolLiteral()
@@ -505,7 +505,7 @@ func (p *Parser) canStartCommandArg() bool {
 
 	switch t {
 	// Literals and identifiers
-	case token.IDENT, token.INT, token.FLOAT, token.STRING, token.SYMBOL,
+	case token.IDENT, token.INT, token.FLOAT, token.STRING, token.HEREDOC, token.SYMBOL,
 		token.TRUE, token.FALSE, token.NIL, token.SELF:
 		return true
 	// Grouping and collection literals (not LBRACE - that's handled as a block)

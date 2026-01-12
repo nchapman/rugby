@@ -282,7 +282,22 @@ func (l *Lexer) NextToken() token.Token {
 			tok = l.newToken(token.LE, "<=")
 		} else if l.peekChar() == '<' {
 			l.readChar()
-			tok = l.newToken(token.SHOVELLEFT, "<<")
+			// Check for heredoc: <<IDENT, <<-IDENT, or <<~IDENT
+			nextChar := l.peekChar()
+			if isLetter(nextChar) || nextChar == '_' {
+				return l.readHeredoc(false, false)
+			} else if nextChar == '-' || nextChar == '~' {
+				stripIndent := nextChar == '~'
+				l.readChar() // consume - or ~
+				if isLetter(l.peekChar()) || l.peekChar() == '_' {
+					return l.readHeredoc(true, stripIndent)
+				}
+				// Not a heredoc, was just <<- or <<~ without identifier
+				// This is an error case, but we'll let parser handle it
+				tok = l.newToken(token.SHOVELLEFT, "<<")
+			} else {
+				tok = l.newToken(token.SHOVELLEFT, "<<")
+			}
 		} else {
 			tok = l.newToken(token.LT, "<")
 		}
@@ -360,6 +375,147 @@ func (l *Lexer) readString() string {
 	}
 	l.readChar() // skip closing quote
 	return string(out)
+}
+
+// readHeredoc reads a heredoc string literal.
+// allowIndentedEnd: true for <<- and <<~ syntax (closing delimiter can be indented)
+// stripIndent: true for <<~ syntax (strips common leading whitespace from content)
+func (l *Lexer) readHeredoc(allowIndentedEnd bool, stripIndent bool) token.Token {
+	line := l.line
+	col := l.column
+
+	// Read the delimiter identifier
+	l.readChar() // move to start of identifier
+	delimStart := l.pos
+	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
+		l.readChar()
+	}
+	delimiter := l.input[delimStart:l.pos]
+
+	// Skip to end of current line (heredoc content starts on next line)
+	for l.ch != '\n' && l.ch != 0 {
+		l.readChar()
+	}
+
+	// Read heredoc content
+	var content strings.Builder
+	foundDelimiter := false
+	for l.ch != 0 {
+		l.readChar() // move past newline to start of new line
+		l.line++
+		l.column = 1
+
+		// Check if this line starts with (optionally indented) delimiter
+		lineStart := l.pos
+
+		// Skip leading whitespace for indented end check
+		if allowIndentedEnd {
+			for l.ch == ' ' || l.ch == '\t' {
+				l.readChar()
+			}
+		}
+
+		// Check if we've reached the delimiter
+		delimMatch := true
+		for i := 0; i < len(delimiter) && l.ch != 0; i++ {
+			if l.ch != delimiter[i] {
+				delimMatch = false
+				break
+			}
+			l.readChar()
+		}
+
+		// Verify delimiter is followed by newline or EOF
+		if delimMatch && (l.ch == '\n' || l.ch == 0 || l.ch == '\r') {
+			foundDelimiter = true
+			break
+		}
+
+		// Not the delimiter, rewind and read the line as content
+		l.pos = lineStart
+		l.readPos = lineStart + 1
+		if lineStart < len(l.input) {
+			l.ch = l.input[lineStart]
+		}
+
+		// Read the entire line
+		for l.ch != '\n' && l.ch != 0 {
+			content.WriteByte(l.ch)
+			l.readChar()
+		}
+		content.WriteByte('\n')
+	}
+
+	// Check for unterminated heredoc
+	if !foundDelimiter {
+		return token.Token{
+			Type:    token.ILLEGAL,
+			Literal: "unterminated heredoc: missing " + delimiter,
+			Line:    line,
+			Column:  col,
+		}
+	}
+
+	result := content.String()
+
+	// Remove trailing newline
+	if len(result) > 0 && result[len(result)-1] == '\n' {
+		result = result[:len(result)-1]
+	}
+
+	// Strip common leading whitespace for <<~ heredocs
+	if stripIndent && len(result) > 0 {
+		result = stripLeadingWhitespace(result)
+	}
+
+	return token.Token{
+		Type:    token.HEREDOC,
+		Literal: result,
+		Line:    line,
+		Column:  col,
+	}
+}
+
+// stripLeadingWhitespace removes common leading whitespace from heredoc content.
+func stripLeadingWhitespace(s string) string {
+	lines := strings.Split(s, "\n")
+
+	// Find minimum indentation (ignoring empty lines)
+	minIndent := -1
+	for _, line := range lines {
+		if len(line) == 0 {
+			continue
+		}
+		indent := 0
+		for _, ch := range line {
+			if ch == ' ' || ch == '\t' {
+				indent++
+			} else {
+				break
+			}
+		}
+		if minIndent == -1 || indent < minIndent {
+			minIndent = indent
+		}
+	}
+
+	if minIndent <= 0 {
+		return s
+	}
+
+	// Strip the common indentation
+	var result strings.Builder
+	for i, line := range lines {
+		if i > 0 {
+			result.WriteByte('\n')
+		}
+		if len(line) >= minIndent {
+			result.WriteString(line[minIndent:])
+		} else {
+			result.WriteString(line)
+		}
+	}
+	return result.String()
 }
 
 func (l *Lexer) readNumber() token.Token {

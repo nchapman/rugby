@@ -4231,3 +4231,65 @@ end`
 	assertContains(t, output, `"explicit": 1`)
 	assertContains(t, output, `"short": 2`)
 }
+
+func TestHeredocBasic(t *testing.T) {
+	input := `def main
+  text = <<END
+hello
+world
+END
+  puts text
+end`
+
+	output := compile(t, input)
+
+	// Should generate a multi-line string with explicit newlines
+	assertContains(t, output, `"hello\nworld"`)
+}
+
+func TestHeredocIndented(t *testing.T) {
+	input := `def main
+  text = <<-END
+first line
+second line
+    END
+  puts text
+end`
+
+	output := compile(t, input)
+
+	// <<- allows indented closing delimiter but preserves content indentation
+	assertContains(t, output, `"first line\nsecond line"`)
+}
+
+func TestHeredocSquiggly(t *testing.T) {
+	input := `def main
+  text = <<~SQL
+    SELECT *
+    FROM users
+    WHERE id = 1
+  SQL
+  puts text
+end`
+
+	output := compile(t, input)
+
+	// <<~ strips common leading whitespace
+	assertContains(t, output, `"SELECT *\nFROM users\nWHERE id = 1"`)
+}
+
+func TestHeredocInterpolation(t *testing.T) {
+	input := `def main
+  name = "Alice"
+  text = <<END
+Hello #{name}!
+END
+  puts text
+end`
+
+	output := compile(t, input)
+
+	// Heredocs with interpolation should use fmt.Sprintf
+	assertContains(t, output, `fmt.Sprintf`)
+	assertContains(t, output, `name`)
+}

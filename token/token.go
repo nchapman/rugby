@@ -12,6 +12,7 @@ const (
 	// Literals
 	IDENT        TokenType = "IDENT"
 	STRING       TokenType = "STRING"
+	HEREDOC      TokenType = "HEREDOC" // <<END...END multi-line string
 	INT          TokenType = "INT"
 	FLOAT        TokenType = "FLOAT"
 	SYMBOL       TokenType = "SYMBOL"
