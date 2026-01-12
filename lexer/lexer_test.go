@@ -1282,3 +1282,87 @@ func TestSpaceBefore(t *testing.T) {
 		})
 	}
 }
+
+func TestWordArrayLiteral(t *testing.T) {
+	tests := []struct {
+		input   string
+		tokType token.TokenType
+		literal string
+	}{
+		// Basic word arrays with different delimiters
+		{`%w{foo bar baz}`, token.WORDARRAY, "foo\x00bar\x00baz"},
+		{`%w(one two three)`, token.WORDARRAY, "one\x00two\x00three"},
+		{`%w[a b c]`, token.WORDARRAY, "a\x00b\x00c"},
+		{`%w<x y z>`, token.WORDARRAY, "x\x00y\x00z"},
+		{`%w|hello world|`, token.WORDARRAY, "hello\x00world"},
+		{`%w{}`, token.WORDARRAY, ""},
+		{`%W{foo bar}`, token.INTERPWARRAY, "foo\x00bar"},
+
+		// Escape sequences
+		{`%w{hello\ world}`, token.WORDARRAY, "hello world"},    // escaped space keeps words together
+		{`%w{a\nb}`, token.WORDARRAY, "a\nb"},                   // escaped newline in word
+		{`%w{a\tb}`, token.WORDARRAY, "a\tb"},                   // escaped tab in word
+		{`%w{a\\b}`, token.WORDARRAY, "a\\b"},                   // escaped backslash
+		{`%w{a\}b}`, token.WORDARRAY, "a}b"},                    // escaped closing delimiter
+		{`%w(a\)b)`, token.WORDARRAY, "a)b"},                    // escaped closing paren
+		{`%w[a\]b]`, token.WORDARRAY, "a]b"},                    // escaped closing bracket
+		{`%w<a\>b>`, token.WORDARRAY, "a>b"},                    // escaped closing angle
+		{`%w|a\|b|`, token.WORDARRAY, "a|b"},                    // escaped pipe delimiter
+		{`%w{foo\ bar baz}`, token.WORDARRAY, "foo bar\x00baz"}, // escaped space creates one word
+
+		// Multiline word arrays
+		{"%w{foo\nbar\nbaz}", token.WORDARRAY, "foo\x00bar\x00baz"}, // newlines separate words
+		{"%w{foo\tbar}", token.WORDARRAY, "foo\x00bar"},             // tabs separate words
+		{"%w{  foo   bar  }", token.WORDARRAY, "foo\x00bar"},        // multiple spaces collapse
+
+		// Interpolation in %W arrays
+		{`%W{hello #{name} world}`, token.INTERPWARRAY, "hello\x00#{name}\x00world"},  // interpolation preserved
+		{`%W{#{a} #{b}}`, token.INTERPWARRAY, "#{a}\x00#{b}"},                         // multiple interpolations
+		{`%W{prefix#{x}suffix}`, token.INTERPWARRAY, "prefix#{x}suffix"},              // interpolation mid-word
+		{`%W{#{nested.call()} done}`, token.INTERPWARRAY, "#{nested.call()}\x00done"}, // complex expression
+		{`%W{#{a + b}}`, token.INTERPWARRAY, "#{a + b}"},                              // expression with spaces
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		tok := l.NextToken()
+
+		if tok.Type != tt.tokType {
+			t.Errorf("input %q: expected token type %q, got %q", tt.input, tt.tokType, tok.Type)
+		}
+		if tok.Literal != tt.literal {
+			t.Errorf("input %q: expected literal %q, got %q", tt.input, tt.literal, tok.Literal)
+		}
+	}
+}
+
+func TestDoubleStarToken(t *testing.T) {
+	input := `** * *= **`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.DOUBLESTAR, "**"},
+		{token.STAR, "*"},
+		{token.STARASSIGN, "*="},
+		{token.DOUBLESTAR, "**"},
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
+				i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}

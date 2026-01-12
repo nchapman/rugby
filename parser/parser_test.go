@@ -4815,3 +4815,389 @@ end`
 		t.Error("expected block on call")
 	}
 }
+
+func TestSymbolKeyShorthand(t *testing.T) {
+	input := `{name: "Alice", age: 30}`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	mapLit, ok := exprStmt.Expr.(*ast.MapLit)
+	if !ok {
+		t.Fatalf("expected MapLit, got %T", exprStmt.Expr)
+	}
+
+	if len(mapLit.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(mapLit.Entries))
+	}
+
+	// Check first entry: name: "Alice"
+	key1, ok := mapLit.Entries[0].Key.(*ast.StringLit)
+	if !ok || key1.Value != "name" {
+		t.Errorf("expected key 'name', got %v", mapLit.Entries[0].Key)
+	}
+	val1, ok := mapLit.Entries[0].Value.(*ast.StringLit)
+	if !ok || val1.Value != "Alice" {
+		t.Errorf("expected value 'Alice', got %v", mapLit.Entries[0].Value)
+	}
+
+	// Check second entry: age: 30
+	key2, ok := mapLit.Entries[1].Key.(*ast.StringLit)
+	if !ok || key2.Value != "age" {
+		t.Errorf("expected key 'age', got %v", mapLit.Entries[1].Key)
+	}
+	val2, ok := mapLit.Entries[1].Value.(*ast.IntLit)
+	if !ok || val2.Value != 30 {
+		t.Errorf("expected value 30, got %v", mapLit.Entries[1].Value)
+	}
+}
+
+func TestImplicitValueShorthand(t *testing.T) {
+	input := `{name:, age:}`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	mapLit, ok := exprStmt.Expr.(*ast.MapLit)
+	if !ok {
+		t.Fatalf("expected MapLit, got %T", exprStmt.Expr)
+	}
+
+	if len(mapLit.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(mapLit.Entries))
+	}
+
+	// First entry: name: name
+	key1, ok := mapLit.Entries[0].Key.(*ast.StringLit)
+	if !ok || key1.Value != "name" {
+		t.Errorf("expected key 'name', got %v", mapLit.Entries[0].Key)
+	}
+	val1, ok := mapLit.Entries[0].Value.(*ast.Ident)
+	if !ok || val1.Name != "name" {
+		t.Errorf("expected value ident 'name', got %v", mapLit.Entries[0].Value)
+	}
+
+	// Second entry: age: age
+	key2, ok := mapLit.Entries[1].Key.(*ast.StringLit)
+	if !ok || key2.Value != "age" {
+		t.Errorf("expected key 'age', got %v", mapLit.Entries[1].Key)
+	}
+	val2, ok := mapLit.Entries[1].Value.(*ast.Ident)
+	if !ok || val2.Name != "age" {
+		t.Errorf("expected value ident 'age', got %v", mapLit.Entries[1].Value)
+	}
+}
+
+func TestWordArrayLiteral(t *testing.T) {
+	input := `%w{foo bar baz}`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	arr, ok := exprStmt.Expr.(*ast.ArrayLit)
+	if !ok {
+		t.Fatalf("expected ArrayLit, got %T", exprStmt.Expr)
+	}
+
+	if len(arr.Elements) != 3 {
+		t.Fatalf("expected 3 elements, got %d", len(arr.Elements))
+	}
+
+	expected := []string{"foo", "bar", "baz"}
+	for i, elem := range arr.Elements {
+		strLit, ok := elem.(*ast.StringLit)
+		if !ok {
+			t.Errorf("element %d: expected StringLit, got %T", i, elem)
+			continue
+		}
+		if strLit.Value != expected[i] {
+			t.Errorf("element %d: expected %q, got %q", i, expected[i], strLit.Value)
+		}
+	}
+}
+
+func TestArraySplat(t *testing.T) {
+	input := `[1, *rest, 3]`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	arr, ok := exprStmt.Expr.(*ast.ArrayLit)
+	if !ok {
+		t.Fatalf("expected ArrayLit, got %T", exprStmt.Expr)
+	}
+
+	if len(arr.Elements) != 3 {
+		t.Fatalf("expected 3 elements, got %d", len(arr.Elements))
+	}
+
+	// First element: 1
+	_, ok = arr.Elements[0].(*ast.IntLit)
+	if !ok {
+		t.Errorf("element 0: expected IntLit, got %T", arr.Elements[0])
+	}
+
+	// Second element: *rest (SplatExpr)
+	splat, ok := arr.Elements[1].(*ast.SplatExpr)
+	if !ok {
+		t.Fatalf("element 1: expected SplatExpr, got %T", arr.Elements[1])
+	}
+	ident, ok := splat.Expr.(*ast.Ident)
+	if !ok || ident.Name != "rest" {
+		t.Errorf("splat expression: expected ident 'rest', got %v", splat.Expr)
+	}
+
+	// Third element: 3
+	_, ok = arr.Elements[2].(*ast.IntLit)
+	if !ok {
+		t.Errorf("element 2: expected IntLit, got %T", arr.Elements[2])
+	}
+}
+
+func TestMapDoubleSplat(t *testing.T) {
+	input := `{**defaults, name: "Alice"}`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	mapLit, ok := exprStmt.Expr.(*ast.MapLit)
+	if !ok {
+		t.Fatalf("expected MapLit, got %T", exprStmt.Expr)
+	}
+
+	if len(mapLit.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(mapLit.Entries))
+	}
+
+	// First entry: **defaults (splat)
+	if mapLit.Entries[0].Splat == nil {
+		t.Fatal("expected first entry to be a splat")
+	}
+	ident, ok := mapLit.Entries[0].Splat.(*ast.Ident)
+	if !ok || ident.Name != "defaults" {
+		t.Errorf("splat expression: expected ident 'defaults', got %v", mapLit.Entries[0].Splat)
+	}
+
+	// Second entry: name: "Alice"
+	if mapLit.Entries[1].Splat != nil {
+		t.Error("expected second entry to NOT be a splat")
+	}
+	key, ok := mapLit.Entries[1].Key.(*ast.StringLit)
+	if !ok || key.Value != "name" {
+		t.Errorf("expected key 'name', got %v", mapLit.Entries[1].Key)
+	}
+}
+
+func TestMixedMapSyntax(t *testing.T) {
+	// Test mixing hash rocket and symbol key shorthand
+	input := `{"explicit" => 1, short: 2}`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	mapLit, ok := exprStmt.Expr.(*ast.MapLit)
+	if !ok {
+		t.Fatalf("expected MapLit, got %T", exprStmt.Expr)
+	}
+
+	if len(mapLit.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(mapLit.Entries))
+	}
+
+	// First entry: "explicit" => 1 (hash rocket)
+	key1, ok := mapLit.Entries[0].Key.(*ast.StringLit)
+	if !ok || key1.Value != "explicit" {
+		t.Errorf("expected key 'explicit', got %v", mapLit.Entries[0].Key)
+	}
+
+	// Second entry: short: 2 (symbol key shorthand)
+	key2, ok := mapLit.Entries[1].Key.(*ast.StringLit)
+	if !ok || key2.Value != "short" {
+		t.Errorf("expected key 'short', got %v", mapLit.Entries[1].Key)
+	}
+}
+
+func TestInterpolatedWordArray(t *testing.T) {
+	input := `%W{hello #{name} world}`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	arr, ok := exprStmt.Expr.(*ast.ArrayLit)
+	if !ok {
+		t.Fatalf("expected ArrayLit, got %T", exprStmt.Expr)
+	}
+
+	if len(arr.Elements) != 3 {
+		t.Fatalf("expected 3 elements, got %d", len(arr.Elements))
+	}
+
+	// First element: "hello" (plain string)
+	str1, ok := arr.Elements[0].(*ast.StringLit)
+	if !ok || str1.Value != "hello" {
+		t.Errorf("element 0: expected StringLit 'hello', got %T %v", arr.Elements[0], arr.Elements[0])
+	}
+
+	// Second element: interpolated string with #{name}
+	interp, ok := arr.Elements[1].(*ast.InterpolatedString)
+	if !ok {
+		t.Errorf("element 1: expected InterpolatedString, got %T", arr.Elements[1])
+	} else if len(interp.Parts) != 1 {
+		t.Errorf("element 1: expected 1 part in interpolation, got %d", len(interp.Parts))
+	}
+
+	// Third element: "world" (plain string)
+	str3, ok := arr.Elements[2].(*ast.StringLit)
+	if !ok || str3.Value != "world" {
+		t.Errorf("element 2: expected StringLit 'world', got %T %v", arr.Elements[2], arr.Elements[2])
+	}
+}
+
+func TestArraySplatAtEdges(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		numElems int
+	}{
+		{"splat only", "[*items]", 1},
+		{"splat at start", "[*first, 2, 3]", 3},
+		{"splat at end", "[1, 2, *last]", 3},
+		{"multiple splats", "[*a, middle, *b]", 3},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := lexer.New(tt.input)
+			p := New(l)
+			program := p.ParseProgram()
+			checkParserErrors(t, p)
+
+			exprStmt := program.Declarations[0].(*ast.ExprStmt)
+			arr, ok := exprStmt.Expr.(*ast.ArrayLit)
+			if !ok {
+				t.Fatalf("expected ArrayLit, got %T", exprStmt.Expr)
+			}
+
+			if len(arr.Elements) != tt.numElems {
+				t.Errorf("expected %d elements, got %d", tt.numElems, len(arr.Elements))
+			}
+		})
+	}
+}
+
+func TestSplatWithExpression(t *testing.T) {
+	// Splat with method call, not just identifier
+	input := `[*get_items(), 1]`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	arr, ok := exprStmt.Expr.(*ast.ArrayLit)
+	if !ok {
+		t.Fatalf("expected ArrayLit, got %T", exprStmt.Expr)
+	}
+
+	splat, ok := arr.Elements[0].(*ast.SplatExpr)
+	if !ok {
+		t.Fatalf("expected SplatExpr, got %T", arr.Elements[0])
+	}
+
+	// The splat should contain a call expression
+	_, ok = splat.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Errorf("expected CallExpr inside splat, got %T", splat.Expr)
+	}
+}
+
+func TestMultipleDoubleSplats(t *testing.T) {
+	input := `{**defaults, **overrides, final: 1}`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	mapLit, ok := exprStmt.Expr.(*ast.MapLit)
+	if !ok {
+		t.Fatalf("expected MapLit, got %T", exprStmt.Expr)
+	}
+
+	if len(mapLit.Entries) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(mapLit.Entries))
+	}
+
+	// First two should be splats
+	if mapLit.Entries[0].Splat == nil {
+		t.Error("expected entry 0 to be a splat")
+	}
+	if mapLit.Entries[1].Splat == nil {
+		t.Error("expected entry 1 to be a splat")
+	}
+	// Third should be regular entry
+	if mapLit.Entries[2].Splat != nil {
+		t.Error("expected entry 2 to NOT be a splat")
+	}
+}
+
+func TestSymbolShorthandTrailingComma(t *testing.T) {
+	input := `{name: "test", age: 30,}`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	mapLit, ok := exprStmt.Expr.(*ast.MapLit)
+	if !ok {
+		t.Fatalf("expected MapLit, got %T", exprStmt.Expr)
+	}
+
+	if len(mapLit.Entries) != 2 {
+		t.Errorf("expected 2 entries (trailing comma should be allowed), got %d", len(mapLit.Entries))
+	}
+}
+
+func TestArraySplatTrailingComma(t *testing.T) {
+	input := `[1, *rest,]`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	arr, ok := exprStmt.Expr.(*ast.ArrayLit)
+	if !ok {
+		t.Fatalf("expected ArrayLit, got %T", exprStmt.Expr)
+	}
+
+	if len(arr.Elements) != 2 {
+		t.Errorf("expected 2 elements (trailing comma should be allowed), got %d", len(arr.Elements))
+	}
+}

@@ -132,7 +132,38 @@ func (p *Parser) parseSymbolLiteral() ast.Expression {
 	return &ast.SymbolLit{Value: p.curToken.Literal}
 }
 
+// parseWordArray parses a %w{...} or %W{...} word array literal.
+// The lexer stores words separated by \x00 in the token literal.
+// If isInterpolated is true, each word may contain #{} interpolation.
+func (p *Parser) parseWordArray(isInterpolated bool) ast.Expression {
+	arr := &ast.ArrayLit{}
+	literal := p.curToken.Literal
+
+	// Empty word array
+	if literal == "" {
+		return arr
+	}
+
+	// Split words by null byte separator
+	for word := range strings.SplitSeq(literal, "\x00") {
+		if word == "" {
+			continue
+		}
+
+		if isInterpolated && strings.Contains(word, "#{") {
+			// Parse as interpolated string
+			elem := p.parseInterpolatedString(word)
+			arr.Elements = append(arr.Elements, elem)
+		} else {
+			arr.Elements = append(arr.Elements, &ast.StringLit{Value: word})
+		}
+	}
+
+	return arr
+}
+
 // parseArrayLiteral parses an array literal [a, b, c].
+// Supports splat operator: [1, *rest, 3]
 func (p *Parser) parseArrayLiteral() ast.Expression {
 	arr := &ast.ArrayLit{}
 
@@ -143,8 +174,8 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 		return arr
 	}
 
-	// Parse first element
-	elem := p.parseExpression(lowest)
+	// Parse first element (may be splat)
+	elem := p.parseArrayElement()
 	if elem == nil {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected expression in array literal")
 		return nil
@@ -161,7 +192,7 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 			return arr
 		}
 
-		elem := p.parseExpression(lowest)
+		elem := p.parseArrayElement()
 		if elem == nil {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected expression after comma in array literal")
 			return nil
@@ -180,7 +211,23 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 	return arr
 }
 
+// parseArrayElement parses a single array element, which may be a splat.
+func (p *Parser) parseArrayElement() ast.Expression {
+	// Check for splat: *expr
+	if p.curTokenIs(token.STAR) {
+		p.nextToken() // consume '*'
+		expr := p.parseExpression(lowest)
+		if expr == nil {
+			return nil
+		}
+		return &ast.SplatExpr{Expr: expr}
+	}
+
+	return p.parseExpression(lowest)
+}
+
 // parseMapLiteral parses a map literal {a => b, c => d}.
+// Supports double splat: {**defaults, key: value}
 func (p *Parser) parseMapLiteral() ast.Expression {
 	mapLit := &ast.MapLit{}
 
@@ -191,7 +238,7 @@ func (p *Parser) parseMapLiteral() ast.Expression {
 		return mapLit
 	}
 
-	// Parse first entry
+	// Parse first entry (may be double splat)
 	entry, ok := p.parseMapEntry()
 	if !ok {
 		return nil
@@ -226,8 +273,50 @@ func (p *Parser) parseMapLiteral() ast.Expression {
 	return mapLit
 }
 
-// parseMapEntry parses a single key => value entry in a map literal.
+// parseMapEntry parses a single key => value or key: value entry in a map literal.
+// Supports four forms:
+//   - Hash rocket: "key" => value
+//   - Symbol key shorthand: key: value (key becomes string)
+//   - Implicit value shorthand: key: (key becomes both string key and variable value)
+//   - Double splat: **expr (spreads a map into the literal)
 func (p *Parser) parseMapEntry() (ast.MapEntry, bool) {
+	// Check for double splat: **expr
+	if p.curTokenIs(token.DOUBLESTAR) {
+		p.nextToken() // consume '**'
+		expr := p.parseExpression(lowest)
+		if expr == nil {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected expression after '**'")
+			return ast.MapEntry{}, false
+		}
+		return ast.MapEntry{Splat: expr}, true
+	}
+
+	// Check for symbol key shorthand: identifier followed by colon
+	// e.g., {name: "Alice", age: 30} or {name:, age:} (implicit value)
+	if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.COLON) {
+		keyName := p.curToken.Literal
+		key := &ast.StringLit{Value: keyName}
+		p.nextToken() // move to ':'
+
+		// Check for implicit value shorthand: {x:, y:} or {x:}
+		// If peek is comma or rbrace, use identifier as value and stay on ':'
+		if p.peekTokenIs(token.COMMA) || p.peekTokenIs(token.RBRACE) {
+			value := &ast.Ident{Name: keyName}
+			return ast.MapEntry{Key: key, Value: value}, true
+		}
+
+		p.nextToken() // move past ':' to value
+
+		// Parse the value expression
+		value := p.parseExpression(lowest)
+		if value == nil {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected value after ':' in map literal")
+			return ast.MapEntry{}, false
+		}
+		return ast.MapEntry{Key: key, Value: value}, true
+	}
+
+	// Standard hash rocket form: key => value
 	key := p.parseExpression(lowest)
 	if key == nil {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected key in map literal")

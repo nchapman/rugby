@@ -26,6 +26,10 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseNilLiteral()
 	case token.SYMBOL:
 		left = p.parseSymbolLiteral()
+	case token.WORDARRAY:
+		left = p.parseWordArray(false)
+	case token.INTERPWARRAY:
+		left = p.parseWordArray(true)
 	case token.LPAREN:
 		left = p.parseGroupedExpr()
 	case token.LBRACKET:

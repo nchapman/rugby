@@ -205,6 +205,102 @@ Symbols compile to **Go strings**. `:ok` → `"ok"`
 | `Chan[T]`    | `chan T`    |
 | `Task[T]`    | `struct` (internal) |
 
+#### Array Literals
+
+Rugby supports Ruby-style array literal syntax:
+
+**Basic arrays:**
+```ruby
+nums = [1, 2, 3]
+mixed = [1, "two", 3.0]
+nested = [[1, 2], [3, 4]]
+```
+
+**Word arrays (`%w` and `%W`):**
+
+Word arrays provide a concise syntax for arrays of strings:
+
+```ruby
+words = %w{foo bar baz}        # ["foo", "bar", "baz"]
+words = %w(one two three)      # alternate delimiter
+words = %w[a b c]              # bracket delimiter
+words = %w<x y z>              # angle bracket delimiter
+words = %w|hello world|        # pipe delimiter
+```
+
+Interpolated word arrays use `%W`:
+```ruby
+name = "world"
+words = %W{hello #{name}}      # ["hello", "world"]
+```
+
+**Escape sequences in word arrays:**
+* `\ ` — escaped space (keeps words together)
+* `\n`, `\t`, `\\` — standard escapes
+* `\}`, `\)`, `\]`, `\>`, `\|` — escaped closing delimiters
+
+```ruby
+%w{hello\ world foo}           # ["hello world", "foo"]
+```
+
+**Splat operator (`*`):**
+
+The splat operator expands an array inline:
+
+```ruby
+rest = [2, 3]
+all = [1, *rest, 4]            # [1, 2, 3, 4]
+copy = [*items]                # shallow copy
+combined = [*a, *b]            # concatenate arrays
+```
+
+#### Map Literals
+
+Rugby supports multiple syntaxes for map literals:
+
+**Hash rocket syntax:**
+```ruby
+m = {"name" => "Alice", "age" => 30}
+m = {1 => "one", 2 => "two"}
+```
+
+**Symbol key shorthand:**
+
+When keys are identifiers followed by `:`, they become string keys:
+```ruby
+m = {name: "Alice", age: 30}   # {"name" => "Alice", "age" => 30}
+```
+
+**Implicit value shorthand:**
+
+When the value is omitted after `:`, the identifier is used as both key and value:
+```ruby
+name = "Alice"
+age = 30
+m = {name:, age:}              # {"name" => name, "age" => age}
+```
+
+**Mixed syntax:**
+```ruby
+m = {"explicit" => 1, short: 2}
+```
+
+**Double splat operator (`**`):**
+
+The double splat operator merges maps:
+```ruby
+defaults = {a: 1, b: 2}
+overrides = {b: 3, c: 4}
+m = {**defaults, **overrides}  # {a: 1, b: 3, c: 4}
+m = {**defaults, d: 5}         # {a: 1, b: 2, d: 5}
+```
+
+**Note:** Map literals with `{` require parentheses when used with command syntax to distinguish from blocks:
+```ruby
+foo({a: 1})                    # pass map argument
+foo {a: 1}                     # ERROR: parsed as block
+```
+
 ### 4.2.1 Range Type
 
 Ranges are first-class values representing a sequence of integers.

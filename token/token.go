@@ -10,19 +10,22 @@ const (
 	ILLEGAL TokenType = "ILLEGAL"
 
 	// Literals
-	IDENT  TokenType = "IDENT"
-	STRING TokenType = "STRING"
-	INT    TokenType = "INT"
-	FLOAT  TokenType = "FLOAT"
-	SYMBOL TokenType = "SYMBOL"
+	IDENT        TokenType = "IDENT"
+	STRING       TokenType = "STRING"
+	INT          TokenType = "INT"
+	FLOAT        TokenType = "FLOAT"
+	SYMBOL       TokenType = "SYMBOL"
+	WORDARRAY    TokenType = "WORDARRAY"    // %w{...} word array literal
+	INTERPWARRAY TokenType = "INTERPWARRAY" // %W{...} interpolated word array
 
 	// Operators
-	PLUS    TokenType = "+"
-	MINUS   TokenType = "-"
-	STAR    TokenType = "*"
-	SLASH   TokenType = "/"
-	PERCENT TokenType = "%"
-	BANG    TokenType = "!"
+	PLUS       TokenType = "+"
+	MINUS      TokenType = "-"
+	STAR       TokenType = "*"
+	DOUBLESTAR TokenType = "**"
+	SLASH      TokenType = "/"
+	PERCENT    TokenType = "%"
+	BANG       TokenType = "!"
 
 	// Comparison
 	EQ TokenType = "=="

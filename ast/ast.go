@@ -204,6 +204,24 @@ type ArrayLit struct {
 func (a *ArrayLit) node()     {}
 func (a *ArrayLit) exprNode() {}
 
+// SplatExpr represents a splat expression: *arr
+// Used in array literals to spread elements: [1, *rest, 3]
+type SplatExpr struct {
+	Expr Expression // the expression being splatted
+}
+
+func (s *SplatExpr) node()     {}
+func (s *SplatExpr) exprNode() {}
+
+// DoubleSplatExpr represents a double splat expression: **hash
+// Used in map literals to spread key-value pairs: {**defaults, key: value}
+type DoubleSplatExpr struct {
+	Expr Expression // the map being splatted
+}
+
+func (d *DoubleSplatExpr) node()     {}
+func (d *DoubleSplatExpr) exprNode() {}
+
 // IndexExpr represents an index expression like arr[0]
 type IndexExpr struct {
 	Left  Expression // the expression being indexed
@@ -213,10 +231,11 @@ type IndexExpr struct {
 func (i *IndexExpr) node()     {}
 func (i *IndexExpr) exprNode() {}
 
-// MapEntry represents a key-value pair in a map literal
+// MapEntry represents a key-value pair or a splat in a map literal
 type MapEntry struct {
-	Key   Expression
-	Value Expression
+	Key   Expression // nil for splat entries
+	Value Expression // nil for splat entries
+	Splat Expression // non-nil for **expr splat entries
 }
 
 // MapLit represents a map literal like {"a" => 1, "b" => 2}

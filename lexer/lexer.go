@@ -2,6 +2,8 @@
 package lexer
 
 import (
+	"strings"
+
 	"github.com/nchapman/rugby/ast"
 	"github.com/nchapman/rugby/token"
 )
@@ -157,7 +159,10 @@ func (l *Lexer) NextToken() token.Token {
 			tok = l.newToken(token.MINUS, "-")
 		}
 	case '*':
-		if l.peekChar() == '=' {
+		if l.peekChar() == '*' {
+			l.readChar()
+			tok = l.newToken(token.DOUBLESTAR, "**")
+		} else if l.peekChar() == '=' {
 			l.readChar()
 			tok = l.newToken(token.STARASSIGN, "*=")
 		} else {
@@ -171,6 +176,15 @@ func (l *Lexer) NextToken() token.Token {
 			tok = l.newToken(token.SLASH, "/")
 		}
 	case '%':
+		// Check for word array literals: %w{...} or %W{...}
+		if l.peekChar() == 'w' || l.peekChar() == 'W' {
+			isInterpolated := l.peekChar() == 'W'
+			l.readChar() // consume 'w' or 'W'
+			l.readChar() // consume delimiter opening
+			tok = l.readWordArray(isInterpolated)
+			tok.SpaceBefore = spaceBefore
+			return tok
+		}
 		tok = l.newToken(token.PERCENT, "%")
 	case '(':
 		tok = l.newToken(token.LPAREN, "(")
@@ -445,4 +459,127 @@ func isLetter(ch byte) bool {
 
 func isDigit(ch byte) bool {
 	return '0' <= ch && ch <= '9'
+}
+
+// getClosingDelimiter returns the closing delimiter for paired delimiters,
+// or the same character for non-paired delimiters.
+func getClosingDelimiter(opening byte) byte {
+	switch opening {
+	case '(':
+		return ')'
+	case '[':
+		return ']'
+	case '{':
+		return '}'
+	case '<':
+		return '>'
+	default:
+		return opening // for |, /, !, etc.
+	}
+}
+
+// readWordArray reads a %w{...} or %W{...} word array literal.
+// Words are separated by whitespace. The literal is stored with \x00 as separator.
+// isInterpolated indicates %W (true) vs %w (false).
+func (l *Lexer) readWordArray(isInterpolated bool) token.Token {
+	opening := l.ch
+	closing := getClosingDelimiter(opening)
+	line := l.line
+	col := l.column
+
+	var words []string
+	var currentWord []byte
+
+	l.readChar() // move past opening delimiter
+
+	for l.ch != closing && l.ch != 0 {
+		if l.ch == '\n' {
+			l.line++
+			l.column = 0
+		}
+
+		// Handle escape sequences
+		if l.ch == '\\' {
+			l.readChar()
+			// Handle closing delimiter escape first (dynamic value)
+			if l.ch == closing {
+				currentWord = append(currentWord, closing)
+			} else {
+				// Handle standard escape sequences
+				switch l.ch {
+				case ' ':
+					currentWord = append(currentWord, ' ')
+				case 'n':
+					currentWord = append(currentWord, '\n')
+				case 't':
+					currentWord = append(currentWord, '\t')
+				case '\\':
+					currentWord = append(currentWord, '\\')
+				default:
+					// Keep the backslash and the character
+					currentWord = append(currentWord, '\\', l.ch)
+				}
+			}
+			l.readChar()
+			continue
+		}
+
+		// Handle #{...} interpolation in %W arrays - don't treat inner } as closing
+		if isInterpolated && l.ch == '#' && l.peekChar() == '{' {
+			currentWord = append(currentWord, '#')
+			l.readChar() // consume #
+			currentWord = append(currentWord, '{')
+			l.readChar() // consume {
+			braceCount := 1
+			for braceCount > 0 && l.ch != 0 {
+				switch l.ch {
+				case '{':
+					braceCount++
+				case '}':
+					braceCount--
+				}
+				currentWord = append(currentWord, l.ch)
+				l.readChar()
+			}
+			continue
+		}
+
+		// Whitespace separates words
+		if l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r' {
+			if len(currentWord) > 0 {
+				words = append(words, string(currentWord))
+				currentWord = nil
+			}
+			l.readChar()
+			continue
+		}
+
+		currentWord = append(currentWord, l.ch)
+		l.readChar()
+	}
+
+	// Don't forget the last word
+	if len(currentWord) > 0 {
+		words = append(words, string(currentWord))
+	}
+
+	// Consume closing delimiter
+	if l.ch == closing {
+		l.readChar()
+	}
+
+	// Join words with null byte separator
+	literal := strings.Join(words, "\x00")
+
+	tokType := token.WORDARRAY
+	if isInterpolated {
+		tokType = token.INTERPWARRAY
+	}
+
+	return token.Token{
+		Type:    tokType,
+		Literal: literal,
+		Line:    line,
+		Column:  col,
+	}
 }

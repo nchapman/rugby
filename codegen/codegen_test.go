@@ -3705,3 +3705,157 @@ end`
 	assertContains(t, output, "port int")
 	assertContains(t, output, "func (s *Service) log(msg string) {")
 }
+
+func TestSymbolKeyShorthandCodegen(t *testing.T) {
+	input := `def main
+  m = {name: "Alice", age: 30}
+end`
+
+	output := compile(t, input)
+
+	// Keys should be strings
+	assertContains(t, output, `"name":`)
+	assertContains(t, output, `"Alice"`)
+	assertContains(t, output, `"age":`)
+	assertContains(t, output, `30`)
+}
+
+func TestWordArrayCodegen(t *testing.T) {
+	input := `def main
+  words = %w{foo bar baz}
+end`
+
+	output := compile(t, input)
+
+	// Should be a string array
+	assertContains(t, output, `[]string{`)
+	assertContains(t, output, `"foo"`)
+	assertContains(t, output, `"bar"`)
+	assertContains(t, output, `"baz"`)
+}
+
+func TestEmptyWordArrayCodegen(t *testing.T) {
+	input := `def main
+  empty = %w{}
+end`
+
+	output := compile(t, input)
+
+	// Empty word array generates []any{} since type can't be inferred
+	assertContains(t, output, `[]any{}`)
+}
+
+func TestArraySplatCodegen(t *testing.T) {
+	input := `def main
+  rest = [2, 3]
+  all = [1, *rest, 4]
+end`
+
+	output := compile(t, input)
+
+	// Should generate IIFE for splat with unique var names
+	assertContains(t, output, `func() []any {`)
+	assertContains(t, output, `_arr0 := []any{}`)
+	assertContains(t, output, `append(_arr0`)
+	assertContains(t, output, `for _, _v0 := range rest`)
+}
+
+func TestMapDoubleSplatCodegen(t *testing.T) {
+	input := `def main
+  defaults = {"a" => 1}
+  m = {**defaults, b: 2}
+end`
+
+	output := compile(t, input)
+
+	// Should generate IIFE for splat with unique var names
+	assertContains(t, output, `func() map[any]any {`)
+	assertContains(t, output, `_map0 := map[any]any{}`)
+	assertContains(t, output, `for _k0, _v0 := range defaults`)
+	assertContains(t, output, `_map0[_k0] = _v0`)
+	assertContains(t, output, `_map0["b"] = 2`)
+}
+
+func TestImplicitValueShorthandCodegen(t *testing.T) {
+	input := `def main
+  name = "Alice"
+  age = 30
+  m = {name:, age:}
+end`
+
+	output := compile(t, input)
+
+	// Keys should be strings, values should be identifiers
+	assertContains(t, output, `"name": name`)
+	assertContains(t, output, `"age": age`)
+}
+
+func TestMultipleSplatsCodegen(t *testing.T) {
+	input := `def main
+  a = [1, 2]
+  b = [3, 4]
+  all = [*a, 0, *b]
+end`
+
+	output := compile(t, input)
+
+	// Should generate IIFE with multiple splats
+	assertContains(t, output, `func() []any {`)
+	assertContains(t, output, `range a`)
+	assertContains(t, output, `range b`)
+}
+
+func TestMultipleDoubleSplatsCodegen(t *testing.T) {
+	input := `def main
+  defaults = {"a" => 1}
+  overrides = {"b" => 2}
+  m = {**defaults, **overrides, c: 3}
+end`
+
+	output := compile(t, input)
+
+	// Should generate IIFE with multiple splats
+	assertContains(t, output, `func() map[any]any {`)
+	assertContains(t, output, `range defaults`)
+	assertContains(t, output, `range overrides`)
+	assertContains(t, output, `"c"] = 3`)
+}
+
+func TestSplatOnlyArrayCodegen(t *testing.T) {
+	input := `def main
+  items = [1, 2, 3]
+  copy = [*items]
+end`
+
+	output := compile(t, input)
+
+	// Should generate IIFE even for single splat
+	assertContains(t, output, `func() []any {`)
+	assertContains(t, output, `range items`)
+}
+
+func TestInterpolatedWordArrayCodegen(t *testing.T) {
+	input := `def main
+  name = "world"
+  words = %W{hello #{name}}
+end`
+
+	output := compile(t, input)
+
+	// Should contain string concatenation for interpolation
+	assertContains(t, output, `"hello"`)
+	// The interpolated element should reference the name variable
+	assertContains(t, output, `name`)
+}
+
+func TestMixedMapSyntaxCodegen(t *testing.T) {
+	input := `def main
+  m = {"explicit" => 1, short: 2}
+end`
+
+	output := compile(t, input)
+
+	// Both syntaxes should produce string keys
+	assertContains(t, output, `"explicit": 1`)
+	assertContains(t, output, `"short": 2`)
+}

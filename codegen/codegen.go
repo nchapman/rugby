@@ -2535,6 +2535,21 @@ func (g *Generator) genInterpolatedString(s *ast.InterpolatedString) {
 }
 
 func (g *Generator) genArrayLit(arr *ast.ArrayLit) {
+	// Check if there are any splat expressions
+	hasSplat := false
+	for _, elem := range arr.Elements {
+		if _, ok := elem.(*ast.SplatExpr); ok {
+			hasSplat = true
+			break
+		}
+	}
+
+	if hasSplat {
+		// Generate an IIFE that builds the array with splats
+		g.genArrayLitWithSplat(arr)
+		return
+	}
+
 	// Try to infer element type from elements
 	elemType := ""
 	consistent := true
@@ -2574,6 +2589,38 @@ func (g *Generator) genArrayLit(arr *ast.ArrayLit) {
 	g.buf.WriteString("}")
 }
 
+// genArrayLitWithSplat generates an array literal containing splat expressions.
+// It generates an IIFE that builds the array piecemeal.
+func (g *Generator) genArrayLitWithSplat(arr *ast.ArrayLit) {
+	// Use unique variable names to avoid shadowing user variables
+	arrVar := fmt.Sprintf("_arr%d", g.tempVarCounter)
+	elemVar := fmt.Sprintf("_v%d", g.tempVarCounter)
+	g.tempVarCounter++
+
+	// Generate: func() []any { _arrN := []any{}; ... ; return _arrN }()
+	g.buf.WriteString("func() []any {\n")
+	g.buf.WriteString(fmt.Sprintf("\t\t%s := []any{}\n", arrVar))
+
+	for _, elem := range arr.Elements {
+		if splat, ok := elem.(*ast.SplatExpr); ok {
+			// Splat: append the splatted array
+			g.buf.WriteString(fmt.Sprintf("\t\tfor _, %s := range ", elemVar))
+			g.genExpr(splat.Expr)
+			g.buf.WriteString(" {\n")
+			g.buf.WriteString(fmt.Sprintf("\t\t\t%s = append(%s, %s)\n", arrVar, arrVar, elemVar))
+			g.buf.WriteString("\t\t}\n")
+		} else {
+			// Regular element: append single value
+			g.buf.WriteString(fmt.Sprintf("\t\t%s = append(%s, ", arrVar, arrVar))
+			g.genExpr(elem)
+			g.buf.WriteString(")\n")
+		}
+	}
+
+	g.buf.WriteString(fmt.Sprintf("\t\treturn %s\n", arrVar))
+	g.buf.WriteString("\t}()")
+}
+
 func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 	g.genExpr(idx.Left)
 	g.buf.WriteString("[")
@@ -2582,6 +2629,21 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 }
 
 func (g *Generator) genMapLit(m *ast.MapLit) {
+	// Check if there are any splat entries
+	hasSplat := false
+	for _, entry := range m.Entries {
+		if entry.Splat != nil {
+			hasSplat = true
+			break
+		}
+	}
+
+	if hasSplat {
+		// Generate an IIFE that builds the map with splats
+		g.genMapLitWithSplat(m)
+		return
+	}
+
 	// Emit untyped map; type inference will be added in Phase 7
 	g.buf.WriteString("map[any]any{")
 	for i, entry := range m.Entries {
@@ -2593,6 +2655,41 @@ func (g *Generator) genMapLit(m *ast.MapLit) {
 		g.genExpr(entry.Value)
 	}
 	g.buf.WriteString("}")
+}
+
+// genMapLitWithSplat generates a map literal containing double splat expressions.
+// It generates an IIFE that builds the map piecemeal.
+func (g *Generator) genMapLitWithSplat(m *ast.MapLit) {
+	// Use unique variable names to avoid shadowing user variables
+	mapVar := fmt.Sprintf("_map%d", g.tempVarCounter)
+	keyVar := fmt.Sprintf("_k%d", g.tempVarCounter)
+	valVar := fmt.Sprintf("_v%d", g.tempVarCounter)
+	g.tempVarCounter++
+
+	// Generate: func() map[any]any { _mapN := map[any]any{}; ... ; return _mapN }()
+	g.buf.WriteString("func() map[any]any {\n")
+	g.buf.WriteString(fmt.Sprintf("\t\t%s := map[any]any{}\n", mapVar))
+
+	for _, entry := range m.Entries {
+		if entry.Splat != nil {
+			// Double splat: merge the splatted map
+			g.buf.WriteString(fmt.Sprintf("\t\tfor %s, %s := range ", keyVar, valVar))
+			g.genExpr(entry.Splat)
+			g.buf.WriteString(" {\n")
+			g.buf.WriteString(fmt.Sprintf("\t\t\t%s[%s] = %s\n", mapVar, keyVar, valVar))
+			g.buf.WriteString("\t\t}\n")
+		} else {
+			// Regular entry: set key-value pair
+			g.buf.WriteString(fmt.Sprintf("\t\t%s[", mapVar))
+			g.genExpr(entry.Key)
+			g.buf.WriteString("] = ")
+			g.genExpr(entry.Value)
+			g.buf.WriteString("\n")
+		}
+	}
+
+	g.buf.WriteString(fmt.Sprintf("\t\treturn %s\n", mapVar))
+	g.buf.WriteString("\t}()")
 }
 
 func (g *Generator) genCallExpr(call *ast.CallExpr) {
