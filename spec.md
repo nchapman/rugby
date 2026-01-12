@@ -167,41 +167,32 @@ String interpolation rules:
 
 ### 3.4 Heredocs
 
-Heredocs are multi-line string literals using the `<<` syntax:
+Multi-line string literals using `<<` syntax:
 
 ```ruby
-# Basic heredoc - delimiter must be at start of line
 text = <<END
 First line
 Second line
 END
 
-# <<- allows indented closing delimiter
-message = <<-END
-  Some content here
-  END
-
-# <<~ (squiggly heredoc) strips common leading whitespace
-sql = <<~SQL
+# <<~ strips common leading whitespace (most useful in practice)
+def query
+  sql = <<~SQL
     SELECT *
     FROM users
     WHERE active = true
   SQL
-# Result: "SELECT *\nFROM users\nWHERE active = true"
+end
+# sql = "SELECT *\nFROM users\nWHERE active = true"
 ```
 
-**Heredoc forms:**
 | Syntax | Behavior |
 |--------|----------|
-| `<<DELIM` | Basic - closing delimiter must be at line start |
-| `<<-DELIM` | Allows indented closing delimiter |
+| `<<DELIM` | Closing delimiter must be at line start |
+| `<<-DELIM` | Closing delimiter can be indented |
 | `<<~DELIM` | Strips common leading whitespace from content |
 
-**Notes:**
-- The delimiter can be any valid identifier (e.g., `END`, `SQL`, `HTML`, `END_TEXT`)
-- Content starts on the line after the opening `<<DELIM`
-- Heredocs compile to regular Go strings with `\n` for newlines
-- String interpolation (`#{}`) is supported within heredocs
+String interpolation (`#{}`) works within heredocs. The delimiter can be any identifier (`END`, `SQL`, `HTML`, etc.).
 
 ---
 
