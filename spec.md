@@ -202,6 +202,8 @@ Symbols compile to **Go strings**. `:ok` → `"ok"`
 | `Map[K, V]`  | `map[K]V`   |
 | `T?`         | `(T, bool)` |
 | `Range`      | `struct` (internal) |
+| `Chan[T]`    | `chan T`    |
+| `Task[T]`    | `struct` (internal) |
 
 ### 4.2.1 Range Type
 
@@ -235,6 +237,33 @@ end
 (1..100).include?(50)  # membership test
 nums = (1..5).to_a     # [1, 2, 3, 4, 5]
 ```
+
+### 4.2.2 Channel Type
+
+`Chan[T]` is a typed channel for concurrent communication between goroutines.
+
+**Creation:**
+```ruby
+ch = Chan[Int].new(10)  # buffered channel with capacity 10
+ch = Chan[Int].new      # unbuffered channel
+```
+
+**Compilation:** `Chan[T]` compiles to Go's `chan T`.
+
+See Section 13.2 for full channel operations.
+
+### 4.2.3 Task Type
+
+`Task[T]` represents a concurrent computation that will produce a value of type `T`. Tasks are created with `spawn` and consumed with `await`.
+
+```ruby
+t = spawn { expensive_work() }  # t : Task[Result]
+result = await t                 # result : Result
+```
+
+**Compilation:** `Task[T]` compiles to an internal struct containing a result channel.
+
+See Section 13.4 for spawning and awaiting tasks.
 
 ### 4.3 Type Inference
 
@@ -592,7 +621,7 @@ if user.ok?   # OK (explicit check)
 
 **Unwrapping (`if let`):**
 
-Use `if let` to handle optionals and type assertions safeley.
+Use `if let` to handle optionals and type assertions safely.
 
 ```ruby
 if let user = find_user(id)
@@ -955,7 +984,7 @@ end
 
 Compiles to: `func (u *User) name() string { ... }`
 
-### 7.7 Inheritance & Specialization
+### 7.6 Inheritance & Specialization
 
 Rugby supports code reuse through **Specialization**. While it uses Go's struct embedding for data layout, it ensures Ruby-like method dispatch by specializing inherited methods.
 
@@ -1002,7 +1031,7 @@ Concrete types are **invariant**. A variable of type `Parent` cannot hold a `Chi
 **Performance Note:**
 Specialization increases binary size (code duplication) and compile time but ensures **zero runtime overhead** for method calls (no vtable lookups).
 
-### 7.9 Explicit Implementation (Optional)
+### 7.7 Explicit Implementation (Optional)
 
 While Rugby uses structural typing (implicit satisfaction), classes may explicitly declare conformance to an interface using `implements`. This serves as documentation and a compile-time assertion.
 
@@ -1021,7 +1050,7 @@ end
 **Compilation:**
 The compiler verifies that `Job` satisfies `Runnable`. If a method is missing or signatures don't match, compilation fails with a descriptive error. This produces no runtime code overhead.
 
-### 7.10 Polymorphism & Interfaces
+### 7.8 Polymorphism & Interfaces
 
 Rugby uses **Interfaces** for polymorphism. Since concrete inheritance is for code reuse (not subtyping), you must use Interfaces to treat different classes uniformly.
 
@@ -1399,7 +1428,10 @@ runtime/
 ├── int.go        # Integer methods
 ├── float.go      # Float methods
 ├── bytes.go      # Byte slice methods
-└── conv.go       # Type conversions
+├── conv.go       # Type conversions
+├── task.go       # Task[T] and spawn/await
+├── scope.go      # Structured concurrency scope
+└── channel.go    # Channel helpers (try_receive)
 ```
 
 ### 12.3 Array methods (`Array[T]`)
@@ -1582,7 +1614,16 @@ The compiler automatically adds `import "rugby/runtime"` when any runtime functi
 
 ## 13. Concurrency
 
-Rugby treats Go's concurrency primitives as first-class citizens, providing Ruby-like syntax for high-performance concurrent programming.
+Rugby provides Ruby-like ergonomics for Go's concurrency model while preserving Go's semantics and performance characteristics.
+
+Concurrency is built on two layers:
+
+1. **Go primitives:** goroutines, channels, select
+2. **Structured concurrency:** `spawn`, `await`, and `concurrently` scopes
+
+The structured layer compiles to Go primitives and exists to prevent leaks, provide deterministic cleanup, and make cancellation and error propagation consistent.
+
+---
 
 ### 13.1 Goroutines (`go`)
 
@@ -1590,34 +1631,84 @@ The `go` keyword executes a call in a new goroutine.
 
 ```ruby
 go fetch_url(url)
+
 go do
   puts "running in background"
 end
 ```
 
 **Compilation:**
-*   `go func_call()` → `go funcCall()`
-*   `go do ... end` → `go func() { ... }() (anonymous goroutine)`
+* `go func_call()` → `go funcCall()`
+* `go do ... end` → `go func() { ... }()`
+
+**Notes:**
+* `go` is low-level and does not provide a return value.
+* For "run and await result" semantics, prefer `spawn` + `await` (see 13.4).
+
+---
 
 ### 13.2 Channels (`Chan[T]`)
 
-Channels are typed pipes used for communication and synchronization.
+Channels are typed pipes for communication and synchronization.
 
-**Syntax:**
-*   `ch = Chan[Int].new(buffer_size)` (Buffered)
-*   `ch = Chan[Int].new` (Unbuffered)
-*   `ch << val` (Send)
-*   `val = ch.receive` (Receive, blocks)
-*   `val, ok = ch.try_receive` (Safe receive, returns `(T, Bool)`)
+**Creation:**
+```ruby
+ch = Chan[Int].new(10)   # buffered (capacity 10)
+ch = Chan[Int].new       # unbuffered
+```
+
+**Operations:**
+```ruby
+ch << val            # send (blocks if full/unbuffered)
+val = ch.receive     # receive (blocks; returns zero value if closed)
+val = ch.try_receive # non-blocking receive, returns T?
+ch.close             # close the channel
+```
+
+**`try_receive` returns `T?`** for consistency with Rugby's optional pattern:
+```ruby
+if let msg = ch.try_receive
+  puts "got: #{msg}"
+else
+  puts "channel empty or closed"
+end
+
+# Or with default
+msg = ch.try_receive ?? "default"
+```
 
 **Compilation:**
-*   `make(chan T, n)`
-*   `ch <- val`
-*   `val := <-ch`
+| Rugby | Go |
+|-------|-----|
+| `Chan[T].new(n)` | `make(chan T, n)` |
+| `Chan[T].new` | `make(chan T)` |
+| `ch << val` | `ch <- val` |
+| `ch.receive` | `<-ch` |
+| `ch.try_receive` | wrapped `select` with default (returns `Option[T]`) |
+| `ch.close` | `close(ch)` |
+
+**Channel iteration:**
+
+Channels can be iterated until closed:
+
+```ruby
+for msg in ch
+  puts msg
+end
+```
+
+Compiles to:
+```go
+for msg := range ch {
+    runtime.Puts(msg)
+}
+```
+
+---
 
 ### 13.3 Select
 
-The `select` statement allows a goroutine to wait on multiple communication operations.
+The `select` statement waits on multiple channel operations.
 
 ```ruby
 select
@@ -1626,12 +1717,328 @@ when val = ch1.receive
 when ch2 << 42
   puts "sent to ch2"
 else
-  puts "no communication"
+  puts "no communication ready"
 end
 ```
 
+**Semantics:**
+* Executes the first ready case.
+* If multiple cases are ready, one is chosen at random.
+* The `else` clause makes select non-blocking.
+* Variables bound in `when` clauses (like `val`) are scoped to that branch.
+
+**Note:** `when` in `select` binds variables from channel operations. This differs from `when` in `case` expressions (Section 5.2), which matches values. The keyword is reused for familiarity, but the semantics are distinct.
+
 **Compilation:**
-Maps directly to Go's `select` block.
+Maps directly to Go's `select { case ... }` block.
+
+---
+
+### 13.4 Tasks (`spawn` and `await`)
+
+Tasks provide value-oriented concurrency: run work concurrently and retrieve its result.
+
+#### 13.4.1 Spawning Tasks
+
+```ruby
+t = spawn do
+  heavy_computation()
+end
+```
+
+* `spawn` starts execution immediately in a goroutine.
+* Returns a typed handle: `Task[T]` where `T` is the block's return type.
+* Type inference works naturally:
+
+```ruby
+t = spawn { 42 }           # t : Task[Int]
+t = spawn { "hello" }      # t : Task[String]
+t = spawn { fetch_data() } # t : Task[Data] if fetch_data returns Data
+```
+
+**Compilation:**
+
+`spawn` lowers to:
+* Create a result channel
+* Start a goroutine that evaluates the block and sends the result
+* Return a `Task[T]` wrapping the channel
+
+#### 13.4.2 Awaiting Tasks
+
+```ruby
+value = await t
+```
+
+**Syntax:**
+* `await expr` — awaits a task expression
+* `await(expr)` — equivalent; parentheses are optional but required when chaining with `!`
+
+`await` is a keyword that binds to the immediately following expression:
+* `await t` — await task `t`
+* `await get_task()` — await the result of `get_task()`
+* `(await t).name` — await `t`, then access `.name` on the result
+* `await(t)!` — await and propagate error (parentheses required for `!`)
+
+**Semantics:**
+* `await` blocks until the task completes and returns its value.
+* Awaiting a completed task returns immediately.
+* Awaiting a task multiple times is a compile error (tasks complete once).
+
+**Error-returning tasks:**
+
+If the block returns `(T, error)`, awaiting returns `(T, error)`:
+
+```ruby
+t = spawn do
+  os.read_file("data.txt")  # returns (Bytes, error)
+end
+
+data, err = await t
+return nil, err if err != nil
+```
+
+**Integration with `!` operator:**
+
+The `!` operator (Section 15.3) works with `await`:
+
+```ruby
+def load_all -> (Array[Bytes], error)
+  t1 = spawn { os.read_file("a.txt") }
+  t2 = spawn { os.read_file("b.txt") }
+
+  a = await(t1)!  # propagate error if t1 failed
+  b = await(t2)!  # propagate error if t2 failed
+
+  [a, b], nil
+end
+```
+
+#### 13.4.3 Panics in Tasks
+
+Panics inside a spawned task behave like Go panics:
+* Panics are not captured by default.
+* A panic in any goroutine terminates the program unless recovered.
+
+---
+
+### 13.5 Structured Concurrency (`concurrently`)
+
+Unscoped concurrency leads to goroutine leaks, unclear cancellation, and inconsistent error handling. Rugby provides `concurrently` for deterministic, scoped concurrency.
+
+A `concurrently` block owns all tasks spawned within it and ensures cleanup when the block exits.
+
+#### 13.5.1 Basic Usage
+
+```ruby
+concurrently do |scope|
+  a = scope.spawn { fetch_a() }
+  b = scope.spawn { fetch_b() }
+
+  x = await a
+  y = await b
+
+  puts x + y
+end
+```
+
+**Rules:**
+1. `concurrently` introduces a scope object.
+2. `scope.spawn { ... }` creates a task owned by the scope.
+3. On block exit (normal, `return`, or error), the scope:
+   * Cancels its context (signals tasks to stop)
+   * Waits for all spawned tasks to complete
+4. Tasks can be awaited in any order.
+
+This makes task lifetime explicit: tasks cannot outlive their scope.
+
+**Return value:**
+
+`concurrently` is an expression. Its value is the last expression in the block:
+
+```ruby
+# Returns a value
+total = concurrently do |scope|
+  a = scope.spawn { fetch_a() }
+  b = scope.spawn { fetch_b() }
+  (await a) + (await b)  # block evaluates to this sum
+end
+
+# Used as statement (no return value needed)
+concurrently do |scope|
+  scope.spawn { log_metrics() }
+  scope.spawn { send_notifications() }
+end
+```
+
+If tasks return errors and you use `!`, the block returns `(T, error)`:
+
+```ruby
+result, err = concurrently do |scope|
+  data = await(scope.spawn { fetch_data() })!
+  process(data), nil
+end
+```
+
+#### 13.5.2 Cancellation Context
+
+Each scope provides a cancellation context via `scope.ctx`:
+
+```ruby
+concurrently do |scope|
+  t = scope.spawn do
+    long_running_work(scope.ctx)
+  end
+
+  # If we return early, scope.ctx is cancelled
+  return if should_abort?
+
+  await t
+end
+```
+
+**Semantics:**
+* When the scope exits, its context is cancelled.
+* Tasks should check the context cooperatively (Go-style).
+* Rugby does not forcibly terminate goroutines.
+
+**Compilation:**
+
+`concurrently` lowers to:
+```go
+ctx, cancel := context.WithCancel(parentCtx)
+defer cancel()
+var wg sync.WaitGroup
+// ... spawned tasks use ctx and increment wg
+wg.Wait()
+```
+
+#### 13.5.3 Error Propagation
+
+If any scoped task returns an error:
+1. The scope cancels its context (requesting siblings stop).
+2. The scope waits for all tasks to finish.
+3. The first error is returned from the `concurrently` block.
+
+```ruby
+result, err = concurrently do |scope|
+  a = scope.spawn { fetch_a() }  # -> (A, error)
+  b = scope.spawn { fetch_b() }  # -> (B, error)
+
+  val_a = await(a)!  # propagate error
+  val_b = await(b)!  # propagate error
+
+  process(val_a, val_b)
+end
+```
+
+Using `!` inside `concurrently` triggers early exit from the block, cancelling sibling tasks.
+
+#### 13.5.4 Detached Tasks
+
+Tasks spawned via `spawn` (not `scope.spawn`) are **detached** and may outlive the current function:
+
+```ruby
+spawn do
+  background_worker()  # runs independently
+end
+```
+
+**Guideline:** Prefer `concurrently` for tasks that must complete safely. Use detached `spawn` sparingly for fire-and-forget work.
+
+#### 13.5.5 Escape Restriction
+
+A task handle from `scope.spawn` must not escape the `concurrently` block:
+
+```ruby
+var leaked : Task[Int]
+
+concurrently do |scope|
+  leaked = scope.spawn { 42 }  # ERROR: task escapes scope
+end
+
+await leaked  # would await after scope cleanup
+```
+
+This is a compile-time error. It prevents awaiting tasks after their scope has ended.
+
+---
+
+### 13.6 Choosing a Pattern
+
+| Need | Use |
+|------|-----|
+| Fire-and-forget background work | `go do ... end` |
+| Low-level channel communication | `Chan[T]`, `select` |
+| Run work and get result | `spawn` + `await` |
+| Multiple concurrent tasks with cleanup | `concurrently` |
+| Cancellable, scoped work | `concurrently` with `scope.ctx` |
+
+**Examples:**
+
+**Simple parallel fetch:**
+```ruby
+def fetch_both(url1 : String, url2 : String) -> (String, String, error)
+  concurrently do |scope|
+    t1 = scope.spawn { http.get(url1) }
+    t2 = scope.spawn { http.get(url2) }
+
+    r1 = await(t1)!
+    r2 = await(t2)!
+
+    r1.body, r2.body, nil
+  end
+end
+```
+
+**Worker pool with channels:**
+```ruby
+def process_items(items : Array[Item])
+  work = Chan[Item].new(100)
+  done = Chan[Bool].new
+
+  # Start workers
+  4.times do
+    go do
+      for item in work
+        process(item)
+      end
+      done << true
+    end
+  end
+
+  # Feed work
+  items.each { |item| work << item }
+  work.close
+
+  # Wait for workers
+  4.times { done.receive }
+end
+```
+
+**Timeout pattern:**
+```ruby
+select
+when result = work_chan.receive
+  puts "got result: #{result}"
+when timeout_chan.receive
+  puts "timed out"
+end
+```
+
+---
+
+### 13.7 Compilation Summary
+
+| Rugby | Go |
+|-------|-----|
+| `go expr` | `go expr` |
+| `go do ... end` | `go func() { ... }()` |
+| `Chan[T].new(n)` | `make(chan T, n)` |
+| `spawn { expr }` | goroutine + channel for result |
+| `await t` | receive from task's channel |
+| `concurrently do \|s\| ... end` | `context.WithCancel` + `sync.WaitGroup` |
+| `scope.spawn { ... }` | goroutine tracked by WaitGroup |
+| `scope.ctx` | `context.Context` |
 
 ---
 
@@ -1717,10 +2124,17 @@ Postfix `!` is valid only on **call expressions** with explicit parentheses, who
 * `(T, error)`
 * `(A, B, ..., error)`
 
+**`await` expressions:** `await(expr)!` is valid when the task returns `(T, error)`. The `await` keyword with parentheses is treated as a call-like expression for this purpose.
+
+```ruby
+data = await(task)!  # valid: propagate error from task
+```
+
 **Compile-time errors:**
 * Using `!` on a non-call expression (e.g., `x!` where `x` is a variable)
 * Using `!` on a call that does not return `error`
 * Using `!` without parentheses (e.g., `f!` is parsed as a method name, not `f()!`)
+* Using `!` on `await expr` without parentheses (use `await(expr)!`)
 
 #### 15.3.3 Enclosing Function Requirement
 
