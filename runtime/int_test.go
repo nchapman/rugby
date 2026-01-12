@@ -198,3 +198,20 @@ func TestOdd(t *testing.T) {
 		}
 	}
 }
+
+func TestAbsInt64_Extended(t *testing.T) {
+	// Additional coverage for edge cases
+	if AbsInt64(-1) != 1 {
+		t.Error("AbsInt64 -1 failed")
+	}
+}
+
+func TestClampInt64_Extended(t *testing.T) {
+	// Additional edge cases
+	if ClampInt64(0, 0, 10) != 0 {
+		t.Error("ClampInt64 at min boundary failed")
+	}
+	if ClampInt64(10, 0, 10) != 10 {
+		t.Error("ClampInt64 at max boundary failed")
+	}
+}

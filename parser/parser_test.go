@@ -5301,3 +5301,1062 @@ func TestArraySplatTrailingComma(t *testing.T) {
 		t.Errorf("expected 2 elements (trailing comma should be allowed), got %d", len(arr.Elements))
 	}
 }
+
+// Module tests
+
+func TestModuleDecl(t *testing.T) {
+	input := `module Loggable
+  def log(msg : String)
+    puts msg
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	mod, ok := program.Declarations[0].(*ast.ModuleDecl)
+	if !ok {
+		t.Fatalf("expected ModuleDecl, got %T", program.Declarations[0])
+	}
+
+	if mod.Name != "Loggable" {
+		t.Errorf("expected module name 'Loggable', got %q", mod.Name)
+	}
+
+	if len(mod.Methods) != 1 {
+		t.Fatalf("expected 1 method, got %d", len(mod.Methods))
+	}
+
+	if mod.Methods[0].Name != "log" {
+		t.Errorf("expected method name 'log', got %q", mod.Methods[0].Name)
+	}
+}
+
+func TestModuleWithAccessor(t *testing.T) {
+	input := `module Countable
+  getter count : Int
+
+  def increment
+    puts "incrementing"
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	mod, ok := program.Declarations[0].(*ast.ModuleDecl)
+	if !ok {
+		t.Fatalf("expected ModuleDecl, got %T", program.Declarations[0])
+	}
+
+	if len(mod.Accessors) != 1 {
+		t.Fatalf("expected 1 accessor, got %d", len(mod.Accessors))
+	}
+
+	if mod.Accessors[0].Kind != "getter" {
+		t.Errorf("expected accessor kind 'getter', got %q", mod.Accessors[0].Kind)
+	}
+	if mod.Accessors[0].Name != "count" {
+		t.Errorf("expected accessor name 'count', got %q", mod.Accessors[0].Name)
+	}
+	if mod.Accessors[0].Type != "Int" {
+		t.Errorf("expected accessor type 'Int', got %q", mod.Accessors[0].Type)
+	}
+}
+
+func TestModuleWithField(t *testing.T) {
+	input := `module Cacheable
+  @data : Map[String, any]
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	mod, ok := program.Declarations[0].(*ast.ModuleDecl)
+	if !ok {
+		t.Fatalf("expected ModuleDecl, got %T", program.Declarations[0])
+	}
+
+	if len(mod.Fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(mod.Fields))
+	}
+
+	if mod.Fields[0].Name != "data" {
+		t.Errorf("expected field name 'data', got %q", mod.Fields[0].Name)
+	}
+}
+
+// Accessor tests
+
+func TestAccessorDecl_Getter(t *testing.T) {
+	input := `class User
+  getter name : String
+
+  def initialize(@name : String)
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	class, ok := program.Declarations[0].(*ast.ClassDecl)
+	if !ok {
+		t.Fatalf("expected ClassDecl, got %T", program.Declarations[0])
+	}
+
+	if len(class.Accessors) != 1 {
+		t.Fatalf("expected 1 accessor, got %d", len(class.Accessors))
+	}
+
+	accessor := class.Accessors[0]
+	if accessor.Kind != "getter" {
+		t.Errorf("expected kind 'getter', got %q", accessor.Kind)
+	}
+	if accessor.Name != "name" {
+		t.Errorf("expected name 'name', got %q", accessor.Name)
+	}
+	if accessor.Type != "String" {
+		t.Errorf("expected type 'String', got %q", accessor.Type)
+	}
+}
+
+func TestAccessorDecl_Setter(t *testing.T) {
+	input := `class User
+  setter name : String
+
+  def initialize(@name : String)
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	class := program.Declarations[0].(*ast.ClassDecl)
+	if len(class.Accessors) != 1 {
+		t.Fatalf("expected 1 accessor, got %d", len(class.Accessors))
+	}
+
+	accessor := class.Accessors[0]
+	if accessor.Kind != "setter" {
+		t.Errorf("expected kind 'setter', got %q", accessor.Kind)
+	}
+}
+
+func TestAccessorDecl_Property(t *testing.T) {
+	input := `class User
+  property email : String
+
+  def initialize(@email : String)
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	class := program.Declarations[0].(*ast.ClassDecl)
+	if len(class.Accessors) != 1 {
+		t.Fatalf("expected 1 accessor, got %d", len(class.Accessors))
+	}
+
+	accessor := class.Accessors[0]
+	if accessor.Kind != "property" {
+		t.Errorf("expected kind 'property', got %q", accessor.Kind)
+	}
+}
+
+func TestAccessorDecl_WithAnyType(t *testing.T) {
+	input := `class Container
+  property data : any
+
+  def initialize
+    @data = nil
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	class := program.Declarations[0].(*ast.ClassDecl)
+	if len(class.Accessors) != 1 {
+		t.Fatalf("expected 1 accessor, got %d", len(class.Accessors))
+	}
+
+	if class.Accessors[0].Type != "any" {
+		t.Errorf("expected type 'any', got %q", class.Accessors[0].Type)
+	}
+}
+
+// Super expression tests
+
+func TestSuperExpr_NoArgs(t *testing.T) {
+	input := `class Child < Parent
+  def greet
+    super
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	class := program.Declarations[0].(*ast.ClassDecl)
+	method := class.Methods[0]
+
+	exprStmt, ok := method.Body[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", method.Body[0])
+	}
+
+	superExpr, ok := exprStmt.Expr.(*ast.SuperExpr)
+	if !ok {
+		t.Fatalf("expected SuperExpr, got %T", exprStmt.Expr)
+	}
+
+	if len(superExpr.Args) != 0 {
+		t.Errorf("expected 0 args, got %d", len(superExpr.Args))
+	}
+}
+
+func TestSuperExpr_WithArgs(t *testing.T) {
+	input := `class Child < Parent
+  def initialize(name : String, age : Int)
+    super(name, age)
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	class := program.Declarations[0].(*ast.ClassDecl)
+	method := class.Methods[0]
+
+	exprStmt, ok := method.Body[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", method.Body[0])
+	}
+
+	superExpr, ok := exprStmt.Expr.(*ast.SuperExpr)
+	if !ok {
+		t.Fatalf("expected SuperExpr, got %T", exprStmt.Expr)
+	}
+
+	if len(superExpr.Args) != 2 {
+		t.Errorf("expected 2 args, got %d", len(superExpr.Args))
+	}
+}
+
+// Rescue expression tests
+
+func TestRescueExpr_InlineDefault(t *testing.T) {
+	input := `def main
+  port = parse_int("8080") rescue 3000
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
+
+	rescue, ok := assign.Value.(*ast.RescueExpr)
+	if !ok {
+		t.Fatalf("expected RescueExpr, got %T", assign.Value)
+	}
+
+	if rescue.Default == nil {
+		t.Fatal("expected Default to be set")
+	}
+	if rescue.Block != nil {
+		t.Error("expected Block to be nil for inline form")
+	}
+
+	intLit, ok := rescue.Default.(*ast.IntLit)
+	if !ok {
+		t.Fatalf("expected IntLit default, got %T", rescue.Default)
+	}
+	if intLit.Value != 3000 {
+		t.Errorf("expected default 3000, got %d", intLit.Value)
+	}
+}
+
+func TestRescueExpr_BlockForm(t *testing.T) {
+	input := `def main
+  data = read_file(path) rescue do
+    default_data
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+	rescue, ok := assign.Value.(*ast.RescueExpr)
+	if !ok {
+		t.Fatalf("expected RescueExpr, got %T", assign.Value)
+	}
+
+	if rescue.Block == nil {
+		t.Fatal("expected Block to be set for block form")
+	}
+	if rescue.Default != nil {
+		t.Error("expected Default to be nil for block form")
+	}
+}
+
+func TestRescueExpr_WithErrorBinding(t *testing.T) {
+	input := `def main
+  data = read_file(path) rescue => err do
+    puts err
+    fallback
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+	rescue, ok := assign.Value.(*ast.RescueExpr)
+	if !ok {
+		t.Fatalf("expected RescueExpr, got %T", assign.Value)
+	}
+
+	if rescue.ErrName != "err" {
+		t.Errorf("expected ErrName 'err', got %q", rescue.ErrName)
+	}
+	if rescue.Block == nil {
+		t.Fatal("expected Block to be set")
+	}
+}
+
+func TestRescueExpr_MethodCall(t *testing.T) {
+	input := `def main
+  value = obj.get_value() rescue nil
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+	rescue, ok := assign.Value.(*ast.RescueExpr)
+	if !ok {
+		t.Fatalf("expected RescueExpr, got %T", assign.Value)
+	}
+
+	call, ok := rescue.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr in rescue, got %T", rescue.Expr)
+	}
+
+	if call.Func == nil {
+		t.Fatal("expected Func to be set")
+	}
+}
+
+func TestRescueExpr_SelectorWithoutParens(t *testing.T) {
+	input := `def main
+  value = obj.get_value rescue nil
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+	rescue, ok := assign.Value.(*ast.RescueExpr)
+	if !ok {
+		t.Fatalf("expected RescueExpr, got %T", assign.Value)
+	}
+
+	call, ok := rescue.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr (converted from selector), got %T", rescue.Expr)
+	}
+
+	if call.Func == nil {
+		t.Fatal("expected Func to be set")
+	}
+}
+
+func TestRescueExpr_IdentWithoutParens(t *testing.T) {
+	input := `def main
+  value = fetch rescue nil
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+	rescue, ok := assign.Value.(*ast.RescueExpr)
+	if !ok {
+		t.Fatalf("expected RescueExpr, got %T", assign.Value)
+	}
+
+	call, ok := rescue.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr (converted from ident), got %T", rescue.Expr)
+	}
+
+	ident, ok := call.Func.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident in call, got %T", call.Func)
+	}
+	if ident.Name != "fetch" {
+		t.Errorf("expected func name 'fetch', got %q", ident.Name)
+	}
+}
+
+// Error formatting tests
+
+func TestFormatErrors(t *testing.T) {
+	tests := []struct {
+		name     string
+		errors   []ParseError
+		expected string
+	}{
+		{
+			name:     "empty errors",
+			errors:   []ParseError{},
+			expected: "",
+		},
+		{
+			name: "single error without hint",
+			errors: []ParseError{
+				{Line: 1, Column: 5, Message: "unexpected token"},
+			},
+			expected: "1:5: unexpected token",
+		},
+		{
+			name: "single error with hint",
+			errors: []ParseError{
+				{Line: 2, Column: 10, Message: "missing type", Hint: "add : Type"},
+			},
+			expected: "2:10: missing type (hint: add : Type)",
+		},
+		{
+			name: "multiple errors",
+			errors: []ParseError{
+				{Line: 1, Column: 1, Message: "error one"},
+				{Line: 2, Column: 2, Message: "error two"},
+			},
+			expected: "1:1: error one\n2:2: error two",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := FormatErrors(tt.errors)
+			if got != tt.expected {
+				t.Errorf("FormatErrors() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestParseErrors(t *testing.T) {
+	input := `def main
+  if
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	errs := p.ParseErrors()
+	if len(errs) == 0 {
+		t.Fatal("expected parse errors, got none")
+	}
+
+	err := errs[0]
+	if err.Line == 0 {
+		t.Error("expected Line to be set")
+	}
+	if err.Message == "" {
+		t.Error("expected Message to be set")
+	}
+}
+
+func TestParseError_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      ParseError
+		expected string
+	}{
+		{
+			name:     "without hint",
+			err:      ParseError{Line: 5, Column: 10, Message: "test error"},
+			expected: "5:10: test error",
+		},
+		{
+			name:     "with hint",
+			err:      ParseError{Line: 3, Column: 1, Message: "missing end", Hint: "add 'end' keyword"},
+			expected: "3:1: missing end (hint: add 'end' keyword)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.err.String()
+			if got != tt.expected {
+				t.Errorf("String() = %q, want %q", got, tt.expected)
+			}
+		})
+	}
+}
+
+// Error case tests
+
+func TestModuleDecl_MissingName(t *testing.T) {
+	input := `module
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for missing module name")
+	}
+}
+
+func TestModuleDecl_MissingEnd(t *testing.T) {
+	input := `module Foo
+  def bar
+  end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for missing end")
+	}
+}
+
+func TestModuleDecl_UnexpectedToken(t *testing.T) {
+	input := `module Foo
+  class Bar
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for unexpected token in module")
+	}
+}
+
+func TestAccessorDecl_MissingType(t *testing.T) {
+	input := `class Foo
+  getter name
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for missing accessor type")
+	}
+}
+
+func TestAccessorDecl_MissingName(t *testing.T) {
+	input := `class Foo
+  getter : String
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for missing accessor name")
+	}
+}
+
+func TestSuperExpr_UnclosedParens(t *testing.T) {
+	input := `class Child < Parent
+  def foo
+    super(1, 2
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for unclosed parentheses in super")
+	}
+}
+
+func TestTypeNameParsing_GenericTypes(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{
+			input:    "class Foo\n  @items : Array[String]\nend",
+			expected: "Array[String]",
+		},
+		{
+			input:    "class Foo\n  @map : Map[String, Int]\nend",
+			expected: "Map[String, Int]",
+		},
+		{
+			input:    "class Foo\n  @nested : Array[Map[String, Int]]\nend",
+			expected: "Array[Map[String, Int]]",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.expected, func(t *testing.T) {
+			l := lexer.New(tt.input)
+			p := New(l)
+			program := p.ParseProgram()
+			checkParserErrors(t, p)
+
+			class := program.Declarations[0].(*ast.ClassDecl)
+			if len(class.Fields) < 1 {
+				t.Fatal("expected at least 1 field")
+			}
+			if class.Fields[0].Type != tt.expected {
+				t.Errorf("expected type %q, got %q", tt.expected, class.Fields[0].Type)
+			}
+		})
+	}
+}
+
+func TestTypeNameParsing_Optional(t *testing.T) {
+	input := `class Foo
+  @value : String?
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	class := program.Declarations[0].(*ast.ClassDecl)
+	if len(class.Fields) != 1 {
+		t.Fatalf("expected 1 field, got %d", len(class.Fields))
+	}
+	if class.Fields[0].Type != "String?" {
+		t.Errorf("expected type 'String?', got %q", class.Fields[0].Type)
+	}
+}
+
+func TestFieldDecl_MissingType(t *testing.T) {
+	input := `class Foo
+  @name
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for field without type")
+	}
+}
+
+func TestMethodSig_InInterface(t *testing.T) {
+	input := `interface Speaker
+  def speak(msg : String) -> String
+  def volume -> Int
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	iface := program.Declarations[0].(*ast.InterfaceDecl)
+	if len(iface.Methods) != 2 {
+		t.Fatalf("expected 2 method signatures, got %d", len(iface.Methods))
+	}
+
+	sig := iface.Methods[0]
+	if sig.Name != "speak" {
+		t.Errorf("expected method name 'speak', got %q", sig.Name)
+	}
+	if len(sig.Params) != 1 {
+		t.Errorf("expected 1 param, got %d", len(sig.Params))
+	}
+	if len(sig.ReturnTypes) != 1 || sig.ReturnTypes[0] != "String" {
+		t.Errorf("expected return type 'String', got %v", sig.ReturnTypes)
+	}
+}
+
+func TestMethodSig_MultipleReturnTypes(t *testing.T) {
+	input := `interface Parser
+  def parse(input : String) -> (AST, error)
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	iface := program.Declarations[0].(*ast.InterfaceDecl)
+	if len(iface.Methods) != 1 {
+		t.Fatalf("expected 1 method, got %d", len(iface.Methods))
+	}
+
+	sig := iface.Methods[0]
+	if len(sig.ReturnTypes) != 2 {
+		t.Fatalf("expected 2 return types, got %d", len(sig.ReturnTypes))
+	}
+	if sig.ReturnTypes[0] != "AST" {
+		t.Errorf("expected first return type 'AST', got %q", sig.ReturnTypes[0])
+	}
+	if sig.ReturnTypes[1] != "error" {
+		t.Errorf("expected second return type 'error', got %q", sig.ReturnTypes[1])
+	}
+}
+
+func TestMethodSig_MultipleParams(t *testing.T) {
+	input := `interface Calculator
+  def add(a : Int, b : Int, c : Int) -> Int
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	iface := program.Declarations[0].(*ast.InterfaceDecl)
+	sig := iface.Methods[0]
+	if len(sig.Params) != 3 {
+		t.Fatalf("expected 3 params, got %d", len(sig.Params))
+	}
+}
+
+func TestMethodSig_TrailingCommaParams(t *testing.T) {
+	input := `interface Foo
+  def bar(a : Int, b : String,) -> Bool
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	iface := program.Declarations[0].(*ast.InterfaceDecl)
+	sig := iface.Methods[0]
+	if len(sig.Params) != 2 {
+		t.Fatalf("expected 2 params (trailing comma), got %d", len(sig.Params))
+	}
+}
+
+func TestMethodSig_TrailingCommaReturnTypes(t *testing.T) {
+	input := `interface Foo
+  def bar -> (Int, String,)
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	iface := program.Declarations[0].(*ast.InterfaceDecl)
+	sig := iface.Methods[0]
+	if len(sig.ReturnTypes) != 2 {
+		t.Fatalf("expected 2 return types (trailing comma), got %d", len(sig.ReturnTypes))
+	}
+}
+
+func TestMethodSig_MissingName(t *testing.T) {
+	input := `interface Foo
+  def
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for missing method name")
+	}
+}
+
+func TestMethodSig_MissingCloseParen(t *testing.T) {
+	input := `interface Foo
+  def bar(a : Int
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for unclosed parentheses")
+	}
+}
+
+func TestMethodSig_MissingTypeAfterArrow(t *testing.T) {
+	input := `interface Foo
+  def bar ->
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for missing type after ->")
+	}
+}
+
+// Field validation tests
+
+func TestValidateNoNewFields_InMethod(t *testing.T) {
+	input := `class User
+  @name : String
+
+  def initialize(@name : String)
+  end
+
+  def set_unknown
+    @unknown = "test"
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for new field in non-initialize method")
+	}
+}
+
+func TestValidateNoNewFields_InIfStatement(t *testing.T) {
+	input := `class User
+  @name : String
+
+  def initialize(@name : String)
+  end
+
+  def check
+    if true
+      @unknown = "test"
+    end
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for new field in if statement")
+	}
+}
+
+func TestValidateNoNewFields_InWhileLoop(t *testing.T) {
+	input := `class User
+  @name : String
+
+  def initialize(@name : String)
+  end
+
+  def loop
+    while true
+      @unknown = "test"
+    end
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for new field in while loop")
+	}
+}
+
+func TestValidateNoNewFields_InForLoop(t *testing.T) {
+	input := `class User
+  @name : String
+
+  def initialize(@name : String)
+  end
+
+  def iterate
+    for i in items
+      @unknown = "test"
+    end
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for new field in for loop")
+	}
+}
+
+func TestValidateNoNewFields_OrAssign(t *testing.T) {
+	input := `class User
+  @name : String
+
+  def initialize(@name : String)
+  end
+
+  def lazy
+    @unknown ||= "default"
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.Errors()) == 0 {
+		t.Error("expected parse error for new field via ||= in method")
+	}
+}
+
+// Index expression tests
+
+func TestIndexExpr_Range(t *testing.T) {
+	input := `def main
+  arr = items[1..3]
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+
+	indexExpr, ok := assign.Value.(*ast.IndexExpr)
+	if !ok {
+		t.Fatalf("expected IndexExpr, got %T", assign.Value)
+	}
+
+	rangeLit, ok := indexExpr.Index.(*ast.RangeLit)
+	if !ok {
+		t.Fatalf("expected RangeLit index, got %T", indexExpr.Index)
+	}
+
+	if rangeLit.Exclusive {
+		t.Error("expected inclusive range (..), got exclusive (...)")
+	}
+}
+
+func TestIndexExpr_Negative(t *testing.T) {
+	input := `def main
+  last = items[-1]
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+
+	indexExpr, ok := assign.Value.(*ast.IndexExpr)
+	if !ok {
+		t.Fatalf("expected IndexExpr, got %T", assign.Value)
+	}
+
+	unary, ok := indexExpr.Index.(*ast.UnaryExpr)
+	if !ok {
+		t.Fatalf("expected UnaryExpr for negative index, got %T", indexExpr.Index)
+	}
+	if unary.Op != "-" {
+		t.Errorf("expected '-' operator, got %q", unary.Op)
+	}
+}
+
+// Interface and class inheritance tests
+
+func TestInterfaceWithParents(t *testing.T) {
+	input := `interface ReadWriter < Reader, Writer
+  def close
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	iface := program.Declarations[0].(*ast.InterfaceDecl)
+	if len(iface.Parents) != 2 {
+		t.Fatalf("expected 2 parent interfaces, got %d", len(iface.Parents))
+	}
+	if iface.Parents[0] != "Reader" || iface.Parents[1] != "Writer" {
+		t.Errorf("expected parents [Reader, Writer], got %v", iface.Parents)
+	}
+}
+
+func TestClassWithEmbeds(t *testing.T) {
+	input := `class AdminUser < User
+  def admin?
+    true
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	class := program.Declarations[0].(*ast.ClassDecl)
+	if len(class.Embeds) != 1 {
+		t.Fatalf("expected 1 embed, got %d", len(class.Embeds))
+	}
+	if class.Embeds[0] != "User" {
+		t.Errorf("expected embed 'User', got %q", class.Embeds[0])
+	}
+}

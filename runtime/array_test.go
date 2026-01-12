@@ -955,3 +955,421 @@ func TestCallMethodWithMapIntegration(t *testing.T) {
 		t.Errorf("Map with CallMethod = %v; want [ALICE, BOB]", result)
 	}
 }
+
+func TestEach_AllTypes(t *testing.T) {
+	// Test []any
+	var anyResults []any
+	Each([]any{1, "two", 3.0}, func(v any) bool {
+		anyResults = append(anyResults, v)
+		return true
+	})
+	if len(anyResults) != 3 {
+		t.Errorf("Each []any: got %d elements, want 3", len(anyResults))
+	}
+
+	// Test []float64
+	var floatResults []float64
+	Each([]float64{1.1, 2.2, 3.3}, func(v any) bool {
+		floatResults = append(floatResults, v.(float64))
+		return true
+	})
+	if !reflect.DeepEqual(floatResults, []float64{1.1, 2.2, 3.3}) {
+		t.Errorf("Each []float64: got %v", floatResults)
+	}
+
+	// Test []bool
+	var boolResults []bool
+	Each([]bool{true, false, true}, func(v any) bool {
+		boolResults = append(boolResults, v.(bool))
+		return true
+	})
+	if !reflect.DeepEqual(boolResults, []bool{true, false, true}) {
+		t.Errorf("Each []bool: got %v", boolResults)
+	}
+
+	// Test early break with []float64
+	var partialFloats []float64
+	Each([]float64{1.0, 2.0, 3.0, 4.0}, func(v any) bool {
+		partialFloats = append(partialFloats, v.(float64))
+		return v.(float64) < 2.5
+	})
+	if len(partialFloats) != 3 {
+		t.Errorf("Each []float64 with break: got %d elements, want 3", len(partialFloats))
+	}
+
+	// Test early break with []bool
+	var partialBools []bool
+	Each([]bool{true, true, false, true}, func(v any) bool {
+		partialBools = append(partialBools, v.(bool))
+		return v.(bool)
+	})
+	if len(partialBools) != 3 {
+		t.Errorf("Each []bool with break: got %d elements, want 3", len(partialBools))
+	}
+
+	// Test early break with []any
+	var partialAny []any
+	Each([]any{1, 2, 3, 4}, func(v any) bool {
+		partialAny = append(partialAny, v)
+		return v.(int) < 3
+	})
+	if len(partialAny) != 3 {
+		t.Errorf("Each []any with break: got %d elements, want 3", len(partialAny))
+	}
+
+	// Test reflection fallback with custom slice type
+	type customInt int
+	customSlice := []customInt{1, 2, 3}
+	var customResults []customInt
+	Each(customSlice, func(v any) bool {
+		customResults = append(customResults, v.(customInt))
+		return true
+	})
+	if len(customResults) != 3 {
+		t.Errorf("Each custom slice: got %d elements, want 3", len(customResults))
+	}
+}
+
+func TestEachWithIndex_AllTypes(t *testing.T) {
+	// Test []string
+	var strPairs []struct {
+		val string
+		idx int
+	}
+	EachWithIndex([]string{"a", "b", "c"}, func(v any, i int) bool {
+		strPairs = append(strPairs, struct {
+			val string
+			idx int
+		}{v.(string), i})
+		return true
+	})
+	if len(strPairs) != 3 || strPairs[2].val != "c" || strPairs[2].idx != 2 {
+		t.Errorf("EachWithIndex []string: got %v", strPairs)
+	}
+
+	// Test []float64
+	var floatPairs []struct {
+		val float64
+		idx int
+	}
+	EachWithIndex([]float64{1.1, 2.2}, func(v any, i int) bool {
+		floatPairs = append(floatPairs, struct {
+			val float64
+			idx int
+		}{v.(float64), i})
+		return true
+	})
+	if len(floatPairs) != 2 {
+		t.Errorf("EachWithIndex []float64: got %d elements", len(floatPairs))
+	}
+
+	// Test []bool
+	var boolPairs []struct {
+		val bool
+		idx int
+	}
+	EachWithIndex([]bool{true, false}, func(v any, i int) bool {
+		boolPairs = append(boolPairs, struct {
+			val bool
+			idx int
+		}{v.(bool), i})
+		return true
+	})
+	if len(boolPairs) != 2 {
+		t.Errorf("EachWithIndex []bool: got %d elements", len(boolPairs))
+	}
+
+	// Test []any
+	var anyPairs []struct {
+		val any
+		idx int
+	}
+	EachWithIndex([]any{"x", "y"}, func(v any, i int) bool {
+		anyPairs = append(anyPairs, struct {
+			val any
+			idx int
+		}{v, i})
+		return true
+	})
+	if len(anyPairs) != 2 {
+		t.Errorf("EachWithIndex []any: got %d elements", len(anyPairs))
+	}
+
+	// Test early break
+	var partial []int
+	EachWithIndex([]int{1, 2, 3, 4}, func(v any, i int) bool {
+		partial = append(partial, v.(int))
+		return i < 2
+	})
+	if len(partial) != 3 {
+		t.Errorf("EachWithIndex with break: got %d elements, want 3", len(partial))
+	}
+
+	// Test reflection fallback
+	type customStr string
+	customSlice := []customStr{"a", "b"}
+	var customPairs []struct {
+		val customStr
+		idx int
+	}
+	EachWithIndex(customSlice, func(v any, i int) bool {
+		customPairs = append(customPairs, struct {
+			val customStr
+			idx int
+		}{v.(customStr), i})
+		return true
+	})
+	if len(customPairs) != 2 {
+		t.Errorf("EachWithIndex custom slice: got %d elements", len(customPairs))
+	}
+}
+
+func TestAtIndex_AllTypes(t *testing.T) {
+	// Test []int
+	if AtIndex([]int{10, 20, 30}, 1).(int) != 20 {
+		t.Error("AtIndex []int positive failed")
+	}
+	if AtIndex([]int{10, 20, 30}, -1).(int) != 30 {
+		t.Error("AtIndex []int negative failed")
+	}
+
+	// Test []string
+	if AtIndex([]string{"a", "b", "c"}, 0).(string) != "a" {
+		t.Error("AtIndex []string positive failed")
+	}
+	if AtIndex([]string{"a", "b", "c"}, -2).(string) != "b" {
+		t.Error("AtIndex []string negative failed")
+	}
+
+	// Test []float64
+	if AtIndex([]float64{1.1, 2.2, 3.3}, 2).(float64) != 3.3 {
+		t.Error("AtIndex []float64 positive failed")
+	}
+	if AtIndex([]float64{1.1, 2.2, 3.3}, -3).(float64) != 1.1 {
+		t.Error("AtIndex []float64 negative failed")
+	}
+
+	// Test []bool
+	if AtIndex([]bool{true, false, true}, 1).(bool) != false {
+		t.Error("AtIndex []bool positive failed")
+	}
+	if AtIndex([]bool{true, false, true}, -1).(bool) != true {
+		t.Error("AtIndex []bool negative failed")
+	}
+
+	// Test []any
+	if AtIndex([]any{1, "two", 3.0}, 1) != "two" {
+		t.Error("AtIndex []any positive failed")
+	}
+	if AtIndex([]any{1, "two", 3.0}, -1).(float64) != 3.0 {
+		t.Error("AtIndex []any negative failed")
+	}
+
+	// Test string
+	if AtIndex("hello", 1).(string) != "e" {
+		t.Error("AtIndex string positive failed")
+	}
+	if AtIndex("hello", -1).(string) != "o" {
+		t.Error("AtIndex string negative failed")
+	}
+
+	// Test reflection fallback
+	type customInt int
+	customSlice := []customInt{1, 2, 3}
+	if AtIndex(customSlice, -1).(customInt) != 3 {
+		t.Error("AtIndex custom slice negative failed")
+	}
+}
+
+func TestAtIndexOpt_AllTypes(t *testing.T) {
+	// Test []int - valid indices
+	v, ok := AtIndexOpt([]int{10, 20, 30}, 1)
+	if !ok || v.(int) != 20 {
+		t.Error("AtIndexOpt []int valid positive failed")
+	}
+	v, ok = AtIndexOpt([]int{10, 20, 30}, -1)
+	if !ok || v.(int) != 30 {
+		t.Error("AtIndexOpt []int valid negative failed")
+	}
+
+	// Test []int - invalid indices
+	_, ok = AtIndexOpt([]int{1, 2}, 5)
+	if ok {
+		t.Error("AtIndexOpt []int out of bounds should return false")
+	}
+	_, ok = AtIndexOpt([]int{1, 2}, -5)
+	if ok {
+		t.Error("AtIndexOpt []int negative out of bounds should return false")
+	}
+
+	// Test []string - valid
+	v, ok = AtIndexOpt([]string{"a", "b"}, 0)
+	if !ok || v.(string) != "a" {
+		t.Error("AtIndexOpt []string valid failed")
+	}
+	// Test []string - invalid
+	_, ok = AtIndexOpt([]string{"a"}, 10)
+	if ok {
+		t.Error("AtIndexOpt []string out of bounds should return false")
+	}
+
+	// Test []float64
+	v, ok = AtIndexOpt([]float64{1.1, 2.2}, -1)
+	if !ok || v.(float64) != 2.2 {
+		t.Error("AtIndexOpt []float64 valid negative failed")
+	}
+	_, ok = AtIndexOpt([]float64{1.1}, 5)
+	if ok {
+		t.Error("AtIndexOpt []float64 out of bounds should return false")
+	}
+
+	// Test []bool
+	v, ok = AtIndexOpt([]bool{true, false}, 0)
+	if !ok || v.(bool) != true {
+		t.Error("AtIndexOpt []bool valid failed")
+	}
+	_, ok = AtIndexOpt([]bool{true}, -5)
+	if ok {
+		t.Error("AtIndexOpt []bool negative out of bounds should return false")
+	}
+
+	// Test []any
+	v, ok = AtIndexOpt([]any{1, "two"}, 1)
+	if !ok || v.(string) != "two" {
+		t.Error("AtIndexOpt []any valid failed")
+	}
+	_, ok = AtIndexOpt([]any{}, 0)
+	if ok {
+		t.Error("AtIndexOpt empty []any should return false")
+	}
+
+	// Test string
+	v, ok = AtIndexOpt("hello", 1)
+	if !ok || v.(string) != "e" {
+		t.Error("AtIndexOpt string valid failed")
+	}
+	_, ok = AtIndexOpt("hi", 10)
+	if ok {
+		t.Error("AtIndexOpt string out of bounds should return false")
+	}
+
+	// Test reflection fallback
+	type customInt int
+	customSlice := []customInt{1, 2}
+	v, ok = AtIndexOpt(customSlice, -1)
+	if !ok || v.(customInt) != 2 {
+		t.Error("AtIndexOpt custom slice valid negative failed")
+	}
+	_, ok = AtIndexOpt(customSlice, 10)
+	if ok {
+		t.Error("AtIndexOpt custom slice out of bounds should return false")
+	}
+}
+
+func TestSlice_AllTypes(t *testing.T) {
+	// Test []int with inclusive range
+	result := Slice([]int{1, 2, 3, 4, 5}, Range{Start: 1, End: 3, Exclusive: false}).([]int)
+	if !reflect.DeepEqual(result, []int{2, 3, 4}) {
+		t.Errorf("Slice []int inclusive: got %v, want [2 3 4]", result)
+	}
+
+	// Test []int with exclusive range
+	result = Slice([]int{1, 2, 3, 4, 5}, Range{Start: 1, End: 3, Exclusive: true}).([]int)
+	if !reflect.DeepEqual(result, []int{2, 3}) {
+		t.Errorf("Slice []int exclusive: got %v, want [2 3]", result)
+	}
+
+	// Test []int with negative indices
+	result = Slice([]int{1, 2, 3, 4, 5}, Range{Start: -3, End: -1, Exclusive: false}).([]int)
+	if !reflect.DeepEqual(result, []int{3, 4, 5}) {
+		t.Errorf("Slice []int negative: got %v, want [3 4 5]", result)
+	}
+
+	// Test []string
+	strResult := Slice([]string{"a", "b", "c", "d"}, Range{Start: 0, End: 2, Exclusive: false}).([]string)
+	if !reflect.DeepEqual(strResult, []string{"a", "b", "c"}) {
+		t.Errorf("Slice []string: got %v", strResult)
+	}
+
+	// Test []float64
+	floatResult := Slice([]float64{1.1, 2.2, 3.3}, Range{Start: 0, End: 1, Exclusive: false}).([]float64)
+	if !reflect.DeepEqual(floatResult, []float64{1.1, 2.2}) {
+		t.Errorf("Slice []float64: got %v", floatResult)
+	}
+
+	// Test []bool
+	boolResult := Slice([]bool{true, false, true}, Range{Start: 1, End: 2, Exclusive: false}).([]bool)
+	if !reflect.DeepEqual(boolResult, []bool{false, true}) {
+		t.Errorf("Slice []bool: got %v", boolResult)
+	}
+
+	// Test []any
+	anyResult := Slice([]any{1, "two", 3.0}, Range{Start: 0, End: 1, Exclusive: false}).([]any)
+	if len(anyResult) != 2 {
+		t.Errorf("Slice []any: got %d elements, want 2", len(anyResult))
+	}
+
+	// Test string
+	strSlice := Slice("hello world", Range{Start: 0, End: 4, Exclusive: false}).(string)
+	if strSlice != "hello" {
+		t.Errorf("Slice string: got %q, want \"hello\"", strSlice)
+	}
+
+	// Test out of bounds (should return empty)
+	emptyResult := Slice([]int{1, 2}, Range{Start: 10, End: 20, Exclusive: false}).([]int)
+	if len(emptyResult) != 0 {
+		t.Errorf("Slice out of bounds: got %v, want empty", emptyResult)
+	}
+
+	// Test reflection fallback
+	type customInt int
+	customSlice := []customInt{1, 2, 3, 4}
+	customResult := Slice(customSlice, Range{Start: 1, End: 2, Exclusive: false}).([]customInt)
+	if len(customResult) != 2 {
+		t.Errorf("Slice custom: got %d elements, want 2", len(customResult))
+	}
+}
+
+func TestShiftLeft_Chan(t *testing.T) {
+	ch := make(chan int, 5)
+	result := ShiftLeft(ch, 42)
+	if result != ch {
+		t.Error("ShiftLeft chan should return the same channel")
+	}
+	received := <-ch
+	if received != 42 {
+		t.Errorf("ShiftLeft chan: got %d, want 42", received)
+	}
+}
+
+func TestMaxMinFloat_Empty(t *testing.T) {
+	_, ok := MinFloat([]float64{})
+	if ok {
+		t.Error("MinFloat empty should return false")
+	}
+	_, ok = MaxFloat([]float64{})
+	if ok {
+		t.Error("MaxFloat empty should return false")
+	}
+}
+
+func TestMaxMinInt_Empty(t *testing.T) {
+	_, ok := MinInt([]int{})
+	if ok {
+		t.Error("MinInt empty should return false")
+	}
+	_, ok = MaxInt([]int{})
+	if ok {
+		t.Error("MaxInt empty should return false")
+	}
+}
+
+func TestCallMethod_NotFound(t *testing.T) {
+	obj := struct{ Name string }{Name: "test"}
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("CallMethod should panic for non-existent method")
+		}
+	}()
+	CallMethod(obj, "nonexistent_method")
+}
