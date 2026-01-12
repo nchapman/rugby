@@ -262,6 +262,8 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 		}
 		if stmt := p.parseStatement(); stmt != nil {
 			fn.Body = append(fn.Body, stmt)
+		} else {
+			p.nextToken() // error recovery: always advance to prevent infinite loop
 		}
 	}
 
@@ -855,6 +857,8 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 		}
 		if stmt := p.parseStatement(); stmt != nil {
 			method.Body = append(method.Body, stmt)
+		} else {
+			p.nextToken() // error recovery: always advance to prevent infinite loop
 		}
 	}
 

@@ -123,6 +123,8 @@ func (p *Parser) parseItStmt() *ast.ItStmt {
 		}
 		if s := p.parseStatement(); s != nil {
 			stmt.Body = append(stmt.Body, s)
+		} else {
+			p.nextToken() // error recovery: always advance to prevent infinite loop
 		}
 	}
 
@@ -187,6 +189,8 @@ func (p *Parser) parseTestStmt() *ast.TestStmt {
 		}
 		if s := p.parseStatement(); s != nil {
 			stmt.Body = append(stmt.Body, s)
+		} else {
+			p.nextToken() // error recovery: always advance to prevent infinite loop
 		}
 	}
 
@@ -250,6 +254,8 @@ func (p *Parser) parseTableStmt() *ast.TableStmt {
 		}
 		if s := p.parseStatement(); s != nil {
 			stmt.Body = append(stmt.Body, s)
+		} else {
+			p.nextToken() // error recovery: always advance to prevent infinite loop
 		}
 	}
 
@@ -305,6 +311,8 @@ func (p *Parser) parseBeforeStmt() *ast.BeforeStmt {
 		}
 		if s := p.parseStatement(); s != nil {
 			stmt.Body = append(stmt.Body, s)
+		} else {
+			p.nextToken() // error recovery: always advance to prevent infinite loop
 		}
 	}
 
@@ -360,6 +368,8 @@ func (p *Parser) parseAfterStmt() *ast.AfterStmt {
 		}
 		if s := p.parseStatement(); s != nil {
 			stmt.Body = append(stmt.Body, s)
+		} else {
+			p.nextToken() // error recovery: always advance to prevent infinite loop
 		}
 	}
 

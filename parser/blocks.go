@@ -104,6 +104,8 @@ func (p *Parser) parseBlock(terminator token.TokenType) *ast.BlockExpr {
 		}
 		if stmt := p.parseStatement(); stmt != nil {
 			block.Body = append(block.Body, stmt)
+		} else {
+			p.nextToken() // error recovery: always advance to prevent infinite loop
 		}
 	}
 

@@ -221,6 +221,8 @@ func (p *Parser) parseIfStmt() *ast.IfStmt {
 		}
 		if s := p.parseStatement(); s != nil {
 			stmt.Then = append(stmt.Then, s)
+		} else {
+			p.nextToken() // error recovery: always advance
 		}
 	}
 
@@ -240,6 +242,8 @@ func (p *Parser) parseIfStmt() *ast.IfStmt {
 			}
 			if s := p.parseStatement(); s != nil {
 				clause.Body = append(clause.Body, s)
+			} else {
+				p.nextToken() // error recovery: always advance
 			}
 		}
 		stmt.ElseIfs = append(stmt.ElseIfs, clause)
@@ -257,6 +261,8 @@ func (p *Parser) parseIfStmt() *ast.IfStmt {
 			}
 			if s := p.parseStatement(); s != nil {
 				stmt.Else = append(stmt.Else, s)
+			} else {
+				p.nextToken() // error recovery: always advance
 			}
 		}
 	}
@@ -293,6 +299,8 @@ func (p *Parser) parseUnlessStmt() *ast.IfStmt {
 		}
 		if s := p.parseStatement(); s != nil {
 			stmt.Then = append(stmt.Then, s)
+		} else {
+			p.nextToken() // error recovery: always advance
 		}
 	}
 
@@ -316,6 +324,8 @@ func (p *Parser) parseUnlessStmt() *ast.IfStmt {
 			}
 			if s := p.parseStatement(); s != nil {
 				stmt.Else = append(stmt.Else, s)
+			} else {
+				p.nextToken() // error recovery: always advance
 			}
 		}
 	}
@@ -379,6 +389,8 @@ func (p *Parser) parseCaseStmt() *ast.CaseStmt {
 			}
 			if s := p.parseStatement(); s != nil {
 				clause.Body = append(clause.Body, s)
+			} else {
+				p.nextToken() // error recovery: always advance
 			}
 		}
 		stmt.WhenClauses = append(stmt.WhenClauses, clause)
@@ -402,6 +414,8 @@ func (p *Parser) parseCaseStmt() *ast.CaseStmt {
 			}
 			if s := p.parseStatement(); s != nil {
 				stmt.Else = append(stmt.Else, s)
+			} else {
+				p.nextToken() // error recovery: always advance
 			}
 		}
 	}
@@ -455,6 +469,8 @@ func (p *Parser) parseCaseTypeStmt() *ast.CaseTypeStmt {
 			}
 			if s := p.parseStatement(); s != nil {
 				clause.Body = append(clause.Body, s)
+			} else {
+				p.nextToken() // error recovery: always advance
 			}
 		}
 		stmt.WhenClauses = append(stmt.WhenClauses, clause)
@@ -478,6 +494,8 @@ func (p *Parser) parseCaseTypeStmt() *ast.CaseTypeStmt {
 			}
 			if s := p.parseStatement(); s != nil {
 				stmt.Else = append(stmt.Else, s)
+			} else {
+				p.nextToken() // error recovery: always advance
 			}
 		}
 	}
@@ -508,6 +526,8 @@ func (p *Parser) parseWhileStmt() *ast.WhileStmt {
 		}
 		if s := p.parseStatement(); s != nil {
 			stmt.Body = append(stmt.Body, s)
+		} else {
+			p.nextToken() // error recovery: always advance
 		}
 	}
 
@@ -537,6 +557,8 @@ func (p *Parser) parseUntilStmt() *ast.UntilStmt {
 		}
 		if s := p.parseStatement(); s != nil {
 			stmt.Body = append(stmt.Body, s)
+		} else {
+			p.nextToken() // error recovery: always advance
 		}
 	}
 
@@ -579,6 +601,8 @@ func (p *Parser) parseForStmt() *ast.ForStmt {
 		}
 		if s := p.parseStatement(); s != nil {
 			stmt.Body = append(stmt.Body, s)
+		} else {
+			p.nextToken() // error recovery: always advance
 		}
 	}
 
@@ -896,6 +920,8 @@ func (p *Parser) parseSelectStmt() *ast.SelectStmt {
 			}
 			if s := p.parseStatement(); s != nil {
 				stmt.Else = append(stmt.Else, s)
+			} else {
+				p.nextToken() // error recovery: always advance
 			}
 		}
 	}
@@ -954,6 +980,8 @@ func (p *Parser) parseSelectCase() ast.SelectCase {
 		}
 		if s := p.parseStatement(); s != nil {
 			selectCase.Body = append(selectCase.Body, s)
+		} else {
+			p.nextToken() // error recovery: always advance
 		}
 	}
 
@@ -997,6 +1025,8 @@ func (p *Parser) parseConcurrentlyStmt() *ast.ConcurrentlyStmt {
 		}
 		if s := p.parseStatement(); s != nil {
 			stmt.Body = append(stmt.Body, s)
+		} else {
+			p.nextToken() // error recovery: always advance
 		}
 	}
 
