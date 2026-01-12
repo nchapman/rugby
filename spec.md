@@ -897,9 +897,10 @@ print x + 1        # print(x + 1)
 5. Unary minus disambiguation uses whitespace:
    - `foo -1` → `foo(-1)` (space before `-`, no space after)
    - `foo - 1` → `(foo - 1)` (space on both sides = binary)
-6. Collection literals with space are arguments:
+6. Array literals with space are arguments:
    - `foo [1, 2]` → `foo([1, 2])` (array argument)
    - `foo[1]` → index expression (no space = indexing)
+   - Note: `{` always starts a block, so pass maps with parens: `foo({"a" => 1})`
 7. **Properties:** `user.age` (getter) and `user.age = 5` (setter) do not use parentheses
 8. For clarity in complex expressions, parentheses are recommended
 
