@@ -1681,6 +1681,19 @@ runtime/
 * `length` / `size` → `len(arr)` (inlined)
 * `empty?` → `len(arr) == 0` (inlined)
 
+**Append operator (`<<`):**
+```ruby
+arr << item           # append single item
+arr << a << b << c    # chainable (returns new slice)
+arr = arr << item     # reassign to capture result
+```
+
+The `<<` operator works for both arrays and channels:
+* Arrays: `runtime.ShiftLeft(arr, item)` → appends and returns new slice
+* Channels: `runtime.ShiftLeft(ch, val)` → sends value and returns channel
+
+**Note:** Unlike Ruby's in-place mutation, `<<` returns a new slice in Rugby. To update the original variable, reassign: `arr = arr << item`.
+
 **Mutation (in-place):**
 * `reverse` → `runtime.Reverse(arr)` (in-place)
 * `sort` → `runtime.Sort(arr)` (in-place, requires `Ordered`)
@@ -1899,7 +1912,8 @@ msg = ch.try_receive ?? "default"
 |-------|-----|
 | `Chan[T].new(n)` | `make(chan T, n)` |
 | `Chan[T].new` | `make(chan T)` |
-| `ch << val` | `ch <- val` |
+| `ch << val` | `runtime.ShiftLeft(ch, val)` (outside select) |
+| `ch << val` (in select) | `ch <- val` (native Go syntax required) |
 | `ch.receive` | `<-ch` |
 | `ch.try_receive` | wrapped `select` with default (returns `Option[T]`) |
 | `ch.close` | `close(ch)` |

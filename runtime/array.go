@@ -584,3 +584,65 @@ func AtIndexOpt(collection any, i int) (any, bool) {
 	}
 	return val.Index(i).Interface(), true
 }
+
+// ShiftLeft implements the << operator for both slices and channels.
+// For slices: appends the value and returns the new slice.
+// For channels: sends the value and returns the channel.
+// This allows chaining: arr << a << b or ch << val.
+// Ruby: arr << item, ch << val
+func ShiftLeft(collection any, value any) any {
+	// Fast paths for common slice types
+	switch s := collection.(type) {
+	case []int:
+		if v, ok := value.(int); ok {
+			return append(s, v)
+		}
+	case []string:
+		if v, ok := value.(string); ok {
+			return append(s, v)
+		}
+	case []float64:
+		if v, ok := value.(float64); ok {
+			return append(s, v)
+		}
+	case []bool:
+		if v, ok := value.(bool); ok {
+			return append(s, v)
+		}
+	case []any:
+		return append(s, value)
+	}
+
+	// Use reflection for channels and other types
+	val := reflect.ValueOf(collection)
+
+	switch val.Kind() {
+	case reflect.Chan:
+		// Channel send
+		val.Send(reflect.ValueOf(value))
+		return collection
+
+	case reflect.Slice:
+		// Slice append via reflection
+		return appendToSlice(val, value)
+
+	default:
+		panic(fmt.Sprintf("ShiftLeft: expected slice or channel, got %T", collection))
+	}
+}
+
+// appendToSlice appends a value to a slice using reflection.
+func appendToSlice(sliceVal reflect.Value, value any) any {
+	// Convert value to the slice's element type
+	elemType := sliceVal.Type().Elem()
+	valueVal := reflect.ValueOf(value)
+
+	// Handle type conversion if needed
+	if valueVal.Type() != elemType && valueVal.Type().ConvertibleTo(elemType) {
+		valueVal = valueVal.Convert(elemType)
+	}
+
+	// Append and return the new slice
+	newSlice := reflect.Append(sliceVal, valueVal)
+	return newSlice.Interface()
+}

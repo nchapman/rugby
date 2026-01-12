@@ -226,7 +226,7 @@ func TestChannelOperations(t *testing.T) {
 	}{
 		{
 			input:    `ch << 42`,
-			expected: "ch <- 42",
+			expected: "runtime.ShiftLeft(ch, 42)",
 			desc:     "channel send",
 		},
 		{
@@ -550,9 +550,9 @@ func TestChannelSendExpressions(t *testing.T) {
 		expected string
 		desc     string
 	}{
-		{`ch << 42`, "ch <- 42", "literal"},
-		{`ch << x + y`, "ch <- x + y", "binary expr"},
-		{`ch << compute()`, "ch <- compute()", "function call"},
+		{`ch << 42`, "runtime.ShiftLeft(ch, 42)", "literal"},
+		{`ch << x + y`, "runtime.ShiftLeft(ch, (x + y))", "binary expr"},
+		{`ch << compute()`, "runtime.ShiftLeft(ch, compute())", "function call"},
 	}
 
 	for _, tt := range tests {
@@ -677,11 +677,11 @@ val2 = ch.receive`
 		return
 	}
 
-	if !strings.Contains(code, "ch <- 1") {
-		t.Errorf("expected 'ch <- 1', got:\n%s", code)
+	if !strings.Contains(code, "runtime.ShiftLeft(ch, 1)") {
+		t.Errorf("expected 'runtime.ShiftLeft(ch, 1)', got:\n%s", code)
 	}
-	if !strings.Contains(code, "ch <- 2") {
-		t.Errorf("expected 'ch <- 2', got:\n%s", code)
+	if !strings.Contains(code, "runtime.ShiftLeft(ch, 2)") {
+		t.Errorf("expected 'runtime.ShiftLeft(ch, 2)', got:\n%s", code)
 	}
 	if !strings.Contains(code, "val1 := <-ch") {
 		t.Errorf("expected 'val1 := <-ch', got:\n%s", code)

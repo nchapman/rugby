@@ -15,6 +15,7 @@ const (
 	andPrec     // and
 	equals      // ==, !=
 	lessGreater // <, >, <=, >=
+	shift       // << (lower than arithmetic, like Ruby)
 	sum         // +, -
 	product     // *, /, %
 	prefix      // -x, not x
@@ -40,7 +41,7 @@ var precedences = map[token.TokenType]int{
 	token.GE:               lessGreater,
 	token.PLUS:             sum,
 	token.MINUS:            sum,
-	token.SHOVELLEFT:       sum, // << (channel send)
+	token.SHOVELLEFT:       shift, // << (array append / channel send)
 	token.STAR:             product,
 	token.SLASH:            product,
 	token.PERCENT:          product,

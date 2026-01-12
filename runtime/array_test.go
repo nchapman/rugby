@@ -730,3 +730,57 @@ func TestAtIndexPanicsOutOfBounds(t *testing.T) {
 		AtIndex(arr, -10)
 	}()
 }
+
+func TestShiftLeftSlice(t *testing.T) {
+	// Test with int slice
+	arr := []int{1, 2, 3}
+	result := ShiftLeft(arr, 4).([]int)
+	if len(result) != 4 || result[3] != 4 {
+		t.Errorf("ShiftLeft([]int, 4) = %v; want [1,2,3,4]", result)
+	}
+
+	// Original slice unchanged
+	if len(arr) != 3 {
+		t.Errorf("Original slice modified: %v", arr)
+	}
+
+	// Test with string slice
+	strs := []string{"a", "b"}
+	result2 := ShiftLeft(strs, "c").([]string)
+	if len(result2) != 3 || result2[2] != "c" {
+		t.Errorf("ShiftLeft([]string, c) = %v; want [a,b,c]", result2)
+	}
+
+	// Test with []any
+	anys := []any{1, "two"}
+	result3 := ShiftLeft(anys, 3.0).([]any)
+	if len(result3) != 3 {
+		t.Errorf("ShiftLeft([]any, 3.0) = %v; want [1,two,3.0]", result3)
+	}
+}
+
+func TestShiftLeftChaining(t *testing.T) {
+	// Test chaining: arr << 1 << 2 << 3
+	arr := []int{}
+	result := ShiftLeft(ShiftLeft(ShiftLeft(arr, 1), 2), 3).([]int)
+	if len(result) != 3 || result[0] != 1 || result[1] != 2 || result[2] != 3 {
+		t.Errorf("Chained ShiftLeft = %v; want [1,2,3]", result)
+	}
+}
+
+func TestShiftLeftChannel(t *testing.T) {
+	// Test with channel
+	ch := make(chan int, 1)
+	result := ShiftLeft(ch, 42)
+
+	// Should return the same channel
+	if result != ch {
+		t.Error("ShiftLeft on channel should return the same channel")
+	}
+
+	// Value should have been sent
+	val := <-ch
+	if val != 42 {
+		t.Errorf("Channel received %d; want 42", val)
+	}
+}

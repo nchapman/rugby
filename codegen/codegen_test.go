@@ -663,6 +663,51 @@ end`
 	assertContains(t, output, `runtime.AtIndex(matrix[0], -1)`)
 }
 
+func TestGenerateArrayAppend(t *testing.T) {
+	input := `def main
+  arr << 5
+end`
+
+	output := compile(t, input)
+
+	// Array append uses runtime.ShiftLeft
+	assertContains(t, output, `runtime.ShiftLeft(arr, 5)`)
+}
+
+func TestGenerateArrayAppendChained(t *testing.T) {
+	input := `def main
+  arr << 1 << 2 << 3
+end`
+
+	output := compile(t, input)
+
+	// Chained appends nest ShiftLeft calls
+	assertContains(t, output, `runtime.ShiftLeft(runtime.ShiftLeft(runtime.ShiftLeft(arr, 1), 2), 3)`)
+}
+
+func TestGenerateArrayAppendAssignment(t *testing.T) {
+	input := `def main
+  arr = [1, 2, 3]
+  arr = arr << 5
+end`
+
+	output := compile(t, input)
+
+	// Reassignment with append
+	assertContains(t, output, `arr = runtime.ShiftLeft(arr, 5)`)
+}
+
+func TestGenerateChannelSend(t *testing.T) {
+	input := `def main
+  ch << 42
+end`
+
+	output := compile(t, input)
+
+	// Channel send also uses runtime.ShiftLeft
+	assertContains(t, output, `runtime.ShiftLeft(ch, 42)`)
+}
+
 func TestGenerateMapLiteral(t *testing.T) {
 	input := `def main
   x = {"a" => 1, "b" => 2}

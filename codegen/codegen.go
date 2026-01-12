@@ -2423,11 +2423,17 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 		return
 	}
 
-	// Channel send: ch << val -> ch <- val
+	// ShiftLeft: handles both array append and channel send
+	// arr << val -> runtime.ShiftLeft(arr, val) (returns new slice)
+	// ch << val -> runtime.ShiftLeft(ch, val) (sends and returns channel)
+	// This allows chaining: arr << a << b << c
 	if e.Op == "<<" {
+		g.needsRuntime = true
+		g.buf.WriteString("runtime.ShiftLeft(")
 		g.genExpr(e.Left)
-		g.buf.WriteString(" <- ")
+		g.buf.WriteString(", ")
 		g.genExpr(e.Right)
+		g.buf.WriteString(")")
 		return
 	}
 

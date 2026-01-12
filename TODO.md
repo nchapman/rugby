@@ -31,7 +31,7 @@ numbers.reduce(&:+)         # → numbers.reduce { |a, b| a + b }
 
 ### 2. Array Append (`<<`)
 **Priority:** High
-**Status:** Pending
+**Status:** ✅ Complete
 
 **Syntax:**
 ```ruby
@@ -40,17 +40,19 @@ items << a << b << c        # chainable
 ```
 
 **Implementation:**
-- [ ] Lexer: `<<` already exists for channels, reuse token
-- [ ] AST: Reuse `BinaryExpr` with `<<` operator
-- [ ] Parser: Already parses `<<`, no changes needed
-- [ ] CodeGen: Type-check LHS; if array, emit `append()`; if chan, emit `<-`
-- [ ] Runtime: May need `Append[T]` helper for chaining
-- [ ] Tests: Parser (already works), codegen tests for array vs chan
-- [ ] Docs: Update spec.md Section 4.2 (Composite types) and Section 12.3 (Array methods)
+- [x] Lexer: `<<` (SHOVELLEFT) already exists, reused
+- [x] AST: Reuses `BinaryExpr` with `<<` operator
+- [x] Parser: Fixed precedence (<<  should be lower than +/-)
+- [x] CodeGen: Emits `runtime.ShiftLeft(coll, val)` for all << operations
+- [x] Runtime: Added `ShiftLeft` function that handles both slices and channels
+- [x] Tests: Codegen tests for array append, chaining, and channel send
+- [x] Docs: Updated spec.md Section 12.3 (Array methods)
 
 **Notes:**
-- Chaining `a << b << c` requires `<<` to return the array
-- Go's `append` returns new slice; need to handle mutation semantics
+- `runtime.ShiftLeft` handles both arrays (append) and channels (send)
+- Returns new slice for arrays (requires reassignment: `arr = arr << item`)
+- For channels, sends value and returns the channel for chaining
+- Precedence is lower than arithmetic, so `ch << x + y` parses as `ch << (x + y)`
 
 ---
 
