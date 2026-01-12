@@ -351,7 +351,7 @@ func (b *Builder) generateGoMod() string {
 
 go 1.25
 
-require %s v0.0.2
+require %s v0.1.0
 `, RuntimeModule)
 		// Auto-detect local development and inject replace directive
 		if inRepo, repoPath := isInRugbyRepo(); inRepo {
@@ -382,7 +382,7 @@ require %s v0.0.2
 		if inRequireBlock && trimmed == ")" {
 			// Inject runtime before closing the require block
 			if !hasRuntimeDep {
-				out.WriteString(fmt.Sprintf("\t%s v0.0.2\n", RuntimeModule))
+				out.WriteString(fmt.Sprintf("\t%s v0.1.0\n", RuntimeModule))
 			}
 			inRequireBlock = false
 		}
@@ -395,12 +395,12 @@ require %s v0.0.2
 
 	// If no require block exists, add one with the runtime
 	if !hasRuntimeDep && !strings.Contains(result, "require") {
-		result += fmt.Sprintf("\nrequire %s v0.0.2\n", RuntimeModule)
+		result += fmt.Sprintf("\nrequire %s v0.1.0\n", RuntimeModule)
 	}
 
 	// Handle single-line require statement (require foo v1.0.0)
 	if !hasRuntimeDep && strings.Contains(result, "require ") && !strings.Contains(result, "require (") {
-		result += fmt.Sprintf("require %s v0.0.2\n", RuntimeModule)
+		result += fmt.Sprintf("require %s v0.1.0\n", RuntimeModule)
 	}
 
 	// Auto-detect local development and inject replace directive
