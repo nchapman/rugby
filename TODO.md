@@ -1,223 +1,469 @@
-# Rugby Development Roadmap
+# Rugby Test Coverage
 
-Features in implementation order, building incrementally.
+Comprehensive test coverage based on spec.md.
 
-**Recent spec updates (see spec.md):**
-- **Strict Conditionals (5.2):** Only `Bool` allowed in `if`/`while`. No implicit truthiness.
-- **Unified Optionals (4.4):** `T?` with operators (`??`, `&.`) and methods (`ok?`, `unwrap!`, `map`, etc.).
-- **The `nil` Keyword (4.5):** Only `T?` and `error` can be `nil`. Value/reference types require `T?` for nullability.
-- **Explicit Typing (6.1):** Function parameters must be explicitly typed (except `any`).
-- **Strict Field Inference (7.2):** Fields inferred from `initialize` or declared explicitly; new fields outside `initialize` are errors.
-- **Pure Blocks (5.4):** No `break`/`next` in blocks. `return` exits block only.
-- **Strict Calls (6.5):** Parentheses required for method calls (except properties).
-- **Interface Evolution (9):** `implements`, `any`, interface inheritance, `is_a?`, `as` (returns `T?`).
-- **Error Handling (15):** `error` type, `error()` kernel function, postfix `!` propagation, `rescue` keyword, `panic` for unrecoverable errors.
-- **Strict `?` Suffix (10.3):** Methods ending in `?` must return `Bool`. No `to_i?`/`as?` patterns.
-
-## Phase 16: Interface System Evolution ✓
-**Goal:** Align interfaces with the refined class model and provide safe runtime polymorphism.
-- [x] **Interface Inheritance:** Support `interface IO < Reader, Writer` syntax and Go embedding.
-- [x] **`implements` Keyword:** Support `class User implements Speaker` for compile-time conformance checks.
-- [x] **`any` Keyword:** Map `any` to Go's `any` (empty interface).
-- [x] **Runtime Casting:**
-  - [x] Implement `is_a?(Interface)` → Go type assertion returning `Bool`.
-  - [x] Implement `as(Interface)` → returns `Interface?` (optional), use with `if let`, `??`, `.unwrap!`.
-- [x] **Standard Interface Mapping:** Ensure `to_s` satisfies `fmt.Stringer` and `message` satisfies `error`.
-
-## Phase 17: Crispness Polish (Strictness & Safety) ✓
-**Goal:** Reduce ambiguity and enforce deterministic behavior.
-
-### 17.1 Strict Syntax & Parsing ✓
-- [x] **Strict Method Calls:** Parser requires parentheses for all method calls.
-  - Exception: Property accessors (getters/setters).
-- [x] **Pure Blocks:** Parser rejects `break` and `next` keywords inside blocks.
-- [x] **Explicit Parameters:** Parser requires type annotations for all function parameters (use `: any` for untyped).
-- [x] **Strict Field Inference:**
-  - Parser parses field declarations in class body (`@x : Type`).
-  - Fields can be introduced via: explicit declaration, parameter promotion, or first assignment in `initialize`.
-  - New fields outside `initialize` are compile-time errors.
-
-### 17.2 Strict Semantics & Codegen ✓
-- [x] **Strict Conditionals:**
-  - Update Codegen to validate that `if`/`while` conditions evaluate to `Bool`.
-  - Remove implicit truthiness logic.
-- [x] **Unified Optionals:**
-  - Add `runtime.Option[T]` struct.
-  - Implement `if let` pattern in Parser and Codegen.
-  - Implement tuple unpacking: `val, ok = optional_expr` → `(T, Bool)`.
-  - Implement optional operators:
-    - `??` (nil coalescing): `T? ?? T → T`
-    - `&.` (safe navigation): `T?&.method → R?`
-  - Implement optional methods:
-    - `ok?` / `present?` → Bool
-    - `nil?` / `absent?` → Bool
-    - `unwrap!` → T (dereference)
-
-### 17.3 Type System Refinement ✓
-- [x] **Case vs Type Switch:**
-  - Introduced `case_type` syntax for type switching.
-  - Standard `case` restricted to value matching (`==`).
-
-### 17.4 Strict `?` Suffix ✓
-- [x] **Predicate Enforcement:** Methods ending in `?` must return `Bool`.
-  - Codegen validates return type of `?`-suffixed methods.
-  - Compile error if `def foo? -> Int` or similar.
-- [x] **Remove Optional-Returning `?` Methods:**
-  - `to_i` returns `(Int, error)` instead of `to_i?` returning `Int?`.
-  - `to_f` returns `(Float, error)` instead of `to_f?` returning `Float?`.
-  - Updated runtime string conversion functions accordingly.
-
-## Phase 18: Standard Library Polish ✓
-- [x] **String Interpolation:** Ensure all interpolations compile to `fmt.Sprintf` (or `String()` calls).
-- [x] **Range Constraints:** Restrict `Range` to `Int` only.
-
-## Phase 19: Error Handling ✓
-**Goal:** Implement Go-style error handling with ergonomic syntax sugar.
-
-### 19.1 Core Error Support ✓
-- [x] **`error` Type:** Map Rugby `error` to Go's `error` interface.
-- [x] **Error Returns:** Support `-> error` and `-> (T, error)` return signatures.
-- [x] **`nil` as No Error:** Allow `nil` as valid error value.
-- [x] **`error()` Kernel Function:** Create error values with `error("message")` - maps to `runtime.Error()`.
-
-### 19.2 Postfix Bang Operator (`!`) ✓
-- [x] **Lexer:** Add `BANG` token recognition for postfix `!` on call expressions.
-- [x] **Parser:** Parse `call_expr!` as error propagation.
-  - Only valid on call expressions with parentheses.
-  - `f!` is a method name, `f()!` is propagation.
-- [x] **Codegen:** Lower `call!` to Go error check pattern:
-  ```go
-  result, err := call()
-  if err != nil { return <zero-values>, err }
-  ```
-- [x] **Enclosing Function Check:** Compile error if `!` used in function not returning `error`.
-- [x] **Chained Calls:** Support `a()!.b()!.c()!` with sequential unwrapping.
-
-### 19.3 Script Mode / Main ✓
-- [x] **`runtime.Fatal`:** Implement `Fatal(err)` that prints to stderr and exits with code 1.
-- [x] **Main Lowering:** In `def main` or top-level scripts, `call!` lowers to `runtime.Fatal(err)`.
-
-### 19.4 Rescue Keyword ✓
-- [x] **Lexer:** Add `RESCUE` and `FATARROW` (`=>`) tokens.
-- [x] **Parser:** Parse three forms:
-  - Inline: `call() rescue default_expr`
-  - Block: `call() rescue do ... end`
-  - Block with binding: `call() rescue => err do ... end`
-- [x] **Codegen:**
-  - Inline: `if err != nil { result = default }`
-  - Block: `if err != nil { <block statements>; result = <last expr> }`
-  - Binding: `if err != nil { err := err; <block> }`
-- [x] **Mutual Exclusion:** Compile error if `!` and `rescue` both appear on same call.
-
-### 19.5 Panic (Unrecoverable Errors) ✓
-- [x] **Lexer:** Add `PANIC` token (changed from `RAISE` for clarity).
-- [x] **Parser:** Parse `panic expr` as panic statement.
-- [x] **Codegen:** Lower to `panic(expr)` or `panic(fmt.Sprintf(...))` for interpolated strings.
-- **Note:** Renamed from `raise` to `panic` to avoid confusion with Ruby's catchable exceptions.
-
-### 19.6 Error Utilities ✓
-- [x] **`error_is?(err, target)`:** Compile to `errors.Is(err, target)`, returns `Bool`.
-- [x] **`error_as(err, Type)`:** Compile to `errors.As` pattern, returns `Type?` (optional).
-  - Use with `if let` for unwrapping.
-  - Auto-import `"errors"` package when these functions are used.
-
-### 19.7 Runtime Updates ✓
-- [x] Add `runtime.Fatal(err error)` function.
-- [x] Update `runtime.StringToInt` to return `(int, error)` instead of optional.
-- [x] Update `runtime.StringToFloat` to return `(float64, error)` instead of optional.
+Legend:
+- [x] Tested and passing
+- [ ] Not yet tested
+- [N/A] Not yet implemented
 
 ---
 
-## Recently Completed
+## Missing Features
 
-### Standard Library Polish & Error Utilities (Phase 18 & 19.6)
-- **String Interpolation:** All interpolations compile to `fmt.Sprintf` with `%v` format
-  - Automatically calls `String()` on types implementing `fmt.Stringer`
-  - Properly escapes `%` as `%%`
-- **Range Constraints:** Ranges restricted to `Int` only
-  - Codegen validates that Range start and end are Int types
-  - Compile-time error for non-Int ranges (e.g., `1.5..10` or `"a".."z"`)
-- **Error Utilities:**
-  - `error_is?(err, target)`: Compiles to `errors.Is(err, target)`
-  - `error_as(err, Type)`: Compiles to `errors.As` pattern returning `*Type`
-  - Auto-imports `errors` package when these functions are used
-  - Works with `if let` for unwrapping error types
+These features are defined in spec.md but not yet implemented in the compiler:
 
-### Type System Refinement & Strict `?` Suffix (Phase 17.3 & 17.4)
-- **`case_type` syntax:** Type switching for runtime type matching on `any` values
-  - Parses `case_type x when String ... when Int ... end`
-  - Generates Go type switch: `switch x := x.(type) { case string: ... }`
-  - Auto-narrows subject variable inside each branch
-- **Strict `?` suffix:** Methods ending in `?` must return `Bool`
-  - Codegen validates return type and errors if not `Bool`
-  - Example error: `method 'valid?' ending in '?' must return Bool`
-- **String conversions return error:**
-  - `to_i` now returns `(Int, error)` - use with `!` or `rescue`
-  - `to_f` now returns `(Float, error)` - use with `!` or `rescue`
-  - Removed `to_i?` and `to_f?` optional patterns
+| Feature | Spec Section | Description |
+|---------|--------------|-------------|
+| Modules/Mixins | §8 | `module` keyword, `include` for mixing in modules, module field embedding |
+| Concurrency | §13 | `go` keyword, `Chan[T]` channels, `select` statement, channel operations |
+| `super` keyword | §7.7 | Calling parent implementation in inherited methods |
+| Accessor macros | §7.4 | `getter`, `setter`, `property` declarative macros |
 
-### Interface System Evolution (Phase 16)
-Complete interface support with inheritance, runtime polymorphism, and standard interface mapping:
-- **Interface Inheritance**: `interface IO < Reader, Writer` compiles to Go interface embedding
-- **`implements` Keyword**: `class User implements Speaker` generates compile-time conformance checks via `var _ Speaker = (*User)(nil)`
-- **`any` Keyword**: Maps to Go's `any` (empty interface) for generic parameters
-- **Runtime Casting**:
-  - `is_a?(Type)`: Type predicate returning `Bool`, compiles to Go type assertion with `_, ok := obj.(Type)`
-  - `as(Type)`: Type cast returning `(Type, bool)`, compiles to Go type assertion with value
-- **Standard Interface Mapping**:
-  - `to_s` → `String()` (satisfies `fmt.Stringer`)
-  - `message` → `Error()` (satisfies `error` interface)
-- Parser updated to accept `any` keyword in type positions and `as` in selector expressions
-- Comprehensive tests added in `codegen/interface_features_test.go`
+---
 
-### Error Handling (Phase 19)
-Complete Go-style error handling with Rugby-idiomatic syntax:
-- **`error` type:** Maps to Go's `error` interface for function returns
-- **`error()` kernel function:** Creates error values (`error("message")`) - no imports needed
-- **Postfix `!` operator:** Error propagation with context-aware behavior
-  - In error-returning functions: early return with zero values
-  - In `main`/scripts: calls `runtime.Fatal()` and exits
-  - Supports chained calls: `a()!.b()!.c()!`
-- **`rescue` keyword:** Inline error recovery with three forms:
-  - Inline default: `call() rescue default_value`
-  - Block: `call() rescue do ... end`
-  - Block with error binding: `call() rescue => err do ... end`
-- **`panic` statement:** For unrecoverable programmer errors (not `raise`)
-  - Renamed from `raise` to avoid confusion with Ruby's catchable exceptions
-  - Compiles directly to Go's `panic()`
-- **`runtime.Fatal()`:** Prints error to stderr and exits with status 1
+## 2. Compilation Model
 
-### Strict Semantics & Codegen (Phase 17.2)
-- **Strict Conditionals:** Only `Bool` allowed in `if`/`while` conditions. Removed implicit truthiness.
-  - Codegen now validates condition types and returns errors for non-Bool conditions
-  - Nil comparisons (`x != nil`) still allowed as they return `Bool`
-- **Unified Optionals:** Complete optional type support with operators and methods:
-  - `runtime.Option[T]` generic struct for field storage
-  - `if let` pattern for optional unwrapping in conditions
-  - Tuple unpacking with `val, ok = expr` syntax
-  - `??` (nil coalescing): Returns value if present, otherwise default
-  - `&.` (safe navigation): Safely calls method on optional, returns nil if absent
-  - Optional methods: `ok?`/`present?`, `nil?`/`absent?`, `unwrap!`
+### 2.1 Bare Scripts (Top-Level Execution)
+- [x] Top-level statements execute in source order
+- [x] Single file with only top-level statements generates `func main()`
+- [x] `def`, `class`, `interface` at top level become package-level constructs
+- [x] Error: Top-level statements + explicit `def main` in same file
+- [x] Script with functions: functions lifted, calls in generated main
+- [x] Script with classes: classes lifted, instantiation in generated main
 
-### Strict Field Inference (Phase 17.1)
-- Parser now supports explicit field declarations (`@field : Type` in class body)
-- Implemented parameter promotion syntax (`def initialize(@field : Type)`)
-- Fields inferred from first assignment in `initialize` method
-- Validation: methods other than `initialize` cannot introduce new instance variables
-- Formatter updated to display field declarations with proper indentation
+## 3. Lexical Structure
 
-### Parser Restructure
-Split the monolithic `parser.go` (2,569 lines) into focused modules:
-- `parser.go` - Core infrastructure (238 lines)
-- `declarations.go` - Function, class, interface declarations
-- `statements.go` - Control flow statements
-- `expressions.go` - Pratt parser for expressions
-- `blocks.go` - Block parsing (do/end, braces)
-- `literals.go` - Literal parsing (int, float, string, array, map)
-- `errors.go` - Structured ParseError with hints
-- `precedence.go` - Operator precedence definitions
-- `testing.go` - Test DSL parsing (describe, it, test, table)
+### 3.1 Comments
+- [x] Single line comments with `#`
+- [x] Comments at end of line
+- [x] Comments preserve line numbers for error reporting
 
-### Builder Enhancement
-- Added `isInRugbyRepo()` to auto-detect development environment
-- Auto-injects `replace` directive for local runtime during development
+### 3.2 Blocks
+- [x] `do ... end` block syntax
+- [x] `{ ... }` block syntax
+- [x] Block with single parameter `{ |x| ... }`
+- [x] Block with multiple parameters `{ |x, y| ... }`
+- [x] Block with no parameters `do ... end`
+
+### 3.3 Strings
+- [x] Normal string literals `"hello"`
+- [x] String interpolation `"Hello, #{name}!"`
+- [x] Interpolation with expressions `"sum: #{a + b}"`
+- [x] Interpolation with method calls `"len: #{items.length}"`
+- [x] Empty string `""`
+
+## 4. Types
+
+### 4.1 Primitive Types
+- [x] `Int` → `int`
+- [x] `Int64` → `int64`
+- [x] `Float` → `float64`
+- [x] `Bool` → `bool`
+- [x] `String` → `string`
+- [x] `Symbol` → `string` (`:ok` → `"ok"`)
+- [x] `Bytes` → `[]byte`
+
+### 4.1.1 Symbols
+- [x] Symbol syntax `:name`
+- [x] Symbol with underscores `:not_found`
+
+### 4.2 Composite Types
+- [x] `Array[T]` → `[]T`
+- [x] `Map[K, V]` → `map[K]V`
+- [x] `T?` optionals
+- [x] `Range` type
+
+### 4.2.1 Range Type
+- [x] Inclusive range `start..end`
+- [x] Exclusive range `start...end`
+- [x] Range in for loop
+- [x] `range.each { |i| }`
+- [x] `range.include?(n)` / `range.contains?(n)`
+- [x] `range.to_a`
+- [x] `range.size` / `range.length`
+- [x] Range as first-class value
+
+### 4.3 Type Inference
+- [x] Local variable inference from assignment
+- [x] Explicit type annotation `y : Int64 = 5`
+- [x] Function parameters require explicit types
+- [x] Instance variable inference from initialize
+- [x] Instance variable from parameter promotion `def initialize(@name : String)`
+- [x] Explicit field declaration `@field : Type`
+
+### 4.4 Optionals (`T?`)
+
+#### 4.4.1 Optional Operators
+- [x] Nil coalescing `??`: `expr ?? default`
+- [x] Safe navigation `&.`: `obj&.method`
+- [x] Chained safe navigation `user&.address&.city`
+- [x] Combined `&.` and `??`
+
+#### 4.4.2 Optional Methods
+- [x] `ok?` / `present?` returns Bool
+- [x] `nil?` / `absent?` returns Bool
+- [x] `unwrap!` returns T, panics if absent
+
+#### 4.4.3 The `if let` Pattern
+- [x] `if let user = find_user(id)` unwraps optional
+- [x] `if let` with else branch
+- [x] `if let` compiles to Go comma-ok idiom
+
+#### 4.4.4 Tuple Unpacking
+- [x] `user, ok = find_user(id)` unpacks optional
+- [x] Unpacked value is non-optional type
+- [x] Unpacked ok is Bool
+
+### 4.5 The `nil` Keyword
+- [x] `nil` valid for optional types
+- [x] `nil` valid for `error` type
+- [x] Return nil from `-> T?` function
+- [x] Assign nil to optional variable
+- [x] Compare error to nil
+
+## 5. Variables & Control Flow
+
+### 5.1 Variables & Operators
+- [x] Variable declaration with `=`
+- [x] Variable reassignment
+- [x] Shadowing in nested scopes
+- [x] Compound assignment `+=`, `-=`, `*=`, `/=`
+- [x] `||=` for Bool type
+- [x] `||=` for optional types
+
+### 5.2 Conditionals
+- [x] `if` with Bool condition
+- [x] Error: `if` with non-Bool condition (no truthiness)
+- [x] `if let` for optional unwrapping
+- [x] `if let` with type assertion `obj.as(Type)`
+- [x] `unless` (inverse of if)
+- [x] `unless` with else
+- [x] `case` expression (value switch)
+- [x] `case` with multiple values `when 200, 201`
+- [x] `case` with else
+- [x] `case_type` (type switch)
+
+### 5.3 Imperative Loops
+- [x] `for item in items`
+- [x] `for i in 0..10` (inclusive range)
+- [x] `for i in 0...10` (exclusive range)
+- [x] `while cond`
+- [x] `break` exits loop
+- [x] `next` continues to next iteration
+- [x] `return` from inside loop
+
+### 5.4 Functional Blocks
+- [x] Block creates new scope
+- [x] `return` in block returns value to iterator
+
+### 5.5 Statement Modifiers
+- [x] `statement if condition`
+- [x] `statement unless condition`
+- [x] `break if cond`
+- [x] `next unless cond`
+- [x] `return if cond`
+
+## 6. Functions
+
+### 6.1 Definition
+- [x] Basic function definition
+- [x] Function with typed parameters
+
+### 6.2 Return Types
+- [x] Single return type `-> Int`
+- [x] Multiple return types `-> (Int, Bool)`
+- [x] No return type (void)
+
+### 6.3 Return Statements
+- [x] Implicit return (last expression)
+- [x] Explicit `return` for early exit
+- [x] Multiple return values `return 0, false`
+
+### 6.4 Errors
+- [x] Function returning `error`
+- [x] Function returning `(T, error)`
+
+### 6.5 Calling Convention
+- [x] Parentheses required for method calls
+- [x] Properties don't use parentheses (getter)
+
+## 7. Classes
+
+### 7.1 Definition
+- [x] Basic class definition
+- [x] Class with `implements` interface
+
+### 7.2 Instance Variables & Layout
+- [x] Explicit field declaration
+- [x] Parameter promotion in initialize
+- [x] Field inference from initialize assignment
+
+### 7.3 Initialization (`new`)
+- [x] `ClassName.new(args)` calls initialize
+- [x] Generated Go `NewClassName` function
+
+### 7.4 Accessors
+- [N/A] `getter name : Type` generates getter (not yet implemented)
+- [N/A] `setter name : Type` generates setter (not yet implemented)
+- [N/A] `property name : Type` generates both (not yet implemented)
+
+### 7.5 Methods and Receivers
+- [x] All methods use pointer receivers
+- [x] Method can access instance variables
+- [x] Method can modify instance variables
+
+### 7.7 Inheritance & Specialization
+- [x] `class Child < Parent` syntax (embedding)
+- [x] Data layout embeds parent
+- [N/A] Method specialization (cloning) - not yet implemented
+- [N/A] `super` calls parent implementation - not yet implemented
+
+### 7.9 Explicit Implementation
+- [x] `class Foo implements Bar` syntax
+- [x] Compile error if methods missing
+
+### 7.10 Polymorphism & Interfaces
+- [x] Interface types for polymorphism
+
+## 8. Modules (Mixins)
+- [N/A] Module definition - not yet implemented
+- [N/A] `include ModuleName` - not yet implemented
+- [N/A] Module fields embedded in class - not yet implemented
+- [N/A] Module methods specialized into class - not yet implemented
+
+## 9. Interfaces
+
+### 9.1 Declaration
+- [x] Interface with method signatures
+- [x] Interface names CamelCase
+
+### 9.2 Interface Inheritance
+- [x] `interface IO < Reader, Writer`
+- [x] Composed interface requires all methods
+
+### 9.3 Satisfaction & `implements`
+- [x] Structural typing (implicit satisfaction)
+- [x] `implements` as compile-time assertion
+
+### 9.4 The `any` Type
+- [x] `any` maps to `interface{}`
+
+### 9.5 Runtime Casting
+- [x] `obj.is_a?(Interface)` returns Bool
+- [x] `obj.as(Interface)` returns `Interface?`
+- [x] `if let w = obj.as(Writer)`
+- [x] `obj.as(Type) ?? default`
+- [x] `obj.as(Type).unwrap!`
+
+## 10. Visibility & Naming
+
+### 10.1 Core Principle
+- [x] `pub` exports to Go (uppercase)
+- [x] No `pub` = internal (lowercase)
+
+### 10.2 What Can Be `pub`
+- [x] `pub def` function
+- [x] `pub class`
+- [x] `pub def` inside pub class
+- [x] `pub interface`
+
+### 10.3 Rugby Naming Conventions
+- [x] Types in CamelCase
+- [x] Functions/methods/variables in snake_case
+- [x] Predicate methods end in `?`
+- [x] `?` methods must return Bool
+
+### 10.4 Go Name Generation
+- [x] `snake_case` → `camelCase` (internal)
+- [x] `snake_case` → `PascalCase` (pub)
+- [x] Acronyms handled (`user_id` → `userID`)
+
+## 11. Go Interop
+
+### 11.1 Imports
+- [x] `import net/http`
+- [x] `import encoding/json as json`
+
+### 11.2 Calling Go Functions
+- [x] `http.Get(url)` syntax
+- [x] `io.read_all(r)` → `io.ReadAll(r)`
+
+### 11.4 Defer
+- [x] `defer expr.method()` syntax
+- [x] Compiles to Go defer
+
+## 12. Runtime Package
+
+### 12.3 Array Methods
+- [x] `each { |x| }`
+- [x] `each_with_index { |x, i| }`
+- [x] `map { |x| }`
+- [x] `select { |x| }` / `filter { |x| }`
+- [x] `reject { |x| }`
+- [x] `find { |x| }` / `detect { |x| }`
+- [x] `any? { |x| }`
+- [x] `all? { |x| }`
+- [x] `none? { |x| }`
+- [x] `include?(val)` / `contains?(val)`
+- [x] `reduce(init) { |acc, x| }`
+- [x] `sum` (numeric arrays)
+- [x] `min` / `max`
+- [x] `first` / `last`
+- [x] `length` / `size`
+- [x] `empty?`
+- [x] `reverse!` / `reverse`
+- [x] `sort`
+- [x] `join`
+- [x] `flatten`
+- [x] `uniq`
+- [x] `shuffle`
+- [x] `sample`
+- [x] `first_n` / `last_n`
+- [x] `rotate`
+
+### 12.4 Map Methods
+- [x] `keys`
+- [x] `values`
+- [x] `length` / `size`
+- [x] `has_key?(k)` / `key?(k)`
+- [x] `fetch(k, default)`
+- [x] `select { |k, v| }`
+- [x] `reject { |k, v| }`
+- [x] `merge(other)`
+- [x] `delete(k)`
+- [x] `clear`
+- [x] `invert`
+
+### 12.5 String Methods
+- [x] `length` / `size`
+- [x] `char_length`
+- [x] `empty?`
+- [x] `include?(sub)` / `contains?(sub)`
+- [x] `upcase`
+- [x] `downcase`
+- [x] `capitalize`
+- [x] `strip`
+- [x] `lstrip` / `rstrip`
+- [x] `replace(old, new)`
+- [x] `reverse`
+- [x] `split(sep)`
+- [x] `chars`
+- [x] `to_i` → `(Int, error)`
+- [x] `to_f` → `(Float, error)`
+
+### 12.6 Integer Methods
+- [x] `even?`
+- [x] `odd?`
+- [x] `abs`
+- [x] `clamp(min, max)`
+- [x] `times { |i| }`
+- [x] `upto(max) { |i| }`
+- [x] `downto(min) { |i| }`
+
+### 12.7 Float/Math Methods
+- [x] `floor`
+- [x] `ceil`
+- [x] `round`
+- [x] `sqrt`
+- [x] `pow`
+
+### 12.9 Global Functions (Kernel)
+- [x] `puts(args...)`
+- [x] `print(args...)`
+- [x] `p(args...)`
+- [x] `exit(code)`
+- [x] `sleep(seconds)`
+- [x] `rand(n)`
+- [x] `rand` (no arg)
+
+## 13. Concurrency
+- [N/A] `go func_call()` - not yet implemented
+- [N/A] `go do ... end` - not yet implemented
+- [N/A] Channels - not yet implemented
+- [N/A] `select` - not yet implemented
+
+## 15. Errors
+
+### 15.1 The `error` Type
+- [x] `error` type maps to Go `error`
+- [x] `nil` represents no error
+
+### 15.2 Fallible Function Signatures
+- [x] `-> (T, error)` signature
+- [x] `-> error` signature
+
+### 15.3 Postfix Bang Operator (`!`)
+- [x] `call()!` propagates error
+- [x] `!` unwraps `(T, error)` to `T`
+- [x] `!` on `error`-only for control flow
+- [x] Chained `!`: `a()!.b()!.c()!`
+
+### 15.4 The `rescue` Keyword
+- [x] Inline default: `call() rescue default`
+- [x] Block form: `call() rescue do ... end`
+- [x] Error binding: `call() rescue => err do ... end`
+
+### 15.7 Explicit Handling
+- [x] Manual `if err != nil` pattern
+
+### 15.8 Panics
+- [x] `panic "message"`
+
+### 15.9 Error Utilities
+- [x] `error_is?(err, target)`
+- [x] `error_as(err, Type)` returns `Type?`
+
+---
+
+## Edge Cases Tested
+
+### Parser Edge Cases
+- [x] Empty function body
+- [x] Empty class body
+- [x] Empty interface body
+- [x] Deeply nested expressions
+- [x] Chained method calls
+- [x] Nil coalesce chains
+- [x] Safe navigation chains
+- [x] Tuple unpacking
+- [x] Inclusive/exclusive ranges in for loops
+- [x] Case type switch
+- [x] Symbol literals
+- [x] Defer statements
+- [x] Panic statements
+
+### Runtime Edge Cases
+- [x] Range with break
+- [x] Empty range iteration
+- [x] Array methods with break/continue
+- [x] Map operations on empty maps
+- [x] String operations on empty strings
+- [x] Math functions with edge values (NaN, Inf)
+
+---
+
+## Not Yet Implemented (Future Work)
+
+These features are defined in spec.md but not yet implemented in the compiler:
+
+1. **Modules/Mixins (Section 8)**
+   - `module` keyword
+   - `include` for mixing in modules
+   - Module field embedding
+   - Method specialization from modules
+
+2. **Concurrency (Section 13)**
+   - `go` keyword for goroutines
+   - `Chan[T]` channel type
+   - `select` statement
+   - Channel operations (`<<`, `.receive`, `.try_receive`)
+
+3. **Inheritance Features (Section 7.7)**
+   - `super` keyword for calling parent methods
+   - Method specialization (cloning parent methods)
+
+4. **Accessor Macros (Section 7.4)**
+   - `getter` macro
+   - `setter` macro
+   - `property` macro

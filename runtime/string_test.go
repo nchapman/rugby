@@ -103,3 +103,187 @@ func TestStringToFloat(t *testing.T) {
 		t.Error("StringToFloat invalid: got nil error, want error")
 	}
 }
+
+func TestSplit(t *testing.T) {
+	result := Split("a,b,c", ",")
+	expected := []string{"a", "b", "c"}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Split: got %v, want %v", result, expected)
+	}
+
+	// No separator found
+	result = Split("hello", ",")
+	if !reflect.DeepEqual(result, []string{"hello"}) {
+		t.Errorf("Split no match: got %v, want [hello]", result)
+	}
+
+	// Empty string
+	result = Split("", ",")
+	if !reflect.DeepEqual(result, []string{""}) {
+		t.Errorf("Split empty: got %v, want ['']", result)
+	}
+
+	// Multi-char separator
+	result = Split("a::b::c", "::")
+	if !reflect.DeepEqual(result, []string{"a", "b", "c"}) {
+		t.Errorf("Split multi-char: got %v, want [a b c]", result)
+	}
+}
+
+func TestStrip(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"  hello  ", "hello"},
+		{"hello", "hello"},
+		{"\t\nhello\n\t", "hello"},
+		{"", ""},
+		{"   ", ""},
+	}
+
+	for _, tt := range tests {
+		result := Strip(tt.input)
+		if result != tt.expected {
+			t.Errorf("Strip(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestLstrip(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"  hello  ", "hello  "},
+		{"hello", "hello"},
+		{"\t\nhello", "hello"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		result := Lstrip(tt.input)
+		if result != tt.expected {
+			t.Errorf("Lstrip(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestRstrip(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"  hello  ", "  hello"},
+		{"hello", "hello"},
+		{"hello\t\n", "hello"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		result := Rstrip(tt.input)
+		if result != tt.expected {
+			t.Errorf("Rstrip(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestUpcase(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"hello", "HELLO"},
+		{"Hello World", "HELLO WORLD"},
+		{"ALREADY", "ALREADY"},
+		{"", ""},
+		{"123abc", "123ABC"},
+	}
+
+	for _, tt := range tests {
+		result := Upcase(tt.input)
+		if result != tt.expected {
+			t.Errorf("Upcase(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestDowncase(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"HELLO", "hello"},
+		{"Hello World", "hello world"},
+		{"already", "already"},
+		{"", ""},
+		{"123ABC", "123abc"},
+	}
+
+	for _, tt := range tests {
+		result := Downcase(tt.input)
+		if result != tt.expected {
+			t.Errorf("Downcase(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestCapitalize(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"hello", "Hello"},
+		{"HELLO", "Hello"},
+		{"hELLO", "Hello"},
+		{"", ""},
+		{"a", "A"},
+		{"1abc", "1abc"},
+	}
+
+	for _, tt := range tests {
+		result := Capitalize(tt.input)
+		if result != tt.expected {
+			t.Errorf("Capitalize(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestStringContains(t *testing.T) {
+	tests := []struct {
+		s, substr string
+		expected  bool
+	}{
+		{"hello world", "world", true},
+		{"hello world", "foo", false},
+		{"hello", "", true},
+		{"", "a", false},
+		{"", "", true},
+	}
+
+	for _, tt := range tests {
+		result := StringContains(tt.s, tt.substr)
+		if result != tt.expected {
+			t.Errorf("StringContains(%q, %q) = %v, want %v", tt.s, tt.substr, result, tt.expected)
+		}
+	}
+}
+
+func TestReplace(t *testing.T) {
+	tests := []struct {
+		s, old, new string
+		expected    string
+	}{
+		{"hello world", "world", "there", "hello there"},
+		{"aaa", "a", "b", "bbb"},
+		{"hello", "x", "y", "hello"},
+		{"", "a", "b", ""},
+	}
+
+	for _, tt := range tests {
+		result := Replace(tt.s, tt.old, tt.new)
+		if result != tt.expected {
+			t.Errorf("Replace(%q, %q, %q) = %q, want %q", tt.s, tt.old, tt.new, result, tt.expected)
+		}
+	}
+}

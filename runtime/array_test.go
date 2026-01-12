@@ -251,3 +251,315 @@ func TestMinMaxFloat(t *testing.T) {
 		t.Errorf("MaxFloat: got (%f, %v), want (3.14, true)", max, ok)
 	}
 }
+
+func TestEach(t *testing.T) {
+	// Test with []int
+	var collected []int
+	Each([]int{1, 2, 3}, func(v any) bool {
+		collected = append(collected, v.(int))
+		return true
+	})
+	if !reflect.DeepEqual(collected, []int{1, 2, 3}) {
+		t.Errorf("Each []int: got %v, want [1 2 3]", collected)
+	}
+
+	// Test with []string
+	var strs []string
+	Each([]string{"a", "b", "c"}, func(v any) bool {
+		strs = append(strs, v.(string))
+		return true
+	})
+	if !reflect.DeepEqual(strs, []string{"a", "b", "c"}) {
+		t.Errorf("Each []string: got %v, want [a b c]", strs)
+	}
+
+	// Test early break
+	var partial []int
+	Each([]int{1, 2, 3, 4, 5}, func(v any) bool {
+		partial = append(partial, v.(int))
+		return v.(int) < 3
+	})
+	if !reflect.DeepEqual(partial, []int{1, 2, 3}) {
+		t.Errorf("Each with break: got %v, want [1 2 3]", partial)
+	}
+}
+
+func TestEachWithIndex(t *testing.T) {
+	var pairs [][2]int
+	EachWithIndex([]int{10, 20, 30}, func(v any, i int) bool {
+		pairs = append(pairs, [2]int{v.(int), i})
+		return true
+	})
+	expected := [][2]int{{10, 0}, {20, 1}, {30, 2}}
+	if !reflect.DeepEqual(pairs, expected) {
+		t.Errorf("EachWithIndex: got %v, want %v", pairs, expected)
+	}
+}
+
+func TestJoin(t *testing.T) {
+	// Join strings
+	result := Join([]string{"a", "b", "c"}, ", ")
+	if result != "a, b, c" {
+		t.Errorf("Join strings: got %q, want %q", result, "a, b, c")
+	}
+
+	// Join ints
+	result = Join([]int{1, 2, 3}, "-")
+	if result != "1-2-3" {
+		t.Errorf("Join ints: got %q, want %q", result, "1-2-3")
+	}
+
+	// Empty slice
+	result = Join([]string{}, ", ")
+	if result != "" {
+		t.Errorf("Join empty: got %q, want empty", result)
+	}
+
+	// Single element
+	result = Join([]string{"only"}, ", ")
+	if result != "only" {
+		t.Errorf("Join single: got %q, want %q", result, "only")
+	}
+}
+
+func TestFlatten(t *testing.T) {
+	// Simple nested slice
+	nested := []any{1, []any{2, 3}, []any{4, []any{5, 6}}}
+	result := Flatten(nested)
+	expected := []any{1, 2, 3, 4, 5, 6}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Flatten: got %v, want %v", result, expected)
+	}
+
+	// Already flat
+	flat := []any{1, 2, 3}
+	result = Flatten(flat)
+	if !reflect.DeepEqual(result, []any{1, 2, 3}) {
+		t.Errorf("Flatten flat: got %v, want [1 2 3]", result)
+	}
+
+	// Non-slice returns wrapped
+	result = Flatten(42)
+	if !reflect.DeepEqual(result, []any{42}) {
+		t.Errorf("Flatten non-slice: got %v, want [42]", result)
+	}
+}
+
+func TestUniq(t *testing.T) {
+	// With duplicates
+	result := Uniq([]int{1, 2, 2, 3, 1, 4, 3})
+	expected := []int{1, 2, 3, 4}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Uniq: got %v, want %v", result, expected)
+	}
+
+	// Already unique
+	result = Uniq([]int{1, 2, 3})
+	if !reflect.DeepEqual(result, []int{1, 2, 3}) {
+		t.Errorf("Uniq already unique: got %v, want [1 2 3]", result)
+	}
+
+	// Empty
+	result = Uniq([]int{})
+	if len(result) != 0 {
+		t.Errorf("Uniq empty: got %v, want empty", result)
+	}
+
+	// Strings
+	strResult := Uniq([]string{"a", "b", "a", "c", "b"})
+	if !reflect.DeepEqual(strResult, []string{"a", "b", "c"}) {
+		t.Errorf("Uniq strings: got %v, want [a b c]", strResult)
+	}
+}
+
+func TestSort(t *testing.T) {
+	nums := []int{3, 1, 4, 1, 5, 9, 2, 6}
+	sorted := Sort(nums)
+
+	// Original unchanged
+	if !reflect.DeepEqual(nums, []int{3, 1, 4, 1, 5, 9, 2, 6}) {
+		t.Errorf("Sort modified original: %v", nums)
+	}
+
+	expected := []int{1, 1, 2, 3, 4, 5, 6, 9}
+	if !reflect.DeepEqual(sorted, expected) {
+		t.Errorf("Sort: got %v, want %v", sorted, expected)
+	}
+
+	// Strings
+	strs := []string{"banana", "apple", "cherry"}
+	sortedStrs := Sort(strs)
+	if !reflect.DeepEqual(sortedStrs, []string{"apple", "banana", "cherry"}) {
+		t.Errorf("Sort strings: got %v, want [apple banana cherry]", sortedStrs)
+	}
+}
+
+func TestShuffle(t *testing.T) {
+	nums := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	shuffled := Shuffle(nums)
+
+	// Original unchanged
+	if !reflect.DeepEqual(nums, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}) {
+		t.Errorf("Shuffle modified original: %v", nums)
+	}
+
+	// Same length
+	if len(shuffled) != len(nums) {
+		t.Errorf("Shuffle length: got %d, want %d", len(shuffled), len(nums))
+	}
+
+	// Contains same elements (sorted should match)
+	sortedShuffled := Sort(shuffled)
+	if !reflect.DeepEqual(sortedShuffled, nums) {
+		t.Errorf("Shuffle elements changed: %v", shuffled)
+	}
+}
+
+func TestSample(t *testing.T) {
+	nums := []int{1, 2, 3, 4, 5}
+
+	// Get a sample (just test it returns a valid element)
+	val, ok := Sample(nums)
+	if !ok {
+		t.Error("Sample: got false, want true")
+	}
+	if !Contains(nums, val) {
+		t.Errorf("Sample: %d not in %v", val, nums)
+	}
+
+	// Empty slice
+	_, ok = Sample([]int{})
+	if ok {
+		t.Error("Sample empty: got true, want false")
+	}
+}
+
+func TestFirstN(t *testing.T) {
+	nums := []int{1, 2, 3, 4, 5}
+
+	result := FirstN(nums, 3)
+	if !reflect.DeepEqual(result, []int{1, 2, 3}) {
+		t.Errorf("FirstN(3): got %v, want [1 2 3]", result)
+	}
+
+	// More than length
+	result = FirstN(nums, 10)
+	if !reflect.DeepEqual(result, []int{1, 2, 3, 4, 5}) {
+		t.Errorf("FirstN(10): got %v, want [1 2 3 4 5]", result)
+	}
+
+	// Zero
+	result = FirstN(nums, 0)
+	if len(result) != 0 {
+		t.Errorf("FirstN(0): got %v, want empty", result)
+	}
+
+	// Negative
+	result = FirstN(nums, -1)
+	if len(result) != 0 {
+		t.Errorf("FirstN(-1): got %v, want empty", result)
+	}
+}
+
+func TestLastN(t *testing.T) {
+	nums := []int{1, 2, 3, 4, 5}
+
+	result := LastN(nums, 3)
+	if !reflect.DeepEqual(result, []int{3, 4, 5}) {
+		t.Errorf("LastN(3): got %v, want [3 4 5]", result)
+	}
+
+	// More than length
+	result = LastN(nums, 10)
+	if !reflect.DeepEqual(result, []int{1, 2, 3, 4, 5}) {
+		t.Errorf("LastN(10): got %v, want [1 2 3 4 5]", result)
+	}
+
+	// Zero
+	result = LastN(nums, 0)
+	if len(result) != 0 {
+		t.Errorf("LastN(0): got %v, want empty", result)
+	}
+}
+
+func TestRotate(t *testing.T) {
+	nums := []int{1, 2, 3, 4, 5}
+
+	// Positive rotation
+	result := Rotate(nums, 2)
+	if !reflect.DeepEqual(result, []int{3, 4, 5, 1, 2}) {
+		t.Errorf("Rotate(2): got %v, want [3 4 5 1 2]", result)
+	}
+
+	// Negative rotation
+	result = Rotate(nums, -2)
+	if !reflect.DeepEqual(result, []int{4, 5, 1, 2, 3}) {
+		t.Errorf("Rotate(-2): got %v, want [4 5 1 2 3]", result)
+	}
+
+	// Zero rotation
+	result = Rotate(nums, 0)
+	if !reflect.DeepEqual(result, []int{1, 2, 3, 4, 5}) {
+		t.Errorf("Rotate(0): got %v, want [1 2 3 4 5]", result)
+	}
+
+	// Full rotation
+	result = Rotate(nums, 5)
+	if !reflect.DeepEqual(result, []int{1, 2, 3, 4, 5}) {
+		t.Errorf("Rotate(5): got %v, want [1 2 3 4 5]", result)
+	}
+
+	// Empty
+	result = Rotate([]int{}, 2)
+	if len(result) != 0 {
+		t.Errorf("Rotate empty: got %v, want empty", result)
+	}
+}
+
+func TestSelectWithBreak(t *testing.T) {
+	nums := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+
+	// Select with early break
+	result := Select(nums, func(n int) (bool, bool) {
+		if n > 5 {
+			return false, false // stop
+		}
+		return n%2 == 0, true // continue
+	})
+	expected := []int{2, 4}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Select with break: got %v, want %v", result, expected)
+	}
+}
+
+func TestMapWithSkip(t *testing.T) {
+	nums := []int{1, 2, 3, 4, 5}
+
+	// Map with skip (include=false)
+	result := Map(nums, func(n int) (int, bool, bool) {
+		if n%2 == 0 {
+			return 0, false, true // skip evens
+		}
+		return n * 10, true, true
+	})
+	expected := []int{10, 30, 50}
+	if !reflect.DeepEqual(result, expected) {
+		t.Errorf("Map with skip: got %v, want %v", result, expected)
+	}
+}
+
+func TestReduceWithBreak(t *testing.T) {
+	nums := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+
+	// Sum until we exceed 10
+	result := Reduce(nums, 0, func(acc, n int) (int, bool) {
+		newAcc := acc + n
+		if newAcc > 10 {
+			return acc, false // stop, keep old acc
+		}
+		return newAcc, true
+	})
+	if result != 10 { // 1+2+3+4 = 10
+		t.Errorf("Reduce with break: got %d, want 10", result)
+	}
+}

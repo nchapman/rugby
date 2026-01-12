@@ -103,3 +103,79 @@ func TestFetch(t *testing.T) {
 		t.Errorf("Fetch missing: got %d, want 99", v)
 	}
 }
+
+func TestMapDelete(t *testing.T) {
+	m := map[string]int{"a": 1, "b": 2, "c": 3}
+
+	// Delete existing key
+	val, ok := MapDelete(m, "b")
+	if !ok || val != 2 {
+		t.Errorf("MapDelete existing: got (%d, %v), want (2, true)", val, ok)
+	}
+	if _, exists := m["b"]; exists {
+		t.Error("MapDelete: key still exists")
+	}
+	if len(m) != 2 {
+		t.Errorf("MapDelete: length is %d, want 2", len(m))
+	}
+
+	// Delete non-existing key
+	val, ok = MapDelete(m, "z")
+	if ok {
+		t.Errorf("MapDelete non-existing: got (%d, %v), want (0, false)", val, ok)
+	}
+}
+
+func TestMapHasKey(t *testing.T) {
+	m := map[string]int{"a": 1, "b": 2}
+
+	if !MapHasKey(m, "a") {
+		t.Error("MapHasKey existing: got false, want true")
+	}
+
+	if MapHasKey(m, "z") {
+		t.Error("MapHasKey non-existing: got true, want false")
+	}
+
+	// Empty map
+	empty := map[string]int{}
+	if MapHasKey(empty, "a") {
+		t.Error("MapHasKey empty map: got true, want false")
+	}
+}
+
+func TestMapClear(t *testing.T) {
+	m := map[string]int{"a": 1, "b": 2, "c": 3}
+
+	MapClear(m)
+
+	if len(m) != 0 {
+		t.Errorf("MapClear: length is %d, want 0", len(m))
+	}
+
+	// Clear already empty map
+	empty := map[string]int{}
+	MapClear(empty) // should not panic
+	if len(empty) != 0 {
+		t.Error("MapClear empty: unexpected entries")
+	}
+}
+
+func TestMapInvert(t *testing.T) {
+	m := map[string]int{"a": 1, "b": 2, "c": 3}
+
+	inverted := MapInvert(m)
+
+	if inverted[1] != "a" || inverted[2] != "b" || inverted[3] != "c" {
+		t.Errorf("MapInvert: got %v", inverted)
+	}
+
+	if len(inverted) != 3 {
+		t.Errorf("MapInvert length: got %d, want 3", len(inverted))
+	}
+
+	// Original unchanged
+	if m["a"] != 1 {
+		t.Error("MapInvert modified original")
+	}
+}
