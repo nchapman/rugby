@@ -119,12 +119,12 @@ Features in implementation order, building incrementally.
 - [ ] **`error_is?(err, target)`:** Compile to `errors.Is(err, target)`, returns `Bool`.
 - [ ] **`error_as(err, Type)`:** Compile to `errors.As` pattern, returns `Type?` (optional).
   - Use with `if let` for unwrapping.
+  - Auto-import `"errors"` package when these functions are used.
 
-### 19.7 Runtime Updates
-- [ ] Add `runtime.Fatal(err error)` function.
-- [ ] Update `runtime.StringToInt` to return `(int, error)` instead of optional.
-- [ ] Update `runtime.StringToFloat` to return `(float64, error)` instead of optional.
-- [ ] Add `import "errors"` when `error_is?` or `error_as` are used.
+### 19.7 Runtime Updates ✓
+- [x] Add `runtime.Fatal(err error)` function.
+- [x] Update `runtime.StringToInt` to return `(int, error)` instead of optional.
+- [x] Update `runtime.StringToFloat` to return `(float64, error)` instead of optional.
 
 ---
 
