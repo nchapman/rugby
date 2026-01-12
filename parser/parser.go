@@ -183,8 +183,13 @@ func (p *Parser) ParseProgram() *ast.Program {
 					iface.Pub = true
 					program.Declarations = append(program.Declarations, iface)
 				}
+			case token.MODULE:
+				if mod := p.parseModuleDeclWithDoc(doc); mod != nil {
+					mod.Pub = true
+					program.Declarations = append(program.Declarations, mod)
+				}
 			default:
-				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' must be followed by 'def', 'class', or 'interface'")
+				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' must be followed by 'def', 'class', 'interface', or 'module'")
 				p.nextToken()
 			}
 		case token.DEF:
@@ -207,6 +212,10 @@ func (p *Parser) ParseProgram() *ast.Program {
 		case token.INTERFACE:
 			if iface := p.parseInterfaceDecl(); iface != nil {
 				program.Declarations = append(program.Declarations, iface)
+			}
+		case token.MODULE:
+			if mod := p.parseModuleDecl(); mod != nil {
+				program.Declarations = append(program.Declarations, mod)
 			}
 		case token.DESCRIBE:
 			if desc := p.parseDescribeStmt(); desc != nil {

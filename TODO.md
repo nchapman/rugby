@@ -15,10 +15,7 @@ These features are defined in spec.md but not yet implemented in the compiler:
 
 | Feature | Spec Section | Description |
 |---------|--------------|-------------|
-| Modules/Mixins | §8 | `module` keyword, `include` for mixing in modules, module field embedding |
 | Concurrency | §13 | `go` keyword, `Chan[T]` channels, `select` statement, channel operations |
-| `super` keyword | §7.7 | Calling parent implementation in inherited methods |
-| Accessor macros | §7.4 | `getter`, `setter`, `property` declarative macros |
 
 ---
 
@@ -204,9 +201,9 @@ These features are defined in spec.md but not yet implemented in the compiler:
 - [x] Generated Go `NewClassName` function
 
 ### 7.4 Accessors
-- [N/A] `getter name : Type` generates getter (not yet implemented)
-- [N/A] `setter name : Type` generates setter (not yet implemented)
-- [N/A] `property name : Type` generates both (not yet implemented)
+- [x] `getter name : Type` generates getter
+- [x] `setter name : Type` generates setter
+- [x] `property name : Type` generates both
 
 ### 7.5 Methods and Receivers
 - [x] All methods use pointer receivers
@@ -216,8 +213,7 @@ These features are defined in spec.md but not yet implemented in the compiler:
 ### 7.7 Inheritance & Specialization
 - [x] `class Child < Parent` syntax (embedding)
 - [x] Data layout embeds parent
-- [N/A] Method specialization (cloning) - not yet implemented
-- [N/A] `super` calls parent implementation - not yet implemented
+- [x] `super` calls parent implementation
 
 ### 7.9 Explicit Implementation
 - [x] `class Foo implements Bar` syntax
@@ -227,10 +223,10 @@ These features are defined in spec.md but not yet implemented in the compiler:
 - [x] Interface types for polymorphism
 
 ## 8. Modules (Mixins)
-- [N/A] Module definition - not yet implemented
-- [N/A] `include ModuleName` - not yet implemented
-- [N/A] Module fields embedded in class - not yet implemented
-- [N/A] Module methods specialized into class - not yet implemented
+- [x] Module definition
+- [x] `include ModuleName`
+- [x] Module fields embedded in class
+- [x] Module methods specialized into class
 
 ## 9. Interfaces
 
@@ -447,23 +443,8 @@ These features are defined in spec.md but not yet implemented in the compiler:
 
 These features are defined in spec.md but not yet implemented in the compiler:
 
-1. **Modules/Mixins (Section 8)**
-   - `module` keyword
-   - `include` for mixing in modules
-   - Module field embedding
-   - Method specialization from modules
-
-2. **Concurrency (Section 13)**
+1. **Concurrency (Section 13)**
    - `go` keyword for goroutines
    - `Chan[T]` channel type
    - `select` statement
    - Channel operations (`<<`, `.receive`, `.try_receive`)
-
-3. **Inheritance Features (Section 7.7)**
-   - `super` keyword for calling parent methods
-   - Method specialization (cloning parent methods)
-
-4. **Accessor Macros (Section 7.4)**
-   - `getter` macro
-   - `setter` macro
-   - `property` macro

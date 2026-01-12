@@ -3386,3 +3386,271 @@ end`
 	// Should generate dereference
 	assertContains(t, output, `return *opt`)
 }
+
+func TestAccessorGetter(t *testing.T) {
+	input := `pub class User
+  getter name : String
+  
+  def initialize(@name : String)
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should have the field in the struct
+	assertContains(t, output, "name string")
+	// Should have a getter method
+	assertContains(t, output, "func (u *User) Name() string {")
+	assertContains(t, output, "return u.name")
+}
+
+func TestAccessorSetter(t *testing.T) {
+	input := `pub class User
+  setter email : String
+  
+  def initialize(@email : String)
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should have the field in the struct
+	assertContains(t, output, "email string")
+	// Should have a setter method
+	assertContains(t, output, "func (u *User) SetEmail(v string) {")
+	assertContains(t, output, "u.email = v")
+}
+
+func TestAccessorProperty(t *testing.T) {
+	input := `pub class Counter
+  property value : Int
+  
+  def initialize(@value : Int)
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should have the field in the struct
+	assertContains(t, output, "value int")
+	// Should have both getter and setter methods
+	assertContains(t, output, "func (c *Counter) Value() int {")
+	assertContains(t, output, "return c.value")
+	assertContains(t, output, "func (c *Counter) SetValue(v int) {")
+	assertContains(t, output, "c.value = v")
+}
+
+func TestAccessorNonPubClass(t *testing.T) {
+	input := `class User
+  property name : String
+
+  def initialize(@name : String)
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Non-pub class should have camelCase method names
+	assertContains(t, output, "func (u *User) name() string {")
+	assertContains(t, output, "func (u *User) setName(v string) {")
+}
+
+func TestSuperKeyword(t *testing.T) {
+	input := `class Parent
+  def greet
+    puts "Hello from Parent"
+  end
+end
+
+class Child < Parent
+  def greet
+    super
+    puts "Hello from Child"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Child class should embed Parent
+	assertContains(t, output, "type Child struct {")
+	assertContains(t, output, "Parent")
+
+	// super should call parent's method on the embedded field
+	assertContains(t, output, "c.Parent.greet()")
+}
+
+func TestSuperWithArgs(t *testing.T) {
+	input := `class Parent
+  def add(a : Int, b : Int) -> Int
+    a + b
+  end
+end
+
+class Child < Parent
+  def add(a : Int, b : Int) -> Int
+    super(a, b) + 10
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// super with args should pass them through
+	assertContains(t, output, "c.Parent.add(a, b)")
+}
+
+func TestSuperInPubClass(t *testing.T) {
+	input := `pub class Base
+  pub def process
+    puts "Base process"
+  end
+end
+
+pub class Derived < Base
+  pub def process
+    super
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Pub method names should be PascalCase
+	assertContains(t, output, "d.Base.Process()")
+}
+
+func TestSuperInNonPubMethod(t *testing.T) {
+	input := `class Parent
+  def greet
+    puts "Hello"
+  end
+end
+
+class Child < Parent
+  def greet
+    super
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Non-pub method names should be camelCase
+	assertContains(t, output, "c.Parent.greet()")
+}
+
+func TestModuleWithMethod(t *testing.T) {
+	input := `module Callable
+  def call
+    puts "calling"
+  end
+end
+
+class Worker
+  include Callable
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Worker should have the call method from Callable
+	assertContains(t, output, "type Worker struct{}")
+	assertContains(t, output, "func (w *Worker) call() {")
+}
+
+func TestModuleWithProperty(t *testing.T) {
+	input := `module Named
+  property name : String
+end
+
+class User
+  include Named
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// User should have the name field from Named module
+	assertContains(t, output, "type User struct {")
+	assertContains(t, output, "name string")
+	// User should have getter/setter from Named module
+	assertContains(t, output, "func (u *User) name() string {")
+	assertContains(t, output, "func (u *User) setName(v string) {")
+}
+
+func TestModuleMultipleIncludes(t *testing.T) {
+	input := `module Callable
+  def call
+    puts "calling"
+  end
+end
+
+module Named
+  property name : String
+end
+
+class Worker
+  include Callable
+  include Named
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Worker should have both module's members
+	assertContains(t, output, "name string")
+	assertContains(t, output, "func (w *Worker) call() {")
+	assertContains(t, output, "func (w *Worker) name() string {")
+}
+
+func TestModuleWithClassFields(t *testing.T) {
+	input := `module Loggable
+  def log(msg : String)
+    puts msg
+  end
+end
+
+class Service
+  include Loggable
+  @port : Int
+
+  def initialize(@port : Int)
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Service should have both its own port field and module's log method
+	assertContains(t, output, "port int")
+	assertContains(t, output, "func (s *Service) log(msg string) {")
+}

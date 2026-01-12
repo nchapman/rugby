@@ -263,6 +263,9 @@ func (l *Lexer) NextToken() token.Token {
 		if l.peekChar() == '=' {
 			l.readChar()
 			tok = l.newToken(token.LE, "<=")
+		} else if l.peekChar() == '<' {
+			l.readChar()
+			tok = l.newToken(token.SHOVELLEFT, "<<")
 		} else {
 			tok = l.newToken(token.LT, "<")
 		}

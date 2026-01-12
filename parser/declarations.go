@@ -333,7 +333,7 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 
 	p.skipNewlines()
 
-	// Parse field declarations and methods until 'end'
+	// Parse field declarations, accessors, includes, and methods until 'end'
 	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
 		p.skipNewlines()
 		if p.curTokenIs(token.END) {
@@ -345,6 +345,21 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 			// Field declaration: @name : Type
 			if field := p.parseFieldDecl(); field != nil {
 				cls.Fields = append(cls.Fields, field)
+			}
+		case token.GETTER, token.SETTER, token.PROPERTY:
+			// Accessor declaration: getter/setter/property name : Type
+			if accessor := p.parseAccessorDecl(); accessor != nil {
+				cls.Accessors = append(cls.Accessors, accessor)
+			}
+		case token.INCLUDE:
+			// Include module: include ModuleName
+			p.nextToken() // consume 'include'
+			if !p.curTokenIs(token.IDENT) {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected module name after 'include'")
+				p.nextToken()
+			} else {
+				cls.Includes = append(cls.Includes, p.curToken.Literal)
+				p.nextToken()
 			}
 		case token.PUB:
 			pubLine := p.curToken.Line
@@ -364,7 +379,7 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 				cls.Methods = append(cls.Methods, method)
 			}
 		default:
-			p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("unexpected token %s in class body, expected '@field', 'def', 'pub def', or 'end'", p.curToken.Type))
+			p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("unexpected token %s in class body, expected '@field', 'def', 'pub def', 'getter', 'setter', 'property', 'include', or 'end'", p.curToken.Type))
 			p.nextToken()
 		}
 	}
@@ -562,6 +577,36 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 	p.skipNewlines()
 
 	return sig
+}
+
+// parseAccessorDecl parses getter/setter/property name : Type
+func (p *Parser) parseAccessorDecl() *ast.AccessorDecl {
+	kind := p.curToken.Literal // "getter", "setter", or "property"
+	line := p.curToken.Line
+	p.nextToken() // consume accessor keyword
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("expected field name after '%s'", kind))
+		return nil
+	}
+
+	name := p.curToken.Literal
+	p.nextToken() // consume field name
+
+	if !p.curTokenIs(token.COLON) {
+		p.errorWithHint("accessor type required",
+			fmt.Sprintf("add type annotation: %s %s : Type", kind, name))
+		return nil
+	}
+	p.nextToken() // consume ':'
+
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
+		return nil
+	}
+
+	fieldType := p.parseTypeName()
+	return &ast.AccessorDecl{Kind: kind, Name: name, Type: fieldType, Line: line}
 }
 
 // parseFieldDecl parses an explicit field declaration: @name : Type
@@ -820,4 +865,60 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 	p.nextToken() // consume 'end'
 
 	return method
+}
+
+func (p *Parser) parseModuleDecl() *ast.ModuleDecl {
+	line := p.curToken.Line
+	doc := p.leadingComments(line)
+	return p.parseModuleDeclWithDoc(doc)
+}
+
+func (p *Parser) parseModuleDeclWithDoc(doc *ast.CommentGroup) *ast.ModuleDecl {
+	line := p.curToken.Line
+	p.nextToken() // consume 'module'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected module name after 'module'")
+		return nil
+	}
+
+	mod := &ast.ModuleDecl{Name: p.curToken.Literal, Line: line, Doc: doc}
+	p.nextToken()
+	p.skipNewlines()
+
+	// Parse field declarations, accessors, and methods until 'end'
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.END) {
+			break
+		}
+
+		switch p.curToken.Type {
+		case token.AT:
+			// Field declaration: @name : Type
+			if field := p.parseFieldDecl(); field != nil {
+				mod.Fields = append(mod.Fields, field)
+			}
+		case token.GETTER, token.SETTER, token.PROPERTY:
+			// Accessor declaration: getter/setter/property name : Type
+			if accessor := p.parseAccessorDecl(); accessor != nil {
+				mod.Accessors = append(mod.Accessors, accessor)
+			}
+		case token.DEF:
+			if method := p.parseMethodDecl(); method != nil {
+				mod.Methods = append(mod.Methods, method)
+			}
+		default:
+			p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("unexpected token %s in module body, expected '@field', 'def', 'getter', 'setter', 'property', or 'end'", p.curToken.Type))
+			p.nextToken()
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close module")
+		return nil
+	}
+	p.nextToken() // consume 'end'
+
+	return mod
 }

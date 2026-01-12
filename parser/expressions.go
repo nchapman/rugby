@@ -38,6 +38,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseInstanceVar()
 	case token.SELF:
 		left = &ast.Ident{Name: "self"}
+	case token.SUPER:
+		left = p.parseSuperExpr()
 	default:
 		return nil
 	}
@@ -278,8 +280,8 @@ func (p *Parser) parseSelectorExpr(x ast.Expression) ast.Expression {
 	// curToken is '.'
 	p.nextToken() // move past '.' to the selector
 
-	// Allow AS keyword as a method name (obj.as(Type))
-	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.AS) {
+	// Allow certain keywords as method names (obj.as(Type), arr.select { |x| ... })
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.AS) && !p.curTokenIs(token.SELECT) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '.'")
 		return nil
 	}
@@ -299,4 +301,37 @@ func (p *Parser) parseInstanceVar() ast.Expression {
 	}
 	name := p.curToken.Literal
 	return &ast.InstanceVar{Name: name}
+}
+
+// parseSuperExpr parses a super call: super or super(args).
+func (p *Parser) parseSuperExpr() ast.Expression {
+	line := p.curToken.Line
+	// curToken is 'super'
+
+	// Check if followed by '(' for explicit args
+	var args []ast.Expression
+	if p.peekTokenIs(token.LPAREN) {
+		p.nextToken() // move to '('
+		p.nextToken() // move past '(' to first arg or ')'
+
+		// Parse arguments
+		if !p.curTokenIs(token.RPAREN) {
+			args = append(args, p.parseExpression(lowest))
+
+			for p.peekTokenIs(token.COMMA) {
+				p.nextToken() // move to ','
+				p.nextToken() // move past ',' to next arg
+				args = append(args, p.parseExpression(lowest))
+			}
+
+			p.nextToken() // move past last arg to ')'
+		}
+
+		if !p.curTokenIs(token.RPAREN) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ')' after super arguments")
+			return nil
+		}
+	}
+
+	return &ast.SuperExpr{Args: args, Line: line}
 }

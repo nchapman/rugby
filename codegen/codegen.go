@@ -166,23 +166,27 @@ type loopContext struct {
 type Generator struct {
 	buf                strings.Builder
 	indent             int
-	vars               map[string]string // track declared variables and their types (empty string = unknown type)
-	imports            map[string]bool   // track import aliases for Go interop detection
-	needsRuntime       bool              // track if rugby/runtime import is needed
-	needsFmt           bool              // track if fmt import is needed (string interpolation)
-	needsErrors        bool              // track if errors import is needed (error_is?, error_as)
-	needsTestingImport bool              // track if testing import is needed
-	needsTestImport    bool              // track if rugby/test import is needed
-	currentClass       string            // current class being generated (for instance vars)
-	pubClasses         map[string]bool   // track public classes for constructor naming
-	classFields        map[string]string // track fields of the current class and their types
-	sourceFile         string            // original .rg filename for //line directives
-	emitLineDir        bool              // whether to emit //line directives
-	currentReturnTypes []string          // return types of the current function/method
-	contexts           []loopContext     // stack of loop/block contexts
-	inMainFunc         bool              // true when generating code inside main() function
-	errors             []error           // collected errors during generation
-	tempVarCounter     int               // counter for generating unique temp variable names
+	vars               map[string]string          // track declared variables and their types (empty string = unknown type)
+	imports            map[string]bool            // track import aliases for Go interop detection
+	needsRuntime       bool                       // track if rugby/runtime import is needed
+	needsFmt           bool                       // track if fmt import is needed (string interpolation)
+	needsErrors        bool                       // track if errors import is needed (error_is?, error_as)
+	needsTestingImport bool                       // track if testing import is needed
+	needsTestImport    bool                       // track if rugby/test import is needed
+	currentClass       string                     // current class being generated (for instance vars)
+	currentMethod      string                     // current method name being generated (for super)
+	currentMethodPub   bool                       // whether current method is pub (for super)
+	currentClassEmbeds []string                   // embedded types (parent classes) of current class
+	pubClasses         map[string]bool            // track public classes for constructor naming
+	classFields        map[string]string          // track fields of the current class and their types
+	modules            map[string]*ast.ModuleDecl // track module definitions for include
+	sourceFile         string                     // original .rg filename for //line directives
+	emitLineDir        bool                       // whether to emit //line directives
+	currentReturnTypes []string                   // return types of the current function/method
+	contexts           []loopContext              // stack of loop/block contexts
+	inMainFunc         bool                       // true when generating code inside main() function
+	errors             []error                    // collected errors during generation
+	tempVarCounter     int                        // counter for generating unique temp variable names
 }
 
 // addError records an error during code generation
@@ -236,6 +240,7 @@ func New(opts ...Option) *Generator {
 		imports:     make(map[string]bool),
 		pubClasses:  make(map[string]bool),
 		classFields: make(map[string]string),
+		modules:     make(map[string]*ast.ModuleDecl),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -374,6 +379,8 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 			definitions = append(definitions, d)
 		case *ast.InterfaceDecl:
 			definitions = append(definitions, d)
+		case *ast.ModuleDecl:
+			definitions = append(definitions, d)
 		// Test constructs are definitions, not top-level statements
 		case *ast.DescribeStmt, *ast.TestStmt, *ast.TableStmt:
 			definitions = append(definitions, decl)
@@ -499,6 +506,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genClassDecl(s)
 	case *ast.InterfaceDecl:
 		g.genInterfaceDecl(s)
+	case *ast.ModuleDecl:
+		g.genModuleDecl(s)
 	case *ast.ExprStmt:
 		g.genExprStmt(s)
 	case *ast.AssignStmt:
@@ -622,15 +631,72 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	g.inMainFunc = false
 }
 
+// genModuleDecl stores the module definition for later use when classes include it.
+// Modules don't generate code directly - their fields and methods are injected
+// into classes that include them.
+func (g *Generator) genModuleDecl(mod *ast.ModuleDecl) {
+	g.modules[mod.Name] = mod
+}
+
 func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	className := cls.Name
 	g.currentClass = className
+	g.currentClassEmbeds = cls.Embeds
 	g.pubClasses[className] = cls.Pub
 	clear(g.classFields)
 
+	// Collect all fields: explicit, inferred, from accessors, and from included modules
+	// Track field names to avoid duplicates
+	fieldNames := make(map[string]bool)
+	allFields := make([]*ast.FieldDecl, 0, len(cls.Fields)+len(cls.Accessors))
+	for _, f := range cls.Fields {
+		if !fieldNames[f.Name] {
+			allFields = append(allFields, f)
+			fieldNames[f.Name] = true
+		}
+	}
+	for _, acc := range cls.Accessors {
+		if !fieldNames[acc.Name] {
+			allFields = append(allFields, &ast.FieldDecl{Name: acc.Name, Type: acc.Type})
+			fieldNames[acc.Name] = true
+		}
+	}
+
+	// Collect all accessors including from modules
+	allAccessors := append([]*ast.AccessorDecl{}, cls.Accessors...)
+
+	// Collect all methods including from modules
+	allMethods := append([]*ast.MethodDecl{}, cls.Methods...)
+
+	// Include modules: add their fields, accessors, and methods
+	for _, modName := range cls.Includes {
+		mod, ok := g.modules[modName]
+		if !ok {
+			g.addError(fmt.Errorf("undefined module: %s", modName))
+			continue
+		}
+		// Add module fields (skip duplicates)
+		for _, f := range mod.Fields {
+			if !fieldNames[f.Name] {
+				allFields = append(allFields, f)
+				fieldNames[f.Name] = true
+			}
+		}
+		for _, acc := range mod.Accessors {
+			if !fieldNames[acc.Name] {
+				allFields = append(allFields, &ast.FieldDecl{Name: acc.Name, Type: acc.Type})
+				fieldNames[acc.Name] = true
+			}
+		}
+		// Add module accessors
+		allAccessors = append(allAccessors, mod.Accessors...)
+		// Add module methods (these will be "specialized" by being generated with the class's receiver)
+		allMethods = append(allMethods, mod.Methods...)
+	}
+
 	// Emit struct definition
 	// Class names are already PascalCase by convention; pub affects field/method visibility
-	hasContent := len(cls.Embeds) > 0 || len(cls.Fields) > 0
+	hasContent := len(cls.Embeds) > 0 || len(allFields) > 0
 	if hasContent {
 		g.buf.WriteString(fmt.Sprintf("type %s struct {\n", className))
 		for _, embed := range cls.Embeds {
@@ -638,7 +704,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			g.buf.WriteString(embed)
 			g.buf.WriteString("\n")
 		}
-		for _, field := range cls.Fields {
+		for _, field := range allFields {
 			g.classFields[field.Name] = field.Type // Store field type
 			if field.Type != "" {
 				g.buf.WriteString(fmt.Sprintf("\t%s %s\n", field.Name, mapType(field.Type)))
@@ -659,8 +725,14 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		}
 	}
 
+	// Emit accessor methods (including from modules)
+	for _, acc := range allAccessors {
+		g.genAccessorMethods(className, acc, cls.Pub)
+	}
+
 	// Emit methods (skip initialize - it's the constructor)
-	for _, method := range cls.Methods {
+	// This includes module methods which are "specialized" by using the class's receiver
+	for _, method := range allMethods {
 		if method.Name != "initialize" {
 			g.genMethodDecl(className, method)
 		}
@@ -675,7 +747,43 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	}
 
 	g.currentClass = ""
+	g.currentClassEmbeds = nil
 	clear(g.classFields)
+}
+
+func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, pub bool) {
+	recv := receiverName(className)
+	goType := mapType(acc.Type)
+
+	// Generate getter for "getter" and "property"
+	if acc.Kind == "getter" || acc.Kind == "property" {
+		// getter/property generates: func (r *T) Name() T { return r.name }
+		// Method name is PascalCase if pub class, camelCase otherwise
+		var methodName string
+		if pub {
+			methodName = snakeToPascalWithAcronyms(acc.Name)
+		} else {
+			methodName = snakeToCamelWithAcronyms(acc.Name)
+		}
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s) %s() %s {\n", recv, className, methodName, goType))
+		g.buf.WriteString(fmt.Sprintf("\treturn %s.%s\n", recv, acc.Name))
+		g.buf.WriteString("}\n\n")
+	}
+
+	// Generate setter for "setter" and "property"
+	if acc.Kind == "setter" || acc.Kind == "property" {
+		// setter/property generates: func (r *T) SetName(v T) { r.name = v }
+		// Method name is SetPascalCase if pub class, setcamelCase otherwise
+		var methodName string
+		if pub {
+			methodName = "Set" + snakeToPascalWithAcronyms(acc.Name)
+		} else {
+			methodName = "set" + snakeToPascalWithAcronyms(acc.Name)
+		}
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s) %s(v %s) {\n", recv, className, methodName, goType))
+		g.buf.WriteString(fmt.Sprintf("\t%s.%s = v\n", recv, acc.Name))
+		g.buf.WriteString("}\n\n")
+	}
 }
 
 func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
@@ -803,6 +911,8 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	clear(g.vars) // reset vars for each method
 	g.currentReturnTypes = method.ReturnTypes
+	g.currentMethod = method.Name
+	g.currentMethodPub = method.Pub
 
 	// Validate: methods ending in ? must return Bool
 	if strings.HasSuffix(method.Name, "?") {
@@ -836,6 +946,8 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		g.indent--
 		g.buf.WriteString("}\n\n")
 		g.currentReturnTypes = nil
+		g.currentMethod = ""
+		g.currentMethodPub = false
 		return
 	}
 
@@ -850,6 +962,8 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		g.indent--
 		g.buf.WriteString("}\n\n")
 		g.currentReturnTypes = nil
+		g.currentMethod = ""
+		g.currentMethodPub = false
 		return
 	}
 
@@ -888,6 +1002,8 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		g.indent--
 		g.buf.WriteString("}\n\n")
 		g.currentReturnTypes = nil
+		g.currentMethod = ""
+		g.currentMethodPub = false
 		return
 	}
 
@@ -948,6 +1064,8 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	g.indent--
 	g.buf.WriteString("}\n\n")
 	g.currentReturnTypes = nil
+	g.currentMethod = ""
+	g.currentMethodPub = false
 }
 
 func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
@@ -2089,6 +2207,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		} else {
 			g.buf.WriteString(fmt.Sprintf("/* @%s outside class */", e.Name))
 		}
+	case *ast.SuperExpr:
+		g.genSuperExpr(e)
 	case *ast.BinaryExpr:
 		g.genBinaryExpr(e)
 	case *ast.UnaryExpr:
@@ -2100,6 +2220,45 @@ func (g *Generator) genExpr(expr ast.Expression) {
 	case *ast.SafeNavExpr:
 		g.genSafeNavExpr(e)
 	}
+}
+
+// genSuperExpr generates code for a super call.
+// super calls the parent's original implementation of the current method.
+// In Go, this is done by calling recv.ParentName.MethodName(args...)
+func (g *Generator) genSuperExpr(e *ast.SuperExpr) {
+	if g.currentClass == "" || g.currentMethod == "" {
+		g.buf.WriteString("/* super outside method */")
+		return
+	}
+	if len(g.currentClassEmbeds) == 0 {
+		g.addError(fmt.Errorf("line %d: super used in class without parent", e.Line))
+		g.buf.WriteString("/* super without parent */")
+		return
+	}
+
+	// Use the first embedded type as the parent class
+	// Rugby only supports single inheritance
+	parentClass := g.currentClassEmbeds[0]
+	recv := receiverName(g.currentClass)
+
+	// Convert the current method name to Go's naming convention
+	// Use same visibility as the current method (pub methods call pub parent methods)
+	var methodName string
+	if g.currentMethodPub {
+		methodName = snakeToPascalWithAcronyms(g.currentMethod)
+	} else {
+		methodName = snakeToCamelWithAcronyms(g.currentMethod)
+	}
+
+	// Generate: recv.ParentName.MethodName(args...)
+	g.buf.WriteString(fmt.Sprintf("%s.%s.%s(", recv, parentClass, methodName))
+	for i, arg := range e.Args {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.genExpr(arg)
+	}
+	g.buf.WriteString(")")
 }
 
 func (g *Generator) genRangeLit(r *ast.RangeLit) {

@@ -480,15 +480,17 @@ func (d *DeferStmt) stmtNode() {}
 
 // ClassDecl represents a class definition
 type ClassDecl struct {
-	Name       string        // class name (e.g., "User")
-	Embeds     []string      // embedded types (Go struct embedding), empty if none
-	Implements []string      // interfaces this class explicitly implements
-	Fields     []*FieldDecl  // fields inferred from initialize
-	Methods    []*MethodDecl // methods defined in class
-	Pub        bool          // true if exported (pub class)
-	Line       int           // source line number (1-indexed)
-	Doc        *CommentGroup // leading comments
-	Comment    *CommentGroup // trailing comment on same line
+	Name       string          // class name (e.g., "User")
+	Embeds     []string        // embedded types (Go struct embedding), empty if none
+	Implements []string        // interfaces this class explicitly implements
+	Fields     []*FieldDecl    // fields inferred from initialize
+	Methods    []*MethodDecl   // methods defined in class
+	Accessors  []*AccessorDecl // accessor declarations (getter, setter, property)
+	Includes   []string        // modules to include
+	Pub        bool            // true if exported (pub class)
+	Line       int             // source line number (1-indexed)
+	Doc        *CommentGroup   // leading comments
+	Comment    *CommentGroup   // trailing comment on same line
 }
 
 func (c *ClassDecl) node()     {}
@@ -626,3 +628,91 @@ type AfterStmt struct {
 
 func (a *AfterStmt) node()     {}
 func (a *AfterStmt) stmtNode() {}
+
+// AccessorDecl represents a getter, setter, or property declaration in a class
+// getter name : Type → declares @name : Type + generates def name -> Type
+// setter name : Type → declares @name : Type + generates def name=(v : Type)
+// property name : Type → declares @name : Type + generates both getter and setter
+type AccessorDecl struct {
+	Kind string // "getter", "setter", or "property"
+	Name string // field name (without @)
+	Type string // field type
+	Line int    // source line number
+}
+
+func (a *AccessorDecl) node()     {}
+func (a *AccessorDecl) stmtNode() {}
+
+// SuperExpr represents a call to the parent's implementation
+// super or super(args...)
+type SuperExpr struct {
+	Args []Expression // arguments to pass to parent method
+	Line int          // source line number
+}
+
+func (s *SuperExpr) node()     {}
+func (s *SuperExpr) exprNode() {}
+
+// GoStmt represents a goroutine spawn: go expr or go do ... end
+type GoStmt struct {
+	Call  Expression // call expression to execute in goroutine
+	Block *BlockExpr // optional block form: go do ... end
+	Line  int        // source line number
+}
+
+func (g *GoStmt) node()     {}
+func (g *GoStmt) stmtNode() {}
+
+// ChanSendStmt represents a channel send: ch << value
+type ChanSendStmt struct {
+	Chan  Expression // the channel
+	Value Expression // the value to send
+	Line  int        // source line number
+}
+
+func (c *ChanSendStmt) node()     {}
+func (c *ChanSendStmt) stmtNode() {}
+
+// SelectStmt represents a select statement for channel operations
+type SelectStmt struct {
+	Cases []SelectCase // when clauses
+	Else  []Statement  // optional else/default clause
+	Line  int          // source line number
+}
+
+func (s *SelectStmt) node()     {}
+func (s *SelectStmt) stmtNode() {}
+
+// SelectCase represents a single case in a select statement
+type SelectCase struct {
+	// Either a receive (val = ch.receive) or send (ch << val)
+	AssignName string     // variable name for receive assignment (empty if none)
+	Chan       Expression // the channel expression
+	IsSend     bool       // true for send, false for receive
+	Value      Expression // value to send (for send case) or nil (for receive)
+	Body       []Statement
+}
+
+// ModuleDecl represents a module definition
+type ModuleDecl struct {
+	Name      string          // module name
+	Fields    []*FieldDecl    // fields defined in module
+	Methods   []*MethodDecl   // methods defined in module
+	Accessors []*AccessorDecl // accessor declarations
+	Pub       bool            // true if exported
+	Line      int             // source line number
+	Doc       *CommentGroup   // associated doc comment
+}
+
+func (m *ModuleDecl) node()     {}
+func (m *ModuleDecl) stmtNode() {}
+
+// IncludeStmt represents including a module in a class
+// include ModuleName
+type IncludeStmt struct {
+	Module string // module name to include
+	Line   int    // source line number
+}
+
+func (i *IncludeStmt) node()     {}
+func (i *IncludeStmt) stmtNode() {}

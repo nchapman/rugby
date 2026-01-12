@@ -61,11 +61,20 @@ const (
 	PIPE       TokenType = "|"
 	AT         TokenType = "@"
 	COLON      TokenType = ":"
+	SHOVELLEFT TokenType = "<<"
 
 	// Keywords
 	IMPORT     TokenType = "IMPORT"
 	DEF        TokenType = "DEF"
 	END        TokenType = "END"
+	GETTER     TokenType = "GETTER"
+	SETTER     TokenType = "SETTER"
+	PROPERTY   TokenType = "PROPERTY"
+	SUPER      TokenType = "SUPER"
+	GO         TokenType = "GO"
+	MODULE     TokenType = "MODULE"
+	INCLUDE    TokenType = "INCLUDE"
+	SELECT     TokenType = "SELECT"
 	IF         TokenType = "IF"
 	ELSIF      TokenType = "ELSIF"
 	ELSE       TokenType = "ELSE"
@@ -118,6 +127,14 @@ var keywords = map[string]TokenType{
 	"import":     IMPORT,
 	"def":        DEF,
 	"end":        END,
+	"getter":     GETTER,
+	"setter":     SETTER,
+	"property":   PROPERTY,
+	"super":      SUPER,
+	"go":         GO,
+	"module":     MODULE,
+	"include":    INCLUDE,
+	"select":     SELECT,
 	"if":         IF,
 	"elsif":      ELSIF,
 	"else":       ELSE,
