@@ -14,6 +14,9 @@ This directory contains Rugby's standard library packages. These provide Ruby-li
 | [time](./time/) | Time and duration | `import rugby/time` |
 | [regex](./regex/) | Regular expressions | `import rugby/regex` |
 | [base64](./base64/) | Base64 encoding/decoding | `import rugby/base64` |
+| [shell](./shell/) | Command execution | `import rugby/shell` |
+| [crypto](./crypto/) | Cryptographic utilities | `import rugby/crypto` |
+| [url](./url/) | URL parsing and building | `import rugby/url` |
 
 ## Usage
 
@@ -38,19 +41,6 @@ puts data["message"]
 ## TODO: Planned Packages
 
 ### Tier 3: Nice to Have
-
-- [ ] `rugby/shell` - Command execution
-  - `shell.Run(cmd)` returns `(String, error)`
-  - `shell.Exec(cmd, args)` returns `Result{Stdout, Stderr, ExitCode}`
-  - `shell.Which(name)` returns `String?`
-
-- [ ] `rugby/crypto` - Cryptographic utilities
-  - `crypto.SHA256(data)`, `crypto.MD5(data)`
-  - `crypto.RandomBytes(n)`
-
-- [ ] `rugby/url` - URL parsing and building
-  - `url.Parse(str)`, `url.Join(base, path)`
-  - `url.QueryEncode(params)`, `url.QueryDecode(str)`
 
 - [ ] `rugby/template` - Simple string templating
   - `template.Render(tmpl, data)`
