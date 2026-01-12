@@ -40,6 +40,23 @@ puts data["message"]
 
 ## TODO: Planned Packages
 
+### Tier 2: High Value
+
+- [ ] `rugby/uuid` - UUID generation and parsing
+  - `uuid.V4()` returns random UUID string
+  - `uuid.Parse(str)` validates and normalizes
+  - `uuid.Valid?(str)` checks format
+
+- [ ] `rugby/csv` - CSV reading and writing
+  - `csv.Parse(str)` returns `Array[Array[String]]`
+  - `csv.ParseWithHeaders(str)` returns `Array[Map[String, String]]`
+  - `csv.Generate(rows)` returns CSV string
+
+- [ ] `rugby/log` - Structured logging with levels
+  - `log.Info(msg, fields)`, `log.Error(msg, fields)`
+  - `log.SetLevel(level)` controls output
+  - JSON and text output formats
+
 ### Tier 3: Nice to Have
 
 - [ ] `rugby/template` - Simple string templating
