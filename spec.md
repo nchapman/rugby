@@ -33,105 +33,31 @@ Rugby **must not** support:
 
 ## 2.1 Bare Scripts (Top-Level Execution)
 
-Rugby files can contain executable statements at the top level without an explicit `main` function, similar to Ruby scripts.
+Rugby files can contain executable statements at the top level without an explicit `main` function.
 
-### Rules
-
-1. **Top-level statements**: Any statement outside a `def`, `class`, or `interface` is considered executable top-level code.
-2. **Order preserved**: Top-level statements execute in source order.
-3. **Single Entry**: When compiling a directory, only **one** file may contain top-level statements (the entry point). Multiple files with top-level statements is a compile error.
-4. **Definitions lifted**: `def`, `class`, and `interface` at top level become package-level Go constructs (not executed as statements).
-5. **Implicit main**: If top-level statements exist and no `def main` is defined, the compiler generates `func main()` containing them.
-6. **Explicit main wins**: If `def main` exists, top-level statements are a compile error (avoids ambiguity).
-
-### Examples
-
-**Simple script:**
 ```ruby
 # hello.rg
 puts "Hello, world!"
-```
 
-Compiles to:
-```go
-package main
-
-import "rugby/runtime"
-
-func main() {
-    runtime.Puts("Hello, world!")
-}
-```
-
-**Script with functions:**
-```ruby
-# greet.rg
+# With functions - definitions are lifted, calls execute in order
 def greet(name : String)
   puts "Hello, #{name}!"
 end
 
 greet("Rugby")
-greet("World")
 ```
 
-Compiles to:
-```go
-package main
-
-import "rugby/runtime"
-
-func greet(name string) {
-    runtime.Puts(fmt.Sprintf("Hello, %s!", name))
-}
-
-func main() {
-    greet("Rugby")
-    greet("World")
-}
-```
-
-**Script with classes:**
-```ruby
-# counter.rg
-class Counter
-  def initialize(n : Int)
-    @n = n
-  end
-
-  def inc
-    @n += 1
-  end
-
-  def value -> Int
-    @n
-  end
-end
-
-c = Counter.new(0)
-c.inc()
-c.inc()
-puts c.value
-```
-
-### Compile Error Case
-
-```ruby
-# error: can't mix top-level statements with def main
-def main
-  puts "in main"
-end
-
-puts "top-level"  # ERROR: top-level statement with explicit main
-```
-
-### Package Mode vs Script Mode
+**Rules:**
+- Top-level statements execute in source order
+- Only one file per directory may contain top-level statements
+- `def main` and top-level statements are mutually exclusive (compile error if both)
+- Definitions (`def`, `class`, `interface`) become package-level constructs
 
 | File contains | Mode | Output |
 |---------------|------|--------|
 | Only defs/classes | Library | `package <name>`, no main |
 | Top-level statements | Script | `package main` + generated `func main()` |
 | `def main` | Explicit | `package main` + user's `func main()` |
-| Both top-level + `def main` | Error | Compile error |
 
 ---
 
@@ -214,12 +140,7 @@ Rugby is statically typed with inference.
 
 ### 4.1.1 Symbols
 
-Symbols are lightweight identifiers starting with `:`.
-
-**Syntax:** `:status`, `:ok`, `:not_found`
-
-**Compilation:**
-Symbols compile to **Go strings**. `:ok` → `"ok"`
+Symbols (`:ok`, `:status`, `:not_found`) compile to Go strings.
 
 ---
 
@@ -236,330 +157,125 @@ Symbols compile to **Go strings**. `:ok` → `"ok"`
 
 #### Array Literals
 
-Rugby supports Ruby-style array literal syntax:
-
-**Basic arrays:**
 ```ruby
 nums = [1, 2, 3]
-mixed = [1, "two", 3.0]
-nested = [[1, 2], [3, 4]]
-```
-
-**Word arrays (`%w` and `%W`):**
-
-Word arrays provide a concise syntax for arrays of strings:
-
-```ruby
 words = %w{foo bar baz}        # ["foo", "bar", "baz"]
-words = %w(one two three)      # alternate delimiter
-words = %w[a b c]              # bracket delimiter
-words = %w<x y z>              # angle bracket delimiter
-words = %w|hello world|        # pipe delimiter
+words = %W{hello #{name}}      # interpolated: ["hello", "world"]
+all = [1, *rest, 4]            # splat: [1, 2, 3, 4]
 ```
 
-Interpolated word arrays use `%W`:
-```ruby
-name = "world"
-words = %W{hello #{name}}      # ["hello", "world"]
-```
+Word arrays support any delimiter: `%w{...}`, `%w(...)`, `%w[...]`, `%w<...>`, `%w|...|`
 
-**Escape sequences in word arrays:**
-* `\ ` — escaped space (keeps words together)
-* `\n`, `\t`, `\\` — standard escapes
-* `\}`, `\)`, `\]`, `\>`, `\|` — escaped closing delimiters
+#### Indexing
+
+Negative indices count from the end:
 
 ```ruby
-%w{hello\ world foo}           # ["hello world", "foo"]
+arr[-1]   # last element
+arr[-2]   # second-to-last
+str[-1]   # last character (Unicode-aware)
 ```
 
-**Splat operator (`*`):**
-
-The splat operator expands an array inline:
-
-```ruby
-rest = [2, 3]
-all = [1, *rest, 4]            # [1, 2, 3, 4]
-copy = [*items]                # shallow copy
-combined = [*a, *b]            # concatenate arrays
-```
-
-#### Array and String Indexing
-
-Rugby supports negative indexing like Ruby, where negative indices count from the end:
-
-```ruby
-arr = [10, 20, 30, 40, 50]
-arr[0]    # 10 (first element)
-arr[2]    # 30 (third element)
-arr[-1]   # 50 (last element)
-arr[-2]   # 40 (second-to-last)
-arr[-5]   # 10 (fifth-from-end = first)
-
-str = "hello"
-str[0]    # "h" (first character)
-str[-1]   # "o" (last character)
-str[-2]   # "l" (second-to-last character)
-```
-
-**Codegen behavior:**
-- Literal non-negative indices use native Go indexing for efficiency: `arr[0]`
-- Negative indices and variable indices use `runtime.AtIndex` to support negative values
-- String indexing is Unicode-aware (operates on runes, not bytes)
-
-**Note:** Out-of-bounds indices will panic at runtime (matching Go semantics). For safe access, use the `first` and `last` methods which return optionals.
+Out-of-bounds indices panic. For safe access, use `first`/`last` which return optionals.
 
 #### Range Slicing
 
-Ruby-style range slicing extracts a portion of an array or string:
-
 ```ruby
-arr = [0, 1, 2, 3, 4]
-arr[1..3]   # [1, 2, 3] (inclusive range, elements 1-3)
-arr[1...3]  # [1, 2] (exclusive range, elements 1-2)
-arr[0..-1]  # [0, 1, 2, 3, 4] (entire array, -1 is last)
-arr[-3..-1] # [2, 3, 4] (last 3 elements)
-
-str = "hello"
-str[1..3]   # "ell" (characters 1-3)
-str[0..-1]  # "hello" (entire string)
+arr[1..3]   # [1, 2, 3] (inclusive)
+arr[1...3]  # [1, 2] (exclusive end)
+arr[-3..-1] # last 3 elements
+str[1..3]   # "ell"
 ```
 
-Range slicing supports:
-- Inclusive ranges (`..`): includes both start and end indices
-- Exclusive ranges (`...`): includes start but not end
-- Negative indices: count from end (-1 is last element)
-
-**Edge cases:**
-- Out-of-bounds ranges return an empty array/string
-- If start > end after index normalization, returns empty
-- End indices are clamped to the collection length
-
-Compiles to `runtime.Slice()` which handles negative indices and range semantics.
+Out-of-bounds ranges return empty. Negative indices count from end.
 
 #### Map Literals
 
-Rugby supports multiple syntaxes for map literals:
-
-**Hash rocket syntax:**
 ```ruby
-m = {"name" => "Alice", "age" => 30}
-m = {1 => "one", 2 => "two"}
+m = {"name" => "Alice", "age" => 30}  # hash rocket
+m = {name: "Alice", age: 30}          # symbol shorthand (same result)
+m = {name:, age:}                     # implicit value (uses variables)
+m = {**defaults, **overrides}         # double splat merges maps
 ```
 
-**Symbol key shorthand:**
-
-When keys are identifiers followed by `:`, they become string keys:
-```ruby
-m = {name: "Alice", age: 30}   # {"name" => "Alice", "age" => 30}
-```
-
-**Implicit value shorthand:**
-
-When the value is omitted after `:`, the identifier is used as both key and value:
-```ruby
-name = "Alice"
-age = 30
-m = {name:, age:}              # {"name" => name, "age" => age}
-```
-
-**Mixed syntax:**
-```ruby
-m = {"explicit" => 1, short: 2}
-```
-
-**Double splat operator (`**`):**
-
-The double splat operator merges maps:
-```ruby
-defaults = {a: 1, b: 2}
-overrides = {b: 3, c: 4}
-m = {**defaults, **overrides}  # {a: 1, b: 3, c: 4}
-m = {**defaults, d: 5}         # {a: 1, b: 2, d: 5}
-```
-
-**Note:** Map literals with `{` require parentheses when used with command syntax to distinguish from blocks:
-```ruby
-foo({a: 1})                    # pass map argument
-foo {a: 1}                     # ERROR: parsed as block
-```
+**Note:** Map literals require parentheses with command syntax: `foo({a: 1})` not `foo {a: 1}` (parsed as block).
 
 ### 4.2.1 Range Type
 
-Ranges are first-class values representing a sequence of integers.
-
-**Syntax:**
-* `start..end` → inclusive (0..5 includes 0, 1, 2, 3, 4, 5)
-* `start...end` → exclusive (0...5 includes 0, 1, 2, 3, 4)
-
-**Compilation:** Compiles to `runtime.Range` struct:
-
-```go
-type Range struct {
-    Start, End int
-    Exclusive  bool
-}
-```
-
-**Methods:**
-* `each { |i| }` → `runtime.RangeEach(r, fn)` - iterate over values
-* `include?(n)` / `contains?(n)` → `runtime.RangeContains(r, n)` - membership test
-* `to_a` → `runtime.RangeToArray(r)` - materialize to `[]int`
-* `size` / `length` → `runtime.RangeSize(r)` - count of elements
-
-**Use cases:**
 ```ruby
-r = 1..10           # store as value
-for i in 0..5       # loop iteration
+1..5    # inclusive: 1, 2, 3, 4, 5
+1...5   # exclusive: 1, 2, 3, 4
+
+for i in 0..5
   puts i
 end
-(1..100).include?(50)  # membership test
-nums = (1..5).to_a     # [1, 2, 3, 4, 5]
+
+(1..100).include?(50)
+nums = (1..5).to_a  # [1, 2, 3, 4, 5]
 ```
+
+Methods: `each`, `include?`/`contains?`, `to_a`, `size`/`length`
 
 ### 4.2.2 Channel Type
 
-`Chan[T]` is a typed channel for concurrent communication between goroutines.
-
-**Creation:**
 ```ruby
-ch = Chan[Int].new(10)  # buffered channel with capacity 10
-ch = Chan[Int].new      # unbuffered channel
+ch = Chan[Int].new(10)  # buffered
+ch = Chan[Int].new      # unbuffered
 ```
 
-**Compilation:** `Chan[T]` compiles to Go's `chan T`.
-
-See Section 13.2 for full channel operations.
+See Section 13.2 for channel operations.
 
 ### 4.2.3 Task Type
 
-`Task[T]` represents a concurrent computation that will produce a value of type `T`. Tasks are created with `spawn` and consumed with `await`.
-
 ```ruby
-t = spawn { expensive_work() }  # t : Task[Result]
-result = await t                 # result : Result
+t = spawn { expensive_work() }  # Task[Result]
+result = await t
 ```
 
-**Compilation:** `Task[T]` compiles to an internal struct containing a result channel.
-
-See Section 13.4 for spawning and awaiting tasks.
+See Section 13.4 for spawning and awaiting.
 
 ### 4.3 Type Inference
 
-Rugby uses a flow-sensitive type inference algorithm inspired by Crystal, designed to map cleanly to Go's static structures.
-
-**Local Variables:**
-Types are inferred from their first assignment.
 ```ruby
-x = 5           # x is Int
-y : Int64 = 5   # y is Int64
+x = 5           # x is Int (inferred)
+y : Int64 = 5   # explicit type annotation
+
+def add(a : Int, b : Int)  # parameters must be typed
+def log(msg : any)         # use `any` for dynamic types
 ```
 
-**Function Parameters:**
-Parameters **must** be explicitly typed. Use `any` for dynamic types (empty interface).
-```ruby
-def add(a : Int, b : Int)  # a, b are Int
-def log(msg : any)         # msg is any
-```
-
-**Instance Variables:**
-Instance variable types must be deducible at compile-time to generate the underlying Go struct. They are resolved from:
+**Instance Variables:** Types resolved from:
 1.  **Explicit Declarations:** `@field : Type` at the class level.
 2.  **Initialize Inference:** Assignments within the `initialize` method.
 3.  **Parameter Promotion:** `def initialize(@field : Type)` syntax.
 
 ```ruby
 class User
-  @role : String                # 1. explicit declaration
+  @role : String                # explicit declaration
 
-  def initialize(@name : String) # 3. parameter promotion → @name : String
-    @age = 0                     # 2. initialize inference → @age : Int
+  def initialize(@name : String) # parameter promotion
+    @age = 0                     # inferred from initialize
   end
 end
 ```
 
-New instance variables may only be introduced in `initialize` (or via class-level declarations). Introducing a new `@field` outside `initialize` is a compile-time error.
-
-**Definite Assignment:** All non-optional fields must be definitely assigned on all control-flow paths in `initialize`. Optional fields (`T?`) may be left unassigned.
-
-```ruby
-class Example
-  def initialize(flag : Bool)
-    if flag
-      @value = 1
-    end
-    # ERROR: @value not assigned when flag is false
-  end
-end
-
-class ExampleFixed
-  @value : Int?  # optional, may be unassigned
-
-  def initialize(flag : Bool)
-    if flag
-      @value = 1
-    end
-    # OK: @value is optional
-  end
-end
-```
+New instance variables may only be introduced in `initialize`. Non-optional fields must be assigned on all control-flow paths.
 
 ### 4.4 Optionals (`T?`)
 
-**Syntax:** `T?` is the universal syntax for "nullable" or "optional" values.
-
-**Representation:**
-
-To ensure deterministic behavior and Go-idiomatic ergonomics, optionals are unified:
-
-1.  **Return Values:** Compiles to `(T, bool)` (standard Go "comma-ok" idiom).
-2.  **Storage (Fields, Arrays, Maps):** Compiles to `runtime.Option[T]` struct:
-    ```go
-    type Option[T any] struct {
-        Value T
-        Ok    bool
-    }
-    ```
-
-**Usage:**
-
-Rugby requires explicit handling of optionals. "Truthiness" is **not** supported (see 5.2). Instead, use operators and patterns below.
+`T?` represents optional values. Compiles to `(T, bool)` for returns, `runtime.Option[T]` for storage.
 
 #### 4.4.1 Optional Operators
 
-Rugby provides two operators for working with optionals:
-
-| Operator | Name | Description |
-|----------|------|-------------|
-| `??` | Nil coalescing | Unwrap or use default: `T? ?? T → T` |
-| `&.` | Safe navigation | Call method if present: `T?&.method → R?` |
-
-**Examples:**
+| Operator | Description |
+|----------|-------------|
+| `??` | Nil coalescing: `expr ?? default` |
+| `&.` | Safe navigation: `obj&.method` (returns `R?`) |
 
 ```ruby
-# Nil coalescing - unwrap or default
 name = find_user(id)&.name ?? "Anonymous"
-port = config.get("port") ?? 8080
-user = find_user(id) ?? guest_user
-
-# Safe navigation - chain through optionals
 city = user&.address&.city ?? "Unknown"
-len = input&.strip&.length ?? 0
-
-# Combined
-title = article&.author&.name ?? "Unknown Author"
-```
-
-**Lowering:**
-
-```go
-// name = find_user(id)&.name ?? "Anonymous"
-tmp := findUser(id)
-var name string
-if tmp.Ok {
-    name = tmp.Value.Name
-} else {
-    name = "Anonymous"
-}
+port = config.get("port") ?? 8080
 ```
 
 **Rules:**
@@ -569,185 +285,54 @@ if tmp.Ok {
 
 #### 4.4.2 Optional Methods
 
-For more complex operations, optionals provide methods:
+| Method | Description |
+|--------|-------------|
+| `ok?` / `present?` | Is value present? |
+| `nil?` / `absent?` | Is value absent? |
+| `unwrap` | Unwrap, panic if absent |
+| `map { \|x\| }` | Transform if present → `R?` |
+| `each { \|x\| }` | Execute block if present |
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `ok?` / `present?` | `Bool` | Is value present? |
-| `nil?` / `absent?` | `Bool` | Is value absent? |
-| `unwrap` | `T` | Unwrap, panic if absent |
-| `map { \|x\| expr }` | `R?` | Transform if present |
-| `flat_map { \|x\| expr }` | `R?` | Chain optionals (expr returns `R?`) |
-| `each { \|x\| ... }` | `nil` | Execute block if present |
-
-**Examples:**
+#### 4.4.3 Unwrapping Patterns
 
 ```ruby
-# Transform value if present
-upper = name&.upcase  # simpler with &.
-upper = name.map { |n| n.upcase }  # equivalent with method
-
-# Chain optionals
-city = user.flat_map { |u| u.address }.flat_map { |a| a.city }
-
-# Side effect if present
-user.each { |u| log.info("Found: #{u.name}") }
-
-# Unwrap or panic (use sparingly)
-value = required_field.unwrap
-```
-
-#### 4.4.3 The `if let` Pattern
-
-For conditional unwrapping with a scoped binding, use `if let`:
-
-```ruby
+# if let - scoped binding (preferred)
 if let user = find_user(id)
   puts user.name
 end
-```
 
-Compiles to `if user, ok := findUser(id); ok { ... }`
-
-This is the preferred pattern when you need to use the unwrapped value conditionally.
-
-#### 4.4.4 Tuple Unpacking
-
-Optionals can be unpacked into a value and boolean using tuple assignment:
-
-```ruby
+# Tuple unpacking - Go's comma-ok idiom
 user, ok = find_user(id)
 if ok
   puts user.name
 end
 ```
 
-**Semantics:**
-- `find_user(id)` returns `User?`
-- Single assignment: `user = find_user(id)` → `user : User?`
-- Tuple assignment: `user, ok = find_user(id)` → `user : User, ok : Bool`
-
-When unpacked, `user` is the unwrapped type (not optional). If `ok` is false, `user` holds the zero value.
-
-**Lowering:**
-```go
-user, ok := findUser(id)
-if ok {
-    fmt.Println(user.Name)
-}
-```
-
-This mirrors Go's comma-ok idiom and avoids needing `.unwrap` after checking.
-
-#### 4.4.5 Choosing a Pattern
-
-| Pattern | Best for |
+| Pattern | Use case |
 |---------|----------|
-| `expr ?? default` | Providing a fallback value |
-| `expr&.method` | Safe navigation through optionals |
-| `if let u = expr` | Conditional use with scoped binding |
-| `val, ok = expr` | When you need the boolean separately |
-| `expr.unwrap` | When absence is a bug (will panic) |
-| `expr.map { }` | Complex transformations |
+| `expr ?? default` | Fallback value |
+| `expr&.method` | Safe navigation |
+| `if let u = expr` | Conditional with binding |
+| `val, ok = expr` | Need boolean separately |
+| `expr.unwrap` | Absence is a bug (panics) |
 
 ### 4.5 The `nil` Keyword
 
-Rugby has a `nil` keyword representing absence. Unlike Ruby where any value can be `nil`, Rugby restricts where `nil` is valid.
+`nil` is valid only for `T?` (optional) and `error` types:
 
-#### 4.5.1 Where `nil` is Valid
-
-| Type | Can be `nil`? | Notes |
-|------|---------------|-------|
-| Value types (`Int`, `String`, `Bool`, `Float`) | No | Use `T?` for optional values |
-| Reference types (`User`, `Writer`) | No | Use `T?` for optional references |
-| Optional types (`T?`) | Yes | `nil` means absent |
-| `error` | Yes | `nil` means no error (success) |
-
-#### 4.5.2 Examples
-
-**Optional types:**
 ```ruby
 def find_user(id : Int) -> User?
-  if id < 0
-    return nil  # OK: User? can be nil
-  end
+  return nil if id < 0
   User.new("Alice")
 end
 
-user : User? = nil  # OK
-name : String? = nil  # OK
-```
+x : Int = nil  # ERROR: use Int?
 
-**Non-optional types (compile errors):**
-```ruby
-def get_user -> User
-  nil  # ERROR: User cannot be nil, use User?
-end
-
-x : Int = nil  # ERROR: Int cannot be nil, use Int?
-```
-
-**Error type (special case):**
-```ruby
-def save(data : String) -> error
-  if data.empty?
-    return fmt.errorf("empty data")
-  end
-  nil  # OK: nil means success
-end
-```
-
-#### 4.5.3 Checking for `nil`
-
-For optional types, use tuple unpacking or `if let`:
-
-```ruby
-# Tuple unpacking (preferred)
-user, ok = find_user(5)
-if ok
-  puts user.name
-else
-  puts "not found"
-end
-
-# Or if let
-if let user = find_user(5)
-  puts user.name
-else
-  puts "not found"
-end
-
-# Or check nil directly
-result = find_user(5)
-if result.nil?
-  puts "not found"
-end
-```
-
-For the `error` type, use direct comparison:
-
-```ruby
-err = save("data")
-if err != nil
-  puts "failed: #{err}"
-end
-
+err = save()
 if err == nil
   puts "success"
 end
 ```
-
-#### 4.5.4 Why This Design?
-
-1. **Safety:** Forcing `T?` for optional values makes nullability explicit in the type system.
-2. **Go compatibility:** Maps cleanly to Go's zero values and pointer semantics.
-3. **Ruby familiarity:** `nil` keyword is familiar, but scoped to where it makes sense.
-4. **Error convention:** `error` being nullable matches Go's idiomatic error handling.
-
-**Lowering:**
-
-* `T?` with `nil` → `Option[T]{Ok: false}` or `(T{}, false)`
-* `error` with `nil` → Go `nil` directly
 
 ---
 
@@ -755,389 +340,140 @@ end
 
 ### 5.1 Variables & Operators
 
-* `x = expr` declares (if new) or assigns (if existing)
-* Shadowing allowed in nested scopes
-
-**Compound Assignment:**
-
-Rugby supports compound assignment operators for arithmetic operations:
-
 ```ruby
-x += 5   # x = x + 5
-x -= 3   # x = x - 3
-x *= 2   # x = x * 2
-x /= 4   # x = x / 4
+x = expr       # declares (new) or assigns (existing)
+x += 5         # compound: +=, -=, *=, /=
+x ||= default  # assign if nil/false/absent
 ```
-
-These compile directly to Go's equivalent operations.
-
-**Logical OR Assignment (`||=`):**
-
-Rugby supports `||=` for safe default assignment.
-
-```ruby
-x ||= y
-```
-
-Semantics depend on the type of `x`:
-*   **Bool:** `x = x || y`
-*   **Reference Types (`User`, `Array`, etc.):** `if x == nil { x = y }`
-*   **Optionals (`T?`):** If value is missing (or nil), assign `y`.
-
-*Note: For non-nullable value types (like `String` or `Int`), `||=` is generally not applicable as they cannot be nil/false (except `Bool`).*
 
 ### 5.2 Conditionals
 
-Conditionals in Rugby are **strict**. Only `Bool` values are allowed in `if`, `unless`, and `while` conditions. There is no implicit "truthiness" for objects, numbers, or strings.
+Conditions must be `Bool` - no implicit truthiness:
 
 ```ruby
-if valid?     # OK (returns Bool)
-if x > 0      # OK (returns Bool)
-if user       # ERROR: User is not Bool
-if user.ok?   # OK (explicit check)
-```
+if valid?           # OK
+if user             # ERROR: User is not Bool
+if user.ok?         # OK
 
-**Unwrapping (`if let`):**
+unless valid?       # inverse of if
+  puts "invalid"
+end
 
-Use `if let` to handle optionals and type assertions safely.
-
-```ruby
-if let user = find_user(id)
+if let user = find_user(id)   # unwrap optional
   puts user.name
 end
-```
 
-**Type assertion with `as`:**
-
-```ruby
-if let w = obj.as(Writer)
+if let w = obj.as(Writer)     # type assertion
   w.write("hello")
 end
 
-# Or with default
-w = obj.as(Writer) ?? fallback_writer
-
-# Or unwrap (panics if wrong type)
-w = obj.as(Writer).unwrap
-```
-
-**Unless:**
-
-Rugby also supports `unless` (inverse of `if`).
-
-```ruby
-unless valid?
-  puts "invalid"
-else
-  puts "valid"
-end
-```
-
-**Case Expressions (Value Switch):**
-
-Matches values using `==`.
-
-```ruby
+# case - value matching
 case status
 when 200, 201
   puts "ok"
 else
   puts "error"
 end
-```
 
-**Type Switch:**
-
-Use `case_type` (or `case type`) to match types.
-
-```ruby
+# case_type - type matching
 case_type x
 when String
   puts "string"
 when Int
   puts "int"
 end
-```
 
-**Ternary Conditional Expression:**
-
-The ternary operator `? :` provides a concise way to write conditional expressions.
-
-```ruby
+# ternary (right-associative)
 max = a > b ? a : b
-status = valid? ? "ok" : "error"
 ```
 
-The ternary operator is right-associative, so nested ternaries work naturally:
+### 5.3 Loops
 
 ```ruby
-# Parses as: a ? (b ? 1 : 2) : 3
-x = a ? b ? 1 : 2 : 3
-```
-
-The ternary compiles to a Go immediately-invoked function expression (IIFE) with an if-else:
-
-```go
-max := func() any { if a > b { return a } else { return b } }()
-```
-
-### 5.3 Imperative Loops (Statements)
-
-Use loops when you need **control flow** (searching, early exit, side effects). These are statements, not expressions (they do not return a value).
-
-**For Loop:**
-The primary way to iterate with control flow.
-
-```ruby
-for item in items
+for item in items        # iterate collection
   return item if item.id == 5
 end
-```
 
-Compiles to: `for _, item := range items { ... }`
-
-**Range iteration** (requires Range type - see 4.2.1):
-```ruby
-for i in 0..10
+for i in 0..10           # iterate range
   puts i
 end
-```
 
-Compiles to: `for i := 0; i <= 10; i++ { ... }`
+while running
+  process_next()
+end
 
-**While Loop:**
-
-```ruby
-while cond
-  ...
+until queue.empty?       # while false (inverse)
+  handle(queue.pop)
 end
 ```
 
-Compiles to: `for cond { ... }`
+Control: `break` (exit), `next` (continue), `return` (from function)
 
-**Until Loop:**
+### 5.4 Blocks
 
-The inverse of `while`. Executes while the condition is false:
-
-```ruby
-until queue.empty?
-  process(queue.pop)
-end
-```
-
-Compiles to: `for !cond { ... }`
-
-**Control Flow Keywords:**
-* `break`: Exits the loop immediately.
-* `next`: Skips to the next iteration (Go `continue`).
-* `return`: Returns from the **enclosing function**.
-
-### 5.4 Functional Blocks (Expressions)
-
-Use blocks when you need to **transform data** or chain operations. Blocks in Rugby are strictly **anonymous pure functions** (lambdas).
-
-**Syntax:**
-* `do ... end`: Preferred for multi-line blocks.
-* `{ ... }`: Preferred for single-line blocks.
-
-**Semantics:**
-* **Scope:** Creates a new local scope (Go function literal).
-* **Return:** `return` exits the **block only** (returns a value to the iterator).
-* **No Control Flow:** `break` and `next` are **not supported** inside blocks. Use iterator methods like `take_while` or `find` for early exit.
+Blocks are anonymous functions for data transformation:
 
 ```ruby
+names = users.map { |u| u.name }
 names = users.map do |u|
   u.name
 end
+
+# Symbol-to-proc shorthand
+names.map(&:upcase)       # same as: names.map { |x| x.upcase }
+users.select(&:active?)
 ```
 
-**Compilation:**
-Blocks compile directly to Go function literals passed to runtime helpers.
-
-```ruby
-items.each { |x| puts x }
-```
-
-Compiles to:
-```go
-runtime.Each(items, func(x any) {
-    runtime.Puts(x)
-})
-```
-
-**Symbol-to-Proc (`&:method`):**
-
-The symbol-to-proc shorthand converts a method name into a block that calls that method:
-
-```ruby
-names.map(&:upcase)       # Equivalent to: names.map { |x| x.upcase }
-users.select(&:active?)   # Equivalent to: users.select { |u| u.active? }
-```
-
-This compiles to a closure that uses reflection to call the named method:
-
-```go
-runtime.Map(names, func(x any) any {
-    return runtime.CallMethod(x, "upcase")
-})
-```
-
-The method name is converted from Ruby-style (`snake_case`, `predicate?`) to Go-style (`PascalCase`, `Predicate_PRED`) at runtime.
+- `do...end` for multi-line, `{...}` for single-line
+- Last expression is the block's return value
+- `return value` in a block returns `value` from the block (not the enclosing function - differs from Ruby)
 
 ### 5.5 Statement Modifiers
 
-Rugby supports suffix `if` and `unless` modifiers for concise control flow.
-
-**Syntax:**
 ```ruby
-<statement> if <condition>
-<statement> unless <condition>
-```
-
-**Supported statements:**
-* `break if cond`
-* `next unless cond`
-* `return if cond`
-* `puts x unless cond` (any expression statement)
-
-**Compilation:**
-Lowered to a standard Go `if` block.
-```ruby
-break if x == 2
-```
-Compiles to:
-```go
-if x == 2 {
-    break
-}
-```
-
-```ruby
+return nil if id < 0
 puts "error" unless valid?
-```
-Compiles to:
-```go
-if !valid() {
-    runtime.Puts("error")
-}
+break if done
 ```
 
 ### 5.6 Loop Modifiers
 
-Rugby supports postfix `while` and `until` modifiers for concise loop expressions.
-
-**Syntax:**
-```ruby
-<statement> while <condition>
-<statement> until <condition>
-```
-
-**Examples:**
 ```ruby
 puts items.shift while items.any?
 process(queue.pop) until queue.empty?
-retry_count += 1 until connected
 ```
 
-**Semantics:**
-* Postfix `while` executes the statement repeatedly while condition is true
-* Postfix `until` executes the statement repeatedly while condition is false
-* Unlike `if`/`unless` modifiers which execute once, these create loops
-
-**Limitations:**
-* Loop modifiers cannot be combined with `if`/`unless` modifiers. Use block form instead:
-```ruby
-if flag
-  puts x while x > 0
-end
-```
-
-**Compilation:**
-```ruby
-puts x while x > 0
-```
-Compiles to:
-```go
-for x > 0 {
-    runtime.Puts(x)
-}
-```
-
-```ruby
-process() until done
-```
-Compiles to:
-```go
-for !done {
-    process()
-}
-```
+Unlike statement modifiers (`if`/`unless`), loop modifiers execute repeatedly.
 
 ---
 
 ## 6. Functions
 
-### 6.1 Definition
-
 ```ruby
 def add(a, b)
+  a + b                          # implicit return (last expression)
+end
+
+def add(a : Int, b : Int) -> Int # explicit types
   a + b
 end
-```
 
-Compiles to `func add(a T, b T) T { ... }` with inferred types.
-
-### 6.2 Return types
-
-Single return:
-
-```ruby
-def add(a, b) -> Int
-  a + b
-end
-```
-
-Multiple returns (Go-style):
-
-```ruby
-def parse_int(s) -> (Int, Bool)
-  ...
-end
-```
-
-### 6.3 Return statements
-
-Rugby supports both explicit and implicit returns:
-
-**Implicit return:** The last expression in a function is returned:
-
-```ruby
-def add(a, b)
-  a + b  # returned
-end
-```
-
-**Explicit return:** Use `return` for early exit or clarity:
-
-```ruby
 def find_user(id) -> User?
-  return nil if id < 0  # early return
-  users[id]             # implicit return
+  return nil if id < 0           # explicit early return
+  users[id]
 end
-```
 
-Multiple return values:
-
-```ruby
-def parse(s) -> (Int, Bool)
+def parse(s) -> (Int, Bool)      # multiple returns
   return 0, false if s.empty?
   s.to_i, true
 end
+
+# Destructuring
+n, ok = parse("42")     # both values
+n, _ = parse("42")      # ignore second with _
 ```
 
 ### 6.4 Errors
-
-Rugby adopts Go error patterns. Surface `error` directly:
 
 ```ruby
 def read(path : String) -> (Bytes, error)
@@ -1145,306 +481,111 @@ def read(path : String) -> (Bytes, error)
 end
 ```
 
+See Section 15 for `!` and `rescue` error handling.
+
 ### 6.5 Calling Convention
 
-Rugby supports Ruby-style "command syntax" where parentheses are optional for function and method calls.
-
-**With parentheses (always valid):**
-
-```ruby
-inc()
-add(1, 2)
-puts("hello")
-user.save()
-```
-
-**Without parentheses (command syntax):**
+Parentheses are optional (command syntax):
 
 ```ruby
 puts "hello"       # puts("hello")
 add 1, 2           # add(1, 2)
 foo.bar baz        # foo.bar(baz)
-print x + 1        # print(x + 1)
 ```
 
-**Rules:**
-
-1. Arguments are comma-separated expressions
-2. The argument list ends at: newline, `do`, `{`, or logical operators (`and`, `or`)
-3. Arithmetic and comparison operators are included in arguments:
-   - `puts x + 1` → `puts(x + 1)`
-   - `puts x == y` → `puts(x == y)`
-4. Logical operators terminate arguments:
-   - `puts x or y` → `puts(x) or y`
-5. Unary minus disambiguation uses whitespace:
-   - `foo -1` → `foo(-1)` (space before `-`, no space after)
-   - `foo - 1` → `(foo - 1)` (space on both sides = binary)
-6. Array literals with space are arguments:
-   - `foo [1, 2]` → `foo([1, 2])` (array argument)
-   - `foo[1]` → index expression (no space = indexing)
-   - Note: `{` always starts a block, so pass maps with parens: `foo({"a" => 1})`
-7. **Properties:** `user.age` (getter) and `user.age = 5` (setter) do not use parentheses
-8. For clarity in complex expressions, parentheses are recommended
+**Key rules:**
+- Arguments end at newline, `do`, `{`, or `and`/`or`
+- `foo -1` → `foo(-1)`, `foo - 1` → binary subtraction
+- `foo [1]` → array arg, `foo[1]` → indexing
+- Maps need parens: `foo({a: 1})` (braces start blocks)
 
 ---
 
 ## 7. Classes
 
-Classes in Rugby describe the shape of objects (Go structs) and their behavior (methods).
-
-### 7.1 Definition
-
 ```ruby
 class User implements Identifiable
-  def initialize(@name : String, email : String, @age : Int)
-    @email = email
-  end
-end
-```
-
-### 7.2 Instance Variables & Layout (Strict Inference)
-
-Rugby classes compile directly to Go structs. Instance variables may be inferred; explicit declarations are optional.
-
-**Rules:**
-
-New instance variables may be introduced only by:
-1. **Explicit Declaration:** `@field : Type` at the class level.
-2. **Parameter Promotion:** `def initialize(@field : Type)` syntax.
-3. **First Assignment in Initialize:** `@field = expr` within `initialize`.
-
-Introducing a new instance variable outside `initialize` is a **compile-time error**.
-
-The compiler determines the complete struct layout at compile time.
-
-**Definite Assignment:** All non-optional fields must be definitely assigned on all control-flow paths in `initialize`. Optional fields (`T?`) may be left unassigned.
-
-```ruby
-class Point
-  def initialize(@x : Int, @y : Int)
-  end
-end
-
-class User
-  @email : String  # explicit declaration (optional)
+  @email : String               # explicit field
+  property name : String        # declares field + getter/setter
 
   def initialize(@name : String, @age : Int)
-    @email = "unknown"
-  end
-
-  def birthday
-    @age += 1  # OK: uses existing field
-    @new = 5   # ERROR: cannot introduce field outside initialize
+    @email = "unknown"          # inferred field
   end
 end
+
+u = User.new("Alice", 30)       # auto-generated
 ```
 
-### 7.3 Initialization (`new`)
+**Instance variables** introduced only via:
+1. Explicit declaration: `@field : Type`
+2. Parameter promotion: `def initialize(@field : Type)`
+3. First assignment in `initialize`
 
-Rugby separates allocation from initialization, but exposes a unified `new` class method.
+Methods use pointer receivers. All non-optional fields must be assigned in `initialize`. Within methods, `self` refers to the receiver (optional when calling other methods on same object).
 
-*   `User.new(...)` is automatically generated.
-*   It allocates the struct (Go zero value).
-*   It calls `initialize(...)` on the new instance.
+### 7.4 Accessors
 
 ```ruby
-# Source
-u = User.new("Alice", "a@b.com", 30)
-
-# Generated Go
-func NewUser(name string, email string, age int) *User {
-    u := &User{}
-    u.Initialize(name, email, age)
-    return u
-}
+getter age : Int        # declares @age + generates def age -> Int
+setter name : String    # declares @name + generates def name=(v)
+property email : String # both getter and setter
 ```
 
-### 7.4 Accessors (Properties)
+**Field access:** Inside class methods, use `@field`. Outside, access via methods only - direct field access is not exposed. Use `pub getter`/`pub property` to export accessors.
 
-Rugby provides macros to reduce boilerplate, inspired by Crystal. Each macro **declares the field** and generates accessor methods:
-
-*   `getter name : String` → Declares `@name : String` + generates `def name -> String`
-*   `setter name : String` → Declares `@name : String` + generates `def name=(v : String)`
-*   `property name : String` → Declares `@name : String` + generates both methods
-
-You do **not** need to separately declare `@name : String` when using these macros. Writing both is redundant.
+### 7.5 Inheritance
 
 ```ruby
-class User
-  property name : String   # declares @name and generates getter/setter
-  getter age : Int         # declares @age and generates getter only
-
-  def initialize(@name : String, @age : Int)
-  end
-end
-```
-
-These compile to idiomatic Go methods:
-*   `getter` → `func (r *T) Name() T`
-*   `setter` → `func (r *T) SetName(v T)` (Standard Go setter pattern)
-
-### 7.5 Methods and receivers
-
-**Rule:** All methods use **pointer receivers** (`func (r *T)`) by default.
-* This ensures Ruby-like reference semantics (modifying `@field` always works).
-* Prevents accidental mutation of struct copies.
-
-```ruby
-class User
+class Child < Parent
   def name
-    @name
-  end
-end
-```
-
-Compiles to: `func (u *User) name() string { ... }`
-
-### 7.6 Inheritance & Specialization
-
-Rugby supports code reuse through **Specialization**. While it uses Go's struct embedding for data layout, it ensures Ruby-like method dispatch by specializing inherited methods.
-
-```ruby
-class Parent
-  def hello
-    puts "Hello, #{name}" # Implicitly self.name()
-  end
-  def name; "Parent"; end
-end
-
-class Child < Parent
-  def name; "Child"; end
-end
-
-Child.new.hello # Output: "Hello, Child"
-```
-
-**Semantics:**
-*   **Single Inheritance:** A class may inherit from only **one** parent class (`class Child < Parent`).
-*   **Data Layout:** `class Child < Parent` embeds the `Parent` struct into `Child`.
-*   **Method Specialization:** The compiler automatically "clones" methods from `Parent` into `Child`.
-    *   **Dispatch:** Inside a specialized method, implicit calls (`foo()`) are treated as `self.foo()`. They dispatch against the **Child's** method set.
-    *   **Receiver Update:** The receiver (`self`) is updated from `*Parent` to `*Child`.
-
-**Super:**
-The `super` keyword statically binds to the **Parent's original implementation**. It does not call the specialized clone, preventing recursion.
-
-```ruby
-class Child < Parent
-  def hello
-    super # Calls Parent.hello(*Parent) embedded field
-  end
-end
-```
-
-**Strict Typing (No Subtype Polymorphism):**
-Concrete types are **invariant**. A variable of type `Parent` cannot hold a `Child`.
-*   Invalid: `p : Parent = Child.new()`
-*   Valid: `p : Interface = Child.new()` (See 7.8)
-
-**Important:** This mechanism is for **composition and code reuse**, not traditional OOP inheritance. Use interfaces for polymorphism.
-
-**Performance Note:**
-Specialization increases binary size (code duplication) and compile time but ensures **zero runtime overhead** for method calls (no vtable lookups).
-
-### 7.7 Explicit Implementation (Optional)
-
-While Rugby uses structural typing (implicit satisfaction), classes may explicitly declare conformance to an interface using `implements`. This serves as documentation and a compile-time assertion.
-
-```ruby
-interface Runnable
-  def run
-end
-
-class Job implements Runnable
-  def run
-    puts "working"
-  end
-end
-```
-
-**Compilation:**
-The compiler verifies that `Job` satisfies `Runnable`. If a method is missing or signatures don't match, compilation fails with a descriptive error. This produces no runtime code overhead.
-
-### 7.8 Polymorphism & Interfaces
-
-Rugby uses **Interfaces** for polymorphism. Since concrete inheritance is for code reuse (not subtyping), you must use Interfaces to treat different classes uniformly.
-
----
-
-## 8. Modules (Mixins)
-
-Modules are the primary mechanism for sharing behavior across classes.
-
-### 8.1 Definition
-
-```ruby
-module Callable
-  def call
-    puts "calling..."
+    "Child"
   end
 end
 
-module Named
-  property name : String
-end
+Child.new.hello  # calls Parent#hello with Child's method dispatch
 ```
 
-### 8.2 Including Modules
+- Single inheritance only (`class Child < Parent`)
+- `super` calls parent's implementation
+- Concrete types are invariant (use interfaces for polymorphism)
 
-```ruby
-class Worker
-  include Callable
-  include Named
-  
-  def work
-    call()        # Calls specialized Callable#call
-    self.name = "Job" 
-  end
-end
-```
-
-**Semantics:**
-*   **Composition:** `include M` embeds the Module's fields into the host class.
-*   **Specialization:** Methods are specialized (cloned) into the host class, allowing them to call host methods.
-*   **Collisions:** If two modules (or a module and parent) define the same method/field, it is a **compile-time error** unless the host class explicitly overrides it.
-
-
----
-
-## 9. Interfaces
-
-Interfaces define **capabilities**. They are pure contracts describing a set of behaviors (methods) without implementation or state.
-
-### 9.1 Declaration
-
-Interfaces are defined using the `interface` keyword and contain one or more method signatures.
+### 7.6 Interfaces
 
 ```ruby
 interface Speaker
   def speak -> String
 end
 
-interface Calculator
-  def add(a : Int, b : Int) -> Int
+class User implements Speaker  # explicit (optional, compile-time check)
+  def speak
+    "Hello"
+  end
 end
 ```
 
-**Syntax Rules:**
-*   Methods in an interface **cannot** have a body.
-*   Method signatures follow the same rules as `def` (parameters and return types).
-*   Interface names must be `CamelCase`.
+Rugby uses structural typing - classes satisfy interfaces automatically if they have matching methods.
 
-**Go Compilation:**
-Interface methods are **implicitly exported** (PascalCase in Go) to allow for cross-package satisfaction.
-```go
-type Speaker interface {
-    Speak() string
-}
+---
+
+## 8. Modules (Mixins)
+
+```ruby
+module Loggable
+  def log(msg)
+    puts msg
+  end
+end
+
+class Worker
+  include Loggable
+end
+
+Worker.new.log("working")  # methods mixed in
 ```
 
-### 9.2 Interface Inheritance (Composition)
+---
 
-Interfaces can inherit from (embed) other interfaces using the `<` operator.
+## 9. Interfaces
 
 ```ruby
 interface Reader
@@ -1455,299 +596,68 @@ interface Writer
   def write(data : String)
 end
 
-# IO requires methods from both Reader and Writer, plus its own
-interface IO < Reader, Writer
+interface IO < Reader, Writer  # interface composition
   def close
 end
 ```
 
-**Semantics:**
-*   A type satisfies `IO` only if it implements `read`, `write`, and `close`.
-*   This compiles directly to **Interface Embedding** in Go.
-
-### 9.3 Satisfaction & `implements`
-
-Rugby uses **Structural Typing** (like Go). A class satisfies an interface automatically if it has the required methods. 
-
-However, a class can **explicitly** declare its intent using the `implements` keyword.
+### 9.2 Type Checking
 
 ```ruby
-class User implements Speaker, Serializable
-  def speak
-    "Hello"
-  end
-end
+obj.is_a?(Writer)              # returns Bool
+w = obj.as(Writer)             # returns Writer?
+w = obj.as(Writer) ?? fallback # with default
 ```
 
-**Rules for `implements`:**
-*   It is a **compile-time assertion**. The compiler will error if the class does not actually satisfy the interface.
-*   It serves as documentation for developers.
-*   It has **zero runtime overhead**.
+### 9.3 The `any` Type
 
-### 9.4 The `any` Type
-
-The empty interface `interface{}` is represented by the keyword `any`. 
-
-```ruby
-def log(thing : any)
-  puts thing.to_s
-end
-```
-
-### 9.5 Runtime Casting (`as` and `is_a?`)
-
-Rugby provides safe mechanisms to work with interfaces at runtime.
-
-*   **`obj.is_a?(Interface)`**: Returns `Bool`. Compiles to Go type assertion `_, ok := obj.(Interface)`.
-*   **`obj.as(Interface)`**: Returns `Interface?` (optional). Use with `if let`, `??`, or `.unwrap`.
-
-```ruby
-# Check type (predicate)
-if obj.is_a?(Writer)
-  puts "it's a writer"
-end
-
-# Cast with if let (preferred)
-if let w = obj.as(Writer)
-  w.write("hello")
-end
-
-# Cast with fallback
-w = obj.as(Writer) ?? default_writer
-
-# Cast with unwrap (panics if wrong type)
-w = obj.as(Writer).unwrap
-```
-
-**Lowering:**
-
-```go
-// obj.as(Writer) compiles to:
-func asWriter(obj any) (Writer, bool) {
-    w, ok := obj.(Writer)
-    return w, ok
-}
-```
-
-### 9.6 Standard Interfaces
-
-Rugby maps common Ruby concepts to idiomatic Go interfaces:
-
-| Rugby Interface | Go Equivalent | Method |
-|-----------------|---------------|--------|
-| `Stringer`      | `fmt.Stringer`| `to_s` -> `String()` |
-| `Error`         | `error`       | `message` -> `Error()` |
-| `Closer`        | `io.Closer`   | `close` -> `Close()` |
+`any` represents Go's empty interface `interface{}`.
 
 ---
 
 ## 10. Visibility & Naming
 
-### 10.1 Core principle
-
-**Inside a Rugby module, everything is usable.**
-
-The `pub` keyword controls what becomes visible when the compiled Go package is imported by other Go (or Rugby) modules.
-
-* `pub` = export to Go (uppercase in output)
-* no `pub` = internal to package (lowercase in output)
-
-There is no Ruby-style `private`/`public`.
-
-### 10.2 What can be `pub`
-
-**Functions:**
+`pub` exports to Go (uppercase). No `pub` = internal (lowercase).
 
 ```ruby
-def helper(x : Int) -> Int    # internal
+def helper(x)      # internal (lowercase in Go)
   x * 2
 end
 
-pub def double(x : Int) -> Int  # exported
+pub def double(x)  # exported (uppercase in Go)
   helper(x)
 end
-```
 
-**Classes:**
-
-```ruby
 pub class Counter
   pub def inc
-    @n += 1
+    @count += 1
   end
 end
 ```
 
-* Class must be `pub` to be usable from Go
-* Methods intended for Go must also be `pub`
-* `pub def` inside non-`pub` class is a compile error
-
-**Interfaces:**
-
-```ruby
-pub interface Greeter
-  def greet(name : String) -> String
-end
-```
-
-### 10.3 Rugby naming conventions
-
-These are **style rules**, not visibility rules:
-
-* Types (`class`, `interface`) → `CamelCase`
-* Functions, methods, variables → `snake_case`
-* Predicate methods → `snake_case?` (must return `Bool`)
-
-**The `?` suffix rule:**
-
-Method names ending in `?` **must** return `Bool`. This is strictly enforced:
-
-```ruby
-def empty? -> Bool    # OK: predicate
-def valid? -> Bool    # OK: predicate
-def even? -> Bool     # OK: predicate
-```
-
-For operations that might fail, use error returns instead:
-
-```ruby
-def to_i -> (Int, error)     # fallible conversion
-def parse -> (Data, error)   # fallible parsing
-```
-
-This keeps `?` unambiguous: when you see `method?`, you know it returns a boolean.
-
-**Other conventions:**
-
-* Capitalization in Rugby **never** controls visibility
-
-### 10.4 Go name generation
-
-Rugby names are rewritten to idiomatic Go names:
-
-| Rugby source | pub? | Go output |
-|--------------|------|-----------|
-| `def parse_json` | no | `parseJSON` |
-| `pub def parse_json` | yes | `ParseJSON` |
-| `def user_id` | no | `userID` |
-| `pub def user_id` | yes | `UserID` |
-
-### 10.5 Acronym list
-
-To keep output Go-idiomatic, the compiler uses an acronym table.
-
-**Standard acronyms:**
-
-`id`, `url`, `uri`, `http`, `https`, `json`, `xml`, `api`, `uuid`, `ip`, `tcp`, `udp`, `sql`, `tls`, `ssh`, `cpu`, `gpu`
-
-Rules:
-
-* Exported: `id` → `ID`, `http` → `HTTP`
-* Unexported: first-part acronym `http_*` → `http*`, later-part `*_id` → `*ID`
-
-These mappings are currently standardized in the compiler.
-
-### 10.6 Name collision rules
-
-Collisions occur when different Rugby identifiers normalize to the same Go identifier:
-
-* `foo_bar` and `foo__bar`
-
-**Rule:** Collisions are compile-time errors showing:
-
-* Both Rugby names and locations
-* The resulting Go name
-* Suggested fix
-
-### 10.7 Reserved words
-
-If a Go identifier would be a keyword (`type`, `var`, `func`) or conflict with generated names (`main`, `init`, `NewTypeName`):
-
-* **`pub`**: compile error (force rename)
-* **internal**: escape with trailing `_` (e.g., `type` → `type_`)
+**Naming:**
+- Types: `CamelCase`, functions/methods: `snake_case`
+- `method?` must return `Bool`
+- `snake_case` → Go `camelCase`/`CamelCase` with acronym handling (`user_id` → `userID`)
 
 ---
 
 ## 11. Go Interop
 
-### 11.1 Imports
-
 ```ruby
 import net/http
 import encoding/json as json
+
+http.Get(url)              # call Go functions
+io.read_all(r)             # snake_case → ReadAll
+defer resp.Body.Close()    # defer works as expected
 ```
-
-* `import a/b` → Go `import "a/b"`
-* `import a/b as x` → Go `import x "a/b"`
-
-### 11.2 Calling Go functions
-
-Rugby calls Go packages with dot syntax:
-
-```ruby
-http.Get(url)
-json.Marshal(data)
-```
-
-Snake_case maps to CamelCase for Go interop:
-
-```ruby
-io.read_all(r)  # compiles to io.ReadAll(r)
-```
-
-Rules:
-
-* Only for imported Go packages/types
-* Mapping is compile-time only
-* Compiler error if ambiguous
-
-### 11.3 Struct fields and methods
-
-* `resp.Body` allowed as-is
-* Optional: `resp.body` → `resp.Body` for Go types
-
-### 11.4 Defer
-
-```ruby
-defer resp.Body.Close()
-```
-
-Compiles to:
-
-```go
-defer resp.Body.Close()
-```
-
-Rule: `defer` requires a call expression with parentheses.
 
 ---
 
 ## 12. Runtime Package
 
-Rugby provides a Go runtime package (`rugby/runtime`) that gives Ruby-like ergonomics to Go's built-in types. This is what makes Rugby feel like Ruby while compiling to idiomatic Go.
-
-### 12.1 Design principles
-
-* **Wrap, don't reinvent:** Functions wrap Go stdlib, adding Ruby-style APIs
-* **Type-safe generics:** Use Go 1.18+ generics for collections
-* **Zero-cost when unused:** Only imported when Rugby code uses these methods
-* **Predictable mapping:** Each Rugby method maps to a clear runtime function
-
-### 12.2 Package organization
-
-```
-runtime/
-├── array.go      # Array/slice methods
-├── map.go        # Map methods
-├── string.go     # String methods
-├── int.go        # Integer methods
-├── float.go      # Float methods
-├── bytes.go      # Byte slice methods
-├── conv.go       # Type conversions
-├── task.go       # Task[T] and spawn/await
-├── scope.go      # Structured concurrency scope
-└── channel.go    # Channel helpers (try_receive)
-```
+The `rugby/runtime` package provides Ruby-like methods for Go types.
 
 ### 12.3 Array methods (`Array[T]`)
 
@@ -1895,149 +805,39 @@ n = s.to_i() rescue 0   # default on failure
 * `to_i` → `int(f)` (inlined)
 * `to_s` → `strconv.FormatFloat` (inlined)
 
-### 12.8 Codegen integration
+### 12.8 Global functions (kernel)
 
-The compiler recognizes Rugby method calls and either:
-1. **Inlines** simple operations (predicates, length, type casts)
-2. **Emits runtime calls** for complex operations
-
-Example:
-```ruby
-nums = [1, 2, 3, 4, 5]
-evens = nums.select { |n| n.even? }
-sum = evens.reduce(0) { |acc, n| acc + n }
-```
-
-Compiles to:
-```go
-nums := []int{1, 2, 3, 4, 5}
-evens := runtime.Select(nums, func(n int) bool { return n % 2 == 0 })
-sum := runtime.Reduce(evens, 0, func(acc, n int) int { return acc + n })
-```
-
-### 12.9 Global functions (kernel)
-
-Rugby provides top-level functions similar to Ruby's Kernel methods. These are available without qualification and compile to `runtime.*` calls.
-
-**I/O:**
-* `puts(args...)` → `runtime.Puts(args...)` - print with newline
-* `print(args...)` → `runtime.Print(args...)` - print without newline
-* `p(args...)` → `runtime.P(args...)` - debug print with inspect
-
-**Input:**
-* `gets` → `runtime.Gets()` - read line from stdin
-
-**Program control:**
-* `exit(code)` → `runtime.Exit(code)` - exit with status code
-* `exit` → `runtime.Exit(0)` - exit successfully
-* `sleep(seconds)` → `runtime.Sleep(seconds)` - pause execution
-
-**Utilities:**
-* `rand(n)` → `runtime.RandInt(n)` - random int [0, n)
-* `rand` → `runtime.RandFloat()` - random float [0.0, 1.0)
-
-### 12.10 Import generation
-
-The compiler automatically adds `import "rugby/runtime"` when any runtime functions are used. All kernel functions and stdlib methods go through the runtime package for consistency.
-
-## 13. Concurrency
-
-Rugby provides Ruby-like ergonomics for Go's concurrency model while preserving Go's semantics and performance characteristics.
-
-Concurrency is built on two layers:
-
-1. **Go primitives:** goroutines, channels, select
-2. **Structured concurrency:** `spawn`, `await`, and `concurrently` scopes
-
-The structured layer compiles to Go primitives and exists to prevent leaks, provide deterministic cleanup, and make cancellation and error propagation consistent.
+Top-level functions: `puts`, `print`, `p`, `gets`, `exit`, `sleep`, `rand`
 
 ---
 
-### 13.1 Goroutines (`go`)
+## 13. Concurrency
 
-The `go` keyword executes a call in a new goroutine.
+### 13.1 Goroutines
 
 ```ruby
 go fetch_url(url)
 
 go do
-  puts "running in background"
+  puts "background"
 end
 ```
 
-**Compilation:**
-* `go func_call()` → `go funcCall()`
-* `go do ... end` → `go func() { ... }()`
-
-**Notes:**
-* `go` is low-level and does not provide a return value.
-* For "run and await result" semantics, prefer `spawn` + `await` (see 13.4).
-
----
-
-### 13.2 Channels (`Chan[T]`)
-
-Channels are typed pipes for communication and synchronization.
-
-**Creation:**
-```ruby
-ch = Chan[Int].new(10)   # buffered (capacity 10)
-ch = Chan[Int].new       # unbuffered
-```
-
-**Operations:**
-```ruby
-ch << val            # send (blocks if full/unbuffered)
-val = ch.receive     # receive (blocks; returns zero value if closed)
-val = ch.try_receive # non-blocking receive, returns T?
-ch.close             # close the channel
-```
-
-**`try_receive` returns `T?`** for consistency with Rugby's optional pattern:
-```ruby
-if let msg = ch.try_receive
-  puts "got: #{msg}"
-else
-  puts "channel empty or closed"
-end
-
-# Or with default
-msg = ch.try_receive ?? "default"
-```
-
-**Compilation:**
-| Rugby | Go |
-|-------|-----|
-| `Chan[T].new(n)` | `make(chan T, n)` |
-| `Chan[T].new` | `make(chan T)` |
-| `ch << val` | `runtime.ShiftLeft(ch, val)` (outside select) |
-| `ch << val` (in select) | `ch <- val` (native Go syntax required) |
-| `ch.receive` | `<-ch` |
-| `ch.try_receive` | wrapped `select` with default (returns `Option[T]`) |
-| `ch.close` | `close(ch)` |
-
-**Channel iteration:**
-
-Channels can be iterated until closed:
+### 13.2 Channels
 
 ```ruby
-for msg in ch
-  puts msg
+ch = Chan[Int].new(10)   # buffered
+ch << val                # send
+val = ch.receive         # blocking receive
+val = ch.try_receive     # non-blocking, returns T?
+ch.close
+
+for msg in ch            # iterate until closed
+  process(msg)
 end
 ```
-
-Compiles to:
-```go
-for msg := range ch {
-    runtime.Puts(msg)
-}
-```
-
----
 
 ### 13.3 Select
-
-The `select` statement waits on multiple channel operations.
 
 ```ruby
 select
@@ -2050,113 +850,28 @@ else
 end
 ```
 
-**Semantics:**
-* Executes the first ready case.
-* If multiple cases are ready, one is chosen at random.
-* The `else` clause makes select non-blocking.
-* Variables bound in `when` clauses (like `val`) are scoped to that branch.
-
-**Note:** `when` in `select` binds variables from channel operations. This differs from `when` in `case` expressions (Section 5.2), which matches values. The keyword is reused for familiarity, but the semantics are distinct.
-
-**Compilation:**
-Maps directly to Go's `select { case ... }` block.
-
----
+- Executes the first ready case (random if multiple ready)
+- `else` makes select non-blocking
+- Variables bound in `when` are scoped to that branch
 
 ### 13.4 Tasks (`spawn` and `await`)
 
-Tasks provide value-oriented concurrency: run work concurrently and retrieve its result.
-
-#### 13.4.1 Spawning Tasks
-
 ```ruby
-t = spawn do
-  heavy_computation()
-end
+t = spawn { expensive_work() }  # Task[T], runs immediately
+result = await t                # blocks until complete
+
+# With errors
+t = spawn { os.read_file(path) }  # Task[(Bytes, error)]
+data = await(t)!                  # parentheses required for !
 ```
 
-* `spawn` starts execution immediately in a goroutine.
-* Returns a typed handle: `Task[T]` where `T` is the block's return type.
-* Type inference works naturally:
-
-```ruby
-t = spawn { 42 }           # t : Task[Int]
-t = spawn { "hello" }      # t : Task[String]
-t = spawn { fetch_data() } # t : Task[Data] if fetch_data returns Data
-```
-
-**Compilation:**
-
-`spawn` lowers to:
-* Create a result channel
-* Start a goroutine that evaluates the block and sends the result
-* Return a `Task[T]` wrapping the channel
-
-#### 13.4.2 Awaiting Tasks
-
-```ruby
-value = await t
-```
-
-**Syntax:**
-* `await expr` — awaits a task expression
-* `await(expr)` — equivalent; parentheses are optional but required when chaining with `!`
-
-`await` is a keyword that binds to the immediately following expression:
-* `await t` — await task `t`
-* `await get_task()` — await the result of `get_task()`
-* `(await t).name` — await `t`, then access `.name` on the result
-* `await(t)!` — await and propagate error (parentheses required for `!`)
-
-**Semantics:**
-* `await` blocks until the task completes and returns its value.
-* Awaiting a completed task returns immediately.
-* Awaiting a task multiple times is a compile error (tasks complete once).
-
-**Error-returning tasks:**
-
-If the block returns `(T, error)`, awaiting returns `(T, error)`:
-
-```ruby
-t = spawn do
-  os.read_file("data.txt")  # returns (Bytes, error)
-end
-
-data, err = await t
-return nil, err if err != nil
-```
-
-**Integration with `!` operator:**
-
-The `!` operator (Section 15.3) works with `await`:
-
-```ruby
-def load_all -> (Array[Bytes], error)
-  t1 = spawn { os.read_file("a.txt") }
-  t2 = spawn { os.read_file("b.txt") }
-
-  a = await(t1)!  # propagate error if t1 failed
-  b = await(t2)!  # propagate error if t2 failed
-
-  [a, b], nil
-end
-```
-
-#### 13.4.3 Panics in Tasks
-
-Panics inside a spawned task behave like Go panics:
-* Panics are not captured by default.
-* A panic in any goroutine terminates the program unless recovered.
-
----
+- `spawn` returns `Task[T]` where `T` is the block's return type
+- `await` blocks until completion; awaiting twice is a compile error
+- Panics in tasks terminate the program (Go semantics)
 
 ### 13.5 Structured Concurrency (`concurrently`)
 
-Unscoped concurrency leads to goroutine leaks, unclear cancellation, and inconsistent error handling. Rugby provides `concurrently` for deterministic, scoped concurrency.
-
-A `concurrently` block owns all tasks spawned within it and ensures cleanup when the block exits.
-
-#### 13.5.1 Basic Usage
+Scoped concurrency that ensures cleanup when the block exits:
 
 ```ruby
 concurrently do |scope|
@@ -2165,132 +880,33 @@ concurrently do |scope|
 
   x = await a
   y = await b
-
-  puts x + y
+  x + y
 end
 ```
 
 **Rules:**
-1. `concurrently` introduces a scope object.
-2. `scope.spawn { ... }` creates a task owned by the scope.
-3. On block exit (normal, `return`, or error), the scope:
-   * Cancels its context (signals tasks to stop)
-   * Waits for all spawned tasks to complete
-4. Tasks can be awaited in any order.
+- `scope.spawn` creates tasks owned by the scope
+- On block exit, the scope cancels `scope.ctx` and waits for all tasks
+- Tasks cannot outlive their scope (compile error if task handle escapes)
+- `concurrently` is an expression; returns the block's last value
 
-This makes task lifetime explicit: tasks cannot outlive their scope.
-
-**Return value:**
-
-`concurrently` is an expression. Its value is the last expression in the block:
+**With errors:**
 
 ```ruby
-# Returns a value
-total = concurrently do |scope|
+result, err = concurrently do |scope|
   a = scope.spawn { fetch_a() }
   b = scope.spawn { fetch_b() }
-  (await a) + (await b)  # block evaluates to this sum
-end
 
-# Used as statement (no return value needed)
-concurrently do |scope|
-  scope.spawn { log_metrics() }
-  scope.spawn { send_notifications() }
-end
-```
-
-If tasks return errors and you use `!`, the block returns `(T, error)`:
-
-```ruby
-result, err = concurrently do |scope|
-  data = await(scope.spawn { fetch_data() })!
-  process(data), nil
-end
-```
-
-#### 13.5.2 Cancellation Context
-
-Each scope provides a cancellation context via `scope.ctx`:
-
-```ruby
-concurrently do |scope|
-  t = scope.spawn do
-    long_running_work(scope.ctx)
-  end
-
-  # If we return early, scope.ctx is cancelled
-  return if should_abort?
-
-  await t
-end
-```
-
-**Semantics:**
-* When the scope exits, its context is cancelled.
-* Tasks should check the context cooperatively (Go-style).
-* Rugby does not forcibly terminate goroutines.
-
-**Compilation:**
-
-`concurrently` lowers to:
-```go
-ctx, cancel := context.WithCancel(parentCtx)
-defer cancel()
-var wg sync.WaitGroup
-// ... spawned tasks use ctx and increment wg
-wg.Wait()
-```
-
-#### 13.5.3 Error Propagation
-
-If any scoped task returns an error:
-1. The scope cancels its context (requesting siblings stop).
-2. The scope waits for all tasks to finish.
-3. The first error is returned from the `concurrently` block.
-
-```ruby
-result, err = concurrently do |scope|
-  a = scope.spawn { fetch_a() }  # -> (A, error)
-  b = scope.spawn { fetch_b() }  # -> (B, error)
-
-  val_a = await(a)!  # propagate error
-  val_b = await(b)!  # propagate error
+  val_a = await(a)!
+  val_b = await(b)!
 
   process(val_a, val_b)
 end
 ```
 
-Using `!` inside `concurrently` triggers early exit from the block, cancelling sibling tasks.
+Using `!` triggers early exit, cancelling sibling tasks.
 
-#### 13.5.4 Detached Tasks
-
-Tasks spawned via `spawn` (not `scope.spawn`) are **detached** and may outlive the current function:
-
-```ruby
-spawn do
-  background_worker()  # runs independently
-end
-```
-
-**Guideline:** Prefer `concurrently` for tasks that must complete safely. Use detached `spawn` sparingly for fire-and-forget work.
-
-#### 13.5.5 Escape Restriction
-
-A task handle from `scope.spawn` must not escape the `concurrently` block:
-
-```ruby
-var leaked : Task[Int]
-
-concurrently do |scope|
-  leaked = scope.spawn { 42 }  # ERROR: task escapes scope
-end
-
-await leaked  # would await after scope cleanup
-```
-
-This is a compile-time error. It prevents awaiting tasks after their scope has ended.
-
----
+**Detached tasks:** `spawn` (not `scope.spawn`) creates tasks that may outlive the function. Prefer `concurrently` for tasks that must complete safely.
 
 ### 13.6 Choosing a Pattern
 
@@ -2383,371 +999,84 @@ end
 
 ## 15. Errors
 
-Rugby follows Go's philosophy: **errors are values**, returned explicitly from functions and handled locally. Rugby does **not** use exceptions for ordinary failures.
+Rugby follows Go's philosophy: **errors are values**, returned explicitly and handled locally.
 
-Rugby provides syntax sugar to keep error handling concise while compiling to idiomatic Go.
-
----
-
-### 15.1 The `error` Type
-
-Rugby includes a built-in `error` type that maps directly to Go's `error` interface.
-
-**Rules:**
-* A function may return `error` as a sole return value, or as part of a multi-return tuple.
-* `nil` represents "no error."
+### 15.1 Error Signatures
 
 ```ruby
-def write_file(path : String, data : Bytes) -> error
-  os.write_file(path, data)
-end
-
 def read_file(path : String) -> (Bytes, error)
   os.read_file(path)
 end
-```
 
----
-
-### 15.2 Fallible Function Signatures
-
-The standard pattern for fallible operations:
-
-* `-> (T, error)` — functions that produce a value or an error
-* `-> error` — procedures that may fail
-
-```ruby
-def parse_int(s : String) -> (Int, error)
-  # ...
-end
-
-def close -> error
-  # ...
+def write_file(path : String, data : Bytes) -> error
+  os.write_file(path, data)
 end
 ```
 
----
+### 15.2 Postfix Bang Operator (`!`)
 
-### 15.3 Postfix Bang Operator (`!`)
-
-Rugby provides a postfix `!` operator for concise error propagation, similar to Rust's `?` operator. It unwraps the result or propagates the error to the caller.
-
-#### 15.3.1 Syntax
+Propagates errors to the caller (like Rust's `?`):
 
 ```ruby
-call_expr!
+def load_config(path : String) -> (Config, error)
+  data = os.read_file(path)!
+  config = parse_json(data)!
+  config, nil
+end
 ```
 
-Examples:
+**Rules:**
+- Enclosing function must return `error`
+- `(T, error)` → `call!` evaluates to `T`
+- `error` → `call!` is control-flow only
+- Binds tighter than all operators except member access/calls
+- In `main` or scripts, prints error and exits (see 15.5)
 
-```ruby
-data = os.read_file(path)!
-os.mkdir_all(dir)!
-```
-
-#### 15.3.2 Valid Operands
-
-Postfix `!` is valid on expressions whose return type includes a trailing `error`:
-
-* `error`
-* `(T, error)`
-* `(A, B, ..., error)`
-
-**Accepted expression forms:**
-
-* **Call expressions**: `call()!`, `obj.method(arg)!`
-* **Selector expressions**: `obj.method!` (equivalent to `obj.method()!`)
-* **Identifiers**: `func_name!` (equivalent to `func_name()!`)
-* **`await` expressions**: `await(expr)!` when the task returns `(T, error)`
-
-The latter two are syntactic sugar that convert to zero-argument calls.
-
-```ruby
-data = os.read_file(path)!  # explicit call
-data = resp.json!           # shorthand for resp.json()!
-data = await(task)!         # await with error propagation
-```
-
-**Compile-time errors:**
-* Using `!` on a non-callable expression (e.g., `42!` or `"string"!`)
-* Using `!` on a call that does not return `error`
-* Using `!` on `await expr` without parentheses (use `await(expr)!`)
-
-#### 15.3.3 Enclosing Function Requirement
-
-Using `!` requires the enclosing function to return `error`:
-
-* `-> error`
-* `-> (T, error)`
-* `-> (A, B, ..., error)`
-
-If the enclosing function does not return `error`, using `!` is a compile-time error.
-
-**Exception:** In `main` or top-level script context, `!` has special behavior (see 15.6).
-
-#### 15.3.4 Semantics
-
-* If the call succeeds (`err == nil`), execution continues.
-* If the call fails (`err != nil`), the current function returns immediately with that error.
-
-**Unwrapping:**
-* `(T, error)` → `call!` evaluates to the unwrapped `T`
-* `error` → `call!` is used only for control-flow effect
-
-#### 15.3.5 Precedence
-
-Postfix `!` binds tighter than all operators except member access and calls. It applies to the completed call expression:
-
-* `foo(bar)!` — call, then bang
-* `a.b().c()!` — bang applies to `c()`
-* `!foo()!` — prefix negation of unwrapped value (valid only if result is `Bool`)
-
-#### 15.3.6 Chained Calls
-
-Multiple `!` operators can appear in a chain:
+**Chaining:**
 
 ```ruby
 user = load_file(path)!.parse_json()!.get_user()!
 ```
 
-Each `!` unwraps its call before the next selector executes.
+### 15.3 The `rescue` Keyword
 
-**Lowering:**
-
-The compiler generates sequential temporaries:
-
-```go
-tmp1, err := loadFile(path)
-if err != nil {
-    return User{}, err
-}
-tmp2, err := tmp1.parseJSON()
-if err != nil {
-    return User{}, err
-}
-user, err := tmp2.getUser()
-if err != nil {
-    return User{}, err
-}
-```
-
----
-
-### 15.4 The `rescue` Keyword
-
-Rugby provides `rescue` for inline error handling when you need more control than simple propagation.
-
-#### 15.4.1 Inline Default Form
-
-Provide a fallback value when a call fails:
+Inline error handling with fallback values:
 
 ```ruby
-expr = fallible_call() rescue default_expr
-```
-
-If the call returns an error, `default_expr` is evaluated and used instead. Execution continues.
-
-```ruby
+# Inline default
 port = env.get("PORT").to_i() rescue 8080
-config = parse_json(text) rescue {}
-data = os.read_file(path) rescue default_bytes
-```
 
-**Lowering:**
-```go
-port, err := strconv.Atoi(env.Get("PORT"))
-if err != nil {
-    port = 8080
-}
-```
-
-**Type rule:** `default_expr` must match the success type `T`.
-
-#### 15.4.2 Block Form
-
-For multi-statement error handling, use `rescue do ... end`:
-
-```ruby
-expr = fallible_call() rescue do
-  log.warn("operation failed")
-  compute_fallback()
-end
-```
-
-The block's last expression becomes the value. Alternatively, use `return` for early exit.
-
-```ruby
+# Block form
 data = os.read_file(path) rescue do
   log.warn("using default config")
   default_config
 end
-```
 
-**Lowering:**
-```go
-data, err := os.ReadFile(path)
-if err != nil {
-    log.Warn("using default config")
-    data = defaultConfig
-}
-```
-
-#### 15.4.3 Block Form with Error Binding
-
-Bind the error to a variable using `=> name`:
-
-```ruby
-expr = fallible_call() rescue => err do
-  log.warn("failed: #{err}")
-  return nil, fmt.errorf("context: %w", err)
-end
-```
-
-The variable `err` is in scope within the block.
-
-```ruby
+# With error binding
 data = os.read_file(path) rescue => err do
   log.warn("read failed: #{err}")
   return nil, fmt.errorf("load_config: %w", err)
 end
 ```
 
-**Lowering:**
-```go
-data, err := os.ReadFile(path)
-if err != nil {
-    log.Warn(fmt.Sprintf("read failed: %v", err))
-    return nil, fmt.Errorf("load_config: %w", err)
-}
-```
+**Rules:**
+- Inline form: `default_expr` must match type `T`
+- Block form: last expression becomes the value
+- `rescue` and `!` are mutually exclusive
+- For `error`-only returns, use block form (no value to replace)
 
-#### 15.4.4 Rules
+### 15.4 Script Mode and `main`
 
-1. `rescue` applies to call expressions returning `error` or `(T, error)`.
-2. In inline form, `default_expr` must match type `T`.
-3. In block form, the last expression becomes the value (unless `return` is used).
-4. `rescue` and `!` are mutually exclusive on the same call.
-5. The `=> name` binding creates a new variable scoped to the block, shadowing any outer variable with the same name.
-
-#### 15.4.5 `rescue` on `error`-only Returns
-
-For calls returning only `error` (no value), `rescue` executes for side effects:
+In scripts and `def main`, `!` prints error to stderr and exits with code 1.
 
 ```ruby
-os.mkdir_all(dir) rescue => err do
-  log.warn("mkdir failed: #{err}")
-  # no value needed
-end
-```
-
-**Lowering:**
-```go
-if err := os.MkdirAll(dir, 0755); err != nil {
-    log.Warn(fmt.Sprintf("mkdir failed: %v", err))
-}
-```
-
-The inline form is not allowed for `error`-only calls (no value to replace):
-
-```ruby
-os.mkdir_all(dir) rescue nil   # ERROR: inline rescue requires (T, error) return
-```
-
----
-
-### 15.5 Lowering Rules
-
-#### A) `call!` where call returns `(T, error)`
-
-Rugby:
-```ruby
-x = f(a, b)!
-```
-
-Go:
-```go
-x, err := f(a, b)
-if err != nil {
-    return <zero-values>, err
-}
-```
-
-#### B) `call!` where call returns `error`
-
-Rugby:
-```ruby
-f(a, b)!
-```
-
-Go:
-```go
-if err := f(a, b); err != nil {
-    return <zero-values>, err
-}
-```
-
-#### C) Multiple return values
-
-If the enclosing function returns multiple values, the compiler constructs appropriate zero values:
-
-Rugby:
-```ruby
-def open_user(id : Int) -> (User, Bool, error)
-  u = load_user(id)!
-  u, true, nil
-end
-```
-
-Go:
-```go
-func openUser(id int) (User, bool, error) {
-    u, err := loadUser(id)
-    if err != nil {
-        return User{}, false, err
-    }
-    return u, true, nil
-}
-```
-
-**Zero values:**
-* Numeric: `0`
-* Bool: `false`
-* String: `""`
-* Slices, maps, funcs, interfaces, pointers: `nil`
-* Structs: `T{}`
-
----
-
-### 15.6 Script Mode and `main`
-
-In bare script mode (see 2.1) and inside `def main`, there is no enclosing function that returns `error`.
-
-**Rule:** `call!` prints the error to stderr and exits with status code `1`.
-
-```ruby
-# script.rg
 data = os.read_file("config.json")!
 puts data.length
 ```
 
-**Lowering:**
-```go
-func main() {
-    data, err := os.ReadFile("config.json")
-    if err != nil {
-        runtime.Fatal(err)
-    }
-    runtime.Puts(len(data))
-}
-```
+### 15.5 Explicit Handling
 
-`runtime.Fatal(err)` prints a readable error message to stderr and calls `os.Exit(1)`.
-
----
-
-### 15.7 Explicit Handling
-
-For cases where `!` and `rescue` don't fit, handle errors explicitly:
+Standard Go-style error handling:
 
 ```ruby
 data, err = os.read_file(path)
@@ -2757,71 +1086,35 @@ if err != nil
 end
 ```
 
-This is standard Go-style error handling and always works.
+### 15.6 Panics
 
----
-
-### 15.8 Panics (Programmer Errors)
-
-For unrecoverable programmer errors or impossible states, use `panic`:
+For unrecoverable programmer errors:
 
 ```ruby
 panic "unreachable"
 panic "invalid state: #{state}"
 ```
 
-**Lowering:**
-```go
-panic("unreachable")
-panic(fmt.Sprintf("invalid state: %v", state))
-```
+Use `panic` only for invariants/bugs. Use `error` for expected failures.
 
-**Guideline:** Use `panic` only for invariants and bugs. Use returned `error` for expected failures.
-
----
-
-### 15.9 Error Utilities
-
-Rugby exposes common Go error utilities via the runtime:
-
-**`error_is?(err, target)`**
-
-Tests if an error matches a target (wrapping-aware):
+### 15.7 Error Utilities
 
 ```ruby
+# Test error type (wrapping-aware)
 if error_is?(err, os.ErrNotExist)
   puts "file not found"
 end
-```
 
-Compiles to `errors.Is(err, target)`.
-
-**`error_as(err, Type)`**
-
-Extracts a specific error type. Returns `Type?` (optional):
-
-```ruby
+# Extract specific error type (returns Type?)
 if let path_err = error_as(err, os.PathError)
   puts "path error: #{path_err.path}"
 end
 ```
 
-Compiles to:
-```go
-var pathErr *os.PathError
-if errors.As(err, &pathErr) {
-    // use pathErr
-}
-```
+### 15.8 Common Patterns
 
-Note: `error_as` returns an optional (not an error), so use `if let` for unwrapping.
-
----
-
-### 15.10 Common Patterns
-
-**Retry with fallback:**
 ```ruby
+# Retry with fallback
 def fetch_config -> (Config, error)
   data = http.get(primary_url) rescue => err do
     log.warn("primary failed: #{err}")
@@ -2829,20 +1122,16 @@ def fetch_config -> (Config, error)
   end
   parse_config(data)!
 end
-```
 
-**Wrap and propagate:**
-```ruby
+# Wrap and propagate
 def load_user(id : Int) -> (User, error)
   row = db.query_row(sql, id) rescue => err do
     return nil, fmt.errorf("load_user(%d): %w", id, err)
   end
   parse_user(row)!
 end
-```
 
-**Cleanup on error:**
-```ruby
+# Cleanup with defer
 def process_file(path : String) -> error
   f = os.open(path)!
   defer f.close()
@@ -2851,19 +1140,10 @@ def process_file(path : String) -> error
     log.error("processing failed: #{err}")
     return err
   end
-
   nil
 end
-```
 
-**Ignore error, use default:**
-```ruby
+# Ignore error, use default
 timeout = config.get("timeout").to_i() rescue 30
 ```
-
----
-
-### 15.11 Determinism
-
-All error handling is compile-time, explicit, and deterministic. There is no implicit exception control flow, stack unwinding, or reflection-based error handling.
 
