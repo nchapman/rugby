@@ -170,6 +170,7 @@ type Generator struct {
 	imports            map[string]bool   // track import aliases for Go interop detection
 	needsRuntime       bool              // track if rugby/runtime import is needed
 	needsFmt           bool              // track if fmt import is needed (string interpolation)
+	needsErrors        bool              // track if errors import is needed (error_is?, error_as)
 	needsTestingImport bool              // track if testing import is needed
 	needsTestImport    bool              // track if rugby/test import is needed
 	currentClass       string            // current class being generated (for instance vars)
@@ -423,9 +424,10 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	const testImport = "github.com/nchapman/rugby/test"
 	needsRuntimeImport := g.needsRuntime && !userImports[runtimeImport]
 	needsFmtImport := g.needsFmt && !userImports["fmt"]
+	needsErrorsImport := g.needsErrors && !userImports["errors"]
 	needsTestingImport := g.needsTestingImport && !userImports["testing"]
 	needsTestImport := g.needsTestImport && !userImports[testImport]
-	hasImports := len(program.Imports) > 0 || needsRuntimeImport || needsFmtImport || needsTestingImport || needsTestImport
+	hasImports := len(program.Imports) > 0 || needsRuntimeImport || needsFmtImport || needsErrorsImport || needsTestingImport || needsTestImport
 	if hasImports {
 		out.WriteString("import (\n")
 		// User-specified imports
@@ -437,6 +439,9 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 			}
 		}
 		// Auto-imports (only if not already imported by user)
+		if needsErrorsImport {
+			out.WriteString("\t\"errors\"\n")
+		}
 		if needsFmtImport {
 			out.WriteString("\t\"fmt\"\n")
 		}
@@ -2098,6 +2103,18 @@ func (g *Generator) genExpr(expr ast.Expression) {
 }
 
 func (g *Generator) genRangeLit(r *ast.RangeLit) {
+	// Validate: Range start and end must be Int
+	// Only validate when type is known - unknown types will be caught by Go compiler
+	startType := g.inferTypeFromExpr(r.Start)
+	endType := g.inferTypeFromExpr(r.End)
+
+	if startType != "" && startType != "Int" {
+		g.addError(fmt.Errorf("line %d: range start must be Int, got %s", r.Line, startType))
+	}
+	if endType != "" && endType != "Int" {
+		g.addError(fmt.Errorf("line %d: range end must be Int, got %s", r.Line, endType))
+	}
+
 	g.needsRuntime = true
 	g.buf.WriteString("runtime.Range{Start: ")
 	g.genExpr(r.Start)
@@ -2400,6 +2417,41 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 	case *ast.Ident:
 		// Simple function call - check for kernel/builtin functions
 		funcName := fn.Name
+
+		// Handle error utility functions (from errors package)
+		if funcName == "error_is?" {
+			if len(call.Args) != 2 {
+				g.addError(fmt.Errorf("error_is? requires 2 arguments (err, target), got %d", len(call.Args)))
+				g.buf.WriteString("false")
+				return
+			}
+			g.needsErrors = true
+			g.buf.WriteString("errors.Is(")
+			g.genExpr(call.Args[0])
+			g.buf.WriteString(", ")
+			g.genExpr(call.Args[1])
+			g.buf.WriteString(")")
+			return
+		}
+
+		if funcName == "error_as" {
+			if len(call.Args) != 2 {
+				g.addError(fmt.Errorf("error_as requires 2 arguments (err, Type), got %d", len(call.Args)))
+				g.buf.WriteString("nil")
+				return
+			}
+			g.needsErrors = true
+			// error_as(err, Type) -> func() *Type { var t *Type; if errors.As(err, &t) { return t }; return nil }()
+			g.buf.WriteString("func() *")
+			g.genExpr(call.Args[1])
+			g.buf.WriteString(" { var _target *")
+			g.genExpr(call.Args[1])
+			g.buf.WriteString("; if errors.As(")
+			g.genExpr(call.Args[0])
+			g.buf.WriteString(", &_target) { return _target }; return nil }()")
+			return
+		}
+
 		if kf, ok := kernelFuncs[funcName]; ok {
 			g.needsRuntime = true
 			if kf.transform != nil {

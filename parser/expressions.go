@@ -264,12 +264,13 @@ func (p *Parser) parseInfixExpr(left ast.Expression) ast.Expression {
 // parseRangeLit parses a range literal: start..end or start...end.
 func (p *Parser) parseRangeLit(start ast.Expression) ast.Expression {
 	// curToken is '..' or '...'
+	line := p.curToken.Line
 	exclusive := p.curToken.Type == token.TRIPLEDOT
 	precedence := p.curPrecedence()
 	p.nextToken()
 	end := p.parseExpression(precedence)
 
-	return &ast.RangeLit{Start: start, End: end, Exclusive: exclusive}
+	return &ast.RangeLit{Start: start, End: end, Exclusive: exclusive, Line: line}
 }
 
 // parseSelectorExpr parses field/method access: x.y.

@@ -67,9 +67,9 @@ Features in implementation order, building incrementally.
   - `to_f` returns `(Float, error)` instead of `to_f?` returning `Float?`.
   - Updated runtime string conversion functions accordingly.
 
-## Phase 18: Standard Library Polish
-- [ ] **String Interpolation:** Ensure all interpolations compile to `fmt.Sprintf` (or `String()` calls).
-- [ ] **Range Constraints:** Restrict `Range` to `Int` only.
+## Phase 18: Standard Library Polish ✓
+- [x] **String Interpolation:** Ensure all interpolations compile to `fmt.Sprintf` (or `String()` calls).
+- [x] **Range Constraints:** Restrict `Range` to `Int` only.
 
 ## Phase 19: Error Handling ✓
 **Goal:** Implement Go-style error handling with ergonomic syntax sugar.
@@ -115,9 +115,9 @@ Features in implementation order, building incrementally.
 - [x] **Codegen:** Lower to `panic(expr)` or `panic(fmt.Sprintf(...))` for interpolated strings.
 - **Note:** Renamed from `raise` to `panic` to avoid confusion with Ruby's catchable exceptions.
 
-### 19.6 Error Utilities
-- [ ] **`error_is?(err, target)`:** Compile to `errors.Is(err, target)`, returns `Bool`.
-- [ ] **`error_as(err, Type)`:** Compile to `errors.As` pattern, returns `Type?` (optional).
+### 19.6 Error Utilities ✓
+- [x] **`error_is?(err, target)`:** Compile to `errors.Is(err, target)`, returns `Bool`.
+- [x] **`error_as(err, Type)`:** Compile to `errors.As` pattern, returns `Type?` (optional).
   - Use with `if let` for unwrapping.
   - Auto-import `"errors"` package when these functions are used.
 
@@ -129,6 +129,19 @@ Features in implementation order, building incrementally.
 ---
 
 ## Recently Completed
+
+### Standard Library Polish & Error Utilities (Phase 18 & 19.6)
+- **String Interpolation:** All interpolations compile to `fmt.Sprintf` with `%v` format
+  - Automatically calls `String()` on types implementing `fmt.Stringer`
+  - Properly escapes `%` as `%%`
+- **Range Constraints:** Ranges restricted to `Int` only
+  - Codegen validates that Range start and end are Int types
+  - Compile-time error for non-Int ranges (e.g., `1.5..10` or `"a".."z"`)
+- **Error Utilities:**
+  - `error_is?(err, target)`: Compiles to `errors.Is(err, target)`
+  - `error_as(err, Type)`: Compiles to `errors.As` pattern returning `*Type`
+  - Auto-imports `errors` package when these functions are used
+  - Works with `if let` for unwrapping error types
 
 ### Type System Refinement & Strict `?` Suffix (Phase 17.3 & 17.4)
 - **`case_type` syntax:** Type switching for runtime type matching on `any` values

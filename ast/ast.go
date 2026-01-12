@@ -232,6 +232,7 @@ type RangeLit struct {
 	Start     Expression // start of range
 	End       Expression // end of range
 	Exclusive bool       // true for ... (exclusive), false for .. (inclusive)
+	Line      int        // line number for error reporting
 }
 
 func (r *RangeLit) node()     {}

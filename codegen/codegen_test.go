@@ -1897,6 +1897,63 @@ end`
 	assertContains(t, output, `for i := 5; i <= 4; i++ {`)
 }
 
+func TestRangeRejectsFloatStart(t *testing.T) {
+	// Range start must be Int
+	input := `def main
+  r = 1.5..10
+end`
+
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	gen := New()
+	_, err := gen.Generate(program)
+
+	if err == nil {
+		t.Fatal("expected error for range with Float start")
+	}
+
+	if !strings.Contains(err.Error(), "range start must be Int") {
+		t.Errorf("expected error about Int start, got: %s", err.Error())
+	}
+}
+
+func TestRangeRejectsStringEnd(t *testing.T) {
+	// Range end must be Int
+	input := `def main
+  r = 1.."z"
+end`
+
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	gen := New()
+	_, err := gen.Generate(program)
+
+	if err == nil {
+		t.Fatal("expected error for range with String end")
+	}
+
+	if !strings.Contains(err.Error(), "range end must be Int") {
+		t.Errorf("expected error about Int end, got: %s", err.Error())
+	}
+}
+
+func TestRangeWithIntVariables(t *testing.T) {
+	// Ranges with Int variables should work fine
+	input := `def main
+  a : Int = 1
+  b : Int = 10
+  r = a..b
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.Range{Start: a, End: b, Exclusive: false}`)
+}
+
 func TestOrAssignFirstDeclaration(t *testing.T) {
 	input := `def main
   x ||= 5
@@ -2307,6 +2364,77 @@ end`
 	assertContains(t, output, "n, err := runtime.StringToInt(s)")
 	// The condition uses runtime.Equal for comparison
 	assertContains(t, output, "!runtime.Equal(err, nil)")
+}
+
+// --- Error Utility Tests ---
+
+func TestErrorIs(t *testing.T) {
+	input := `import "io"
+
+def main
+  err : error = nil
+  if error_is?(err, io.EOF)
+    puts("end of file")
+  end
+end`
+
+	output := compile(t, input)
+
+	// error_is? should compile to errors.Is
+	assertContains(t, output, "errors.Is(err, io.EOF)")
+	// Should auto-import errors package
+	assertContains(t, output, `"errors"`)
+}
+
+func TestErrorIsWithCustomError(t *testing.T) {
+	input := `def check(err : error, target : error) -> Bool
+  error_is?(err, target)
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, "errors.Is(err, target)")
+}
+
+func TestErrorAs(t *testing.T) {
+	input := `import "os"
+
+def main
+  err : error = nil
+  if let pathErr = error_as(err, os.PathError)
+    puts(pathErr.Path)
+  end
+end`
+
+	output := compile(t, input)
+
+	// error_as should compile to errors.As pattern returning optional
+	assertContains(t, output, "errors.As(err, &_target)")
+	assertContains(t, output, "*os.PathError")
+	// Should auto-import errors package
+	assertContains(t, output, `"errors"`)
+}
+
+func TestErrorAsWithIfLet(t *testing.T) {
+	input := `class MyError
+  def initialize(@code : Int)
+  end
+end
+
+def check(err : error) -> Int
+  if let myErr = error_as(err, MyError)
+    myErr.code
+  else
+    -1
+  end
+end`
+
+	output := compile(t, input)
+
+	// Check key parts of the generated errors.As pattern
+	assertContains(t, output, "var _target *MyError")
+	assertContains(t, output, "errors.As(err, &_target)")
+	assertContains(t, output, "return _target")
 }
 
 // --- Bare Script Tests ---
