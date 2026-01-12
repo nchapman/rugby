@@ -2727,14 +2727,40 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 		return
 	}
 
-	// Check if we should use native Go indexing vs runtime.AtIndex
+	// Check if we should use native Go indexing vs runtime helpers
 	// Use native indexing for:
 	// - Non-negative integer literals (arr[0], arr[1])
-	// - String keys (map access: m["key"])
-	// Use runtime.AtIndex for:
+	// - String keys on identifiers (typed map variables)
+	// - String keys on map literals
+	// Use runtime helpers for:
 	// - Negative integer literals (arr[-1])
 	// - Variable indices (arr[i] - could be negative at runtime)
-	// - Expressions (arr[i + 1] - could be negative)
+	// - String keys on expressions that could return 'any' (like arr[i]["key"])
+
+	// For string key access, check if the left side might be an 'any' type
+	if _, isStringKey := idx.Index.(*ast.StringLit); isStringKey {
+		// Identifiers and map literals are typically typed - use native indexing
+		switch idx.Left.(type) {
+		case *ast.Ident, *ast.MapLit:
+			// These are typically typed maps - use native Go indexing
+			g.genExpr(idx.Left)
+			g.buf.WriteString("[")
+			g.genExpr(idx.Index)
+			g.buf.WriteString("]")
+			return
+		default:
+			// For other expressions (IndexExpr, CallExpr, etc.), the result
+			// could be 'any' type (common with JSON data) - use runtime.GetKey
+			g.needsRuntime = true
+			g.buf.WriteString("runtime.GetKey(")
+			g.genExpr(idx.Left)
+			g.buf.WriteString(", ")
+			g.genExpr(idx.Index)
+			g.buf.WriteString(")")
+			return
+		}
+	}
+
 	if g.shouldUseNativeIndex(idx.Index) {
 		g.genExpr(idx.Left)
 		g.buf.WriteString("[")
@@ -3747,6 +3773,14 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 			g.buf.WriteString(")")
 			return
 		}
+	}
+
+	// Handle .length and .size on arrays, slices, strings, and maps -> len()
+	if sel.Sel == "length" || sel.Sel == "size" {
+		g.buf.WriteString("len(")
+		g.genExpr(sel.X)
+		g.buf.WriteString(")")
+		return
 	}
 
 	// Check for methods on optional types (ok?, nil?, present?, absent?, unwrap)

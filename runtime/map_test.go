@@ -179,3 +179,33 @@ func TestMapInvert(t *testing.T) {
 		t.Error("MapInvert modified original")
 	}
 }
+
+func TestGetKey(t *testing.T) {
+	// Test with map[string]any (common JSON pattern)
+	stringMap := map[string]any{"name": "Alice", "age": 30}
+	if v := GetKey(stringMap, "name"); v != "Alice" {
+		t.Errorf("GetKey map[string]any: got %v, want Alice", v)
+	}
+	if v := GetKey(stringMap, "missing"); v != nil {
+		t.Errorf("GetKey missing key: got %v, want nil", v)
+	}
+
+	// Test with map[any]any (Rugby's default map type)
+	anyMap := map[any]any{"key": "value", 42: "number key"}
+	if v := GetKey(anyMap, "key"); v != "value" {
+		t.Errorf("GetKey map[any]any: got %v, want value", v)
+	}
+
+	// Test with unsupported type (returns nil)
+	if v := GetKey("not a map", "key"); v != nil {
+		t.Errorf("GetKey unsupported type: got %v, want nil", v)
+	}
+	if v := GetKey(nil, "key"); v != nil {
+		t.Errorf("GetKey nil: got %v, want nil", v)
+	}
+
+	// Test with slice (unsupported, returns nil)
+	if v := GetKey([]string{"a", "b"}, "0"); v != nil {
+		t.Errorf("GetKey slice: got %v, want nil", v)
+	}
+}

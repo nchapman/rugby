@@ -1326,6 +1326,50 @@ end`
 	}
 }
 
+func TestMapLiteralJSONStyle(t *testing.T) {
+	// JSON-style syntax with colon instead of hashrocket
+	input := `def main
+  x = {"name": "Alice", "age": 30}
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+
+	mapLit, ok := assign.Value.(*ast.MapLit)
+	if !ok {
+		t.Fatalf("expected MapLit, got %T", assign.Value)
+	}
+
+	if len(mapLit.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d", len(mapLit.Entries))
+	}
+
+	// Check first entry: "name": "Alice"
+	key1, ok := mapLit.Entries[0].Key.(*ast.StringLit)
+	if !ok || key1.Value != "name" {
+		t.Errorf("entry 0 key: expected 'name', got %v", mapLit.Entries[0].Key)
+	}
+	val1, ok := mapLit.Entries[0].Value.(*ast.StringLit)
+	if !ok || val1.Value != "Alice" {
+		t.Errorf("entry 0 value: expected 'Alice', got %v", mapLit.Entries[0].Value)
+	}
+
+	// Check second entry: "age": 30
+	key2, ok := mapLit.Entries[1].Key.(*ast.StringLit)
+	if !ok || key2.Value != "age" {
+		t.Errorf("entry 1 key: expected 'age', got %v", mapLit.Entries[1].Key)
+	}
+	val2, ok := mapLit.Entries[1].Value.(*ast.IntLit)
+	if !ok || val2.Value != 30 {
+		t.Errorf("entry 1 value: expected 30, got %v", mapLit.Entries[1].Value)
+	}
+}
+
 func TestEachBlock(t *testing.T) {
 	input := `def main
   arr.each do |x|

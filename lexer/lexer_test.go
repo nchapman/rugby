@@ -1583,3 +1583,52 @@ func TestHeredocVsShovelLeft(t *testing.T) {
 		}
 	}
 }
+
+func TestSingleQuotedStrings(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{`'hello'`, "hello"},
+		{`'it\'s'`, "it's"},
+		{`'back\\slash'`, "back\\slash"},
+		{`'line\nstays'`, "line\\nstays"}, // \n is literal, not escape
+		{`''`, ""},                        // empty string
+		{`'single "double" inside'`, `single "double" inside`},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		tok := l.NextToken()
+		if tok.Type != token.STRING {
+			t.Errorf("input %q: expected STRING, got %q", tt.input, tok.Type)
+			continue
+		}
+		if tok.Literal != tt.expected {
+			t.Errorf("input %q: expected literal %q, got %q", tt.input, tt.expected, tok.Literal)
+		}
+	}
+}
+
+func TestStringInterpolationWithNestedQuotes(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{`"hello #{name}"`, "hello #{name}"},
+		{`"value: #{data["key"]}"`, `value: #{data["key"]}`},
+		{`"nested: #{map["a"]["b"]}"`, `nested: #{map["a"]["b"]}`},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		tok := l.NextToken()
+		if tok.Type != token.STRING {
+			t.Errorf("input %q: expected STRING, got %q", tt.input, tok.Type)
+			continue
+		}
+		if tok.Literal != tt.expected {
+			t.Errorf("input %q: expected literal %q, got %q", tt.input, tt.expected, tok.Literal)
+		}
+	}
+}

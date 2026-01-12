@@ -9,6 +9,7 @@ package json
 
 import (
 	"encoding/json"
+	"fmt"
 )
 
 // Parse parses a JSON string into a map.
@@ -50,7 +51,9 @@ func ParseBytes(b []byte) (map[string]any, error) {
 // Generate converts a value to a JSON string.
 // Ruby: json.generate(data)
 func Generate(v any) (string, error) {
-	b, err := json.Marshal(v)
+	// Convert map[any]any to map[string]any for JSON compatibility
+	converted := convertForJSON(v)
+	b, err := json.Marshal(converted)
 	if err != nil {
 		return "", err
 	}
@@ -60,13 +63,15 @@ func Generate(v any) (string, error) {
 // GenerateBytes converts a value to JSON bytes.
 // Ruby: json.generate_bytes(data)
 func GenerateBytes(v any) ([]byte, error) {
-	return json.Marshal(v)
+	converted := convertForJSON(v)
+	return json.Marshal(converted)
 }
 
 // Pretty converts a value to a pretty-printed JSON string.
 // Ruby: json.pretty(data)
 func Pretty(v any) (string, error) {
-	b, err := json.MarshalIndent(v, "", "  ")
+	converted := convertForJSON(v)
+	b, err := json.MarshalIndent(converted, "", "  ")
 	if err != nil {
 		return "", err
 	}
@@ -76,7 +81,44 @@ func Pretty(v any) (string, error) {
 // PrettyBytes converts a value to pretty-printed JSON bytes.
 // Ruby: json.pretty_bytes(data)
 func PrettyBytes(v any) ([]byte, error) {
-	return json.MarshalIndent(v, "", "  ")
+	converted := convertForJSON(v)
+	return json.MarshalIndent(converted, "", "  ")
+}
+
+// convertForJSON recursively converts map[any]any to map[string]any
+// so that Go's encoding/json can marshal it properly.
+func convertForJSON(v any) any {
+	switch val := v.(type) {
+	case map[any]any:
+		result := make(map[string]any, len(val))
+		for k, v := range val {
+			// Convert key to string
+			var keyStr string
+			switch key := k.(type) {
+			case string:
+				keyStr = key
+			default:
+				// Use fmt.Sprint for other types
+				keyStr = fmt.Sprint(key)
+			}
+			result[keyStr] = convertForJSON(v)
+		}
+		return result
+	case map[string]any:
+		result := make(map[string]any, len(val))
+		for k, v := range val {
+			result[k] = convertForJSON(v)
+		}
+		return result
+	case []any:
+		result := make([]any, len(val))
+		for i, v := range val {
+			result[i] = convertForJSON(v)
+		}
+		return result
+	default:
+		return v
+	}
 }
 
 // Valid reports whether s is valid JSON.

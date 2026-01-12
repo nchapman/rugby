@@ -2,7 +2,6 @@
 # Demonstrates fetching data from an API and parsing JSON
 
 import rugby/http
-import rugby/json
 
 # Fetch a user from JSONPlaceholder API
 def fetch_user(id : Int) -> (Map[String, any], error)
@@ -51,7 +50,6 @@ def main
 
   # Show first 3 posts
   for i in 0..2
-    post = posts[i]
-    puts "- #{post["title"]}"
+    puts "- #{posts[i]["title"]}"
   end
 end

@@ -138,6 +138,13 @@ func (l *Lexer) NextToken() token.Token {
 		tok.Column = l.column
 		tok.SpaceBefore = spaceBefore
 		return tok
+	case '\'':
+		tok.Type = token.STRING
+		tok.Literal = l.readSingleQuoteString()
+		tok.Line = l.line
+		tok.Column = l.column
+		tok.SpaceBefore = spaceBefore
+		return tok
 	case '#':
 		l.readComment()
 		return l.NextToken()
@@ -351,7 +358,14 @@ func (l *Lexer) readIdentifier() string {
 func (l *Lexer) readString() string {
 	l.readChar() // skip opening quote
 	var out []byte
-	for l.ch != '"' && l.ch != 0 {
+	braceDepth := 0 // track #{...} nesting
+
+	for l.ch != 0 {
+		// Only treat " as string terminator when not inside #{}
+		if l.ch == '"' && braceDepth == 0 {
+			break
+		}
+
 		if l.ch == '\\' {
 			l.readChar()
 			switch l.ch {
@@ -367,6 +381,47 @@ func (l *Lexer) readString() string {
 				out = append(out, '\\')
 			default:
 				out = append(out, l.ch)
+			}
+		} else if l.ch == '#' && l.peekChar() == '{' {
+			// Start of interpolation
+			out = append(out, l.ch)
+			l.readChar()
+			out = append(out, l.ch)
+			braceDepth++
+		} else if l.ch == '{' && braceDepth > 0 {
+			// Nested brace inside interpolation
+			out = append(out, l.ch)
+			braceDepth++
+		} else if l.ch == '}' && braceDepth > 0 {
+			// End of interpolation or nested brace
+			out = append(out, l.ch)
+			braceDepth--
+		} else {
+			out = append(out, l.ch)
+		}
+		l.readChar()
+	}
+	l.readChar() // skip closing quote
+	return string(out)
+}
+
+// readSingleQuoteString reads a single-quoted string literal.
+// Single-quoted strings don't support interpolation (like Ruby).
+// Only \' and \\ are recognized as escape sequences.
+func (l *Lexer) readSingleQuoteString() string {
+	l.readChar() // skip opening quote
+	var out []byte
+	for l.ch != '\'' && l.ch != 0 {
+		if l.ch == '\\' {
+			l.readChar()
+			switch l.ch {
+			case '\'':
+				out = append(out, '\'')
+			case '\\':
+				out = append(out, '\\')
+			default:
+				// In single-quoted strings, other escapes are literal
+				out = append(out, '\\', l.ch)
 			}
 		} else {
 			out = append(out, l.ch)

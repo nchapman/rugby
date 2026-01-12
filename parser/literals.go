@@ -274,9 +274,10 @@ func (p *Parser) parseMapLiteral() ast.Expression {
 }
 
 // parseMapEntry parses a single key => value or key: value entry in a map literal.
-// Supports four forms:
+// Supports five forms:
 //   - Hash rocket: "key" => value
 //   - Symbol key shorthand: key: value (key becomes string)
+//   - String key shorthand: "key": value (JSON-style)
 //   - Implicit value shorthand: key: (key becomes both string key and variable value)
 //   - Double splat: **expr (spreads a map into the literal)
 func (p *Parser) parseMapEntry() (ast.MapEntry, bool) {
@@ -305,6 +306,21 @@ func (p *Parser) parseMapEntry() (ast.MapEntry, bool) {
 			return ast.MapEntry{Key: key, Value: value}, true
 		}
 
+		p.nextToken() // move past ':' to value
+
+		// Parse the value expression
+		value := p.parseExpression(lowest)
+		if value == nil {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected value after ':' in map literal")
+			return ast.MapEntry{}, false
+		}
+		return ast.MapEntry{Key: key, Value: value}, true
+	}
+
+	// Check for string key with colon (JSON-style): "key": value
+	if p.curTokenIs(token.STRING) && p.peekTokenIs(token.COLON) {
+		key := &ast.StringLit{Value: p.curToken.Literal}
+		p.nextToken() // move to ':'
 		p.nextToken() // move past ':' to value
 
 		// Parse the value expression

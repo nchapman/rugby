@@ -111,3 +111,18 @@ func MapInvert[K, V comparable](m map[K]V) map[V]K {
 	}
 	return result
 }
+
+// GetKey retrieves a value from a map-like value using a string key.
+// This handles dynamic access patterns common when working with JSON data.
+// Supports: map[string]any, map[any]any, and any type that can be type-asserted to these.
+func GetKey(m any, key string) any {
+	switch v := m.(type) {
+	case map[string]any:
+		return v[key]
+	case map[any]any:
+		return v[key]
+	default:
+		// Return nil for unsupported types
+		return nil
+	}
+}
