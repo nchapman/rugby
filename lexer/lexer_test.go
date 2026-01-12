@@ -1143,3 +1143,45 @@ x = 5`
 		t.Errorf("Text() = %q, want %q", text, expected)
 	}
 }
+
+func TestOptionalOperators(t *testing.T) {
+	input := `x ?? y
+user&.name
+if let x = y`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.IDENT, "x"},
+		{token.QUESTIONQUESTION, "??"},
+		{token.IDENT, "y"},
+		{token.NEWLINE, "\n"},
+		{token.IDENT, "user"},
+		{token.AMPDOT, "&."},
+		{token.IDENT, "name"},
+		{token.NEWLINE, "\n"},
+		{token.IF, "if"},
+		{token.LET, "let"},
+		{token.IDENT, "x"},
+		{token.ASSIGN, "="},
+		{token.IDENT, "y"},
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
+				i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}

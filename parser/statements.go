@@ -30,6 +30,10 @@ func (p *Parser) parseStatement() ast.Statement {
 	case token.DEFER:
 		return p.parseDeferStmt()
 	case token.IDENT:
+		// Check for multi-assignment: ident, ident = expr
+		if p.peekTokenIs(token.COMMA) {
+			return p.parseMultiAssignStmt()
+		}
 		// Check for assignment: ident = expr or ident : Type = expr
 		if p.peekTokenIs(token.ASSIGN) || p.peekTokenIs(token.COLON) {
 			return p.parseAssignStmt()
@@ -108,14 +112,61 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	return &ast.AssignStmt{Name: name, Type: typeAnnotation, Value: value, Line: line}
 }
 
+// parseMultiAssignStmt parses tuple unpacking: val, ok = expr
+func (p *Parser) parseMultiAssignStmt() *ast.MultiAssignStmt {
+	names := []string{p.curToken.Literal}
+
+	// Collect all names separated by commas
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // consume current ident or comma
+		p.nextToken() // consume comma, move to next ident
+		if !p.curTokenIs(token.IDENT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier in multi-assignment")
+			return nil
+		}
+		names = append(names, p.curToken.Literal)
+	}
+
+	p.nextToken() // move past last ident
+
+	if !p.curTokenIs(token.ASSIGN) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '=' in multi-assignment")
+		return nil
+	}
+	p.nextToken() // consume '='
+
+	value := p.parseExpression(lowest)
+
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	return &ast.MultiAssignStmt{Names: names, Value: value}
+}
+
 func (p *Parser) parseIfStmt() *ast.IfStmt {
 	line := p.curToken.Line
 	p.nextToken() // consume 'if'
 
 	stmt := &ast.IfStmt{Line: line}
 
-	// Check for assignment-in-condition pattern: if (name = expr)
-	if p.curTokenIs(token.LPAREN) {
+	// Check for 'if let' pattern: if let name = expr
+	if p.curTokenIs(token.LET) {
+		p.nextToken() // consume 'let'
+		if !p.curTokenIs(token.IDENT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after 'let'")
+			return nil
+		}
+		stmt.AssignName = p.curToken.Literal
+		p.nextToken() // consume ident
+		if !p.curTokenIs(token.ASSIGN) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '=' after identifier in 'if let'")
+			return nil
+		}
+		p.nextToken() // consume '='
+		stmt.AssignExpr = p.parseExpression(lowest)
+		p.nextToken() // move past expression
+	} else if p.curTokenIs(token.LPAREN) {
+		// Check for assignment-in-condition pattern: if (name = expr)
 		// Peek ahead to see if it's (ident = expr) pattern
 		p.nextToken() // consume '('
 		if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.ASSIGN) {

@@ -276,6 +276,26 @@ type RescueExpr struct {
 func (r *RescueExpr) node()     {}
 func (r *RescueExpr) exprNode() {}
 
+// NilCoalesceExpr represents the ?? operator: expr ?? default
+// Returns expr if present, otherwise default
+type NilCoalesceExpr struct {
+	Left  Expression // optional expression (T?)
+	Right Expression // default value (T)
+}
+
+func (n *NilCoalesceExpr) node()     {}
+func (n *NilCoalesceExpr) exprNode() {}
+
+// SafeNavExpr represents the &. operator: expr&.method
+// Calls method only if expr is present, returns optional
+type SafeNavExpr struct {
+	Receiver Expression // optional expression (T?)
+	Selector string     // method/property name
+}
+
+func (s *SafeNavExpr) node()     {}
+func (s *SafeNavExpr) exprNode() {}
+
 // AssignStmt represents variable assignment
 type AssignStmt struct {
 	Name    string
@@ -307,6 +327,15 @@ type CompoundAssignStmt struct {
 
 func (c *CompoundAssignStmt) node()     {}
 func (c *CompoundAssignStmt) stmtNode() {}
+
+// MultiAssignStmt represents tuple unpacking: val, ok = expr
+type MultiAssignStmt struct {
+	Names []string   // variable names (e.g., ["val", "ok"])
+	Value Expression // expression returning multiple values
+}
+
+func (m *MultiAssignStmt) node()     {}
+func (m *MultiAssignStmt) stmtNode() {}
 
 // IfStmt represents an if/elsif/else statement or unless/else statement
 type IfStmt struct {

@@ -376,7 +376,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `[]any{(1 + 2), (3 * 4)}`)
+	// Type inference correctly identifies []int from integer expressions
+	assertContains(t, output, `[]int{(1 + 2), (3 * 4)}`)
 }
 
 func TestGenerateArrayAsArg(t *testing.T) {
@@ -2027,23 +2028,25 @@ end`
 }
 
 func TestOptionalValueTypeInCondition(t *testing.T) {
+	// Rugby requires explicit nil checks for optionals (no implicit truthiness)
 	input := `def main
   x : Int? = nil
-  if x
-    puts "has value"
+  if x != nil
+    puts("has value")
   end
 end`
 
 	output := compile(t, input)
 
-	// Value type optional in condition checks != nil
-	assertContains(t, output, "if x != nil {")
+	// Explicit nil check compiles using runtime.Equal
+	assertContains(t, output, "if !runtime.Equal(x, nil)")
 }
 
 func TestOptionalReferenceTypeInCondition(t *testing.T) {
+	// Rugby requires explicit nil checks for optionals
 	input := `def process(u : User?)
-  if u
-    puts "has user"
+  if u != nil
+    puts("has user")
   end
 end
 
@@ -2052,26 +2055,27 @@ end`
 
 	output := compile(t, input)
 
-	// Reference type optional in condition checks != nil
-	assertContains(t, output, "if u != nil {")
+	// Explicit nil check compiles using runtime.Equal
+	assertContains(t, output, "if !runtime.Equal(u, nil)")
 }
 
 func TestOptionalInElsifCondition(t *testing.T) {
+	// Rugby requires explicit nil checks for optionals
 	input := `def main
   x : Int? = nil
   y : String? = nil
-  if x
+  if x != nil
     puts("x")
-  elsif y
+  elsif y != nil
     puts("y")
   end
 end`
 
 	output := compile(t, input)
 
-	// Both if and elsif should use != nil for value type optionals
-	assertContains(t, output, "if x != nil {")
-	assertContains(t, output, "} else if y != nil {")
+	// Both if and elsif use explicit nil checks with runtime.Equal
+	assertContains(t, output, "if !runtime.Equal(x, nil)")
+	assertContains(t, output, "} else if !runtime.Equal(y, nil)")
 }
 
 func TestNonOptionalInCondition(t *testing.T) {
@@ -2086,6 +2090,56 @@ end`
 
 	// Non-optional types should be used as-is
 	assertContains(t, output, "if x {")
+}
+
+func TestStrictConditionRejectsNonBool(t *testing.T) {
+	// Using non-Bool type directly in condition should error
+	input := `def main
+  x : Int = 5
+  if x
+    puts("yes")
+  end
+end`
+
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	gen := New()
+	_, err := gen.Generate(program)
+
+	if err == nil {
+		t.Fatal("expected error for non-Bool condition, got none")
+	}
+
+	if !strings.Contains(err.Error(), "condition must be Bool, got Int") {
+		t.Errorf("expected error about Bool type, got: %s", err.Error())
+	}
+}
+
+func TestStrictConditionRejectsOptionalWithoutExplicitCheck(t *testing.T) {
+	// Using optional type directly in condition should error (suggest if let)
+	input := `def main
+  x : Int? = nil
+  if x
+    puts("yes")
+  end
+end`
+
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	gen := New()
+	_, err := gen.Generate(program)
+
+	if err == nil {
+		t.Fatal("expected error for optional in condition without explicit check")
+	}
+
+	if !strings.Contains(err.Error(), "use 'if let x = ...' or 'x != nil' for optionals") {
+		t.Errorf("expected helpful error message about optionals, got: %s", err.Error())
+	}
 }
 
 func TestNilLiteral(t *testing.T) {
@@ -2135,6 +2189,23 @@ end`
 
 	// should generate if n, ok := runtime.StringToInt(s); ok {
 	assertContains(t, output, "if n, ok := runtime.StringToInt(s); ok {")
+}
+
+func TestIfLetPattern(t *testing.T) {
+	input := `def main
+  s = "42"
+  if let n = s.to_i?()
+    puts(n)
+  else
+    puts("not a number")
+  end
+end`
+
+	output := compile(t, input)
+
+	// if let should generate the same pattern as if (name = expr)
+	assertContains(t, output, "if n, ok := runtime.StringToInt(s); ok {")
+	assertContains(t, output, `runtime.Puts("not a number")`)
 }
 
 // --- Bare Script Tests ---
@@ -2802,4 +2873,211 @@ end`
 
 	// Should use runtime.Error with fmt.Sprintf
 	assertContains(t, output, `runtime.Error(fmt.Sprintf("negative: %v", n))`)
+}
+
+func TestNilCoalesceIntOptional(t *testing.T) {
+	input := `def get_value(opt : Int?) -> Int
+  return opt ?? 0
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should use runtime.CoalesceInt for Int?
+	assertContains(t, output, `runtime.CoalesceInt(opt, 0)`)
+}
+
+func TestNilCoalesceStringOptional(t *testing.T) {
+	input := `def get_name(opt : String?) -> String
+  return opt ?? "default"
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should use runtime.CoalesceString for String?
+	assertContains(t, output, `runtime.CoalesceString(opt, "default")`)
+}
+
+func TestNilCoalesceFloatOptional(t *testing.T) {
+	input := `def get_price(opt : Float?) -> Float
+  return opt ?? 3.14
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should use runtime.CoalesceFloat for Float?
+	assertContains(t, output, `runtime.CoalesceFloat(opt, 3.14)`)
+}
+
+func TestNilCoalesceBoolOptional(t *testing.T) {
+	input := `def get_flag(opt : Bool?) -> Bool
+  return opt ?? false
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should use runtime.CoalesceBool for Bool?
+	assertContains(t, output, `runtime.CoalesceBool(opt, false)`)
+}
+
+func TestSafeNavigation(t *testing.T) {
+	input := `def get_length(opt : String?) -> any
+  return opt&.length
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should generate safe navigation check with captured variable to avoid double evaluation
+	// Uses unique variable name (_sn0, _sn1, etc.) to handle nested expressions
+	assertContains(t, output, `_sn0 := opt`)
+	assertContains(t, output, `if _sn0 != nil`)
+	assertContains(t, output, `(*_sn0).length`)
+	assertContains(t, output, `return nil`)
+}
+
+func TestChainedSafeNavigationUniqueVars(t *testing.T) {
+	input := `def get_city(user : User?) -> any
+  return user&.address&.city
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should use unique variable names for each level of chained safe navigation
+	// Inner expressions are generated first, so user&.address uses _sn1, and the outer &.city uses _sn0
+	assertContains(t, output, `_sn0 :=`)
+	assertContains(t, output, `_sn1 := user`)
+}
+
+func TestMultiAssignmentNewVariables(t *testing.T) {
+	input := `def main
+  val, ok = get_data()
+end
+
+def get_data() -> (Int, Bool)
+  return 42, true
+end`
+
+	output := compile(t, input)
+
+	// Should use := for new variables
+	assertContains(t, output, `val, ok := getData()`)
+}
+
+func TestMultiAssignmentExistingVariables(t *testing.T) {
+	input := `def main
+  val = 0
+  ok = false
+  val, ok = get_data()
+end
+
+def get_data() -> (Int, Bool)
+  return 42, true
+end`
+
+	output := compile(t, input)
+
+	// Should use = for existing variables
+	assertContains(t, output, `val, ok = getData()`)
+}
+
+func TestMultiAssignmentThreeValues(t *testing.T) {
+	input := `def main
+  a, b, c = get_triple()
+end
+
+def get_triple() -> (Int, Int, Int)
+  return 1, 2, 3
+end`
+
+	output := compile(t, input)
+
+	// Should handle three values
+	assertContains(t, output, `a, b, c := getTriple()`)
+}
+
+func TestOptionalMethodOk(t *testing.T) {
+	input := `def check(opt : Int?) -> Bool
+  return opt.ok?
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should generate nil check
+	assertContains(t, output, `(opt != nil)`)
+}
+
+func TestOptionalMethodPresent(t *testing.T) {
+	input := `def check(opt : String?) -> Bool
+  return opt.present?
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should generate nil check
+	assertContains(t, output, `(opt != nil)`)
+}
+
+func TestOptionalMethodNil(t *testing.T) {
+	input := `def check(opt : Int?) -> Bool
+  return opt.nil?
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should generate nil check
+	assertContains(t, output, `(opt == nil)`)
+}
+
+func TestOptionalMethodAbsent(t *testing.T) {
+	input := `def check(opt : Float?) -> Bool
+  return opt.absent?
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should generate nil check
+	assertContains(t, output, `(opt == nil)`)
+}
+
+func TestOptionalMethodUnwrap(t *testing.T) {
+	input := `def get_value(opt : Int?) -> Int
+  return opt.unwrap!
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should generate dereference
+	assertContains(t, output, `return *opt`)
 }

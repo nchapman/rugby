@@ -148,6 +148,50 @@ end`
 	}
 }
 
+func TestIfLetStatement(t *testing.T) {
+	input := `def main
+  if let user = find_user(5)
+    puts(user.name)
+  else
+    puts("not found")
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	ifStmt, ok := fn.Body[0].(*ast.IfStmt)
+	if !ok {
+		t.Fatalf("expected IfStmt, got %T", fn.Body[0])
+	}
+
+	// Check that it's using the assignment pattern (if let)
+	if ifStmt.AssignName != "user" {
+		t.Errorf("expected AssignName 'user', got %q", ifStmt.AssignName)
+	}
+	if ifStmt.AssignExpr == nil {
+		t.Fatal("expected AssignExpr, got nil")
+	}
+	// The condition should be nil when using assignment pattern
+	if ifStmt.Cond != nil {
+		t.Errorf("expected Cond to be nil for 'if let', got %T", ifStmt.Cond)
+	}
+
+	if len(ifStmt.Then) != 1 {
+		t.Errorf("expected 1 then statement, got %d", len(ifStmt.Then))
+	}
+
+	if len(ifStmt.Else) != 1 {
+		t.Errorf("expected 1 else statement, got %d", len(ifStmt.Else))
+	}
+}
+
 func TestWhileStatement(t *testing.T) {
 	input := `def main
   while x > 0
@@ -4046,5 +4090,179 @@ func TestAnyKeywordInParameters(t *testing.T) {
 		if !found {
 			t.Errorf("input %q: expected parameter with type 'any'", tt.input)
 		}
+	}
+}
+
+func TestNilCoalesceOperator(t *testing.T) {
+	input := `def main
+  x = a ?? b
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assign, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
+	nilCoalesce, ok := assign.Value.(*ast.NilCoalesceExpr)
+	if !ok {
+		t.Fatalf("expected NilCoalesceExpr, got %T", assign.Value)
+	}
+	if left, ok := nilCoalesce.Left.(*ast.Ident); !ok || left.Name != "a" {
+		t.Errorf("expected left 'a', got %v", nilCoalesce.Left)
+	}
+	if right, ok := nilCoalesce.Right.(*ast.Ident); !ok || right.Name != "b" {
+		t.Errorf("expected right 'b', got %v", nilCoalesce.Right)
+	}
+}
+
+func TestSafeNavOperator(t *testing.T) {
+	input := `def main
+  x = user&.name
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assign, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
+	safeNav, ok := assign.Value.(*ast.SafeNavExpr)
+	if !ok {
+		t.Fatalf("expected SafeNavExpr, got %T", assign.Value)
+	}
+	if recv, ok := safeNav.Receiver.(*ast.Ident); !ok || recv.Name != "user" {
+		t.Errorf("expected receiver 'user', got %v", safeNav.Receiver)
+	}
+	if safeNav.Selector != "name" {
+		t.Errorf("expected selector 'name', got %q", safeNav.Selector)
+	}
+}
+
+func TestChainedSafeNavAndNilCoalesce(t *testing.T) {
+	input := `def main
+  x = user&.address&.city ?? "Unknown"
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assign, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
+
+	// Should be NilCoalesceExpr at top level
+	nilCoalesce, ok := assign.Value.(*ast.NilCoalesceExpr)
+	if !ok {
+		t.Fatalf("expected NilCoalesceExpr at top, got %T", assign.Value)
+	}
+
+	// Right side should be the string "Unknown"
+	str, strOk := nilCoalesce.Right.(*ast.StringLit)
+	if !strOk || str.Value != "Unknown" {
+		t.Errorf("expected right 'Unknown', got %v", nilCoalesce.Right)
+	}
+
+	// Left side should be SafeNavExpr for &.city
+	safeNav1, ok := nilCoalesce.Left.(*ast.SafeNavExpr)
+	if !ok {
+		t.Fatalf("expected SafeNavExpr, got %T", nilCoalesce.Left)
+	}
+	if safeNav1.Selector != "city" {
+		t.Errorf("expected selector 'city', got %q", safeNav1.Selector)
+	}
+
+	// Inner should be SafeNavExpr for &.address
+	safeNav2, ok := safeNav1.Receiver.(*ast.SafeNavExpr)
+	if !ok {
+		t.Fatalf("expected inner SafeNavExpr, got %T", safeNav1.Receiver)
+	}
+	if safeNav2.Selector != "address" {
+		t.Errorf("expected selector 'address', got %q", safeNav2.Selector)
+	}
+}
+
+func TestMultiAssignment(t *testing.T) {
+	input := `def main
+  val, ok = get_data()
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	multi, ok := fn.Body[0].(*ast.MultiAssignStmt)
+	if !ok {
+		t.Fatalf("expected MultiAssignStmt, got %T", fn.Body[0])
+	}
+
+	if len(multi.Names) != 2 {
+		t.Fatalf("expected 2 names, got %d", len(multi.Names))
+	}
+	if multi.Names[0] != "val" || multi.Names[1] != "ok" {
+		t.Errorf("expected names [val, ok], got %v", multi.Names)
+	}
+
+	call, ok := multi.Value.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", multi.Value)
+	}
+	if ident, ok := call.Func.(*ast.Ident); !ok || ident.Name != "get_data" {
+		t.Errorf("expected call to 'get_data', got %v", call.Func)
+	}
+}
+
+func TestMultiAssignmentThreeNames(t *testing.T) {
+	input := `def main
+  a, b, c = get_triple()
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	multi, ok := fn.Body[0].(*ast.MultiAssignStmt)
+	if !ok {
+		t.Fatalf("expected MultiAssignStmt, got %T", fn.Body[0])
+	}
+
+	if len(multi.Names) != 3 {
+		t.Fatalf("expected 3 names, got %d", len(multi.Names))
+	}
+	if multi.Names[0] != "a" || multi.Names[1] != "b" || multi.Names[2] != "c" {
+		t.Errorf("expected names [a, b, c], got %v", multi.Names)
 	}
 }

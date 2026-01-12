@@ -51,6 +51,12 @@ infixLoop:
 			token.AND, token.OR:
 			p.nextToken()
 			left = p.parseInfixExpr(left)
+		case token.QUESTIONQUESTION:
+			p.nextToken()
+			left = p.parseNilCoalesceExpr(left)
+		case token.AMPDOT:
+			p.nextToken()
+			left = p.parseSafeNavExpr(left)
 		case token.DOTDOT, token.TRIPLEDOT:
 			p.nextToken()
 			left = p.parseRangeLit(left)
@@ -210,6 +216,31 @@ func (p *Parser) parseRescueExpr(left ast.Expression) ast.Expression {
 	}
 
 	return rescue
+}
+
+// parseNilCoalesceExpr parses the nil coalescing operator: expr ?? default
+// Returns the value if present, otherwise the default
+func (p *Parser) parseNilCoalesceExpr(left ast.Expression) ast.Expression {
+	// curToken is '??'
+	precedence := p.curPrecedence()
+	p.nextToken()
+	right := p.parseExpression(precedence)
+
+	return &ast.NilCoalesceExpr{Left: left, Right: right}
+}
+
+// parseSafeNavExpr parses the safe navigation operator: expr&.method
+// Calls method only if expr is present, returns optional
+func (p *Parser) parseSafeNavExpr(left ast.Expression) ast.Expression {
+	// curToken is '&.'
+	p.nextToken() // move past '&.' to the selector
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '&.'")
+		return nil
+	}
+
+	return &ast.SafeNavExpr{Receiver: left, Selector: p.curToken.Literal}
 }
 
 // parseInfixExpr parses a binary expression: a + b, a && b.

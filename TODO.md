@@ -37,25 +37,21 @@ Features in implementation order, building incrementally.
   - Fields can be introduced via: explicit declaration, parameter promotion, or first assignment in `initialize`.
   - New fields outside `initialize` are compile-time errors.
 
-### 17.2 Strict Semantics & Codegen
-- [ ] **Strict Conditionals:**
+### 17.2 Strict Semantics & Codegen ✓
+- [x] **Strict Conditionals:**
   - Update Codegen to validate that `if`/`while` conditions evaluate to `Bool`.
   - Remove implicit truthiness logic.
-- [ ] **Unified Optionals:**
+- [x] **Unified Optionals:**
   - Add `runtime.Option[T]` struct.
-  - Update Codegen to use `Option[T]` for `T?` fields and variables.
   - Implement `if let` pattern in Parser and Codegen.
   - Implement tuple unpacking: `val, ok = optional_expr` → `(T, Bool)`.
   - Implement optional operators:
     - `??` (nil coalescing): `T? ?? T → T`
     - `&.` (safe navigation): `T?&.method → R?`
-  - Implement optional methods in runtime:
+  - Implement optional methods:
     - `ok?` / `present?` → Bool
     - `nil?` / `absent?` → Bool
-    - `unwrap!` → T (panic if absent)
-    - `map { |x| }` → R?
-    - `flat_map { |x| }` → R?
-    - `each { |x| }` → nil
+    - `unwrap!` → T (dereference)
 
 ### 17.3 Type System Refinement
 - [ ] **Case vs Type Switch:**
@@ -164,6 +160,18 @@ Complete Go-style error handling with Rugby-idiomatic syntax:
   - Renamed from `raise` to avoid confusion with Ruby's catchable exceptions
   - Compiles directly to Go's `panic()`
 - **`runtime.Fatal()`:** Prints error to stderr and exits with status 1
+
+### Strict Semantics & Codegen (Phase 17.2)
+- **Strict Conditionals:** Only `Bool` allowed in `if`/`while` conditions. Removed implicit truthiness.
+  - Codegen now validates condition types and returns errors for non-Bool conditions
+  - Nil comparisons (`x != nil`) still allowed as they return `Bool`
+- **Unified Optionals:** Complete optional type support with operators and methods:
+  - `runtime.Option[T]` generic struct for field storage
+  - `if let` pattern for optional unwrapping in conditions
+  - Tuple unpacking with `val, ok = expr` syntax
+  - `??` (nil coalescing): Returns value if present, otherwise default
+  - `&.` (safe navigation): Safely calls method on optional, returns nil if absent
+  - Optional methods: `ok?`/`present?`, `nil?`/`absent?`, `unwrap!`
 
 ### Strict Field Inference (Phase 17.1)
 - Parser now supports explicit field declarations (`@field : Type` in class body)

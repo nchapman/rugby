@@ -40,8 +40,10 @@ const (
 	STARASSIGN  TokenType = "*="
 	SLASHASSIGN TokenType = "/="
 
-	// Type modifiers
-	QUESTION TokenType = "?"
+	// Type modifiers and optional operators
+	QUESTION         TokenType = "?"
+	QUESTIONQUESTION TokenType = "??"
+	AMPDOT           TokenType = "&."
 
 	// Delimiters
 	LPAREN     TokenType = "("
@@ -61,31 +63,32 @@ const (
 	COLON      TokenType = ":"
 
 	// Keywords
-	IMPORT    TokenType = "IMPORT"
-	DEF       TokenType = "DEF"
-	END       TokenType = "END"
-	IF        TokenType = "IF"
-	ELSIF     TokenType = "ELSIF"
-	ELSE      TokenType = "ELSE"
-	UNLESS    TokenType = "UNLESS"
-	CASE      TokenType = "CASE"
-	WHEN      TokenType = "WHEN"
-	WHILE     TokenType = "WHILE"
-	FOR       TokenType = "FOR"
-	IN        TokenType = "IN"
-	BREAK     TokenType = "BREAK"
-	NEXT      TokenType = "NEXT"
-	RETURN    TokenType = "RETURN"
-	PANIC     TokenType = "PANIC"
-	RESCUE    TokenType = "RESCUE"
-	TRUE      TokenType = "TRUE"
-	FALSE     TokenType = "FALSE"
-	NIL       TokenType = "NIL"
-	AND       TokenType = "AND"
-	OR        TokenType = "OR"
-	NOT       TokenType = "NOT"
-	AS        TokenType = "AS"
-	DEFER     TokenType = "DEFER"
+	IMPORT     TokenType = "IMPORT"
+	DEF        TokenType = "DEF"
+	END        TokenType = "END"
+	IF         TokenType = "IF"
+	ELSIF      TokenType = "ELSIF"
+	ELSE       TokenType = "ELSE"
+	UNLESS     TokenType = "UNLESS"
+	CASE       TokenType = "CASE"
+	WHEN       TokenType = "WHEN"
+	WHILE      TokenType = "WHILE"
+	FOR        TokenType = "FOR"
+	IN         TokenType = "IN"
+	BREAK      TokenType = "BREAK"
+	NEXT       TokenType = "NEXT"
+	RETURN     TokenType = "RETURN"
+	PANIC      TokenType = "PANIC"
+	RESCUE     TokenType = "RESCUE"
+	TRUE       TokenType = "TRUE"
+	FALSE      TokenType = "FALSE"
+	NIL        TokenType = "NIL"
+	AND        TokenType = "AND"
+	OR         TokenType = "OR"
+	NOT        TokenType = "NOT"
+	AS         TokenType = "AS"
+	LET        TokenType = "LET"
+	DEFER      TokenType = "DEFER"
 	DO         TokenType = "DO"
 	CLASS      TokenType = "CLASS"
 	SELF       TokenType = "SELF"
@@ -111,31 +114,32 @@ type Token struct {
 }
 
 var keywords = map[string]TokenType{
-	"import":    IMPORT,
-	"def":       DEF,
-	"end":       END,
-	"if":        IF,
-	"elsif":     ELSIF,
-	"else":      ELSE,
-	"unless":    UNLESS,
-	"case":      CASE,
-	"when":      WHEN,
-	"while":     WHILE,
-	"for":       FOR,
-	"in":        IN,
-	"break":     BREAK,
-	"next":      NEXT,
-	"return":    RETURN,
-	"panic":     PANIC,
-	"rescue":    RESCUE,
-	"true":      TRUE,
-	"false":     FALSE,
-	"nil":       NIL,
-	"and":       AND,
-	"or":        OR,
-	"not":       NOT,
-	"as":        AS,
-	"defer":     DEFER,
+	"import":     IMPORT,
+	"def":        DEF,
+	"end":        END,
+	"if":         IF,
+	"elsif":      ELSIF,
+	"else":       ELSE,
+	"unless":     UNLESS,
+	"case":       CASE,
+	"when":       WHEN,
+	"while":      WHILE,
+	"for":        FOR,
+	"in":         IN,
+	"break":      BREAK,
+	"next":       NEXT,
+	"return":     RETURN,
+	"panic":      PANIC,
+	"rescue":     RESCUE,
+	"true":       TRUE,
+	"false":      FALSE,
+	"nil":        NIL,
+	"and":        AND,
+	"or":         OR,
+	"not":        NOT,
+	"as":         AS,
+	"let":        LET,
+	"defer":      DEFER,
 	"do":         DO,
 	"class":      CLASS,
 	"self":       SELF,

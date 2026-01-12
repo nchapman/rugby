@@ -229,7 +229,19 @@ func (l *Lexer) NextToken() token.Token {
 		}
 		tok = l.newToken(token.COLON, ":")
 	case '?':
-		tok = l.newToken(token.QUESTION, "?")
+		if l.peekChar() == '?' {
+			l.readChar()
+			tok = l.newToken(token.QUESTIONQUESTION, "??")
+		} else {
+			tok = l.newToken(token.QUESTION, "?")
+		}
+	case '&':
+		if l.peekChar() == '.' {
+			l.readChar()
+			tok = l.newToken(token.AMPDOT, "&.")
+		} else {
+			tok = l.newToken(token.ILLEGAL, string(l.ch))
+		}
 	case '=':
 		if l.peekChar() == '=' {
 			l.readChar()

@@ -189,6 +189,13 @@ type Generator struct {
 	currentReturnTypes []string          // return types of the current function/method
 	contexts           []loopContext     // stack of loop/block contexts
 	inMainFunc         bool              // true when generating code inside main() function
+	errors             []error           // collected errors during generation
+	tempVarCounter     int               // counter for generating unique temp variable names
+}
+
+// addError records an error during code generation
+func (g *Generator) addError(err error) {
+	g.errors = append(g.errors, err)
 }
 
 // returnsError checks if the current function returns error as its last type
@@ -274,6 +281,10 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 			if om, ok := optionalMethods[sel.Sel]; ok {
 				return om.resultType
 			}
+			// Check for predicate methods ending in ?
+			if strings.HasSuffix(sel.Sel, "?") {
+				return "Bool"
+			}
 		}
 	case *ast.SelectorExpr:
 		// Infer return type from method calls for chaining
@@ -284,6 +295,38 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 					return def.ReturnType
 				}
 			}
+		}
+		// Check for predicate methods ending in ?
+		if strings.HasSuffix(e.Sel, "?") {
+			return "Bool"
+		}
+	case *ast.BinaryExpr:
+		// Comparison operators return Bool
+		switch e.Op {
+		case "==", "!=", "<", ">", "<=", ">=":
+			return "Bool"
+		case "and", "or":
+			return "Bool"
+		case "+", "-", "*", "/", "%":
+			// Arithmetic operators return the type of operands
+			leftType := g.inferTypeFromExpr(e.Left)
+			if leftType == "Float" || g.inferTypeFromExpr(e.Right) == "Float" {
+				return "Float"
+			}
+			if leftType == "Int" {
+				return "Int"
+			}
+			if leftType == "String" && e.Op == "+" {
+				return "String"
+			}
+		}
+	case *ast.UnaryExpr:
+		if e.Op == "not" || e.Op == "!" {
+			return "Bool"
+		}
+		// Unary minus returns same type as operand
+		if e.Op == "-" {
+			return g.inferTypeFromExpr(e.Expr)
 		}
 	case *ast.IntLit:
 		return "Int"
@@ -309,6 +352,8 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		return "Array"
 	case *ast.MapLit:
 		return "Map"
+	case *ast.NilLit:
+		return "nil"
 	}
 	return "" // unknown
 }
@@ -442,6 +487,16 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 
 	out.WriteString(bodyCode)
 
+	// Check for errors collected during generation
+	if len(g.errors) > 0 {
+		// Combine all errors into one
+		var msgs []string
+		for _, e := range g.errors {
+			msgs = append(msgs, e.Error())
+		}
+		return "", fmt.Errorf("codegen errors:\n  %s", strings.Join(msgs, "\n  "))
+	}
+
 	// Format the output
 	source := out.String()
 	formatted, err := format.Source([]byte(source))
@@ -475,6 +530,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genOrAssignStmt(s)
 	case *ast.CompoundAssignStmt:
 		g.genCompoundAssignStmt(s)
+	case *ast.MultiAssignStmt:
+		g.genMultiAssignStmt(s)
 	case *ast.InstanceVarAssign:
 		g.genInstanceVarAssign(s)
 	case *ast.InstanceVarOrAssign:
@@ -996,6 +1053,44 @@ func (g *Generator) genCompoundAssignStmt(s *ast.CompoundAssignStmt) {
 	g.buf.WriteString("\n")
 }
 
+// genMultiAssignStmt generates code for tuple unpacking: val, ok = expr
+func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
+	g.writeIndent()
+
+	// Check if any names are new declarations
+	allDeclared := true
+	for _, name := range s.Names {
+		if !g.isDeclared(name) {
+			allDeclared = false
+			break
+		}
+	}
+
+	// Generate names
+	for i, name := range s.Names {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.buf.WriteString(name)
+	}
+
+	// Use := if any variable is new, = if all are already declared
+	if allDeclared {
+		g.buf.WriteString(" = ")
+	} else {
+		g.buf.WriteString(" := ")
+		// Mark new variables as declared
+		for _, name := range s.Names {
+			if !g.isDeclared(name) {
+				g.vars[name] = ""
+			}
+		}
+	}
+
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+}
+
 func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 	if g.currentClass == "" {
 		g.writeIndent()
@@ -1384,26 +1479,52 @@ func zeroValue(rubyType string) string {
 	}
 }
 
-// genCondition generates a condition expression, handling optional types.
-// For optional types: if x generates x.Valid (value types) or x != nil (reference types)
-func (g *Generator) genCondition(cond ast.Expression) {
-	// Check if condition is a simple identifier
-	if ident, ok := cond.(*ast.Ident); ok {
-		if varType, exists := g.vars[ident.Name]; exists && isOptionalType(varType) {
-			// Optional type: check != nil
-			g.buf.WriteString(ident.Name + " != nil")
-			return
+// genCondition generates a condition expression with strict Bool type checking.
+// Rugby requires conditions to be Bool type - no implicit truthiness.
+// Use 'if let x = expr' for optional unwrapping, or explicit checks like 'x != nil'.
+func (g *Generator) genCondition(cond ast.Expression) error {
+	condType := g.inferTypeFromExpr(cond)
+
+	// Allow Bool type explicitly
+	if condType == "Bool" {
+		g.genExpr(cond)
+		return nil
+	}
+
+	// Allow nil comparisons (err != nil, x == nil) - these return Bool
+	if binary, ok := cond.(*ast.BinaryExpr); ok {
+		if binary.Op == "==" || binary.Op == "!=" {
+			if _, isNil := binary.Right.(*ast.NilLit); isNil {
+				g.genExpr(cond)
+				return nil
+			}
+			if _, isNil := binary.Left.(*ast.NilLit); isNil {
+				g.genExpr(cond)
+				return nil
+			}
 		}
 	}
-	// Default: generate expression as-is
-	g.genExpr(cond)
+
+	// If type is unknown, generate as-is (may be external function returning bool)
+	if condType == "" {
+		g.genExpr(cond)
+		return nil
+	}
+
+	// Optional types require explicit unwrapping
+	if isOptionalType(condType) {
+		return fmt.Errorf("condition must be Bool, got %s (use 'if let x = ...' or 'x != nil' for optionals)", condType)
+	}
+
+	// Non-Bool types are errors
+	return fmt.Errorf("condition must be Bool, got %s", condType)
 }
 
 func (g *Generator) genIfStmt(s *ast.IfStmt) {
 	g.writeIndent()
 	g.buf.WriteString("if ")
 
-	// Handle assignment-in-condition pattern: if (n = s.to_i?)
+	// Handle assignment-in-condition pattern: if (n = s.to_i?) or if let n = s.to_i?()
 	// Generates: if n, ok := runtime.StringToInt(s); ok {
 	if s.AssignName != "" {
 		g.buf.WriteString(s.AssignName)
@@ -1415,9 +1536,16 @@ func (g *Generator) genIfStmt(s *ast.IfStmt) {
 	} else {
 		// For unless, negate the condition
 		if s.IsUnless {
-			g.buf.WriteString("!")
+			g.buf.WriteString("!(")
 		}
-		g.genCondition(s.Cond)
+		if err := g.genCondition(s.Cond); err != nil {
+			g.addError(fmt.Errorf("line %d: %w", s.Line, err))
+			// Generate a placeholder to keep the output somewhat valid
+			g.buf.WriteString("false")
+		}
+		if s.IsUnless {
+			g.buf.WriteString(")")
+		}
 		g.buf.WriteString(" {\n")
 	}
 
@@ -1430,7 +1558,10 @@ func (g *Generator) genIfStmt(s *ast.IfStmt) {
 	for _, elsif := range s.ElseIfs {
 		g.writeIndent()
 		g.buf.WriteString("} else if ")
-		g.genCondition(elsif.Cond)
+		if err := g.genCondition(elsif.Cond); err != nil {
+			g.addError(fmt.Errorf("line %d: %w", s.Line, err))
+			g.buf.WriteString("false")
+		}
 		g.buf.WriteString(" {\n")
 
 		g.indent++
@@ -1489,7 +1620,10 @@ func (g *Generator) genCaseStmt(s *ast.CaseStmt) {
 				if i > 0 {
 					g.buf.WriteString(" || ")
 				}
-				g.genCondition(val)
+				if err := g.genCondition(val); err != nil {
+					g.addError(err)
+					g.buf.WriteString("false")
+				}
 			}
 			g.buf.WriteString(":\n")
 		}
@@ -1520,7 +1654,10 @@ func (g *Generator) genCaseStmt(s *ast.CaseStmt) {
 func (g *Generator) genWhileStmt(s *ast.WhileStmt) {
 	g.writeIndent()
 	g.buf.WriteString("for ")
-	g.genCondition(s.Cond)
+	if err := g.genCondition(s.Cond); err != nil {
+		g.addError(fmt.Errorf("line %d: %w", s.Line, err))
+		g.buf.WriteString("false")
+	}
 	g.buf.WriteString(" {\n")
 
 	g.pushContext(ctxLoop)
@@ -1694,7 +1831,10 @@ func (g *Generator) genExprStmt(s *ast.ExprStmt) {
 		if s.IsUnless {
 			g.buf.WriteString("!(")
 		}
-		g.genCondition(s.Condition)
+		if err := g.genCondition(s.Condition); err != nil {
+			g.addError(err)
+			g.buf.WriteString("false")
+		}
 		if s.IsUnless {
 			g.buf.WriteString(")")
 		}
@@ -1721,7 +1861,10 @@ func (g *Generator) genBreakStmt(s *ast.BreakStmt) {
 		if s.IsUnless {
 			g.buf.WriteString("!(")
 		}
-		g.genCondition(s.Condition)
+		if err := g.genCondition(s.Condition); err != nil {
+			g.addError(err)
+			g.buf.WriteString("false")
+		}
 		if s.IsUnless {
 			g.buf.WriteString(")")
 		}
@@ -1771,7 +1914,10 @@ func (g *Generator) genNextStmt(s *ast.NextStmt) {
 		if s.IsUnless {
 			g.buf.WriteString("!(")
 		}
-		g.genCondition(s.Condition)
+		if err := g.genCondition(s.Condition); err != nil {
+			g.addError(err)
+			g.buf.WriteString("false")
+		}
 		if s.IsUnless {
 			g.buf.WriteString(")")
 		}
@@ -1821,7 +1967,10 @@ func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
 		if s.IsUnless {
 			g.buf.WriteString("!(")
 		}
-		g.genCondition(s.Condition)
+		if err := g.genCondition(s.Condition); err != nil {
+			g.addError(err)
+			g.buf.WriteString("false")
+		}
 		if s.IsUnless {
 			g.buf.WriteString(")")
 		}
@@ -1947,6 +2096,10 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genUnaryExpr(e)
 	case *ast.RangeLit:
 		g.genRangeLit(e)
+	case *ast.NilCoalesceExpr:
+		g.genNilCoalesceExpr(e)
+	case *ast.SafeNavExpr:
+		g.genSafeNavExpr(e)
 	}
 }
 
@@ -2046,6 +2199,97 @@ func isPrimitiveLiteral(e ast.Expression) bool {
 func (g *Generator) genUnaryExpr(e *ast.UnaryExpr) {
 	g.buf.WriteString(e.Op)
 	g.genExpr(e.Expr)
+}
+
+// genNilCoalesceExpr generates code for the ?? operator: x ?? default
+// Returns x if present, otherwise returns default.
+func (g *Generator) genNilCoalesceExpr(e *ast.NilCoalesceExpr) {
+	g.needsRuntime = true
+	leftType := g.inferTypeFromExpr(e.Left)
+
+	// Map optional types to their coalesce helper
+	switch leftType {
+	case "Int?":
+		g.buf.WriteString("runtime.CoalesceInt(")
+	case "Int64?":
+		g.buf.WriteString("runtime.CoalesceInt64(")
+	case "Float?":
+		g.buf.WriteString("runtime.CoalesceFloat(")
+	case "String?":
+		g.buf.WriteString("runtime.CoalesceString(")
+	case "Bool?":
+		g.buf.WriteString("runtime.CoalesceBool(")
+	default:
+		// For unknown or reference types, generate inline check
+		// func() T { v := x; if v != nil { return *v }; return default }()
+		// We capture x in a variable to avoid double evaluation
+		// Use unique variable name to handle nested expressions
+		varName := fmt.Sprintf("_nc%d", g.tempVarCounter)
+		g.tempVarCounter++
+		g.buf.WriteString("func() ")
+		// Try to infer the base type from the right side (the default)
+		rightType := g.inferTypeFromExpr(e.Right)
+		if rightType != "" {
+			g.buf.WriteString(mapType(rightType))
+		} else {
+			g.buf.WriteString("any")
+		}
+		g.buf.WriteString(" { ")
+		g.buf.WriteString(varName)
+		g.buf.WriteString(" := ")
+		g.genExpr(e.Left)
+		g.buf.WriteString("; if ")
+		g.buf.WriteString(varName)
+		g.buf.WriteString(" != nil { return *")
+		g.buf.WriteString(varName)
+		g.buf.WriteString(" }; return ")
+		g.genExpr(e.Right)
+		g.buf.WriteString(" }()")
+		return
+	}
+
+	g.genExpr(e.Left)
+	g.buf.WriteString(", ")
+	g.genExpr(e.Right)
+	g.buf.WriteString(")")
+}
+
+// genSafeNavExpr generates code for the &. operator: x&.method
+// Calls method only if x is present, returns optional.
+func (g *Generator) genSafeNavExpr(e *ast.SafeNavExpr) {
+	// Generate: func() any { v := x; if v != nil { return (*v).method }; return nil }()
+	// We capture x in a variable to avoid double evaluation
+	// Use unique variable name to handle nested/chained expressions
+	varName := fmt.Sprintf("_sn%d", g.tempVarCounter)
+	g.tempVarCounter++
+
+	g.buf.WriteString("func() any { ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.genExpr(e.Receiver)
+	g.buf.WriteString("; if ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" != nil { return ")
+
+	// Check if receiver is a pointer type that needs dereferencing
+	receiverType := g.inferTypeFromExpr(e.Receiver)
+	if isOptionalType(receiverType) {
+		g.buf.WriteString("(*")
+		g.buf.WriteString(varName)
+		g.buf.WriteString(").")
+	} else {
+		g.buf.WriteString(varName)
+		g.buf.WriteString(".")
+	}
+
+	// Convert selector to appropriate case
+	if g.isGoInterop(e.Receiver) {
+		g.buf.WriteString(snakeToPascal(e.Selector))
+	} else {
+		g.buf.WriteString(snakeToCamel(e.Selector))
+	}
+
+	g.buf.WriteString(" }; return nil }()")
 }
 
 func (g *Generator) genInterpolatedString(s *ast.InterpolatedString) {
@@ -2292,6 +2536,27 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			g.genExpr(call.Args[0])
 			g.buf.WriteString("); return v, ok }()")
 			return
+		}
+
+		// Check for methods on optional types (ok?, nil?, present?, absent?, unwrap!)
+		receiverType := g.inferTypeFromExpr(fn.X)
+		if isOptionalType(receiverType) {
+			switch fn.Sel {
+			case "ok?", "present?":
+				g.buf.WriteString("(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(" != nil)")
+				return
+			case "nil?", "absent?":
+				g.buf.WriteString("(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(" == nil)")
+				return
+			case "unwrap!":
+				g.buf.WriteString("*")
+				g.genExpr(fn.X)
+				return
+			}
 		}
 
 		// Check for range method calls when receiver is a RangeLit
@@ -2824,6 +3089,30 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 			g.buf.WriteString("runtime.RangeSize(")
 			g.genExpr(sel.X)
 			g.buf.WriteString(")")
+			return
+		}
+	}
+
+	// Check for methods on optional types (ok?, nil?, present?, absent?, unwrap!)
+	receiverType := g.inferTypeFromExpr(sel.X)
+	if isOptionalType(receiverType) {
+		switch sel.Sel {
+		case "ok?", "present?":
+			// opt.ok? → (opt != nil)
+			g.buf.WriteString("(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(" != nil)")
+			return
+		case "nil?", "absent?":
+			// opt.nil? → (opt == nil)
+			g.buf.WriteString("(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(" == nil)")
+			return
+		case "unwrap!":
+			// opt.unwrap! → *opt (panics if nil in Go)
+			g.buf.WriteString("*")
+			g.genExpr(sel.X)
 			return
 		}
 	}

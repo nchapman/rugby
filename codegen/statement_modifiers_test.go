@@ -90,7 +90,7 @@ unless x == 0
   puts("not zero")
 end`,
 			contains: []string{
-				"if !runtime.Equal(x, 0)",
+				"if !(runtime.Equal(x, 0))",
 				"runtime.Puts(\"not zero\")",
 			},
 		},
@@ -103,7 +103,7 @@ else
   puts("valid")
 end`,
 			contains: []string{
-				"if !valid",
+				"if !(valid)",
 				"runtime.Puts(\"invalid\")",
 				"} else {",
 				"runtime.Puts(\"valid\")",
