@@ -279,6 +279,34 @@ str[-2]   # "l" (second-to-last character)
 
 **Note:** Out-of-bounds indices will panic at runtime (matching Go semantics). For safe access, use the `first` and `last` methods which return optionals.
 
+#### Range Slicing
+
+Ruby-style range slicing extracts a portion of an array or string:
+
+```ruby
+arr = [0, 1, 2, 3, 4]
+arr[1..3]   # [1, 2, 3] (inclusive range, elements 1-3)
+arr[1...3]  # [1, 2] (exclusive range, elements 1-2)
+arr[0..-1]  # [0, 1, 2, 3, 4] (entire array, -1 is last)
+arr[-3..-1] # [2, 3, 4] (last 3 elements)
+
+str = "hello"
+str[1..3]   # "ell" (characters 1-3)
+str[0..-1]  # "hello" (entire string)
+```
+
+Range slicing supports:
+- Inclusive ranges (`..`): includes both start and end indices
+- Exclusive ranges (`...`): includes start but not end
+- Negative indices: count from end (-1 is last element)
+
+**Edge cases:**
+- Out-of-bounds ranges return an empty array/string
+- If start > end after index normalization, returns empty
+- End indices are clamped to the collection length
+
+Compiles to `runtime.Slice()` which handles negative indices and range semantics.
+
 #### Map Literals
 
 Rugby supports multiple syntaxes for map literals:

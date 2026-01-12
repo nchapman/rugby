@@ -631,6 +631,51 @@ end`
 	assertContains(t, output, `runtime.AtIndex(arr, i)`)
 }
 
+func TestGenerateRangeSliceInclusive(t *testing.T) {
+	input := `def main
+  x = arr[1..3]
+end`
+
+	output := compile(t, input)
+
+	// Range slicing uses runtime.Slice with inclusive range
+	assertContains(t, output, `runtime.Slice(arr, runtime.Range{Start: 1, End: 3, Exclusive: false})`)
+}
+
+func TestGenerateRangeSliceExclusive(t *testing.T) {
+	input := `def main
+  x = arr[1...4]
+end`
+
+	output := compile(t, input)
+
+	// Exclusive range (three dots)
+	assertContains(t, output, `runtime.Slice(arr, runtime.Range{Start: 1, End: 4, Exclusive: true})`)
+}
+
+func TestGenerateRangeSliceNegative(t *testing.T) {
+	input := `def main
+  x = arr[0..-1]
+end`
+
+	output := compile(t, input)
+
+	// Range with negative end index
+	assertContains(t, output, `runtime.Slice(arr, runtime.Range{Start: 0, End: -1, Exclusive: false})`)
+}
+
+func TestGenerateStringRangeSlice(t *testing.T) {
+	input := `def main
+  s = "hello"
+  x = s[1..3]
+end`
+
+	output := compile(t, input)
+
+	// String slicing also uses runtime.Slice
+	assertContains(t, output, `runtime.Slice(s, runtime.Range{Start: 1, End: 3, Exclusive: false})`)
+}
+
 func TestGenerateChainedArrayIndex(t *testing.T) {
 	input := `def main
   x = matrix[0][1]

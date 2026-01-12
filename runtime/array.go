@@ -646,3 +646,83 @@ func appendToSlice(sliceVal reflect.Value, value any) any {
 	newSlice := reflect.Append(sliceVal, valueVal)
 	return newSlice.Interface()
 }
+
+// Slice extracts a portion of a slice or string using a Range.
+// Supports negative indices (Ruby-style: -1 is last element).
+// For inclusive range (..): includes both start and end
+// For exclusive range (...): includes start but not end
+func Slice(collection any, r Range) any {
+	switch c := collection.(type) {
+	case []int:
+		return sliceGeneric(c, r)
+	case []string:
+		return sliceGeneric(c, r)
+	case []float64:
+		return sliceGeneric(c, r)
+	case []bool:
+		return sliceGeneric(c, r)
+	case []any:
+		return sliceGeneric(c, r)
+	case string:
+		return sliceString(c, r)
+	default:
+		// Reflection fallback for other slice types
+		val := reflect.ValueOf(collection)
+		if val.Kind() == reflect.Slice {
+			length := val.Len()
+			start, end := normalizeRangeIndices(r.Start, r.End, length, r.Exclusive)
+			if start >= length || start > end || start < 0 {
+				// Return empty slice of same type
+				return reflect.MakeSlice(val.Type(), 0, 0).Interface()
+			}
+			return val.Slice(start, end).Interface()
+		}
+		panic(fmt.Sprintf("Slice: expected slice or string, got %T", collection))
+	}
+}
+
+// sliceGeneric extracts a portion of a slice with negative index support.
+func sliceGeneric[T any](slice []T, r Range) []T {
+	length := len(slice)
+	start, end := normalizeRangeIndices(r.Start, r.End, length, r.Exclusive)
+	if start >= length || start > end || start < 0 {
+		return []T{}
+	}
+	return slice[start:end]
+}
+
+// sliceString extracts a portion of a string with negative index support.
+func sliceString(s string, r Range) string {
+	runes := []rune(s)
+	length := len(runes)
+	start, end := normalizeRangeIndices(r.Start, r.End, length, r.Exclusive)
+	if start >= length || start > end || start < 0 {
+		return ""
+	}
+	return string(runes[start:end])
+}
+
+// normalizeRangeIndices converts Ruby-style indices to Go slice indices.
+// Returns start and end for Go slicing (end is exclusive in Go).
+func normalizeRangeIndices(start, end, length int, exclusive bool) (int, int) {
+	// Handle negative indices
+	if start < 0 {
+		start = length + start
+	}
+	if end < 0 {
+		end = length + end
+	}
+
+	// For inclusive range, end should include the element
+	// Go slices are exclusive, so we add 1 to include the end element
+	if !exclusive {
+		end = end + 1
+	}
+
+	// Clamp end to length
+	if end > length {
+		end = length
+	}
+
+	return start, end
+}

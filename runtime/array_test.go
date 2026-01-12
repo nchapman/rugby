@@ -784,3 +784,107 @@ func TestShiftLeftChannel(t *testing.T) {
 		t.Errorf("Channel received %d; want 42", val)
 	}
 }
+
+func TestSliceInclusiveRange(t *testing.T) {
+	arr := []int{0, 1, 2, 3, 4}
+
+	// arr[1..3] should return [1, 2, 3]
+	result := Slice(arr, Range{Start: 1, End: 3, Exclusive: false}).([]int)
+	if len(result) != 3 || result[0] != 1 || result[1] != 2 || result[2] != 3 {
+		t.Errorf("Slice([0,1,2,3,4], 1..3) = %v; want [1,2,3]", result)
+	}
+}
+
+func TestSliceExclusiveRange(t *testing.T) {
+	arr := []int{0, 1, 2, 3, 4}
+
+	// arr[1...3] should return [1, 2] (exclusive end)
+	result := Slice(arr, Range{Start: 1, End: 3, Exclusive: true}).([]int)
+	if len(result) != 2 || result[0] != 1 || result[1] != 2 {
+		t.Errorf("Slice([0,1,2,3,4], 1...3) = %v; want [1,2]", result)
+	}
+}
+
+func TestSliceNegativeIndices(t *testing.T) {
+	arr := []int{0, 1, 2, 3, 4}
+
+	// arr[1..-2] should return [1, 2, 3] (index -2 is 3)
+	result := Slice(arr, Range{Start: 1, End: -2, Exclusive: false}).([]int)
+	if len(result) != 3 || result[0] != 1 || result[2] != 3 {
+		t.Errorf("Slice([0,1,2,3,4], 1..-2) = %v; want [1,2,3]", result)
+	}
+
+	// arr[-3..-1] should return [2, 3, 4]
+	result2 := Slice(arr, Range{Start: -3, End: -1, Exclusive: false}).([]int)
+	if len(result2) != 3 || result2[0] != 2 || result2[2] != 4 {
+		t.Errorf("Slice([0,1,2,3,4], -3..-1) = %v; want [2,3,4]", result2)
+	}
+}
+
+func TestSliceString(t *testing.T) {
+	str := "hello"
+
+	// str[1..3] should return "ell"
+	result := Slice(str, Range{Start: 1, End: 3, Exclusive: false}).(string)
+	if result != "ell" {
+		t.Errorf("Slice(\"hello\", 1..3) = %q; want \"ell\"", result)
+	}
+
+	// str[0..-1] should return "hello" (entire string)
+	result2 := Slice(str, Range{Start: 0, End: -1, Exclusive: false}).(string)
+	if result2 != "hello" {
+		t.Errorf("Slice(\"hello\", 0..-1) = %q; want \"hello\"", result2)
+	}
+}
+
+func TestSliceEmptyResult(t *testing.T) {
+	arr := []int{0, 1, 2, 3, 4}
+
+	// arr[3..1] should return [] (start > end after normalization)
+	result := Slice(arr, Range{Start: 3, End: 1, Exclusive: false}).([]int)
+	if len(result) != 0 {
+		t.Errorf("Slice([0,1,2,3,4], 3..1) = %v; want []", result)
+	}
+
+	// arr[10..20] should return [] (out of bounds)
+	result2 := Slice(arr, Range{Start: 10, End: 20, Exclusive: false}).([]int)
+	if len(result2) != 0 {
+		t.Errorf("Slice([0,1,2,3,4], 10..20) = %v; want []", result2)
+	}
+}
+
+func TestSliceNegativeOutOfBounds(t *testing.T) {
+	arr := []int{0, 1, 2}
+
+	// Start index -10 resolves to negative, should return empty slice
+	result := Slice(arr, Range{Start: -10, End: -1, Exclusive: false}).([]int)
+	if len(result) != 0 {
+		t.Errorf("Slice with out-of-bounds negative start = %v; want []", result)
+	}
+}
+
+func TestSliceEndBeyondLength(t *testing.T) {
+	arr := []int{0, 1, 2}
+
+	// arr[1..100] should return [1, 2] (end clamped to length)
+	result := Slice(arr, Range{Start: 1, End: 100, Exclusive: false}).([]int)
+	if len(result) != 2 || result[0] != 1 || result[1] != 2 {
+		t.Errorf("Slice([0,1,2], 1..100) = %v; want [1,2]", result)
+	}
+}
+
+func TestSliceUnicodeString(t *testing.T) {
+	str := "héllo" // Contains multi-byte character
+
+	// Should slice by rune, not byte
+	result := Slice(str, Range{Start: 0, End: 2, Exclusive: false}).(string)
+	if result != "hél" {
+		t.Errorf("Slice Unicode string = %q; want \"hél\"", result)
+	}
+
+	// Slice the accented e
+	result2 := Slice(str, Range{Start: 1, End: 1, Exclusive: false}).(string)
+	if result2 != "é" {
+		t.Errorf("Slice single Unicode char = %q; want \"é\"", result2)
+	}
+}

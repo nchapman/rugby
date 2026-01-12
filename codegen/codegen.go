@@ -2709,6 +2709,12 @@ func (g *Generator) genArrayLitWithSplat(arr *ast.ArrayLit) {
 }
 
 func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
+	// Check if the index is a range (slice operation)
+	if r, ok := idx.Index.(*ast.RangeLit); ok {
+		g.genRangeSlice(idx.Left, r)
+		return
+	}
+
 	// Check if we should use native Go indexing vs runtime.AtIndex
 	// Use native indexing for:
 	// - Non-negative integer literals (arr[0], arr[1])
@@ -2732,6 +2738,24 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 	g.buf.WriteString(", ")
 	g.genExpr(idx.Index)
 	g.buf.WriteString(")")
+}
+
+// genRangeSlice generates code for slicing with a range: arr[1..3] or arr[0..-1]
+func (g *Generator) genRangeSlice(collection ast.Expression, r *ast.RangeLit) {
+	g.needsRuntime = true
+	g.buf.WriteString("runtime.Slice(")
+	g.genExpr(collection)
+	g.buf.WriteString(", runtime.Range{Start: ")
+	g.genExpr(r.Start)
+	g.buf.WriteString(", End: ")
+	g.genExpr(r.End)
+	g.buf.WriteString(", Exclusive: ")
+	if r.Exclusive {
+		g.buf.WriteString("true")
+	} else {
+		g.buf.WriteString("false")
+	}
+	g.buf.WriteString("})")
 }
 
 // shouldUseNativeIndex returns true if the index expression should use native Go indexing.
