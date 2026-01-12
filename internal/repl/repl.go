@@ -506,8 +506,8 @@ func (m *Model) eval(input string, ctx evalContext) evalResult {
 
 go 1.25
 
-require %s v0.1.0
-`, builder.RuntimeModule)
+require %s %s
+`, builder.RuntimeModule, builder.RuntimeVersion)
 
 	// In dev mode (running from rugby source), add replace directive
 	if inRepo, repoPath := builder.IsInRugbyRepo(); inRepo {

@@ -229,6 +229,9 @@ func (b *Builder) formatParseErrors(file string, errors []string) error {
 // RuntimeModule is the Go module that contains the Rugby runtime.
 const RuntimeModule = "github.com/nchapman/rugby"
 
+// RuntimeVersion is the version of the runtime to require in generated go.mod files.
+const RuntimeVersion = "v0.1.1"
+
 // IsInRugbyRepo checks if we're running from within the rugby repository.
 // Returns (true, repoPath) if we're in the repo, (false, "") otherwise.
 // This enables local development by auto-injecting a replace directive.
@@ -351,8 +354,8 @@ func (b *Builder) generateGoMod() string {
 
 go 1.25
 
-require %s v0.1.0
-`, RuntimeModule)
+require %s %s
+`, RuntimeModule, RuntimeVersion)
 		// Auto-detect local development and inject replace directive
 		if inRepo, repoPath := IsInRugbyRepo(); inRepo {
 			result += fmt.Sprintf("\nreplace %s => %s\n", RuntimeModule, repoPath)
@@ -382,7 +385,7 @@ require %s v0.1.0
 		if inRequireBlock && trimmed == ")" {
 			// Inject runtime before closing the require block
 			if !hasRuntimeDep {
-				out.WriteString(fmt.Sprintf("\t%s v0.1.0\n", RuntimeModule))
+				out.WriteString(fmt.Sprintf("\t%s %s\n", RuntimeModule, RuntimeVersion))
 			}
 			inRequireBlock = false
 		}
@@ -395,12 +398,12 @@ require %s v0.1.0
 
 	// If no require block exists, add one with the runtime
 	if !hasRuntimeDep && !strings.Contains(result, "require") {
-		result += fmt.Sprintf("\nrequire %s v0.1.0\n", RuntimeModule)
+		result += fmt.Sprintf("\nrequire %s %s\n", RuntimeModule, RuntimeVersion)
 	}
 
 	// Handle single-line require statement (require foo v1.0.0)
 	if !hasRuntimeDep && strings.Contains(result, "require ") && !strings.Contains(result, "require (") {
-		result += fmt.Sprintf("require %s v0.1.0\n", RuntimeModule)
+		result += fmt.Sprintf("require %s %s\n", RuntimeModule, RuntimeVersion)
 	}
 
 	// Auto-detect local development and inject replace directive
