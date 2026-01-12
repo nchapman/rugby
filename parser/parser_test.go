@@ -252,6 +252,76 @@ end`
 	}
 }
 
+func TestPostfixWhile(t *testing.T) {
+	input := `def main
+  puts x while x > 0
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	// Postfix while should be parsed as a WhileStmt
+	whileStmt, ok := fn.Body[0].(*ast.WhileStmt)
+	if !ok {
+		t.Fatalf("expected WhileStmt, got %T", fn.Body[0])
+	}
+
+	if whileStmt.Cond == nil {
+		t.Fatal("expected condition, got nil")
+	}
+
+	if len(whileStmt.Body) != 1 {
+		t.Errorf("expected 1 body statement, got %d", len(whileStmt.Body))
+	}
+
+	// The body should contain the original expression statement
+	_, ok = whileStmt.Body[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt in body, got %T", whileStmt.Body[0])
+	}
+}
+
+func TestPostfixUntil(t *testing.T) {
+	input := `def main
+  process(item) until done
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	// Postfix until should be parsed as an UntilStmt
+	untilStmt, ok := fn.Body[0].(*ast.UntilStmt)
+	if !ok {
+		t.Fatalf("expected UntilStmt, got %T", fn.Body[0])
+	}
+
+	if untilStmt.Cond == nil {
+		t.Fatal("expected condition, got nil")
+	}
+
+	if len(untilStmt.Body) != 1 {
+		t.Errorf("expected 1 body statement, got %d", len(untilStmt.Body))
+	}
+
+	// The body should contain the original expression statement
+	_, ok = untilStmt.Body[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt in body, got %T", untilStmt.Body[0])
+	}
+}
+
 func TestFunctionCall(t *testing.T) {
 	input := `def main
   puts("hello")

@@ -2007,6 +2007,13 @@ func (g *Generator) genExprStmt(s *ast.ExprStmt) {
 		return
 	}
 
+	// Convert SelectorExpr to CallExpr when used as statement (Ruby-style method call)
+	// e.g., "obj.foo" as statement becomes "obj.foo()"
+	expr := s.Expr
+	if sel, ok := expr.(*ast.SelectorExpr); ok {
+		expr = &ast.CallExpr{Func: sel, Args: nil}
+	}
+
 	if s.Condition != nil {
 		// Wrap in if/unless block
 		g.writeIndent()
@@ -2024,14 +2031,14 @@ func (g *Generator) genExprStmt(s *ast.ExprStmt) {
 		g.buf.WriteString(" {\n")
 		g.indent++
 		g.writeIndent()
-		g.genExpr(s.Expr)
+		g.genExpr(expr)
 		g.buf.WriteString("\n")
 		g.indent--
 		g.writeIndent()
 		g.buf.WriteString("}\n")
 	} else {
 		g.writeIndent()
-		g.genExpr(s.Expr)
+		g.genExpr(expr)
 		g.buf.WriteString("\n")
 	}
 }

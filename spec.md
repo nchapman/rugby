@@ -899,6 +899,57 @@ if !valid() {
 }
 ```
 
+### 5.6 Loop Modifiers
+
+Rugby supports postfix `while` and `until` modifiers for concise loop expressions.
+
+**Syntax:**
+```ruby
+<statement> while <condition>
+<statement> until <condition>
+```
+
+**Examples:**
+```ruby
+puts items.shift while items.any?
+process(queue.pop) until queue.empty?
+retry_count += 1 until connected
+```
+
+**Semantics:**
+* Postfix `while` executes the statement repeatedly while condition is true
+* Postfix `until` executes the statement repeatedly while condition is false
+* Unlike `if`/`unless` modifiers which execute once, these create loops
+
+**Limitations:**
+* Loop modifiers cannot be combined with `if`/`unless` modifiers. Use block form instead:
+```ruby
+if flag
+  puts x while x > 0
+end
+```
+
+**Compilation:**
+```ruby
+puts x while x > 0
+```
+Compiles to:
+```go
+for x > 0 {
+    runtime.Puts(x)
+}
+```
+
+```ruby
+process() until done
+```
+Compiles to:
+```go
+for !done {
+    process()
+}
+```
+
 ---
 
 ## 6. Functions

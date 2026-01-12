@@ -79,6 +79,12 @@ func (p *Parser) parseStatement() ast.Statement {
 			expr = p.parseBlockCall(expr)
 		}
 		p.nextToken() // move past expression
+
+		// Check for loop modifier (e.g., "puts x while cond" or "puts x until done")
+		if loopStmt := p.parseLoopModifier(&ast.ExprStmt{Expr: expr, Line: line}); loopStmt != nil {
+			return loopStmt
+		}
+
 		// Check for statement modifier (e.g., "puts x unless valid?")
 		cond, isUnless := p.parseStatementModifier()
 		p.skipNewlines()
@@ -598,6 +604,31 @@ func (p *Parser) parseStatementModifier() (ast.Expression, bool) {
 		return cond, isUnless
 	}
 	return nil, false
+}
+
+// parseLoopModifier checks for trailing while/until modifiers and transforms
+// the statement into a WhileStmt or UntilStmt with the original statement as
+// the loop body. Returns nil if no loop modifier is present.
+// e.g., "puts x while cond" → WhileStmt { Cond: cond, Body: [ExprStmt{puts x}] }
+// Note: Loop modifiers cannot be combined with if/unless modifiers.
+func (p *Parser) parseLoopModifier(stmt ast.Statement) ast.Statement {
+	if p.curTokenIs(token.WHILE) {
+		line := p.curToken.Line
+		p.nextToken() // consume 'while'
+		cond := p.parseExpression(lowest)
+		p.nextToken() // move past condition
+		p.skipNewlines()
+		return &ast.WhileStmt{Cond: cond, Body: []ast.Statement{stmt}, Line: line}
+	}
+	if p.curTokenIs(token.UNTIL) {
+		line := p.curToken.Line
+		p.nextToken() // consume 'until'
+		cond := p.parseExpression(lowest)
+		p.nextToken() // move past condition
+		p.skipNewlines()
+		return &ast.UntilStmt{Cond: cond, Body: []ast.Statement{stmt}, Line: line}
+	}
+	return nil
 }
 
 func (p *Parser) parseBreakStmt() *ast.BreakStmt {

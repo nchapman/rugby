@@ -1,0 +1,1 @@
+puts "Hello, command syntax\!"

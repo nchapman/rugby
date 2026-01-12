@@ -132,6 +132,54 @@ end`
 	assertContains(t, output, `break`)
 }
 
+func TestGeneratePostfixWhile(t *testing.T) {
+	input := `def main
+  puts x while x > 0
+end`
+
+	output := compile(t, input)
+
+	// Postfix while compiles to a regular while loop
+	assertContains(t, output, `for x > 0 {`)
+	assertContains(t, output, `runtime.Puts(x)`)
+}
+
+func TestGeneratePostfixUntil(t *testing.T) {
+	input := `def main
+  process() until done
+end`
+
+	output := compile(t, input)
+
+	// Postfix until compiles to for !condition
+	assertContains(t, output, `for !done {`)
+	assertContains(t, output, `process()`)
+}
+
+func TestGeneratePostfixWhileMethodChain(t *testing.T) {
+	input := `def main
+  obj.foo.bar while cond
+end`
+
+	output := compile(t, input)
+
+	// Selector expressions as statements become method calls
+	assertContains(t, output, `for cond {`)
+	assertContains(t, output, `obj.foo.bar()`)
+}
+
+func TestGeneratePostfixWhileCompoundCondition(t *testing.T) {
+	input := `def main
+  puts x while x > 0 and y < 10
+end`
+
+	output := compile(t, input)
+
+	// Compound conditions are parsed correctly
+	assertContains(t, output, `for (x > 0) && (y < 10) {`)
+	assertContains(t, output, `runtime.Puts(x)`)
+}
+
 func TestGenerateComparison(t *testing.T) {
 	input := `def main
   x = 5 == 5
@@ -144,6 +192,19 @@ end`
 	assertContains(t, output, `x := (5 == 5)`)
 	assertContains(t, output, `y := (3 != 4)`)
 	assertContains(t, output, `((1 < 2) && (3 > 2))`)
+}
+
+func TestGenerateSelectorAsStatement(t *testing.T) {
+	input := `def main
+  obj.foo
+  obj.bar.baz
+end`
+
+	output := compile(t, input)
+
+	// Selector expressions as statements become method calls (Ruby behavior)
+	assertContains(t, output, `obj.foo()`)
+	assertContains(t, output, `obj.bar.baz()`)
 }
 
 func TestGenerateBoolean(t *testing.T) {
