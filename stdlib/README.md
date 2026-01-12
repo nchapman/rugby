@@ -7,6 +7,7 @@ This directory contains Rugby's standard library packages. These provide Ruby-li
 | Package | Description | Import |
 |---------|-------------|--------|
 | [http](./http/) | HTTP client for web requests | `import rugby/http` |
+| [http_server](./http_server/) | HTTP server for web apps and APIs | `import rugby/http_server` |
 | [json](./json/) | JSON parsing and generation | `import rugby/json` |
 | [file](./file/) | File I/O operations | `import rugby/file` |
 | [env](./env/) | Environment variable access | `import rugby/env` |
