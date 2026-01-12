@@ -198,7 +198,7 @@ func TestRawValid(t *testing.T) {
 		input string
 		want  bool
 	}{
-		{"aGVsbG8", true},  // "hello" without padding
+		{"aGVsbG8", true},   // "hello" without padding
 		{"aGVsbG8=", false}, // With padding (invalid for raw)
 		{"!!!", false},
 	}
@@ -231,7 +231,7 @@ func TestRawURLValid(t *testing.T) {
 
 func TestRoundTrip(t *testing.T) {
 	// Test various lengths to exercise padding
-	for length := 0; length < 10; length++ {
+	for length := range 10 {
 		input := make([]byte, length)
 		for i := range input {
 			input[i] = byte(i)

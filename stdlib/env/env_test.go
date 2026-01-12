@@ -2,6 +2,7 @@ package env
 
 import (
 	"os"
+	"slices"
 	"testing"
 )
 
@@ -142,14 +143,7 @@ func TestKeys(t *testing.T) {
 	}
 
 	keys := Keys()
-	found := false
-	for _, k := range keys {
-		if k == key {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(keys, key) {
 		t.Errorf("Keys() does not contain %q", key)
 	}
 }

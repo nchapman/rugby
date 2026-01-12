@@ -312,9 +312,9 @@ func SleepSeconds(n float64) {
 
 // Common layout constants for convenience.
 const (
-	RFC3339Layout = time.RFC3339
-	RFC822Layout  = time.RFC822
-	DateLayout    = "2006-01-02"
-	TimeLayout    = "15:04:05"
+	RFC3339Layout  = time.RFC3339
+	RFC822Layout   = time.RFC822
+	DateLayout     = "2006-01-02"
+	TimeLayout     = "15:04:05"
 	DateTimeLayout = "2006-01-02 15:04:05"
 )
