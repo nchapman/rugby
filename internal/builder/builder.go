@@ -230,7 +230,7 @@ func (b *Builder) formatParseErrors(file string, errors []string) error {
 const RuntimeModule = "github.com/nchapman/rugby"
 
 // RuntimeVersion is the version of the runtime to require in generated go.mod files.
-const RuntimeVersion = "v0.1.1"
+const RuntimeVersion = "v0.2.0"
 
 // IsInRugbyRepo checks if we're running from within the rugby repository.
 // Returns (true, repoPath) if we're in the repo, (false, "") otherwise.
