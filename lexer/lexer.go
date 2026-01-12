@@ -311,15 +311,10 @@ func (l *Lexer) readIdentifier() string {
 	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
 		l.readChar()
 	}
-	// Ruby-style method suffixes: ? for predicates, ! for mutating methods
-	switch l.ch {
-	case '?':
+	// Ruby-style ? suffix for predicate methods (e.g., empty?, valid?)
+	// Note: ! is NOT included - it's reserved for the error unwrap operator
+	if l.ch == '?' {
 		l.readChar()
-	case '!':
-		// Only consume ! if it's NOT followed by = (which would make it !=)
-		if l.peekChar() != '=' {
-			l.readChar()
-		}
 	}
 	return l.input[pos:l.pos]
 }

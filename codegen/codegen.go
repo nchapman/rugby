@@ -2834,7 +2834,7 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			return
 		}
 
-		// Check for methods on optional types (ok?, nil?, present?, absent?, unwrap!)
+		// Check for methods on optional types (ok?, nil?, present?, absent?, unwrap)
 		receiverType := g.inferTypeFromExpr(fn.X)
 		if isOptionalType(receiverType) {
 			switch fn.Sel {
@@ -2848,7 +2848,7 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				g.genExpr(fn.X)
 				g.buf.WriteString(" == nil)")
 				return
-			case "unwrap!":
+			case "unwrap":
 				g.buf.WriteString("*")
 				g.genExpr(fn.X)
 				return
@@ -3465,7 +3465,7 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 		}
 	}
 
-	// Check for methods on optional types (ok?, nil?, present?, absent?, unwrap!)
+	// Check for methods on optional types (ok?, nil?, present?, absent?, unwrap)
 	receiverType := g.inferTypeFromExpr(sel.X)
 	if isOptionalType(receiverType) {
 		switch sel.Sel {
@@ -3481,8 +3481,8 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 			g.genExpr(sel.X)
 			g.buf.WriteString(" == nil)")
 			return
-		case "unwrap!":
-			// opt.unwrap! → *opt (panics if nil in Go)
+		case "unwrap":
+			// opt.unwrap → *opt (panics if nil in Go)
 			g.buf.WriteString("*")
 			g.genExpr(sel.X)
 			return
@@ -3680,15 +3680,14 @@ func receiverName(className string) string {
 // snakeToCamel converts snake_case to camelCase (lowercase first letter)
 // Used for private method names in Rugby classes
 // Examples: read_all -> readAll, do_something -> doSomething
-// Also strips Ruby-style suffixes: inc! -> inc, empty? -> empty
+// Also strips Ruby-style ? suffix: empty? -> empty
 // Non-snake_case identifiers pass through as-is to support Go interop on variables
 func snakeToCamel(s string) string {
 	if s == "" {
 		return s
 	}
 
-	// Strip Ruby-style suffixes (! for mutation, ? for predicates)
-	s = strings.TrimSuffix(s, "!")
+	// Strip Ruby-style ? suffix for predicate methods
 	s = strings.TrimSuffix(s, "?")
 
 	// If no underscore, pass through as-is (preserves Go PascalCase on variables)
@@ -3894,8 +3893,7 @@ func snakeToCamelWithAcronyms(s string) string {
 		return s
 	}
 
-	// Strip Ruby-style suffixes (! for mutation, ? for predicates)
-	s = strings.TrimSuffix(s, "!")
+	// Strip Ruby-style ? suffix for predicate methods
 	s = strings.TrimSuffix(s, "?")
 
 	// If no underscore, return as-is (already camelCase or single word)

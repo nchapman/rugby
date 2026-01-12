@@ -504,7 +504,7 @@ type FieldDecl struct {
 
 // MethodDecl represents a method definition within a class
 type MethodDecl struct {
-	Name        string        // method name (may end with ! for pointer receiver)
+	Name        string        // method name (may end with ? for predicates)
 	Params      []*Param      // parameters
 	ReturnTypes []string      // return types
 	Body        []Statement   // method body

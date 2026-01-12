@@ -90,7 +90,7 @@ Legend:
 #### 4.4.2 Optional Methods
 - [x] `ok?` / `present?` returns Bool
 - [x] `nil?` / `absent?` returns Bool
-- [x] `unwrap!` returns T, panics if absent
+- [x] `unwrap` returns T, panics if absent
 
 #### 4.4.3 The `if let` Pattern
 - [x] `if let user = find_user(id)` unwraps optional
@@ -240,7 +240,7 @@ Legend:
 - [x] `obj.as(Interface)` returns `Interface?`
 - [x] `if let w = obj.as(Writer)`
 - [x] `obj.as(Type) ?? default`
-- [x] `obj.as(Type).unwrap!`
+- [x] `obj.as(Type).unwrap`
 
 ## 10. Visibility & Naming
 

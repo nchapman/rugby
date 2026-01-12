@@ -397,7 +397,7 @@ For more complex operations, optionals provide methods:
 |--------|---------|-------------|
 | `ok?` / `present?` | `Bool` | Is value present? |
 | `nil?` / `absent?` | `Bool` | Is value absent? |
-| `unwrap!` | `T` | Unwrap, panic if absent |
+| `unwrap` | `T` | Unwrap, panic if absent |
 | `map { \|x\| expr }` | `R?` | Transform if present |
 | `flat_map { \|x\| expr }` | `R?` | Chain optionals (expr returns `R?`) |
 | `each { \|x\| ... }` | `nil` | Execute block if present |
@@ -416,7 +416,7 @@ city = user.flat_map { |u| u.address }.flat_map { |a| a.city }
 user.each { |u| log.info("Found: #{u.name}") }
 
 # Unwrap or panic (use sparingly)
-value = required_field.unwrap!
+value = required_field.unwrap
 ```
 
 #### 4.4.3 The `if let` Pattern
@@ -459,7 +459,7 @@ if ok {
 }
 ```
 
-This mirrors Go's comma-ok idiom and avoids needing `.unwrap!` after checking.
+This mirrors Go's comma-ok idiom and avoids needing `.unwrap` after checking.
 
 #### 4.4.5 Choosing a Pattern
 
@@ -469,7 +469,7 @@ This mirrors Go's comma-ok idiom and avoids needing `.unwrap!` after checking.
 | `expr&.method` | Safe navigation through optionals |
 | `if let u = expr` | Conditional use with scoped binding |
 | `val, ok = expr` | When you need the boolean separately |
-| `expr.unwrap!` | When absence is a bug (will panic) |
+| `expr.unwrap` | When absence is a bug (will panic) |
 | `expr.map { }` | Complex transformations |
 
 ### 4.5 The `nil` Keyword
@@ -640,7 +640,7 @@ end
 w = obj.as(Writer) ?? fallback_writer
 
 # Or unwrap (panics if wrong type)
-w = obj.as(Writer).unwrap!
+w = obj.as(Writer).unwrap
 ```
 
 **Unless:**
@@ -1216,7 +1216,7 @@ end
 Rugby provides safe mechanisms to work with interfaces at runtime.
 
 *   **`obj.is_a?(Interface)`**: Returns `Bool`. Compiles to Go type assertion `_, ok := obj.(Interface)`.
-*   **`obj.as(Interface)`**: Returns `Interface?` (optional). Use with `if let`, `??`, or `.unwrap!`.
+*   **`obj.as(Interface)`**: Returns `Interface?` (optional). Use with `if let`, `??`, or `.unwrap`.
 
 ```ruby
 # Check type (predicate)
@@ -1233,7 +1233,7 @@ end
 w = obj.as(Writer) ?? default_writer
 
 # Cast with unwrap (panics if wrong type)
-w = obj.as(Writer).unwrap!
+w = obj.as(Writer).unwrap
 ```
 
 **Lowering:**
@@ -1496,14 +1496,14 @@ runtime/
 * `length` / `size` → `len(arr)` (inlined)
 * `empty?` → `len(arr) == 0` (inlined)
 
-**Mutation:**
-* `reverse!` → `runtime.Reverse(arr)` (in-place)
-* `sort!` → `runtime.Sort(arr)` (in-place, requires `Ordered`)
-* `sort_by! { |x| }` → `runtime.SortBy(arr, fn)`
+**Mutation (in-place):**
+* `reverse` → `runtime.Reverse(arr)` (in-place)
+* `sort` → `runtime.Sort(arr)` (in-place, requires `Ordered`)
+* `sort_by { |x| }` → `runtime.SortBy(arr, fn)` (in-place)
 
-**Non-mutating variants:**
-* `reverse` → `runtime.Reversed(arr)` → new slice
-* `sort` → `runtime.Sorted(arr)` → new slice
+**Non-mutating (returns copy):**
+* `reversed` → `runtime.Reversed(arr)` → new slice
+* `sorted` → `runtime.Sorted(arr)` → new slice
 
 ### 12.4 Map methods (`Map[K, V]`)
 
@@ -2133,7 +2133,7 @@ end
 
 ### 15.3 Postfix Bang Operator (`!`)
 
-Rugby provides a postfix `!` operator for concise error propagation. This is inspired by Ruby's "bang means strict/dangerous" convention, but the semantics follow Go's early-return pattern.
+Rugby provides a postfix `!` operator for concise error propagation, similar to Rust's `?` operator. It unwraps the result or propagates the error to the caller.
 
 #### 15.3.1 Syntax
 
@@ -2150,22 +2150,30 @@ os.mkdir_all(dir)!
 
 #### 15.3.2 Valid Operands
 
-Postfix `!` is valid only on **call expressions** with explicit parentheses, whose return type includes a trailing `error`:
+Postfix `!` is valid on expressions whose return type includes a trailing `error`:
 
 * `error`
 * `(T, error)`
 * `(A, B, ..., error)`
 
-**`await` expressions:** `await(expr)!` is valid when the task returns `(T, error)`. The `await` keyword with parentheses is treated as a call-like expression for this purpose.
+**Accepted expression forms:**
+
+* **Call expressions**: `call()!`, `obj.method(arg)!`
+* **Selector expressions**: `obj.method!` (equivalent to `obj.method()!`)
+* **Identifiers**: `func_name!` (equivalent to `func_name()!`)
+* **`await` expressions**: `await(expr)!` when the task returns `(T, error)`
+
+The latter two are syntactic sugar that convert to zero-argument calls.
 
 ```ruby
-data = await(task)!  # valid: propagate error from task
+data = os.read_file(path)!  # explicit call
+data = resp.json!           # shorthand for resp.json()!
+data = await(task)!         # await with error propagation
 ```
 
 **Compile-time errors:**
-* Using `!` on a non-call expression (e.g., `x!` where `x` is a variable)
+* Using `!` on a non-callable expression (e.g., `42!` or `"string"!`)
 * Using `!` on a call that does not return `error`
-* Using `!` without parentheses (e.g., `f!` is parsed as a method name, not `f()!`)
 * Using `!` on `await expr` without parentheses (use `await(expr)!`)
 
 #### 15.3.3 Enclosing Function Requirement

@@ -356,16 +356,13 @@ func TestSnakeToCamelConversion(t *testing.T) {
 		{"new_request", "newRequest"},
 		{"read_file", "readFile"},
 		{"http_server_error", "httpServerError"},
-		{"do_something!", "doSomething"},
 		{"is_empty?", "isEmpty"},
 		// Non-snake_case passes through as-is (supports Go interop on variables)
 		{"close", "close"},
 		{"get", "get"},
 		{"Close", "Close"},
 		{"Body", "Body"},
-		// Ruby-style suffixes stripped even without underscore
-		{"inc!", "inc"},
-		{"save!", "save"},
+		// Ruby-style ? suffix stripped even without underscore
 		{"empty?", "empty"},
 		{"valid?", "valid"},
 	}
@@ -3429,7 +3426,7 @@ end`
 
 func TestOptionalMethodUnwrap(t *testing.T) {
 	input := `def get_value(opt : Int?) -> Int
-  return opt.unwrap!
+  return opt.unwrap
 end
 
 def main

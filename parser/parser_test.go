@@ -788,8 +788,7 @@ end`
 }
 
 func TestBangExpressionOnNonCall(t *testing.T) {
-	// Note: `x!` parses as identifier "x!" (valid method name)
-	// We test with a literal followed by ! to trigger the error
+	// Test that ! on a literal (not a call/selector/ident) produces an error
 	input := `def main
   y = 42!
 end`
@@ -798,9 +797,95 @@ end`
 	p := New(l)
 	p.ParseProgram()
 
-	// Should have an error because ! can only follow a call expression
+	// Should have an error because ! can only follow a call, selector, or identifier
 	if len(p.Errors()) == 0 {
 		t.Fatal("expected parse error for '!' on non-call expression (literal)")
+	}
+}
+
+func TestBangExpressionOnSelector(t *testing.T) {
+	// Test that ! works on selector expressions: resp.json! → resp.json()!
+	input := `def main
+  data = resp.json!
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	assignStmt, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
+
+	bangExpr, ok := assignStmt.Value.(*ast.BangExpr)
+	if !ok {
+		t.Fatalf("expected BangExpr as value, got %T", assignStmt.Value)
+	}
+
+	// The selector should have been converted to a CallExpr
+	callExpr, ok := bangExpr.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr inside BangExpr, got %T", bangExpr.Expr)
+	}
+
+	// The function should be a SelectorExpr
+	selExpr, ok := callExpr.Func.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected SelectorExpr as func, got %T", callExpr.Func)
+	}
+
+	if selExpr.Sel != "json" {
+		t.Errorf("expected selector 'json', got %q", selExpr.Sel)
+	}
+}
+
+func TestBangExpressionOnIdent(t *testing.T) {
+	// Test that ! works on identifiers: foo! → foo()!
+	input := `def main
+  result = some_func!
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+
+	assignStmt, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
+
+	bangExpr, ok := assignStmt.Value.(*ast.BangExpr)
+	if !ok {
+		t.Fatalf("expected BangExpr as value, got %T", assignStmt.Value)
+	}
+
+	// The identifier should have been converted to a CallExpr
+	callExpr, ok := bangExpr.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr inside BangExpr, got %T", bangExpr.Expr)
+	}
+
+	// The function should be an Ident
+	ident, ok := callExpr.Func.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident as func, got %T", callExpr.Func)
+	}
+
+	if ident.Name != "some_func" {
+		t.Errorf("expected function name 'some_func', got %q", ident.Name)
 	}
 }
 

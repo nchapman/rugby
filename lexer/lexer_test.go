@@ -1238,9 +1238,9 @@ func TestSpaceBefore(t *testing.T) {
 			want:  []bool{false, true, true, false}, // x = - 1
 		},
 		{
-			name:  "bang method name",
+			name:  "bang operator",
 			input: "foo!",
-			want:  []bool{false}, // foo! is a single identifier
+			want:  []bool{false, false}, // foo ! (two tokens)
 		},
 		{
 			name:  "bang with space",

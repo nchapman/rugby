@@ -88,8 +88,9 @@ end`
 	}
 }
 
-func TestBangMethodEdgeCase(t *testing.T) {
-	// save! != y
+func TestBangOperatorWithComparison(t *testing.T) {
+	// save! != y → (save()!) != y
+	// The ! is now the error unwrap operator, not part of the method name
 	input := `def main
   save! != y
 end`
@@ -111,13 +112,21 @@ end`
 		t.Fatalf("expected BinaryExpr, got %T", stmt.Expr)
 	}
 
-	// Left side should be Ident(save!)
-	ident, ok := binExpr.Left.(*ast.Ident)
+	// Left side should be BangExpr(CallExpr(Ident("save")))
+	bangExpr, ok := binExpr.Left.(*ast.BangExpr)
 	if !ok {
-		t.Fatalf("expected Ident, got %T", binExpr.Left)
+		t.Fatalf("expected BangExpr, got %T", binExpr.Left)
 	}
-	if ident.Name != "save!" {
-		t.Errorf("expected ident name 'save!', got %q", ident.Name)
+	callExpr, ok := bangExpr.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr inside BangExpr, got %T", bangExpr.Expr)
+	}
+	ident, ok := callExpr.Func.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident, got %T", callExpr.Func)
+	}
+	if ident.Name != "save" {
+		t.Errorf("expected ident name 'save', got %q", ident.Name)
 	}
 
 	if binExpr.Op != "!=" {

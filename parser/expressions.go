@@ -197,28 +197,49 @@ func (p *Parser) parsePrefixExpr() ast.Expression {
 	return &ast.UnaryExpr{Op: op, Expr: expr}
 }
 
-// parseBangExpr parses postfix error propagation: call()!
+// parseBangExpr parses postfix error propagation: call()! or selector!
+// For selector/ident expressions (like resp.json! or foo!), converts to a zero-arg call.
 func (p *Parser) parseBangExpr(left ast.Expression) ast.Expression {
-	// Validate that left is a CallExpr
-	if _, ok := left.(*ast.CallExpr); !ok {
-		p.errorWithHint("'!' can only follow a call expression",
-			"add parentheses: foo()!")
+	switch expr := left.(type) {
+	case *ast.CallExpr:
+		return &ast.BangExpr{Expr: expr}
+	case *ast.SelectorExpr:
+		// Convert selector to zero-arg call: resp.json! → resp.json()!
+		call := &ast.CallExpr{Func: expr}
+		return &ast.BangExpr{Expr: call}
+	case *ast.Ident:
+		// Convert identifier to zero-arg call: foo! → foo()!
+		call := &ast.CallExpr{Func: expr}
+		return &ast.BangExpr{Expr: call}
+	default:
+		p.errorWithHint("'!' can only follow a call or method expression",
+			"use: method()! or obj.method!")
 		return left
 	}
-	return &ast.BangExpr{Expr: left}
 }
 
 // parseRescueExpr parses error recovery: call() rescue default
 // curToken is RESCUE when this is called
+// For selector/ident expressions, converts to a zero-arg call.
 func (p *Parser) parseRescueExpr(left ast.Expression) ast.Expression {
-	// Validate that left is a CallExpr
-	if _, ok := left.(*ast.CallExpr); !ok {
-		p.errorWithHint("'rescue' can only follow a call expression",
-			"use 'if err != nil' for explicit handling")
+	// Convert to CallExpr if needed
+	var callExpr *ast.CallExpr
+	switch expr := left.(type) {
+	case *ast.CallExpr:
+		callExpr = expr
+	case *ast.SelectorExpr:
+		// Convert selector to zero-arg call: resp.json rescue x → resp.json() rescue x
+		callExpr = &ast.CallExpr{Func: expr}
+	case *ast.Ident:
+		// Convert identifier to zero-arg call: foo rescue x → foo() rescue x
+		callExpr = &ast.CallExpr{Func: expr}
+	default:
+		p.errorWithHint("'rescue' can only follow a call or method expression",
+			"use: method() rescue default or obj.method rescue default")
 		return left
 	}
 
-	rescue := &ast.RescueExpr{Expr: left}
+	rescue := &ast.RescueExpr{Expr: callExpr}
 
 	// Move past 'rescue' to see what comes next
 	p.nextToken()

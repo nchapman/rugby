@@ -83,7 +83,7 @@ Defines `TokenType` constants and `Token` struct with `Type`, `Literal`, `Line`,
 Single-pass tokenizer. Entry point: `New(input string)` → `*Lexer`, then call `NextToken()` repeatedly.
 - Newlines are significant tokens (Ruby-style)
 - `#` starts comments (skipped)
-- Handles `?` and `!` suffixes on identifiers (e.g., `empty?`, `save!`)
+- Handles `?` suffix on identifiers for predicate methods (e.g., `empty?`, `valid?`)
 - `SaveState()`/`RestoreState()` for parser lookahead
 
 ### ast/ast.go
