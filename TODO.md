@@ -24,7 +24,7 @@ Features in implementation order, building incrementally.
   - [x] Implement `as(Interface)` → returns `Interface?` (optional), use with `if let`, `??`, `.unwrap!`.
 - [x] **Standard Interface Mapping:** Ensure `to_s` satisfies `fmt.Stringer` and `message` satisfies `error`.
 
-## Phase 17: Crispness Polish (Strictness & Safety)
+## Phase 17: Crispness Polish (Strictness & Safety) ✓
 **Goal:** Reduce ambiguity and enforce deterministic behavior.
 
 ### 17.1 Strict Syntax & Parsing ✓
@@ -53,19 +53,19 @@ Features in implementation order, building incrementally.
     - `nil?` / `absent?` → Bool
     - `unwrap!` → T (dereference)
 
-### 17.3 Type System Refinement
-- [ ] **Case vs Type Switch:**
-  - Introduce `case_type` (or `case type`) syntax for type switching.
-  - Restrict standard `case` to value matching (`==`).
+### 17.3 Type System Refinement ✓
+- [x] **Case vs Type Switch:**
+  - Introduced `case_type` syntax for type switching.
+  - Standard `case` restricted to value matching (`==`).
 
-### 17.4 Strict `?` Suffix
-- [ ] **Predicate Enforcement:** Methods ending in `?` must return `Bool`.
-  - Parser/Codegen validates return type of `?`-suffixed methods.
+### 17.4 Strict `?` Suffix ✓
+- [x] **Predicate Enforcement:** Methods ending in `?` must return `Bool`.
+  - Codegen validates return type of `?`-suffixed methods.
   - Compile error if `def foo? -> Int` or similar.
-- [ ] **Remove Optional-Returning `?` Methods:**
+- [x] **Remove Optional-Returning `?` Methods:**
   - `to_i` returns `(Int, error)` instead of `to_i?` returning `Int?`.
   - `to_f` returns `(Float, error)` instead of `to_f?` returning `Float?`.
-  - Update runtime string conversion functions accordingly.
+  - Updated runtime string conversion functions accordingly.
 
 ## Phase 18: Standard Library Polish
 - [ ] **String Interpolation:** Ensure all interpolations compile to `fmt.Sprintf` (or `String()` calls).
@@ -129,6 +129,19 @@ Features in implementation order, building incrementally.
 ---
 
 ## Recently Completed
+
+### Type System Refinement & Strict `?` Suffix (Phase 17.3 & 17.4)
+- **`case_type` syntax:** Type switching for runtime type matching on `any` values
+  - Parses `case_type x when String ... when Int ... end`
+  - Generates Go type switch: `switch x := x.(type) { case string: ... }`
+  - Auto-narrows subject variable inside each branch
+- **Strict `?` suffix:** Methods ending in `?` must return `Bool`
+  - Codegen validates return type and errors if not `Bool`
+  - Example error: `method 'valid?' ending in '?' must return Bool`
+- **String conversions return error:**
+  - `to_i` now returns `(Int, error)` - use with `!` or `rescue`
+  - `to_f` now returns `(Float, error)` - use with `!` or `rescue`
+  - Removed `to_i?` and `to_f?` optional patterns
 
 ### Interface System Evolution (Phase 16)
 Complete interface support with inheritance, runtime polymorphism, and standard interface mapping:

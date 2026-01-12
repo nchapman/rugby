@@ -71,6 +71,7 @@ const (
 	ELSE       TokenType = "ELSE"
 	UNLESS     TokenType = "UNLESS"
 	CASE       TokenType = "CASE"
+	CASETYPE   TokenType = "CASETYPE"
 	WHEN       TokenType = "WHEN"
 	WHILE      TokenType = "WHILE"
 	FOR        TokenType = "FOR"
@@ -122,6 +123,7 @@ var keywords = map[string]TokenType{
 	"else":       ELSE,
 	"unless":     UNLESS,
 	"case":       CASE,
+	"case_type":  CASETYPE,
 	"when":       WHEN,
 	"while":      WHILE,
 	"for":        FOR,

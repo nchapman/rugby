@@ -1222,7 +1222,7 @@ end`
 
 func TestClassMethodWithPredicateSuffix(t *testing.T) {
 	input := `class User
-  def valid?
+  def valid? -> Bool
     return true
   end
 end
@@ -1233,7 +1233,7 @@ end`
 	output := compile(t, input)
 
 	// Method name should have ? stripped and be camelCased (lowercase first letter)
-	assertContains(t, output, `func (u *User) valid()`)
+	assertContains(t, output, `func (u *User) valid() bool`)
 }
 
 func TestRugbyMethodCallCasing(t *testing.T) {
@@ -2153,59 +2153,160 @@ end`
 	assertContains(t, output, "var x *User = nil")
 }
 
-func TestOptionalMethodToInt(t *testing.T) {
-	input := `def main
-  s = "42"
-  n = s.to_i?()
+// --- Strict ? Suffix Tests ---
+
+func TestPredicateMethodReturnsBool(t *testing.T) {
+	// Methods ending in ? must return Bool - this should compile
+	input := `def valid? -> Bool
+  true
 end`
 
 	output := compile(t, input)
 
-	// to_i? should map to runtime.ToOptionalInt(runtime.StringToInt(s))
-	assertContains(t, output, "n := runtime.ToOptionalInt(runtime.StringToInt(s))")
+	assertContains(t, output, "func valid() bool")
+	assertContains(t, output, "return true")
 }
 
-func TestOptionalMethodToFloat(t *testing.T) {
-	input := `def main
-  s = "3.14"
-  n = s.to_f?()
+func TestPredicateMethodRejectsNonBoolReturn(t *testing.T) {
+	// Methods ending in ? that don't return Bool should error
+	input := `def valid? -> Int
+  42
 end`
 
-	output := compile(t, input)
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
 
-	// to_f? should map to runtime.ToOptionalFloat(runtime.StringToFloat(s))
-	assertContains(t, output, "n := runtime.ToOptionalFloat(runtime.StringToFloat(s))")
+	gen := New()
+	_, err := gen.Generate(program)
+
+	if err == nil {
+		t.Fatal("expected error for predicate method not returning Bool")
+	}
+
+	if !strings.Contains(err.Error(), "must return Bool") {
+		t.Errorf("expected error about Bool return type, got: %s", err.Error())
+	}
 }
 
-func TestAssignmentInCondition(t *testing.T) {
-	input := `def main
-  s = "42"
-  if (n = s.to_i?())
-    puts(n)
+func TestPredicateMethodRejectsNoReturnType(t *testing.T) {
+	// Methods ending in ? with no explicit return type should error
+	input := `def valid?
+  true
+end`
+
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	gen := New()
+	_, err := gen.Generate(program)
+
+	if err == nil {
+		t.Fatal("expected error for predicate method without explicit Bool return")
+	}
+
+	if !strings.Contains(err.Error(), "must return Bool") {
+		t.Errorf("expected error about Bool return type, got: %s", err.Error())
+	}
+}
+
+func TestClassPredicateMethodReturnsBool(t *testing.T) {
+	// Class methods ending in ? must return Bool - this should compile
+	input := `class Container
+  def empty? -> Bool
+    true
   end
 end`
 
 	output := compile(t, input)
 
-	// should generate if n, ok := runtime.StringToInt(s); ok {
-	assertContains(t, output, "if n, ok := runtime.StringToInt(s); ok {")
+	assertContains(t, output, "func (c *Container) empty() bool")
 }
 
-func TestIfLetPattern(t *testing.T) {
+func TestClassPredicateMethodRejectsNonBoolReturn(t *testing.T) {
+	// Class methods ending in ? that don't return Bool should error
+	input := `class Container
+  def count? -> Int
+    0
+  end
+end`
+
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	gen := New()
+	_, err := gen.Generate(program)
+
+	if err == nil {
+		t.Fatal("expected error for class predicate method not returning Bool")
+	}
+
+	if !strings.Contains(err.Error(), "must return Bool") {
+		t.Errorf("expected error about Bool return type, got: %s", err.Error())
+	}
+}
+
+func TestStringToIntWithBang(t *testing.T) {
+	input := `def process(s : String) -> (Int, error)
+  n = s.to_i()!
+  n
+end`
+
+	output := compile(t, input)
+
+	// to_i()! should propagate error
+	assertContains(t, output, "runtime.StringToInt(s)")
+	assertContains(t, output, "if _err != nil {")
+	assertContains(t, output, "return 0, _err")
+}
+
+func TestStringToFloatWithBang(t *testing.T) {
+	input := `def process(s : String) -> (Float, error)
+  n = s.to_f()!
+  n
+end`
+
+	output := compile(t, input)
+
+	// to_f()! should propagate error
+	assertContains(t, output, "runtime.StringToFloat(s)")
+	assertContains(t, output, "if _err != nil {")
+	assertContains(t, output, "return 0, _err")
+}
+
+func TestStringToIntWithRescue(t *testing.T) {
+	input := `def main
+  s = "abc"
+  n = s.to_i() rescue 0
+  puts(n)
+end`
+
+	output := compile(t, input)
+
+	// to_i() rescue should provide default on error
+	assertContains(t, output, "runtime.StringToInt(s)")
+	assertContains(t, output, "if _err != nil {")
+}
+
+func TestStringToIntExplicit(t *testing.T) {
 	input := `def main
   s = "42"
-  if let n = s.to_i?()
-    puts(n)
+  n, err = s.to_i()
+  if err != nil
+    puts("error")
   else
-    puts("not a number")
+    puts(n)
   end
 end`
 
 	output := compile(t, input)
 
-	// if let should generate the same pattern as if (name = expr)
-	assertContains(t, output, "if n, ok := runtime.StringToInt(s); ok {")
-	assertContains(t, output, `runtime.Puts("not a number")`)
+	// explicit error handling
+	assertContains(t, output, "n, err := runtime.StringToInt(s)")
+	// The condition uses runtime.Equal for comparison
+	assertContains(t, output, "!runtime.Equal(err, nil)")
 }
 
 // --- Bare Script Tests ---
@@ -2606,6 +2707,82 @@ end`
 	assertContains(t, output, `case "stopped":`) // symbol compiles to string
 	assertContains(t, output, `runtime.Puts("running")`)
 	assertContains(t, output, `runtime.Puts("halted")`)
+}
+
+// --- case_type (Type Switch) Tests ---
+
+func TestGenerateCaseTypeBasic(t *testing.T) {
+	input := `def type_of(x : any) -> String
+  case_type x
+  when String
+    return "it's a string"
+  when Int
+    return "it's an int"
+  else
+    return "unknown"
+  end
+end`
+
+	output := compile(t, input)
+
+	// Should generate Go type switch with shadowing
+	assertContains(t, output, `switch x := x.(type) {`)
+	assertContains(t, output, `case string:`)
+	assertContains(t, output, `case int:`)
+	assertContains(t, output, `default:`)
+	assertContains(t, output, `return "it's a string"`)
+}
+
+func TestGenerateCaseTypeNoElse(t *testing.T) {
+	input := `def process(x : any)
+  case_type x
+  when String
+    puts("string")
+  when Int
+    puts("int")
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `switch x := x.(type) {`)
+	assertContains(t, output, `case string:`)
+	assertContains(t, output, `case int:`)
+	assertNotContains(t, output, `default:`)
+}
+
+func TestGenerateCaseTypeWithFloat(t *testing.T) {
+	input := `def check(x : any)
+  case_type x
+  when Float
+    puts("float")
+  when String
+    puts("string")
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `switch x := x.(type) {`)
+	assertContains(t, output, `case float64:`)
+	assertContains(t, output, `case string:`)
+}
+
+func TestGenerateCaseTypeWithBool(t *testing.T) {
+	input := `def check(x : any)
+  case_type x
+  when Bool
+    puts("boolean")
+  when Int
+    puts("integer")
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `switch x := x.(type) {`)
+	assertContains(t, output, `case bool:`)
+	assertContains(t, output, `case int:`)
 }
 
 // Error handling tests (Phase 19)

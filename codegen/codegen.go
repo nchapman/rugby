@@ -64,17 +64,7 @@ var blockMethods = map[string]blockMethod{
 	"none?":  {runtimeFunc: "runtime.None", returnType: "bool"},
 }
 
-// optionalMethod describes a method that returns (value, bool) for optional results
-type optionalMethod struct {
-	runtimeFunc string // e.g., "runtime.StringToInt"
-	resultType  string // the type of the value (e.g., "Int")
-}
-
-// Optional method mappings - methods that return (T, bool)
-var optionalMethods = map[string]optionalMethod{
-	"to_i?": {runtimeFunc: "runtime.StringToInt", resultType: "Int"},
-	"to_f?": {runtimeFunc: "runtime.StringToFloat", resultType: "Float"},
-}
+// Note: to_i and to_f return (T, error) - use with ! or rescue
 
 // MethodDef describes a standard library method
 type MethodDef struct {
@@ -120,7 +110,8 @@ var stdLib = map[string]map[string]MethodDef{
 		"reverse":    {RuntimeFunc: "runtime.StringReverse", ReturnType: "String"},
 		"chars":      {RuntimeFunc: "runtime.Chars", ReturnType: "Array"},
 		"length":     {RuntimeFunc: "runtime.CharLength", ReturnType: "Int"},
-		"to_i":       {RuntimeFunc: "runtime.MustAtoi", ReturnType: "Int"},
+		"to_i":       {RuntimeFunc: "runtime.StringToInt", ReturnType: "(Int, error)"},
+		"to_f":       {RuntimeFunc: "runtime.StringToFloat", ReturnType: "(Float, error)"},
 	},
 	"Int": {
 		"even?": {RuntimeFunc: "runtime.Even", ReturnType: "Bool"},
@@ -276,12 +267,8 @@ func isValueTypeOptional(t string) bool {
 func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 	switch e := expr.(type) {
 	case *ast.CallExpr:
-		// Check if it's a call to an optional method like s.to_i?
 		if sel, ok := e.Func.(*ast.SelectorExpr); ok {
-			if om, ok := optionalMethods[sel.Sel]; ok {
-				return om.resultType
-			}
-			// Check for predicate methods ending in ?
+			// Check for predicate methods ending in ? (must return Bool)
 			if strings.HasSuffix(sel.Sel, "?") {
 				return "Bool"
 			}
@@ -356,21 +343,6 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		return "nil"
 	}
 	return "" // unknown
-}
-
-// isOptionalMethodCall checks if an expression is a call to an optional method (to_i?, to_f?)
-func isOptionalMethodCall(expr ast.Expression) bool {
-	if call, ok := expr.(*ast.CallExpr); ok {
-		if sel, ok := call.Func.(*ast.SelectorExpr); ok {
-			_, isOptional := optionalMethods[sel.Sel]
-			return isOptional
-		}
-	}
-	if sel, ok := expr.(*ast.SelectorExpr); ok {
-		_, isOptional := optionalMethods[sel.Sel]
-		return isOptional
-	}
-	return false
 }
 
 func (g *Generator) Generate(program *ast.Program) (string, error) {
@@ -540,6 +512,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genIfStmt(s)
 	case *ast.CaseStmt:
 		g.genCaseStmt(s)
+	case *ast.CaseTypeStmt:
+		g.genCaseTypeStmt(s)
 	case *ast.WhileStmt:
 		g.genWhileStmt(s)
 	case *ast.ForStmt:
@@ -570,6 +544,13 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	clear(g.vars) // reset vars for each function
 	g.currentReturnTypes = fn.ReturnTypes
 	g.inMainFunc = fn.Name == "main"
+
+	// Validate: functions ending in ? must return Bool
+	if strings.HasSuffix(fn.Name, "?") {
+		if len(fn.ReturnTypes) != 1 || fn.ReturnTypes[0] != "Bool" {
+			g.addError(fmt.Errorf("line %d: function '%s' ending in '?' must return Bool", fn.Line, fn.Name))
+		}
+	}
 
 	// Mark parameters as declared variables with their types
 	for _, param := range fn.Params {
@@ -817,6 +798,13 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	clear(g.vars) // reset vars for each method
 	g.currentReturnTypes = method.ReturnTypes
+
+	// Validate: methods ending in ? must return Bool
+	if strings.HasSuffix(method.Name, "?") {
+		if len(method.ReturnTypes) != 1 || method.ReturnTypes[0] != "Bool" {
+			g.addError(fmt.Errorf("line %d: method '%s' ending in '?' must return Bool", method.Line, method.Name))
+		}
+	}
 
 	// Mark parameters as declared variables with their types
 	for _, param := range method.Params {
@@ -1155,51 +1143,6 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 	}
 
 	g.writeIndent()
-
-	// Handle optional method calls like s.to_i?() which return (T, bool)
-	// Generate: n, _ := runtime.StringToInt(s)
-	if isOptionalMethodCall(s.Value) {
-		var receiver ast.Expression
-		var method string
-
-		if call, ok := s.Value.(*ast.CallExpr); ok {
-			if sel, ok := call.Func.(*ast.SelectorExpr); ok {
-				receiver = sel.X
-				method = sel.Sel
-			}
-		} else if sel, ok := s.Value.(*ast.SelectorExpr); ok {
-			receiver = sel.X
-			method = sel.Sel
-		}
-
-		if receiver != nil {
-			om := optionalMethods[method]
-			// runtime.ToOptionalInt(runtime.StringToInt(...))
-			baseType := om.resultType // "Int", "Float"
-
-			if s.Type != "" {
-				// Typed declaration
-				g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
-				g.vars[s.Name] = s.Type
-			} else if !g.isDeclared(s.Name) {
-				// New variable - infer as OptionalT
-				g.buf.WriteString(s.Name)
-				g.buf.WriteString(" := ")
-				g.vars[s.Name] = baseType + "?"
-			} else {
-				// Assignment
-				g.buf.WriteString(s.Name)
-				g.buf.WriteString(" = ")
-			}
-
-			g.buf.WriteString(fmt.Sprintf("runtime.ToOptional%s(", baseType))
-			g.buf.WriteString(om.runtimeFunc)
-			g.buf.WriteString("(")
-			g.genExpr(receiver)
-			g.buf.WriteString("))\n")
-			return
-		}
-	}
 
 	// Determine target type
 	var targetType string
@@ -1627,6 +1570,57 @@ func (g *Generator) genCaseStmt(s *ast.CaseStmt) {
 			}
 			g.buf.WriteString(":\n")
 		}
+
+		g.indent++
+		for _, stmt := range whenClause.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	// Generate default (else) clause
+	if len(s.Else) > 0 {
+		g.writeIndent()
+		g.buf.WriteString("default:\n")
+
+		g.indent++
+		for _, stmt := range s.Else {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genCaseTypeStmt(s *ast.CaseTypeStmt) {
+	g.writeIndent()
+
+	// Get the variable name from the subject
+	var varName string
+	switch subj := s.Subject.(type) {
+	case *ast.Ident:
+		varName = subj.Name
+	default:
+		// For complex expressions, generate a unique temp variable
+		varName = fmt.Sprintf("_ts%d", g.tempVarCounter)
+		g.tempVarCounter++
+		g.buf.WriteString(fmt.Sprintf("%s := ", varName))
+		g.genExpr(s.Subject)
+		g.buf.WriteString("\n")
+		g.writeIndent()
+	}
+
+	// Generate type switch with shadowing: switch varName := varName.(type) {
+	g.buf.WriteString(fmt.Sprintf("switch %s := %s.(type) {\n", varName, varName))
+
+	// Generate when clauses for each type
+	for _, whenClause := range s.WhenClauses {
+		g.writeIndent()
+		g.buf.WriteString("case ")
+		g.buf.WriteString(mapType(whenClause.Type))
+		g.buf.WriteString(":\n")
 
 		g.indent++
 		for _, stmt := range whenClause.Body {
@@ -2565,15 +2559,6 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				return
 			}
 		}
-		// Check for optional methods like to_i?, to_f?
-		if om, ok := optionalMethods[fn.Sel]; ok {
-			g.needsRuntime = true
-			g.buf.WriteString(om.runtimeFunc)
-			g.buf.WriteString("(")
-			g.genExpr(fn.X) // receiver becomes first arg
-			g.buf.WriteString(")")
-			return
-		}
 		// Method/package call like http.Get or resp.Body.Close
 		// snake_case transformation only applies here (Go interop)
 		g.genSelectorExpr(fn)
@@ -3115,16 +3100,6 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 			g.genExpr(sel.X)
 			return
 		}
-	}
-
-	// Check for optional methods like to_i?, to_f?
-	if om, ok := optionalMethods[sel.Sel]; ok {
-		g.needsRuntime = true
-		g.buf.WriteString(om.runtimeFunc)
-		g.buf.WriteString("(")
-		g.genExpr(sel.X) // receiver becomes first arg
-		g.buf.WriteString(")")
-		return
 	}
 
 	g.genExpr(sel.X)

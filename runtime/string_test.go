@@ -60,61 +60,46 @@ func TestStringReverse(t *testing.T) {
 
 func TestStringToInt(t *testing.T) {
 	// Valid
-	n, ok := StringToInt("42")
-	if !ok || n != 42 {
-		t.Errorf("StringToInt valid: got (%d, %v), want (42, true)", n, ok)
+	n, err := StringToInt("42")
+	if err != nil || n != 42 {
+		t.Errorf("StringToInt valid: got (%d, %v), want (42, nil)", n, err)
 	}
 
 	// Negative
-	n, ok = StringToInt("-123")
-	if !ok || n != -123 {
-		t.Errorf("StringToInt negative: got (%d, %v), want (-123, true)", n, ok)
+	n, err = StringToInt("-123")
+	if err != nil || n != -123 {
+		t.Errorf("StringToInt negative: got (%d, %v), want (-123, nil)", n, err)
 	}
 
 	// Invalid
-	_, ok = StringToInt("abc")
-	if ok {
-		t.Error("StringToInt invalid: got true, want false")
+	_, err = StringToInt("abc")
+	if err == nil {
+		t.Error("StringToInt invalid: got nil error, want error")
 	}
 
 	// Empty
-	_, ok = StringToInt("")
-	if ok {
-		t.Error("StringToInt empty: got true, want false")
+	_, err = StringToInt("")
+	if err == nil {
+		t.Error("StringToInt empty: got nil error, want error")
 	}
 }
 
 func TestStringToFloat(t *testing.T) {
 	// Valid
-	f, ok := StringToFloat("3.14")
-	if !ok || f != 3.14 {
-		t.Errorf("StringToFloat valid: got (%f, %v), want (3.14, true)", f, ok)
+	f, err := StringToFloat("3.14")
+	if err != nil || f != 3.14 {
+		t.Errorf("StringToFloat valid: got (%f, %v), want (3.14, nil)", f, err)
 	}
 
 	// Integer form
-	f, ok = StringToFloat("42")
-	if !ok || f != 42.0 {
-		t.Errorf("StringToFloat integer: got (%f, %v), want (42.0, true)", f, ok)
+	f, err = StringToFloat("42")
+	if err != nil || f != 42.0 {
+		t.Errorf("StringToFloat integer: got (%f, %v), want (42.0, nil)", f, err)
 	}
 
 	// Invalid
-	_, ok = StringToFloat("abc")
-	if ok {
-		t.Error("StringToFloat invalid: got true, want false")
+	_, err = StringToFloat("abc")
+	if err == nil {
+		t.Error("StringToFloat invalid: got nil error, want error")
 	}
-}
-
-func TestMustAtoi(t *testing.T) {
-	// Valid
-	if n := MustAtoi("42"); n != 42 {
-		t.Errorf("MustAtoi: got %d, want 42", n)
-	}
-
-	// Invalid - should panic
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("MustAtoi invalid: expected panic")
-		}
-	}()
-	MustAtoi("abc")
 }

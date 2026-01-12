@@ -382,6 +382,25 @@ type WhenClause struct {
 	Body   []Statement  // statements in this when branch
 }
 
+// CaseTypeStmt represents a type switch statement: case_type x when String ... when Int ... end
+type CaseTypeStmt struct {
+	Subject     Expression       // the expression being type-matched
+	WhenClauses []TypeWhenClause // one or more type branches
+	Else        []Statement      // optional else clause
+	Line        int              // source line number (1-indexed)
+	Doc         *CommentGroup    // leading comments
+	Comment     *CommentGroup    // trailing comment on same line
+}
+
+func (c *CaseTypeStmt) node()     {}
+func (c *CaseTypeStmt) stmtNode() {}
+
+// TypeWhenClause represents a single when branch in a case_type statement
+type TypeWhenClause struct {
+	Type string      // the type to match (String, Int, etc.)
+	Body []Statement // statements in this when branch
+}
+
 // WhileStmt represents a while loop
 type WhileStmt struct {
 	Cond    Expression

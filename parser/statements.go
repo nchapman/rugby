@@ -15,6 +15,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseUnlessStmt()
 	case token.CASE:
 		return p.parseCaseStmt()
+	case token.CASETYPE:
+		return p.parseCaseTypeStmt()
 	case token.WHILE:
 		return p.parseWhileStmt()
 	case token.FOR:
@@ -392,6 +394,82 @@ func (p *Parser) parseCaseStmt() *ast.CaseStmt {
 
 	if !p.curTokenIs(token.END) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close case")
+		return nil
+	}
+	p.nextToken() // consume 'end'
+	p.skipNewlines()
+
+	return stmt
+}
+
+func (p *Parser) parseCaseTypeStmt() *ast.CaseTypeStmt {
+	line := p.curToken.Line
+	doc := p.leadingComments(line)
+	p.nextToken() // consume 'case_type'
+
+	stmt := &ast.CaseTypeStmt{Line: line, Doc: doc}
+
+	// Parse required subject expression
+	if p.curTokenIs(token.NEWLINE) || p.curTokenIs(token.WHEN) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "case_type requires a subject expression")
+		return nil
+	}
+	stmt.Subject = p.parseExpression(lowest)
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	// Parse when clauses with type patterns
+	for p.curTokenIs(token.WHEN) {
+		p.nextToken() // consume 'when'
+
+		clause := ast.TypeWhenClause{}
+
+		// Parse type name (String, Int, etc.)
+		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type name in 'when' clause")
+			return nil
+		}
+		clause.Type = p.parseTypeName()
+		p.skipNewlines()
+
+		// Parse body until next WHEN, ELSE, or END
+		for !p.curTokenIs(token.WHEN) && !p.curTokenIs(token.ELSE) &&
+			!p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+			p.skipNewlines()
+			if p.curTokenIs(token.WHEN) || p.curTokenIs(token.ELSE) || p.curTokenIs(token.END) {
+				break
+			}
+			if s := p.parseStatement(); s != nil {
+				clause.Body = append(clause.Body, s)
+			}
+		}
+		stmt.WhenClauses = append(stmt.WhenClauses, clause)
+	}
+
+	// Validate that case_type has at least one when clause
+	if len(stmt.WhenClauses) == 0 {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "case_type requires at least one 'when' clause")
+		return nil
+	}
+
+	// Parse optional else clause
+	if p.curTokenIs(token.ELSE) {
+		p.nextToken() // consume 'else'
+		p.skipNewlines()
+
+		for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+			p.skipNewlines()
+			if p.curTokenIs(token.END) {
+				break
+			}
+			if s := p.parseStatement(); s != nil {
+				stmt.Else = append(stmt.Else, s)
+			}
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close case_type")
 		return nil
 	}
 	p.nextToken() // consume 'end'

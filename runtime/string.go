@@ -31,34 +31,16 @@ func StringReverse(s string) string {
 	return string(runes)
 }
 
-// StringToInt parses a string as an integer, returning (value, ok).
-// Ruby: str.to_i? (optional variant)
-func StringToInt(s string) (int, bool) {
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		return 0, false
-	}
-	return n, true
+// StringToInt parses a string as an integer, returning (value, error).
+// Ruby: str.to_i() - use with ! for propagation or rescue for default
+func StringToInt(s string) (int, error) {
+	return strconv.Atoi(s)
 }
 
-// StringToFloat parses a string as a float64, returning (value, ok).
-// Ruby: str.to_f? (optional variant)
-func StringToFloat(s string) (float64, bool) {
-	f, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return 0, false
-	}
-	return f, true
-}
-
-// MustAtoi parses a string as an integer, panicking on failure.
-// Ruby: str.to_i (assumes valid input)
-func MustAtoi(s string) int {
-	n, err := strconv.Atoi(s)
-	if err != nil {
-		panic("MustAtoi: invalid integer: " + s)
-	}
-	return n
+// StringToFloat parses a string as a float64, returning (value, error).
+// Ruby: str.to_f() - use with ! for propagation or rescue for default
+func StringToFloat(s string) (float64, error) {
+	return strconv.ParseFloat(s, 64)
 }
 
 // Split splits a string by a separator.
