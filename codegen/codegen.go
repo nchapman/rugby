@@ -366,6 +366,12 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		return "Map"
 	case *ast.NilLit:
 		return "nil"
+	case *ast.TernaryExpr:
+		// Return the type of the then branch (or else branch if then is unknown)
+		if t := g.inferTypeFromExpr(e.Then); t != "" {
+			return t
+		}
+		return g.inferTypeFromExpr(e.Else)
 	}
 	return "" // unknown
 }
@@ -2290,6 +2296,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genRangeLit(e)
 	case *ast.NilCoalesceExpr:
 		g.genNilCoalesceExpr(e)
+	case *ast.TernaryExpr:
+		g.genTernaryExpr(e)
 	case *ast.SafeNavExpr:
 		g.genSafeNavExpr(e)
 	case *ast.SpawnExpr:
@@ -2513,6 +2521,35 @@ func (g *Generator) genNilCoalesceExpr(e *ast.NilCoalesceExpr) {
 	g.buf.WriteString(", ")
 	g.genExpr(e.Right)
 	g.buf.WriteString(")")
+}
+
+// genTernaryExpr generates code for the ternary conditional: cond ? then : else
+// Go doesn't have a ternary operator, so we emit an IIFE with if-else.
+func (g *Generator) genTernaryExpr(e *ast.TernaryExpr) {
+	// Generate: func() T { if cond { return then } else { return else } }()
+	// Try to infer return type from the then/else expressions
+	thenType := g.inferTypeFromExpr(e.Then)
+	elseType := g.inferTypeFromExpr(e.Else)
+
+	// Use the more specific type, or "any" if unknown
+	resultType := "any"
+	if thenType != "" {
+		resultType = mapType(thenType)
+	} else if elseType != "" {
+		resultType = mapType(elseType)
+	}
+
+	g.buf.WriteString("func() ")
+	g.buf.WriteString(resultType)
+	g.buf.WriteString(" { if ")
+	if err := g.genCondition(e.Condition); err != nil {
+		g.addError(err)
+	}
+	g.buf.WriteString(" { return ")
+	g.genExpr(e.Then)
+	g.buf.WriteString(" } else { return ")
+	g.genExpr(e.Else)
+	g.buf.WriteString(" } }()")
 }
 
 // genSafeNavExpr generates code for the &. operator: x&.method

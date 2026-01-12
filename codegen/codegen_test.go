@@ -708,6 +708,72 @@ end`
 	assertContains(t, output, `runtime.ShiftLeft(ch, 42)`)
 }
 
+func TestGenerateTernaryOperator(t *testing.T) {
+	input := `def main
+  x = a > b ? a : b
+end`
+
+	output := compile(t, input)
+
+	// Ternary compiles to IIFE with if-else
+	assertContains(t, output, `func() any {`)
+	assertContains(t, output, `if a > b {`)
+	assertContains(t, output, `return a`)
+	assertContains(t, output, `return b`)
+}
+
+func TestGenerateTernaryWithStrings(t *testing.T) {
+	input := `def main
+  status = valid ? "ok" : "error"
+end`
+
+	output := compile(t, input)
+
+	// Should infer string type from literals
+	assertContains(t, output, `func() string {`)
+	assertContains(t, output, `if valid {`)
+	assertContains(t, output, `return "ok"`)
+	assertContains(t, output, `return "error"`)
+}
+
+func TestGenerateTernaryNested(t *testing.T) {
+	input := `def main
+  x = a ? b ? 1 : 2 : 3
+end`
+
+	output := compile(t, input)
+
+	// Nested ternary should be right-associative: a ? (b ? 1 : 2) : 3
+	assertContains(t, output, `if a {`)
+	assertContains(t, output, `if b {`)
+	assertContains(t, output, `return 1`)
+	assertContains(t, output, `return 2`)
+	assertContains(t, output, `return 3`)
+}
+
+func TestGenerateTernaryWithFunctionCall(t *testing.T) {
+	input := `def main
+  x = foo() ? a : b
+end`
+
+	output := compile(t, input)
+
+	// Ternary with function call condition
+	assertContains(t, output, `if foo()`)
+}
+
+func TestGenerateTernaryWithMethodCalls(t *testing.T) {
+	input := `def main
+  x = cond ? list.first : list.last
+end`
+
+	output := compile(t, input)
+
+	// Ternary with method calls in branches
+	assertContains(t, output, `return list.first`)
+	assertContains(t, output, `return list.last`)
+}
+
 func TestGenerateMapLiteral(t *testing.T) {
 	input := `def main
   x = {"a" => 1, "b" => 2}

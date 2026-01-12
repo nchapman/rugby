@@ -802,6 +802,28 @@ when Int
 end
 ```
 
+**Ternary Conditional Expression:**
+
+The ternary operator `? :` provides a concise way to write conditional expressions.
+
+```ruby
+max = a > b ? a : b
+status = valid? ? "ok" : "error"
+```
+
+The ternary operator is right-associative, so nested ternaries work naturally:
+
+```ruby
+# Parses as: a ? (b ? 1 : 2) : 3
+x = a ? b ? 1 : 2 : 3
+```
+
+The ternary compiles to a Go immediately-invoked function expression (IIFE) with an if-else:
+
+```go
+max := func() any { if a > b { return a } else { return b } }()
+```
+
 ### 5.3 Imperative Loops (Statements)
 
 Use loops when you need **control flow** (searching, early exit, side effects). These are statements, not expressions (they do not return a value).

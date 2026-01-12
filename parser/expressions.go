@@ -67,6 +67,9 @@ infixLoop:
 			token.AND, token.OR, token.SHOVELLEFT:
 			p.nextToken()
 			left = p.parseInfixExpr(left)
+		case token.QUESTION:
+			p.nextToken()
+			left = p.parseTernaryExpr(left)
 		case token.QUESTIONQUESTION:
 			p.nextToken()
 			left = p.parseNilCoalesceExpr(left)
@@ -273,6 +276,33 @@ func (p *Parser) parseRescueExpr(left ast.Expression) ast.Expression {
 	}
 
 	return rescue
+}
+
+// parseTernaryExpr parses the ternary conditional: cond ? then : else
+// Ruby: status = valid? ? "ok" : "error"
+func (p *Parser) parseTernaryExpr(condition ast.Expression) ast.Expression {
+	// curToken is '?'
+	// Parse the "then" expression with ternary precedence - 1 for right-associativity
+	// This means a ? b ? c : d : e parses as a ? (b ? c : d) : e
+	p.nextToken()
+	thenExpr := p.parseExpression(ternaryPrec - 1)
+
+	// Expect ':'
+	if !p.peekTokenIs(token.COLON) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected ':' in ternary expression")
+		return nil
+	}
+	p.nextToken() // consume ':'
+
+	// Parse the "else" expression (also ternaryPrec - 1 for right-associativity)
+	p.nextToken()
+	elseExpr := p.parseExpression(ternaryPrec - 1)
+
+	return &ast.TernaryExpr{
+		Condition: condition,
+		Then:      thenExpr,
+		Else:      elseExpr,
+	}
 }
 
 // parseNilCoalesceExpr parses the nil coalescing operator: expr ?? default

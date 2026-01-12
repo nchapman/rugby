@@ -9,6 +9,7 @@ const (
 	_ int = iota
 	lowest
 	rescuePrec  // call() rescue default (very low precedence)
+	ternaryPrec // cond ? then : else (ternary conditional)
 	rangePrec   // .., ... (ranges)
 	nilCoalesce // ?? (nil coalescing)
 	orPrec      // or
@@ -28,6 +29,7 @@ const (
 // precedences maps token types to their precedence levels.
 var precedences = map[token.TokenType]int{
 	token.RESCUE:           rescuePrec,
+	token.QUESTION:         ternaryPrec, // ? (ternary conditional)
 	token.DOTDOT:           rangePrec,
 	token.TRIPLEDOT:        rangePrec,
 	token.QUESTIONQUESTION: nilCoalesce, // ?? (nil coalescing)

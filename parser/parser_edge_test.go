@@ -508,3 +508,161 @@ end`
 		t.Errorf("expected panic message, got %q", strLit.Value)
 	}
 }
+
+func TestTernaryExpressionParsing(t *testing.T) {
+	input := `def main
+  x = a > b ? a : b
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assignStmt, ok := decl.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", decl.Body[0])
+	}
+	ternary, ok := assignStmt.Value.(*ast.TernaryExpr)
+	if !ok {
+		t.Fatalf("expected TernaryExpr, got %T", assignStmt.Value)
+	}
+
+	// Check condition is a > b
+	cond, ok := ternary.Condition.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr condition, got %T", ternary.Condition)
+	}
+	if cond.Op != ">" {
+		t.Errorf("expected condition op '>', got %q", cond.Op)
+	}
+
+	// Check then is identifier 'a'
+	thenIdent, ok := ternary.Then.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident for then, got %T", ternary.Then)
+	}
+	if thenIdent.Name != "a" {
+		t.Errorf("expected then 'a', got %q", thenIdent.Name)
+	}
+
+	// Check else is identifier 'b'
+	elseIdent, ok := ternary.Else.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident for else, got %T", ternary.Else)
+	}
+	if elseIdent.Name != "b" {
+		t.Errorf("expected else 'b', got %q", elseIdent.Name)
+	}
+}
+
+func TestTernaryNestedRightAssociativity(t *testing.T) {
+	// a ? b ? 1 : 2 : 3 should parse as a ? (b ? 1 : 2) : 3
+	input := `def main
+  x = a ? b ? 1 : 2 : 3
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assignStmt, ok := decl.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", decl.Body[0])
+	}
+	outer, ok := assignStmt.Value.(*ast.TernaryExpr)
+	if !ok {
+		t.Fatalf("expected TernaryExpr, got %T", assignStmt.Value)
+	}
+
+	// Outer condition should be 'a'
+	outerCond, ok := outer.Condition.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident for outer condition, got %T", outer.Condition)
+	}
+	if outerCond.Name != "a" {
+		t.Errorf("expected outer condition 'a', got %q", outerCond.Name)
+	}
+
+	// Outer then should be another ternary (b ? 1 : 2)
+	inner, ok := outer.Then.(*ast.TernaryExpr)
+	if !ok {
+		t.Fatalf("expected nested TernaryExpr for outer then, got %T", outer.Then)
+	}
+
+	// Inner condition should be 'b'
+	innerCond, ok := inner.Condition.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident for inner condition, got %T", inner.Condition)
+	}
+	if innerCond.Name != "b" {
+		t.Errorf("expected inner condition 'b', got %q", innerCond.Name)
+	}
+
+	// Inner then should be 1
+	innerThen, ok := inner.Then.(*ast.IntLit)
+	if !ok {
+		t.Fatalf("expected IntLit for inner then, got %T", inner.Then)
+	}
+	if innerThen.Value != 1 {
+		t.Errorf("expected inner then 1, got %d", innerThen.Value)
+	}
+
+	// Inner else should be 2
+	innerElse, ok := inner.Else.(*ast.IntLit)
+	if !ok {
+		t.Fatalf("expected IntLit for inner else, got %T", inner.Else)
+	}
+	if innerElse.Value != 2 {
+		t.Errorf("expected inner else 2, got %d", innerElse.Value)
+	}
+
+	// Outer else should be 3
+	outerElse, ok := outer.Else.(*ast.IntLit)
+	if !ok {
+		t.Fatalf("expected IntLit for outer else, got %T", outer.Else)
+	}
+	if outerElse.Value != 3 {
+		t.Errorf("expected outer else 3, got %d", outerElse.Value)
+	}
+}
+
+func TestTernaryWithPredicateMethod(t *testing.T) {
+	// empty? ? a : b - the ? suffix on method name shouldn't confuse ternary parsing
+	input := `def main
+  x = empty? ? "none" : "some"
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assignStmt, ok := decl.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", decl.Body[0])
+	}
+	ternary, ok := assignStmt.Value.(*ast.TernaryExpr)
+	if !ok {
+		t.Fatalf("expected TernaryExpr, got %T", assignStmt.Value)
+	}
+
+	// Condition should be identifier 'empty?'
+	cond, ok := ternary.Condition.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident for condition, got %T", ternary.Condition)
+	}
+	if cond.Name != "empty?" {
+		t.Errorf("expected condition 'empty?', got %q", cond.Name)
+	}
+}

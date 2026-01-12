@@ -306,6 +306,17 @@ type NilCoalesceExpr struct {
 func (n *NilCoalesceExpr) node()     {}
 func (n *NilCoalesceExpr) exprNode() {}
 
+// TernaryExpr represents the ternary conditional: cond ? then : else
+// Ruby: status = valid? ? "ok" : "error"
+type TernaryExpr struct {
+	Condition Expression // the condition to test
+	Then      Expression // value if condition is truthy
+	Else      Expression // value if condition is falsy
+}
+
+func (t *TernaryExpr) node()     {}
+func (t *TernaryExpr) exprNode() {}
+
 // SafeNavExpr represents the &. operator: expr&.method
 // Calls method only if expr is present, returns optional
 type SafeNavExpr struct {
