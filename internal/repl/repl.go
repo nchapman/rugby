@@ -568,8 +568,11 @@ func (m *Model) isAssignment(input string) bool {
 	if stmt == nil {
 		return false
 	}
-	_, ok := stmt.(*ast.AssignStmt)
-	return ok
+	switch stmt.(type) {
+	case *ast.AssignStmt, *ast.CompoundAssignStmt:
+		return true
+	}
+	return false
 }
 
 // getAssignmentVar returns the variable name if input is an assignment.
@@ -578,8 +581,11 @@ func (m *Model) getAssignmentVar(input string) string {
 	if stmt == nil {
 		return ""
 	}
-	if assign, ok := stmt.(*ast.AssignStmt); ok {
-		return assign.Name
+	switch s := stmt.(type) {
+	case *ast.AssignStmt:
+		return s.Name
+	case *ast.CompoundAssignStmt:
+		return s.Name
 	}
 	return ""
 }

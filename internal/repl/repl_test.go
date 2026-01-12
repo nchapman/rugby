@@ -316,7 +316,7 @@ func TestIsAssignment(t *testing.T) {
 		{"function call", "foo()", false},
 		{"puts", "puts(x)", false},
 		{"or-assign", "x ||= 5", false},
-		{"compound-assign", "x += 5", false},
+		{"compound-assign", "x += 5", true},
 	}
 
 	for _, tt := range tests {
