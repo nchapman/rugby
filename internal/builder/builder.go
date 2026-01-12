@@ -229,10 +229,10 @@ func (b *Builder) formatParseErrors(file string, errors []string) error {
 // RuntimeModule is the Go module that contains the Rugby runtime.
 const RuntimeModule = "github.com/nchapman/rugby"
 
-// isInRugbyRepo checks if we're running from within the rugby repository.
+// IsInRugbyRepo checks if we're running from within the rugby repository.
 // Returns (true, repoPath) if we're in the repo, (false, "") otherwise.
 // This enables local development by auto-injecting a replace directive.
-func isInRugbyRepo() (bool, string) {
+func IsInRugbyRepo() (bool, string) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return false, ""
@@ -354,7 +354,7 @@ go 1.25
 require %s v0.1.0
 `, RuntimeModule)
 		// Auto-detect local development and inject replace directive
-		if inRepo, repoPath := isInRugbyRepo(); inRepo {
+		if inRepo, repoPath := IsInRugbyRepo(); inRepo {
 			result += fmt.Sprintf("\nreplace %s => %s\n", RuntimeModule, repoPath)
 		}
 		return result
@@ -404,7 +404,7 @@ require %s v0.1.0
 	}
 
 	// Auto-detect local development and inject replace directive
-	if inRepo, repoPath := isInRugbyRepo(); inRepo {
+	if inRepo, repoPath := IsInRugbyRepo(); inRepo {
 		result += fmt.Sprintf("\nreplace %s => %s\n", RuntimeModule, repoPath)
 	}
 

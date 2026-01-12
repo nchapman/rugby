@@ -43,6 +43,7 @@ type evalResult struct {
 	addFunction string // function/class/interface to add
 	clearState  bool   // reset all state
 	clearOutput bool   // clear output (for reset)
+	quit        bool   // exit the REPL
 }
 
 // Model is the bubbletea model for the REPL.
@@ -104,6 +105,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case evalResult:
 		// Evaluation complete
 		m.evaluating = false
+
+		// Handle quit request
+		if msg.quit {
+			m.quitting = true
+			return m, tea.Quit
+		}
 
 		// Apply state changes from eval (done here to avoid data races)
 		if msg.clearState {
@@ -391,15 +398,16 @@ func (m *Model) truncateOutput() {
 func (m *Model) eval(input string, ctx evalContext) evalResult {
 	result := evalResult{input: input}
 
-	// Handle special inputs
+	// Handle special inputs (with or without leading slash)
 	trimmed := strings.TrimSpace(input)
-	if trimmed == "exit" || trimmed == "quit" {
-		result.err = fmt.Errorf("use Ctrl+D to exit")
+	cmd := strings.TrimPrefix(trimmed, "/")
+	if cmd == "exit" || cmd == "quit" {
+		result.quit = true
 		return result
 	}
 
 	// Handle reset command
-	if trimmed == "reset" || trimmed == "clear" {
+	if cmd == "reset" || cmd == "clear" {
 		result.clearState = true
 		result.clearOutput = true
 		result.output = successStyle.Render("(state cleared)")
@@ -407,10 +415,10 @@ func (m *Model) eval(input string, ctx evalContext) evalResult {
 	}
 
 	// Handle help command
-	if trimmed == "help" {
+	if cmd == "help" {
 		result.output = mutedStyle.Render(`Commands:
   reset, clear  - Clear all accumulated state
-  exit, quit    - Use Ctrl+D to exit
+  exit, quit    - Exit the REPL (or use Ctrl+D)
   help          - Show this message`)
 		return result
 	}
@@ -498,10 +506,13 @@ func (m *Model) eval(input string, ctx evalContext) evalResult {
 
 go 1.25
 
-require rugby v0.0.0
+require %s v0.1.0
+`, builder.RuntimeModule)
 
-replace rugby => %s
-`, ctx.project.Root)
+	// In dev mode (running from rugby source), add replace directive
+	if inRepo, repoPath := builder.IsInRugbyRepo(); inRepo {
+		goModContent += fmt.Sprintf("\nreplace %s => %s\n", builder.RuntimeModule, repoPath)
+	}
 
 	goModFile := filepath.Join(replDir, "go.mod")
 	err = os.WriteFile(goModFile, []byte(goModContent), 0644)

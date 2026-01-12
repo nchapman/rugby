@@ -16,8 +16,8 @@ type Project struct {
 	DebugDir string // .rugby/debug/ for logs
 }
 
-// FindProject locates the project root by walking up from cwd looking for go.mod.
-// If no go.mod is found, the current directory is used as root.
+// FindProject locates the project root by walking up from cwd looking for rugby.mod.
+// If no rugby.mod is found, the current directory is used as root.
 func FindProject() (*Project, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
