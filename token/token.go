@@ -64,48 +64,51 @@ const (
 	SHOVELLEFT TokenType = "<<"
 
 	// Keywords
-	IMPORT     TokenType = "IMPORT"
-	DEF        TokenType = "DEF"
-	END        TokenType = "END"
-	GETTER     TokenType = "GETTER"
-	SETTER     TokenType = "SETTER"
-	PROPERTY   TokenType = "PROPERTY"
-	SUPER      TokenType = "SUPER"
-	GO         TokenType = "GO"
-	MODULE     TokenType = "MODULE"
-	INCLUDE    TokenType = "INCLUDE"
-	SELECT     TokenType = "SELECT"
-	IF         TokenType = "IF"
-	ELSIF      TokenType = "ELSIF"
-	ELSE       TokenType = "ELSE"
-	UNLESS     TokenType = "UNLESS"
-	CASE       TokenType = "CASE"
-	CASETYPE   TokenType = "CASETYPE"
-	WHEN       TokenType = "WHEN"
-	WHILE      TokenType = "WHILE"
-	FOR        TokenType = "FOR"
-	IN         TokenType = "IN"
-	BREAK      TokenType = "BREAK"
-	NEXT       TokenType = "NEXT"
-	RETURN     TokenType = "RETURN"
-	PANIC      TokenType = "PANIC"
-	RESCUE     TokenType = "RESCUE"
-	TRUE       TokenType = "TRUE"
-	FALSE      TokenType = "FALSE"
-	NIL        TokenType = "NIL"
-	AND        TokenType = "AND"
-	OR         TokenType = "OR"
-	NOT        TokenType = "NOT"
-	AS         TokenType = "AS"
-	LET        TokenType = "LET"
-	DEFER      TokenType = "DEFER"
-	DO         TokenType = "DO"
-	CLASS      TokenType = "CLASS"
-	SELF       TokenType = "SELF"
-	INTERFACE  TokenType = "INTERFACE"
-	IMPLEMENTS TokenType = "IMPLEMENTS"
-	ANY        TokenType = "ANY"
-	PUB        TokenType = "PUB"
+	IMPORT       TokenType = "IMPORT"
+	DEF          TokenType = "DEF"
+	END          TokenType = "END"
+	GETTER       TokenType = "GETTER"
+	SETTER       TokenType = "SETTER"
+	PROPERTY     TokenType = "PROPERTY"
+	SUPER        TokenType = "SUPER"
+	GO           TokenType = "GO"
+	SPAWN        TokenType = "SPAWN"
+	AWAIT        TokenType = "AWAIT"
+	CONCURRENTLY TokenType = "CONCURRENTLY"
+	MODULE       TokenType = "MODULE"
+	INCLUDE      TokenType = "INCLUDE"
+	SELECT       TokenType = "SELECT"
+	IF           TokenType = "IF"
+	ELSIF        TokenType = "ELSIF"
+	ELSE         TokenType = "ELSE"
+	UNLESS       TokenType = "UNLESS"
+	CASE         TokenType = "CASE"
+	CASETYPE     TokenType = "CASETYPE"
+	WHEN         TokenType = "WHEN"
+	WHILE        TokenType = "WHILE"
+	FOR          TokenType = "FOR"
+	IN           TokenType = "IN"
+	BREAK        TokenType = "BREAK"
+	NEXT         TokenType = "NEXT"
+	RETURN       TokenType = "RETURN"
+	PANIC        TokenType = "PANIC"
+	RESCUE       TokenType = "RESCUE"
+	TRUE         TokenType = "TRUE"
+	FALSE        TokenType = "FALSE"
+	NIL          TokenType = "NIL"
+	AND          TokenType = "AND"
+	OR           TokenType = "OR"
+	NOT          TokenType = "NOT"
+	AS           TokenType = "AS"
+	LET          TokenType = "LET"
+	DEFER        TokenType = "DEFER"
+	DO           TokenType = "DO"
+	CLASS        TokenType = "CLASS"
+	SELF         TokenType = "SELF"
+	INTERFACE    TokenType = "INTERFACE"
+	IMPLEMENTS   TokenType = "IMPLEMENTS"
+	ANY          TokenType = "ANY"
+	PUB          TokenType = "PUB"
 
 	// Testing keywords
 	DESCRIBE TokenType = "DESCRIBE"
@@ -124,48 +127,51 @@ type Token struct {
 }
 
 var keywords = map[string]TokenType{
-	"import":     IMPORT,
-	"def":        DEF,
-	"end":        END,
-	"getter":     GETTER,
-	"setter":     SETTER,
-	"property":   PROPERTY,
-	"super":      SUPER,
-	"go":         GO,
-	"module":     MODULE,
-	"include":    INCLUDE,
-	"select":     SELECT,
-	"if":         IF,
-	"elsif":      ELSIF,
-	"else":       ELSE,
-	"unless":     UNLESS,
-	"case":       CASE,
-	"case_type":  CASETYPE,
-	"when":       WHEN,
-	"while":      WHILE,
-	"for":        FOR,
-	"in":         IN,
-	"break":      BREAK,
-	"next":       NEXT,
-	"return":     RETURN,
-	"panic":      PANIC,
-	"rescue":     RESCUE,
-	"true":       TRUE,
-	"false":      FALSE,
-	"nil":        NIL,
-	"and":        AND,
-	"or":         OR,
-	"not":        NOT,
-	"as":         AS,
-	"let":        LET,
-	"defer":      DEFER,
-	"do":         DO,
-	"class":      CLASS,
-	"self":       SELF,
-	"interface":  INTERFACE,
-	"implements": IMPLEMENTS,
-	"any":        ANY,
-	"pub":        PUB,
+	"import":       IMPORT,
+	"def":          DEF,
+	"end":          END,
+	"getter":       GETTER,
+	"setter":       SETTER,
+	"property":     PROPERTY,
+	"super":        SUPER,
+	"go":           GO,
+	"spawn":        SPAWN,
+	"await":        AWAIT,
+	"concurrently": CONCURRENTLY,
+	"module":       MODULE,
+	"include":      INCLUDE,
+	"select":       SELECT,
+	"if":           IF,
+	"elsif":        ELSIF,
+	"else":         ELSE,
+	"unless":       UNLESS,
+	"case":         CASE,
+	"case_type":    CASETYPE,
+	"when":         WHEN,
+	"while":        WHILE,
+	"for":          FOR,
+	"in":           IN,
+	"break":        BREAK,
+	"next":         NEXT,
+	"return":       RETURN,
+	"panic":        PANIC,
+	"rescue":       RESCUE,
+	"true":         TRUE,
+	"false":        FALSE,
+	"nil":          NIL,
+	"and":          AND,
+	"or":           OR,
+	"not":          NOT,
+	"as":           AS,
+	"let":          LET,
+	"defer":        DEFER,
+	"do":           DO,
+	"class":        CLASS,
+	"self":         SELF,
+	"interface":    INTERFACE,
+	"implements":   IMPLEMENTS,
+	"any":          ANY,
+	"pub":          PUB,
 	// Testing keywords
 	"describe": DESCRIBE,
 	"it":       IT,

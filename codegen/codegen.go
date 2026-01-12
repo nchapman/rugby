@@ -542,6 +542,15 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genPanicStmt(s)
 	case *ast.DeferStmt:
 		g.genDeferStmt(s)
+	// Concurrency constructs
+	case *ast.GoStmt:
+		g.genGoStmt(s)
+	case *ast.SelectStmt:
+		g.genSelectStmt(s)
+	case *ast.ChanSendStmt:
+		g.genChanSendStmt(s)
+	case *ast.ConcurrentlyStmt:
+		g.genConcurrentlyStmt(s)
 	// Testing constructs
 	case *ast.DescribeStmt:
 		g.genDescribeStmt(s)
@@ -2219,6 +2228,10 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genNilCoalesceExpr(e)
 	case *ast.SafeNavExpr:
 		g.genSafeNavExpr(e)
+	case *ast.SpawnExpr:
+		g.genSpawnExpr(e)
+	case *ast.AwaitExpr:
+		g.genAwaitExpr(e)
 	}
 }
 
@@ -2343,6 +2356,14 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 		g.buf.WriteString(", ")
 		g.genExpr(e.Right)
 		g.buf.WriteString(")")
+		return
+	}
+
+	// Channel send: ch << val -> ch <- val
+	if e.Op == "<<" {
+		g.genExpr(e.Left)
+		g.buf.WriteString(" <- ")
+		g.genExpr(e.Right)
 		return
 	}
 
@@ -2624,6 +2645,33 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		}
 		g.buf.WriteString(funcName)
 	case *ast.SelectorExpr:
+		// Check for Chan[T].new(capacity) constructor call
+		// Chan[T] is parsed as IndexExpr { Left: Ident "Chan", Index: Ident "T" }
+		if fn.Sel == "new" {
+			if indexExpr, ok := fn.X.(*ast.IndexExpr); ok {
+				if chanIdent, ok := indexExpr.Left.(*ast.Ident); ok && chanIdent.Name == "Chan" {
+					// Extract the type parameter from the index
+					var chanType string
+					if typeIdent, ok := indexExpr.Index.(*ast.Ident); ok {
+						chanType = typeIdent.Name
+					} else {
+						chanType = "any"
+					}
+					goType := mapType(chanType)
+
+					g.buf.WriteString("make(chan ")
+					g.buf.WriteString(goType)
+					if len(call.Args) > 0 {
+						// Buffered channel with capacity
+						g.buf.WriteString(", ")
+						g.genExpr(call.Args[0])
+					}
+					g.buf.WriteString(")")
+					return
+				}
+			}
+		}
+
 		// Check for ClassName.new() constructor call
 		if fn.Sel == "new" {
 			if ident, ok := fn.X.(*ast.Ident); ok {
@@ -2646,6 +2694,29 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				g.buf.WriteString(")")
 				return
 			}
+		}
+
+		// Check for channel methods: close(), receive(), try_receive()
+		if fn.Sel == "close" {
+			// ch.close() -> close(ch)
+			g.buf.WriteString("close(")
+			g.genExpr(fn.X)
+			g.buf.WriteString(")")
+			return
+		}
+		if fn.Sel == "receive" {
+			// ch.receive() -> <-ch
+			g.buf.WriteString("<-")
+			g.genExpr(fn.X)
+			return
+		}
+		if fn.Sel == "try_receive" {
+			// ch.try_receive() -> runtime.TryReceive(ch)
+			g.needsRuntime = true
+			g.buf.WriteString("runtime.TryReceive(")
+			g.genExpr(fn.X)
+			g.buf.WriteString(")")
+			return
 		}
 
 		// Check standard library registry
@@ -2817,6 +2888,10 @@ func (g *Generator) genBlockCall(call *ast.CallExpr) {
 		return
 	case "downto":
 		g.genDowntoBlock(sel.X, block, call.Args)
+		return
+	case "spawn":
+		// scope.spawn { expr } -> scope.Spawn(func() any { return expr })
+		g.genScopedSpawnBlock(sel.X, block)
 		return
 	}
 
@@ -3129,6 +3204,40 @@ func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, a
 	g.buf.WriteString("})")
 }
 
+// genScopedSpawnBlock generates: scope.Spawn(func() any { return expr })
+func (g *Generator) genScopedSpawnBlock(scope ast.Expression, block *ast.BlockExpr) {
+	g.genExpr(scope)
+	g.buf.WriteString(".Spawn(func() any {\n")
+
+	g.indent++
+	// For spawn blocks, the last expression is returned
+	for i, stmt := range block.Body {
+		if i == len(block.Body)-1 {
+			// Check if it's an expression statement - return its value
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+			} else {
+				g.genStatement(stmt)
+				g.writeIndent()
+				g.buf.WriteString("return nil\n")
+			}
+		} else {
+			g.genStatement(stmt)
+		}
+	}
+	if len(block.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return nil\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
 // genRuntimeBlock generates runtime block calls (map, select, reject, reduce, find)
 // Unified handler for all runtime block methods
 func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExpr, args []ast.Expression, method blockMethod) {
@@ -3271,6 +3380,53 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 }
 
 func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
+	// Check for channel methods: .receive, .try_receive, .close
+	switch sel.Sel {
+	case "receive":
+		// ch.receive -> <-ch
+		g.buf.WriteString("<-")
+		g.genExpr(sel.X)
+		return
+	case "try_receive":
+		// ch.try_receive -> runtime.TryReceive(ch)
+		g.needsRuntime = true
+		g.buf.WriteString("runtime.TryReceive(")
+		g.genExpr(sel.X)
+		g.buf.WriteString(")")
+		return
+	case "close":
+		// ch.close -> close(ch) - handled in genCallExpr for ch.close()
+		// But if used without parens, generate close(ch)
+		g.buf.WriteString("close(")
+		g.genExpr(sel.X)
+		g.buf.WriteString(")")
+		return
+	case "await":
+		// task.await -> runtime.Await(task)
+		g.needsRuntime = true
+		g.buf.WriteString("runtime.Await(")
+		g.genExpr(sel.X)
+		g.buf.WriteString(")")
+		return
+	case "new":
+		// Chan[T].new -> make(chan T) - unbuffered channel without parens
+		if indexExpr, ok := sel.X.(*ast.IndexExpr); ok {
+			if chanIdent, ok := indexExpr.Left.(*ast.Ident); ok && chanIdent.Name == "Chan" {
+				var chanType string
+				if typeIdent, ok := indexExpr.Index.(*ast.Ident); ok {
+					chanType = typeIdent.Name
+				} else {
+					chanType = "any"
+				}
+				goType := mapType(chanType)
+				g.buf.WriteString("make(chan ")
+				g.buf.WriteString(goType)
+				g.buf.WriteString(")")
+				return
+			}
+		}
+	}
+
 	// Check for range methods used without parentheses (property-style access)
 	if _, ok := sel.X.(*ast.RangeLit); ok {
 		switch sel.Sel {
@@ -3345,6 +3501,151 @@ func (g *Generator) genDeferStmt(s *ast.DeferStmt) {
 	g.buf.WriteString("defer ")
 	g.genCallExpr(s.Call)
 	g.buf.WriteString("\n")
+}
+
+// genGoStmt generates: go funcCall() or go func() { ... }()
+func (g *Generator) genGoStmt(s *ast.GoStmt) {
+	g.writeIndent()
+	g.buf.WriteString("go ")
+	if s.Block != nil {
+		// Block form: go do ... end -> go func() { ... }()
+		g.buf.WriteString("func() {\n")
+		g.indent++
+		for _, stmt := range s.Block.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}()")
+	} else if s.Call != nil {
+		// Expression form: go func_call()
+		g.genExpr(s.Call)
+	}
+	g.buf.WriteString("\n")
+}
+
+// genSelectStmt generates: select { case ... }
+func (g *Generator) genSelectStmt(s *ast.SelectStmt) {
+	g.writeIndent()
+	g.buf.WriteString("select {\n")
+
+	for _, c := range s.Cases {
+		g.writeIndent()
+		g.buf.WriteString("case ")
+		if c.IsSend {
+			// Send case: case ch <- val:
+			g.genExpr(c.Chan)
+			g.buf.WriteString(" <- ")
+			g.genExpr(c.Value)
+		} else {
+			// Receive case: case val := <-ch:  or  case <-ch:
+			if c.AssignName != "" {
+				g.buf.WriteString(c.AssignName)
+				g.buf.WriteString(" := ")
+			}
+			g.buf.WriteString("<-")
+			// Handle chan.receive or chan.try_receive selector
+			// In a select, try_receive is redundant (select already provides non-blocking behavior)
+			if sel, ok := c.Chan.(*ast.SelectorExpr); ok && (sel.Sel == "receive" || sel.Sel == "try_receive") {
+				g.genExpr(sel.X)
+			} else {
+				g.genExpr(c.Chan)
+			}
+		}
+		g.buf.WriteString(":\n")
+
+		g.indent++
+		for _, stmt := range c.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	// Else clause becomes default:
+	if len(s.Else) > 0 {
+		g.writeIndent()
+		g.buf.WriteString("default:\n")
+		g.indent++
+		for _, stmt := range s.Else {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+// genChanSendStmt generates: ch <- val
+func (g *Generator) genChanSendStmt(s *ast.ChanSendStmt) {
+	g.writeIndent()
+	g.genExpr(s.Chan)
+	g.buf.WriteString(" <- ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+}
+
+// genConcurrentlyStmt generates structured concurrency block
+func (g *Generator) genConcurrentlyStmt(s *ast.ConcurrentlyStmt) {
+	g.needsRuntime = true
+	scopeVar := s.ScopeVar
+	if scopeVar == "" {
+		scopeVar = "scope"
+	}
+
+	// Generate: scope := runtime.NewScope(context.Background())
+	g.writeIndent()
+	g.buf.WriteString(fmt.Sprintf("%s := runtime.NewScope()\n", scopeVar))
+
+	// Generate: defer scope.Wait()
+	g.writeIndent()
+	g.buf.WriteString(fmt.Sprintf("defer %s.Wait()\n", scopeVar))
+
+	// Generate body
+	for _, stmt := range s.Body {
+		g.genStatement(stmt)
+	}
+}
+
+// genSpawnExpr generates: runtime.Spawn(func() T { ... })
+func (g *Generator) genSpawnExpr(e *ast.SpawnExpr) {
+	g.needsRuntime = true
+	g.buf.WriteString("runtime.Spawn(func() any {\n")
+	g.indent++
+	// Generate block body with implicit return of last expression
+	if len(e.Block.Body) > 0 {
+		for i, stmt := range e.Block.Body {
+			if i == len(e.Block.Body)-1 {
+				// Last statement: check if it's an expression
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+				} else {
+					g.genStatement(stmt)
+					g.writeIndent()
+					g.buf.WriteString("return nil\n")
+				}
+			} else {
+				g.genStatement(stmt)
+			}
+		}
+	} else {
+		g.writeIndent()
+		g.buf.WriteString("return nil\n")
+	}
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genAwaitExpr generates: runtime.Await(task)
+func (g *Generator) genAwaitExpr(e *ast.AwaitExpr) {
+	g.needsRuntime = true
+	g.buf.WriteString("runtime.Await(")
+	g.genExpr(e.Task)
+	g.buf.WriteString(")")
 }
 
 // receiverName returns the Go receiver variable name for a class.

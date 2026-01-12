@@ -9,16 +9,6 @@ Legend:
 
 ---
 
-## Missing Features
-
-These features are defined in spec.md but not yet implemented in the compiler:
-
-| Feature | Spec Section | Description |
-|---------|--------------|-------------|
-| Concurrency | §13 | `go` keyword, `Chan[T]` channels, `select` statement, channel operations |
-
----
-
 ## 2. Compilation Model
 
 ### 2.1 Bare Scripts (Top-Level Execution)
@@ -374,10 +364,34 @@ These features are defined in spec.md but not yet implemented in the compiler:
 - [x] `rand` (no arg)
 
 ## 13. Concurrency
-- [N/A] `go func_call()` - not yet implemented
-- [N/A] `go do ... end` - not yet implemented
-- [N/A] Channels - not yet implemented
-- [N/A] `select` - not yet implemented
+
+### 13.1 Goroutines
+- [x] `go func_call()` spawns goroutine with call
+- [x] `go do ... end` spawns goroutine with block
+
+### 13.2 Channels
+- [x] `Chan[T].new` creates unbuffered channel
+- [x] `Chan[T].new(capacity)` creates buffered channel
+- [x] `ch << value` sends to channel
+- [x] `ch.receive` receives from channel (blocking)
+- [x] `ch.try_receive` returns `(T, Bool)` (non-blocking)
+- [x] `ch.close` closes channel
+- [x] `for msg in ch` iterates over channel
+
+### 13.3 Select Statement
+- [x] `select` with `when val = ch.receive` (receive case)
+- [x] `select` with `when ch << value` (send case)
+- [x] `select` with `else` (default case)
+
+### 13.4 Spawn/Await
+- [x] `spawn { expr }` returns Task[T]
+- [x] `spawn do ... end` returns Task[T]
+- [x] `await task` blocks until task completes
+
+### 13.5 Structured Concurrency
+- [x] `concurrently do |scope| ... end` creates scope
+- [x] `scope.spawn { }` spawns task in scope
+- [x] Scope waits for all tasks on exit
 
 ## 15. Errors
 
@@ -437,14 +451,3 @@ These features are defined in spec.md but not yet implemented in the compiler:
 - [x] String operations on empty strings
 - [x] Math functions with edge values (NaN, Inf)
 
----
-
-## Not Yet Implemented (Future Work)
-
-These features are defined in spec.md but not yet implemented in the compiler:
-
-1. **Concurrency (Section 13)**
-   - `go` keyword for goroutines
-   - `Chan[T]` channel type
-   - `select` statement
-   - Channel operations (`<<`, `.receive`, `.try_receive`)

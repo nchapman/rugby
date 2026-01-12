@@ -31,6 +31,12 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parsePanicStmt()
 	case token.DEFER:
 		return p.parseDeferStmt()
+	case token.GO:
+		return p.parseGoStmt()
+	case token.SELECT:
+		return p.parseSelectStmt()
+	case token.CONCURRENTLY:
+		return p.parseConcurrentlyStmt()
 	case token.IDENT:
 		// Check for multi-assignment: ident, ident = expr
 		if p.peekTokenIs(token.COMMA) {
@@ -773,4 +779,171 @@ func (p *Parser) parseInstanceVarOrAssign() *ast.InstanceVarOrAssign {
 	p.skipNewlines()
 
 	return &ast.InstanceVarOrAssign{Name: name, Value: value}
+}
+
+// parseGoStmt parses: go func_call() or go do ... end
+func (p *Parser) parseGoStmt() *ast.GoStmt {
+	line := p.curToken.Line
+	p.nextToken() // consume 'go'
+
+	stmt := &ast.GoStmt{Line: line}
+
+	// Check for block form: go do ... end
+	if p.curTokenIs(token.DO) {
+		stmt.Block = p.parseBlock(token.END)
+		p.skipNewlines()
+		return stmt
+	}
+
+	// Otherwise parse the expression to call
+	expr := p.parseExpression(lowest)
+	if expr == nil {
+		p.errorAt(line, p.curToken.Column, "expected expression after 'go'")
+		return nil
+	}
+	stmt.Call = expr
+
+	p.nextToken() // move past expression
+	p.skipNewlines()
+	return stmt
+}
+
+// parseSelectStmt parses: select when ... end
+func (p *Parser) parseSelectStmt() *ast.SelectStmt {
+	line := p.curToken.Line
+	p.nextToken() // consume 'select'
+	p.skipNewlines()
+
+	stmt := &ast.SelectStmt{Line: line}
+
+	// Parse when clauses
+	for p.curTokenIs(token.WHEN) {
+		selectCase := p.parseSelectCase()
+		stmt.Cases = append(stmt.Cases, selectCase)
+	}
+
+	// Parse optional else clause (default case)
+	if p.curTokenIs(token.ELSE) {
+		p.nextToken() // consume 'else'
+		p.skipNewlines()
+
+		for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+			p.skipNewlines()
+			if p.curTokenIs(token.END) {
+				break
+			}
+			if s := p.parseStatement(); s != nil {
+				stmt.Else = append(stmt.Else, s)
+			}
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close select")
+		return nil
+	}
+	p.nextToken() // consume 'end'
+	p.skipNewlines()
+
+	return stmt
+}
+
+// parseSelectCase parses a single when clause in select
+func (p *Parser) parseSelectCase() ast.SelectCase {
+	p.nextToken() // consume 'when'
+
+	selectCase := ast.SelectCase{}
+
+	// Two forms:
+	// 1. Receive: when val = ch.receive  OR  when ch.receive (no assignment)
+	// 2. Send: when ch << value
+
+	// Check for assignment pattern: ident = ...
+	if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.ASSIGN) {
+		selectCase.AssignName = p.curToken.Literal
+		p.nextToken() // consume ident
+		p.nextToken() // consume '='
+	}
+
+	// Parse the channel expression
+	expr := p.parseExpression(lowest)
+
+	// Check if this is a send expression (ch << val was parsed as expression)
+	// or a receive (ch.receive)
+	if binary, ok := expr.(*ast.BinaryExpr); ok && binary.Op == "<<" {
+		selectCase.IsSend = true
+		selectCase.Chan = binary.Left
+		selectCase.Value = binary.Right
+	} else {
+		// Receive case - the expression should be the channel or channel.receive
+		selectCase.IsSend = false
+		selectCase.Chan = expr
+	}
+
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	// Parse body until next WHEN, ELSE, or END
+	for !p.curTokenIs(token.WHEN) && !p.curTokenIs(token.ELSE) &&
+		!p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.WHEN) || p.curTokenIs(token.ELSE) || p.curTokenIs(token.END) {
+			break
+		}
+		if s := p.parseStatement(); s != nil {
+			selectCase.Body = append(selectCase.Body, s)
+		}
+	}
+
+	return selectCase
+}
+
+// parseConcurrentlyStmt parses: concurrently do |scope| ... end
+func (p *Parser) parseConcurrentlyStmt() *ast.ConcurrentlyStmt {
+	line := p.curToken.Line
+	p.nextToken() // consume 'concurrently'
+
+	stmt := &ast.ConcurrentlyStmt{Line: line}
+
+	// Expect 'do' keyword
+	if !p.curTokenIs(token.DO) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after 'concurrently'")
+		return nil
+	}
+	p.nextToken() // consume 'do'
+
+	// Parse optional scope parameter: |scope|
+	if p.curTokenIs(token.PIPE) {
+		p.nextToken() // consume '|'
+		if p.curTokenIs(token.IDENT) {
+			stmt.ScopeVar = p.curToken.Literal
+			p.nextToken() // consume scope var name
+		}
+		if !p.curTokenIs(token.PIPE) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '|' after scope parameter")
+			return nil
+		}
+		p.nextToken() // consume '|'
+	}
+	p.skipNewlines()
+
+	// Parse body until 'end'
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.END) {
+			break
+		}
+		if s := p.parseStatement(); s != nil {
+			stmt.Body = append(stmt.Body, s)
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close concurrently block")
+		return nil
+	}
+	p.nextToken() // consume 'end'
+	p.skipNewlines()
+
+	return stmt
 }

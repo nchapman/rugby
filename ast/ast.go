@@ -716,3 +716,34 @@ type IncludeStmt struct {
 
 func (i *IncludeStmt) node()     {}
 func (i *IncludeStmt) stmtNode() {}
+
+// SpawnExpr represents spawning a concurrent task: spawn { expr }
+// Returns Task[T] where T is the block's return type
+type SpawnExpr struct {
+	Block *BlockExpr // the block to execute concurrently
+	Line  int        // source line number
+}
+
+func (s *SpawnExpr) node()     {}
+func (s *SpawnExpr) exprNode() {}
+
+// AwaitExpr represents awaiting a task: await t or await(t)
+// Blocks until the task completes and returns its value
+type AwaitExpr struct {
+	Task Expression // the Task[T] to await
+	Line int        // source line number
+}
+
+func (a *AwaitExpr) node()     {}
+func (a *AwaitExpr) exprNode() {}
+
+// ConcurrentlyStmt represents structured concurrency: concurrently do |scope| ... end
+// All tasks spawned within the scope are awaited when the block exits
+type ConcurrentlyStmt struct {
+	ScopeVar string      // the scope variable name (e.g., "scope")
+	Body     []Statement // statements inside the block
+	Line     int         // source line number
+}
+
+func (c *ConcurrentlyStmt) node()     {}
+func (c *ConcurrentlyStmt) stmtNode() {}

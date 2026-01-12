@@ -40,6 +40,10 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = &ast.Ident{Name: "self"}
 	case token.SUPER:
 		left = p.parseSuperExpr()
+	case token.SPAWN:
+		left = p.parseSpawnExpr()
+	case token.AWAIT:
+		left = p.parseAwaitExpr()
 	default:
 		return nil
 	}
@@ -50,7 +54,7 @@ infixLoop:
 		switch p.peekToken.Type {
 		case token.PLUS, token.MINUS, token.STAR, token.SLASH, token.PERCENT,
 			token.EQ, token.NE, token.LT, token.GT, token.LE, token.GE,
-			token.AND, token.OR:
+			token.AND, token.OR, token.SHOVELLEFT:
 			p.nextToken()
 			left = p.parseInfixExpr(left)
 		case token.QUESTIONQUESTION:
@@ -280,8 +284,9 @@ func (p *Parser) parseSelectorExpr(x ast.Expression) ast.Expression {
 	// curToken is '.'
 	p.nextToken() // move past '.' to the selector
 
-	// Allow certain keywords as method names (obj.as(Type), arr.select { |x| ... })
-	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.AS) && !p.curTokenIs(token.SELECT) {
+	// Allow certain keywords as method names (obj.as(Type), arr.select { |x| ... }, scope.spawn { })
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.AS) && !p.curTokenIs(token.SELECT) &&
+		!p.curTokenIs(token.SPAWN) && !p.curTokenIs(token.AWAIT) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '.'")
 		return nil
 	}
@@ -334,4 +339,48 @@ func (p *Parser) parseSuperExpr() ast.Expression {
 	}
 
 	return &ast.SuperExpr{Args: args, Line: line}
+}
+
+// parseSpawnExpr parses: spawn { expr } or spawn do ... end
+func (p *Parser) parseSpawnExpr() ast.Expression {
+	line := p.curToken.Line
+	p.nextToken() // consume 'spawn'
+
+	// Expect block: spawn { expr } or spawn do ... end
+	var block *ast.BlockExpr
+	if p.curTokenIs(token.DO) {
+		block = p.parseBlock(token.END)
+	} else if p.curTokenIs(token.LBRACE) {
+		block = p.parseBlock(token.RBRACE)
+	} else {
+		p.errorAt(line, p.curToken.Column, "expected block after 'spawn'")
+		return nil
+	}
+
+	return &ast.SpawnExpr{Block: block, Line: line}
+}
+
+// parseAwaitExpr parses: await task or await(task)
+func (p *Parser) parseAwaitExpr() ast.Expression {
+	line := p.curToken.Line
+	p.nextToken() // consume 'await'
+
+	// Handle optional parentheses: await(task) or await task
+	var task ast.Expression
+	if p.curTokenIs(token.LPAREN) {
+		p.nextToken() // consume '('
+		task = p.parseExpression(lowest)
+		p.nextToken() // move past expression
+		if !p.curTokenIs(token.RPAREN) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ')' after await expression")
+			return nil
+		}
+		// Don't advance past ')' - let infix loop handle it
+	} else {
+		// Without parens, parse as the following expression
+		task = p.parseExpression(lowest)
+		// Don't advance - the main parseExpression will handle token advancement
+	}
+
+	return &ast.AwaitExpr{Task: task, Line: line}
 }

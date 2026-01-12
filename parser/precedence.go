@@ -40,6 +40,7 @@ var precedences = map[token.TokenType]int{
 	token.GE:               lessGreater,
 	token.PLUS:             sum,
 	token.MINUS:            sum,
+	token.SHOVELLEFT:       sum, // << (channel send)
 	token.STAR:             product,
 	token.SLASH:            product,
 	token.PERCENT:          product,
