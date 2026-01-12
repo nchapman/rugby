@@ -89,6 +89,7 @@ const (
 	CASETYPE     TokenType = "CASETYPE"
 	WHEN         TokenType = "WHEN"
 	WHILE        TokenType = "WHILE"
+	UNTIL        TokenType = "UNTIL"
 	FOR          TokenType = "FOR"
 	IN           TokenType = "IN"
 	BREAK        TokenType = "BREAK"
@@ -153,6 +154,7 @@ var keywords = map[string]TokenType{
 	"case_type":    CASETYPE,
 	"when":         WHEN,
 	"while":        WHILE,
+	"until":        UNTIL,
 	"for":          FOR,
 	"in":           IN,
 	"break":        BREAK,

@@ -70,6 +70,68 @@ end`
 	assertContains(t, output, `i = (i + 1)`)
 }
 
+func TestGenerateUntil(t *testing.T) {
+	input := `def main
+  i = 5
+  until i == 0
+    puts(i)
+    i = i - 1
+  end
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `i := 5`)
+	// == is compiled to runtime.Equal for type safety
+	assertContains(t, output, `for !(runtime.Equal(i, 0)) {`)
+	assertContains(t, output, `runtime.Puts(i)`)
+	assertContains(t, output, `i = (i - 1)`)
+}
+
+func TestGenerateUntilSimpleCondition(t *testing.T) {
+	input := `def main
+  until done
+    work()
+  end
+end`
+
+	output := compile(t, input)
+
+	// Simple identifier condition doesn't need parentheses
+	assertContains(t, output, `for !done {`)
+}
+
+func TestGenerateUntilWithLogicalOperator(t *testing.T) {
+	input := `def main
+  until ready and valid
+    wait()
+  end
+end`
+
+	output := compile(t, input)
+
+	// Logical operators need parentheses for correct precedence
+	assertContains(t, output, `for !(ready && valid) {`)
+}
+
+func TestGenerateUntilWithBreakAndNext(t *testing.T) {
+	input := `def main
+  until done
+    next if skip
+    break if found
+  end
+end`
+
+	output := compile(t, input)
+
+	// break and next should work correctly inside until loops
+	assertContains(t, output, `for !done {`)
+	assertContains(t, output, `if skip {`)
+	assertContains(t, output, `continue`)
+	assertContains(t, output, `if found {`)
+	assertContains(t, output, `break`)
+}
+
 func TestGenerateComparison(t *testing.T) {
 	input := `def main
   x = 5 == 5

@@ -433,6 +433,18 @@ type WhileStmt struct {
 func (w *WhileStmt) node()     {}
 func (w *WhileStmt) stmtNode() {}
 
+// UntilStmt represents an until loop (inverse of while)
+type UntilStmt struct {
+	Cond    Expression
+	Body    []Statement
+	Line    int           // source line number (1-indexed)
+	Doc     *CommentGroup // leading comments
+	Comment *CommentGroup // trailing comment on same line
+}
+
+func (u *UntilStmt) node()     {}
+func (u *UntilStmt) stmtNode() {}
+
 // ForStmt represents a for...in loop: for item in items ... end
 type ForStmt struct {
 	Var      string     // loop variable name

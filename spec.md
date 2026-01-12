@@ -811,6 +811,18 @@ end
 
 Compiles to: `for cond { ... }`
 
+**Until Loop:**
+
+The inverse of `while`. Executes while the condition is false:
+
+```ruby
+until queue.empty?
+  process(queue.pop)
+end
+```
+
+Compiles to: `for !cond { ... }`
+
 **Control Flow Keywords:**
 * `break`: Exits the loop immediately.
 * `next`: Skips to the next iteration (Go `continue`).

@@ -19,6 +19,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseCaseTypeStmt()
 	case token.WHILE:
 		return p.parseWhileStmt()
+	case token.UNTIL:
+		return p.parseUntilStmt()
 	case token.FOR:
 		return p.parseForStmt()
 	case token.BREAK:
@@ -505,6 +507,35 @@ func (p *Parser) parseWhileStmt() *ast.WhileStmt {
 
 	if !p.curTokenIs(token.END) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close while")
+		return nil
+	}
+	p.nextToken() // consume 'end'
+	p.skipNewlines()
+
+	return stmt
+}
+
+func (p *Parser) parseUntilStmt() *ast.UntilStmt {
+	line := p.curToken.Line
+	p.nextToken() // consume 'until'
+
+	stmt := &ast.UntilStmt{Line: line}
+	stmt.Cond = p.parseExpression(lowest)
+	p.nextToken() // move past condition
+	p.skipNewlines()
+
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.END) {
+			break
+		}
+		if s := p.parseStatement(); s != nil {
+			stmt.Body = append(stmt.Body, s)
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close until")
 		return nil
 	}
 	p.nextToken() // consume 'end'

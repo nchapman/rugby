@@ -222,6 +222,36 @@ end`
 	}
 }
 
+func TestUntilStatement(t *testing.T) {
+	input := `def main
+  until queue.empty?
+    process(queue.pop)
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	untilStmt, ok := fn.Body[0].(*ast.UntilStmt)
+	if !ok {
+		t.Fatalf("expected UntilStmt, got %T", fn.Body[0])
+	}
+
+	if untilStmt.Cond == nil {
+		t.Fatal("expected condition, got nil")
+	}
+
+	if len(untilStmt.Body) != 1 {
+		t.Errorf("expected 1 body statement, got %d", len(untilStmt.Body))
+	}
+}
+
 func TestFunctionCall(t *testing.T) {
 	input := `def main
   puts("hello")

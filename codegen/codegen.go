@@ -550,6 +550,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genCaseTypeStmt(s)
 	case *ast.WhileStmt:
 		g.genWhileStmt(s)
+	case *ast.UntilStmt:
+		g.genUntilStmt(s)
 	case *ast.ForStmt:
 		g.genForStmt(s)
 	case *ast.BreakStmt:
@@ -1803,6 +1805,41 @@ func (g *Generator) genWhileStmt(s *ast.WhileStmt) {
 	if err := g.genCondition(s.Cond); err != nil {
 		g.addError(fmt.Errorf("line %d: %w", s.Line, err))
 		g.buf.WriteString("false")
+	}
+	g.buf.WriteString(" {\n")
+
+	g.pushContext(ctxLoop)
+	g.indent++
+	for _, stmt := range s.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+	g.popContext()
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genUntilStmt(s *ast.UntilStmt) {
+	g.writeIndent()
+	g.buf.WriteString("for !")
+	// Wrap condition in parentheses unless it's a simple expression.
+	// Simple expressions that don't need parens: identifiers, booleans, calls, selectors.
+	// All other expressions (binary, nil-coalesce, etc.) need parens for correct precedence.
+	needsParens := true
+	switch s.Cond.(type) {
+	case *ast.Ident, *ast.BoolLit, *ast.CallExpr, *ast.SelectorExpr:
+		needsParens = false
+	}
+	if needsParens {
+		g.buf.WriteString("(")
+	}
+	if err := g.genCondition(s.Cond); err != nil {
+		g.addError(fmt.Errorf("line %d: %w", s.Line, err))
+		g.buf.WriteString("false")
+	}
+	if needsParens {
+		g.buf.WriteString(")")
 	}
 	g.buf.WriteString(" {\n")
 
