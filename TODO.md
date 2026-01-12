@@ -56,7 +56,7 @@ items << a << b << c        # chainable
 
 ### 3. Negative Indexing
 **Priority:** High
-**Status:** Pending
+**Status:** ✅ Complete
 
 **Syntax:**
 ```ruby
@@ -66,18 +66,19 @@ str[-1]     # last character
 ```
 
 **Implementation:**
-- [ ] Lexer: No changes (already handles negative numbers)
-- [ ] AST: No changes (`IndexExpr` already exists)
-- [ ] Parser: No changes (already parses `arr[-1]`)
-- [ ] CodeGen: Detect negative literal index, emit `runtime.Index(arr, -1)`
-- [ ] Runtime: Add `Index[T](slice []T, i int) T` that handles negative indices
-- [ ] Runtime: Add `StringIndex(s string, i int) string` for strings
-- [ ] Tests: Codegen and runtime tests
-- [ ] Docs: Update spec.md Section 12.3 (Array methods)
+- [x] Lexer: No changes (already handles negative numbers)
+- [x] AST: No changes (`IndexExpr` already exists)
+- [x] Parser: No changes (already parses `arr[-1]`)
+- [x] CodeGen: Detect negative/variable index, emit `runtime.AtIndex(arr, i)`
+- [x] Runtime: Added `Index[T]`, `IndexOpt[T]`, `AtIndex`, `AtIndexOpt`
+- [x] Runtime: Added `StringIndex`, `StringIndexOpt` for strings
+- [x] Tests: Codegen and runtime tests
+- [x] Docs: Updated spec.md Section 4.2 (Array and String Indexing)
 
 **Notes:**
-- Only static negative literals, or all negative indices at runtime?
-- Recommend: runtime check for all index operations for safety
+- Non-negative literal indices use native Go syntax for efficiency
+- Variable and negative indices use `runtime.AtIndex` for safety
+- `AtIndex` handles both strings (rune-based) and slices via reflection
 
 ---
 
@@ -172,7 +173,7 @@ EOF
 
 ### 7. `until` Loop
 **Priority:** Medium
-**Status:** Pending
+**Status:** ✅ Complete
 
 **Syntax:**
 ```ruby
@@ -182,22 +183,22 @@ end
 ```
 
 **Implementation:**
-- [ ] Lexer: Add `UNTIL` keyword
-- [ ] AST: Add `UntilStmt` node (or reuse `WhileStmt` with `Negated` flag)
-- [ ] Parser: Parse `until cond ... end` similar to `while`
-- [ ] CodeGen: Emit `for !cond { ... }`
-- [ ] Tests: Lexer, parser, codegen tests
-- [ ] Docs: Update spec.md Section 5.3 (Imperative Loops)
+- [x] Lexer: Added `UNTIL` keyword
+- [x] AST: Added `UntilStmt` node
+- [x] Parser: Added `parseUntilStmt` similar to `while`
+- [x] CodeGen: Emits `for !cond { ... }` with smart parenthesization
+- [x] Tests: Lexer, parser, codegen tests
+- [x] Docs: Updated spec.md Section 5.3 (Imperative Loops)
 
 **Notes:**
 - Semantically equivalent to `while !cond`
-- Simple addition, low risk
+- Supports break/next like while loop
 
 ---
 
 ### 8. Postfix `while`/`until`
 **Priority:** Medium
-**Status:** Pending
+**Status:** ✅ Complete
 
 **Syntax:**
 ```ruby
@@ -206,17 +207,17 @@ process(x) until done?
 ```
 
 **Implementation:**
-- [ ] Lexer: No changes (`while`/`until` already keywords)
-- [ ] AST: Extend statement modifier support (already have `if`/`unless`)
-- [ ] Parser: Parse `<stmt> while <cond>` and `<stmt> until <cond>`
-- [ ] CodeGen: Emit `for cond { stmt }` or `for !cond { stmt }`
-- [ ] Tests: Parser, codegen tests
-- [ ] Docs: Update spec.md Section 5.5 (Statement Modifiers)
+- [x] Lexer: No changes (`while`/`until` already keywords)
+- [x] AST: Reuses `WhileStmt` and `UntilStmt` nodes
+- [x] Parser: Added `parseLoopModifier` to handle postfix forms
+- [x] CodeGen: Reuses existing `genWhileStmt` and `genUntilStmt`
+- [x] Tests: Parser, codegen tests
+- [x] Docs: Updated spec.md Section 5.6 (Loop Modifiers)
 
 **Notes:**
 - Follows same pattern as existing `if`/`unless` modifiers
 - `stmt while cond` executes stmt repeatedly while cond is true
-- Unlike Ruby, we won't support `begin...end while` (do-while)
+- Cannot be combined with if/unless modifiers on same statement
 
 ---
 

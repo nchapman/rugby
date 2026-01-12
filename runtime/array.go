@@ -255,6 +255,30 @@ func Last[T any](slice []T) (T, bool) {
 	return slice[len(slice)-1], true
 }
 
+// Index returns the element at the given index, supporting negative indices.
+// Negative indices count from the end: -1 is last, -2 is second-to-last, etc.
+// Ruby: arr[-1], arr[-2]
+func Index[T any](slice []T, i int) T {
+	if i < 0 {
+		i = len(slice) + i
+	}
+	return slice[i]
+}
+
+// IndexOpt returns the element at the given index with bounds checking.
+// Returns (value, true) if index is valid, (zero, false) if out of bounds.
+// Supports negative indices.
+func IndexOpt[T any](slice []T, i int) (T, bool) {
+	if i < 0 {
+		i = len(slice) + i
+	}
+	if i < 0 || i >= len(slice) {
+		var zero T
+		return zero, false
+	}
+	return slice[i], true
+}
+
 // Reverse reverses the slice in-place.
 // Ruby: arr.reverse!
 func Reverse[T any](slice []T) {
@@ -443,4 +467,120 @@ func Rotate[T any](slice []T, n int) []T {
 		return slices.Clone(slice)
 	}
 	return slices.Concat(slice[n:], slice[:n])
+}
+
+// AtIndex returns the element at the given index, supporting negative indices.
+// This is a universal function that handles both strings and slices.
+// For strings, returns the character (as string) at the index.
+// For slices, returns the element at the index.
+// Negative indices count from the end: -1 is last, -2 is second-to-last, etc.
+// Panics if index is out of bounds.
+// Ruby: arr[-1], str[-1]
+func AtIndex(collection any, i int) any {
+	// Fast paths for common types to avoid reflection overhead
+	switch s := collection.(type) {
+	case string:
+		return StringIndex(s, i)
+	case []int:
+		if i < 0 {
+			i = len(s) + i
+		}
+		return s[i]
+	case []string:
+		if i < 0 {
+			i = len(s) + i
+		}
+		return s[i]
+	case []float64:
+		if i < 0 {
+			i = len(s) + i
+		}
+		return s[i]
+	case []bool:
+		if i < 0 {
+			i = len(s) + i
+		}
+		return s[i]
+	case []any:
+		if i < 0 {
+			i = len(s) + i
+		}
+		return s[i]
+	}
+
+	// Reflection fallback for other slice types
+	val := reflect.ValueOf(collection)
+	if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
+		panic(fmt.Sprintf("AtIndex: expected string, slice or array, got %T", collection))
+	}
+	length := val.Len()
+	if i < 0 {
+		i = length + i
+	}
+	return val.Index(i).Interface()
+}
+
+// AtIndexOpt returns the element at the given index with bounds checking.
+// Returns (value, true) if index is valid, (nil, false) if out of bounds.
+// Supports negative indices and works for both strings and slices.
+func AtIndexOpt(collection any, i int) (any, bool) {
+	// Fast paths for common types to avoid reflection overhead
+	switch s := collection.(type) {
+	case string:
+		return StringIndexOpt(s, i)
+	case []int:
+		if i < 0 {
+			i = len(s) + i
+		}
+		if i < 0 || i >= len(s) {
+			return nil, false
+		}
+		return s[i], true
+	case []string:
+		if i < 0 {
+			i = len(s) + i
+		}
+		if i < 0 || i >= len(s) {
+			return nil, false
+		}
+		return s[i], true
+	case []float64:
+		if i < 0 {
+			i = len(s) + i
+		}
+		if i < 0 || i >= len(s) {
+			return nil, false
+		}
+		return s[i], true
+	case []bool:
+		if i < 0 {
+			i = len(s) + i
+		}
+		if i < 0 || i >= len(s) {
+			return nil, false
+		}
+		return s[i], true
+	case []any:
+		if i < 0 {
+			i = len(s) + i
+		}
+		if i < 0 || i >= len(s) {
+			return nil, false
+		}
+		return s[i], true
+	}
+
+	// Reflection fallback for other slice types
+	val := reflect.ValueOf(collection)
+	if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
+		return nil, false
+	}
+	length := val.Len()
+	if i < 0 {
+		i = length + i
+	}
+	if i < 0 || i >= length {
+		return nil, false
+	}
+	return val.Index(i).Interface(), true
 }

@@ -2666,10 +2666,43 @@ func (g *Generator) genArrayLitWithSplat(arr *ast.ArrayLit) {
 }
 
 func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
+	// Check if we should use native Go indexing vs runtime.AtIndex
+	// Use native indexing for:
+	// - Non-negative integer literals (arr[0], arr[1])
+	// - String keys (map access: m["key"])
+	// Use runtime.AtIndex for:
+	// - Negative integer literals (arr[-1])
+	// - Variable indices (arr[i] - could be negative at runtime)
+	// - Expressions (arr[i + 1] - could be negative)
+	if g.shouldUseNativeIndex(idx.Index) {
+		g.genExpr(idx.Left)
+		g.buf.WriteString("[")
+		g.genExpr(idx.Index)
+		g.buf.WriteString("]")
+		return
+	}
+
+	// Could be negative or is a variable integer: use runtime.AtIndex
+	g.needsRuntime = true
+	g.buf.WriteString("runtime.AtIndex(")
 	g.genExpr(idx.Left)
-	g.buf.WriteString("[")
+	g.buf.WriteString(", ")
 	g.genExpr(idx.Index)
-	g.buf.WriteString("]")
+	g.buf.WriteString(")")
+}
+
+// shouldUseNativeIndex returns true if the index expression should use native Go indexing.
+// This is true for non-negative integer literals and string keys (map access).
+func (g *Generator) shouldUseNativeIndex(expr ast.Expression) bool {
+	switch e := expr.(type) {
+	case *ast.IntLit:
+		return e.Value >= 0
+	case *ast.StringLit:
+		// String key means map access - use native Go syntax
+		return true
+	default:
+		return false
+	}
 }
 
 func (g *Generator) genMapLit(m *ast.MapLit) {

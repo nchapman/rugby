@@ -563,3 +563,170 @@ func TestReduceWithBreak(t *testing.T) {
 		t.Errorf("Reduce with break: got %d, want 10", result)
 	}
 }
+
+func TestIndex(t *testing.T) {
+	arr := []int{10, 20, 30, 40, 50}
+
+	// Positive indices
+	if got := Index(arr, 0); got != 10 {
+		t.Errorf("Index(arr, 0) = %d; want 10", got)
+	}
+	if got := Index(arr, 2); got != 30 {
+		t.Errorf("Index(arr, 2) = %d; want 30", got)
+	}
+
+	// Negative indices
+	if got := Index(arr, -1); got != 50 {
+		t.Errorf("Index(arr, -1) = %d; want 50", got)
+	}
+	if got := Index(arr, -2); got != 40 {
+		t.Errorf("Index(arr, -2) = %d; want 40", got)
+	}
+	if got := Index(arr, -5); got != 10 {
+		t.Errorf("Index(arr, -5) = %d; want 10", got)
+	}
+}
+
+func TestIndexOpt(t *testing.T) {
+	arr := []int{10, 20, 30}
+
+	// Valid indices
+	if val, ok := IndexOpt(arr, 0); !ok || val != 10 {
+		t.Errorf("IndexOpt(arr, 0) = %d, %v; want 10, true", val, ok)
+	}
+	if val, ok := IndexOpt(arr, -1); !ok || val != 30 {
+		t.Errorf("IndexOpt(arr, -1) = %d, %v; want 30, true", val, ok)
+	}
+
+	// Out of bounds
+	if _, ok := IndexOpt(arr, 3); ok {
+		t.Error("IndexOpt(arr, 3) should return false for out of bounds")
+	}
+	if _, ok := IndexOpt(arr, -4); ok {
+		t.Error("IndexOpt(arr, -4) should return false for out of bounds")
+	}
+}
+
+func TestAtIndex(t *testing.T) {
+	// Test with int slice
+	intArr := []int{10, 20, 30, 40, 50}
+	if got := AtIndex(intArr, 0).(int); got != 10 {
+		t.Errorf("AtIndex(intArr, 0) = %d; want 10", got)
+	}
+	if got := AtIndex(intArr, -1).(int); got != 50 {
+		t.Errorf("AtIndex(intArr, -1) = %d; want 50", got)
+	}
+	if got := AtIndex(intArr, -2).(int); got != 40 {
+		t.Errorf("AtIndex(intArr, -2) = %d; want 40", got)
+	}
+
+	// Test with string slice
+	strArr := []string{"a", "b", "c"}
+	if got := AtIndex(strArr, 1).(string); got != "b" {
+		t.Errorf("AtIndex(strArr, 1) = %s; want b", got)
+	}
+	if got := AtIndex(strArr, -1).(string); got != "c" {
+		t.Errorf("AtIndex(strArr, -1) = %s; want c", got)
+	}
+
+	// Test with string (character indexing)
+	str := "hello"
+	if got := AtIndex(str, 0).(string); got != "h" {
+		t.Errorf("AtIndex(str, 0) = %s; want h", got)
+	}
+	if got := AtIndex(str, -1).(string); got != "o" {
+		t.Errorf("AtIndex(str, -1) = %s; want o", got)
+	}
+	if got := AtIndex(str, -2).(string); got != "l" {
+		t.Errorf("AtIndex(str, -2) = %s; want l", got)
+	}
+
+	// Test with unicode string
+	unicode := "héllo"
+	if got := AtIndex(unicode, 1).(string); got != "é" {
+		t.Errorf("AtIndex(unicode, 1) = %s; want é", got)
+	}
+	if got := AtIndex(unicode, -1).(string); got != "o" {
+		t.Errorf("AtIndex(unicode, -1) = %s; want o", got)
+	}
+}
+
+func TestAtIndexOpt(t *testing.T) {
+	// Test with slice
+	arr := []int{10, 20, 30}
+	if val, ok := AtIndexOpt(arr, 0); !ok || val.(int) != 10 {
+		t.Errorf("AtIndexOpt(arr, 0) = %v, %v; want 10, true", val, ok)
+	}
+	if val, ok := AtIndexOpt(arr, -1); !ok || val.(int) != 30 {
+		t.Errorf("AtIndexOpt(arr, -1) = %v, %v; want 30, true", val, ok)
+	}
+	if _, ok := AtIndexOpt(arr, 3); ok {
+		t.Error("AtIndexOpt(arr, 3) should return false")
+	}
+	if _, ok := AtIndexOpt(arr, -4); ok {
+		t.Error("AtIndexOpt(arr, -4) should return false")
+	}
+
+	// Test with string
+	str := "abc"
+	if val, ok := AtIndexOpt(str, 0); !ok || val.(string) != "a" {
+		t.Errorf("AtIndexOpt(str, 0) = %v, %v; want a, true", val, ok)
+	}
+	if val, ok := AtIndexOpt(str, -1); !ok || val.(string) != "c" {
+		t.Errorf("AtIndexOpt(str, -1) = %v, %v; want c, true", val, ok)
+	}
+	if _, ok := AtIndexOpt(str, 3); ok {
+		t.Error("AtIndexOpt(str, 3) should return false")
+	}
+	if _, ok := AtIndexOpt(str, -4); ok {
+		t.Error("AtIndexOpt(str, -4) should return false")
+	}
+}
+
+func TestIndexPanicsOutOfBounds(t *testing.T) {
+	arr := []int{1, 2, 3}
+
+	// Test positive out-of-bounds
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Index with positive out-of-bounds did not panic")
+			}
+		}()
+		Index(arr, 10)
+	}()
+
+	// Test negative out-of-bounds
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("Index with negative out-of-bounds did not panic")
+			}
+		}()
+		Index(arr, -10)
+	}()
+}
+
+func TestAtIndexPanicsOutOfBounds(t *testing.T) {
+	arr := []int{1, 2, 3}
+
+	// Test positive out-of-bounds
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("AtIndex with positive out-of-bounds did not panic")
+			}
+		}()
+		AtIndex(arr, 10)
+	}()
+
+	// Test negative out-of-bounds
+	func() {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Error("AtIndex with negative out-of-bounds did not panic")
+			}
+		}()
+		AtIndex(arr, -10)
+	}()
+}

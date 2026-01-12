@@ -287,3 +287,81 @@ func TestReplace(t *testing.T) {
 		}
 	}
 }
+
+func TestStringIndex(t *testing.T) {
+	// Basic ASCII string
+	s := "hello"
+	if got := StringIndex(s, 0); got != "h" {
+		t.Errorf("StringIndex(%q, 0) = %q; want h", s, got)
+	}
+	if got := StringIndex(s, 4); got != "o" {
+		t.Errorf("StringIndex(%q, 4) = %q; want o", s, got)
+	}
+	if got := StringIndex(s, -1); got != "o" {
+		t.Errorf("StringIndex(%q, -1) = %q; want o", s, got)
+	}
+	if got := StringIndex(s, -2); got != "l" {
+		t.Errorf("StringIndex(%q, -2) = %q; want l", s, got)
+	}
+	if got := StringIndex(s, -5); got != "h" {
+		t.Errorf("StringIndex(%q, -5) = %q; want h", s, got)
+	}
+
+	// Unicode string
+	unicode := "héllo"
+	if got := StringIndex(unicode, 1); got != "é" {
+		t.Errorf("StringIndex(%q, 1) = %q; want é", unicode, got)
+	}
+	if got := StringIndex(unicode, -1); got != "o" {
+		t.Errorf("StringIndex(%q, -1) = %q; want o", unicode, got)
+	}
+	if got := StringIndex(unicode, -4); got != "é" {
+		t.Errorf("StringIndex(%q, -4) = %q; want é", unicode, got)
+	}
+
+	// Emoji (multi-byte runes)
+	emoji := "a😀b"
+	if got := StringIndex(emoji, 1); got != "😀" {
+		t.Errorf("StringIndex(%q, 1) = %q; want 😀", emoji, got)
+	}
+	if got := StringIndex(emoji, -1); got != "b" {
+		t.Errorf("StringIndex(%q, -1) = %q; want b", emoji, got)
+	}
+	if got := StringIndex(emoji, -2); got != "😀" {
+		t.Errorf("StringIndex(%q, -2) = %q; want 😀", emoji, got)
+	}
+}
+
+func TestStringIndexOpt(t *testing.T) {
+	s := "abc"
+
+	// Valid indices
+	if val, ok := StringIndexOpt(s, 0); !ok || val != "a" {
+		t.Errorf("StringIndexOpt(%q, 0) = %q, %v; want a, true", s, val, ok)
+	}
+	if val, ok := StringIndexOpt(s, 2); !ok || val != "c" {
+		t.Errorf("StringIndexOpt(%q, 2) = %q, %v; want c, true", s, val, ok)
+	}
+	if val, ok := StringIndexOpt(s, -1); !ok || val != "c" {
+		t.Errorf("StringIndexOpt(%q, -1) = %q, %v; want c, true", s, val, ok)
+	}
+	if val, ok := StringIndexOpt(s, -3); !ok || val != "a" {
+		t.Errorf("StringIndexOpt(%q, -3) = %q, %v; want a, true", s, val, ok)
+	}
+
+	// Out of bounds
+	if _, ok := StringIndexOpt(s, 3); ok {
+		t.Error("StringIndexOpt(s, 3) should return false for out of bounds")
+	}
+	if _, ok := StringIndexOpt(s, -4); ok {
+		t.Error("StringIndexOpt(s, -4) should return false for out of bounds")
+	}
+
+	// Empty string
+	if _, ok := StringIndexOpt("", 0); ok {
+		t.Error("StringIndexOpt(\"\", 0) should return false for empty string")
+	}
+	if _, ok := StringIndexOpt("", -1); ok {
+		t.Error("StringIndexOpt(\"\", -1) should return false for empty string")
+	}
+}

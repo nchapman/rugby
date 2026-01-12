@@ -254,6 +254,31 @@ copy = [*items]                # shallow copy
 combined = [*a, *b]            # concatenate arrays
 ```
 
+#### Array and String Indexing
+
+Rugby supports negative indexing like Ruby, where negative indices count from the end:
+
+```ruby
+arr = [10, 20, 30, 40, 50]
+arr[0]    # 10 (first element)
+arr[2]    # 30 (third element)
+arr[-1]   # 50 (last element)
+arr[-2]   # 40 (second-to-last)
+arr[-5]   # 10 (fifth-from-end = first)
+
+str = "hello"
+str[0]    # "h" (first character)
+str[-1]   # "o" (last character)
+str[-2]   # "l" (second-to-last character)
+```
+
+**Codegen behavior:**
+- Literal non-negative indices use native Go indexing for efficiency: `arr[0]`
+- Negative indices and variable indices use `runtime.AtIndex` to support negative values
+- String indexing is Unicode-aware (operates on runes, not bytes)
+
+**Note:** Out-of-bounds indices will panic at runtime (matching Go semantics). For safe access, use the `first` and `last` methods which return optionals.
+
 #### Map Literals
 
 Rugby supports multiple syntaxes for map literals:

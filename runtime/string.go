@@ -100,3 +100,28 @@ func StringContains(s, substr string) bool {
 func Replace(s, old, new string) string {
 	return strings.ReplaceAll(s, old, new)
 }
+
+// StringIndex returns the character (as string) at the given index, supporting negative indices.
+// Negative indices count from the end: -1 is last char, -2 is second-to-last, etc.
+// Ruby: str[-1], str[-2]
+func StringIndex(s string, i int) string {
+	runes := []rune(s)
+	if i < 0 {
+		i = len(runes) + i
+	}
+	return string(runes[i])
+}
+
+// StringIndexOpt returns the character at the given index with bounds checking.
+// Returns (char, true) if index is valid, ("", false) if out of bounds.
+// Supports negative indices.
+func StringIndexOpt(s string, i int) (string, bool) {
+	runes := []rune(s)
+	if i < 0 {
+		i = len(runes) + i
+	}
+	if i < 0 || i >= len(runes) {
+		return "", false
+	}
+	return string(runes[i]), true
+}

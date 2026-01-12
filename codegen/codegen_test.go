@@ -591,7 +591,44 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `arr[(i + 1)]`)
+	// Variable index uses runtime.AtIndex to support negative indices
+	assertContains(t, output, `runtime.AtIndex(arr, (i + 1))`)
+}
+
+func TestGenerateNegativeIndexLiteral(t *testing.T) {
+	input := `def main
+  x = arr[-1]
+  y = arr[-2]
+end`
+
+	output := compile(t, input)
+
+	// Negative literal indices use runtime.AtIndex
+	assertContains(t, output, `runtime.AtIndex(arr, -1)`)
+	assertContains(t, output, `runtime.AtIndex(arr, -2)`)
+}
+
+func TestGenerateNegativeStringIndex(t *testing.T) {
+	input := `def main
+  s = "hello"
+  x = s[-1]
+end`
+
+	output := compile(t, input)
+
+	// String negative indexing also uses runtime.AtIndex
+	assertContains(t, output, `runtime.AtIndex(s, -1)`)
+}
+
+func TestGenerateVariableIndex(t *testing.T) {
+	input := `def main
+  x = arr[i]
+end`
+
+	output := compile(t, input)
+
+	// Variable indices use runtime.AtIndex to support negative values
+	assertContains(t, output, `runtime.AtIndex(arr, i)`)
 }
 
 func TestGenerateChainedArrayIndex(t *testing.T) {
@@ -602,6 +639,28 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `matrix[0][1]`)
+}
+
+func TestGenerateChainedNegativeIndex(t *testing.T) {
+	input := `def main
+  x = matrix[-1][-1]
+end`
+
+	output := compile(t, input)
+
+	// Negative indices chain AtIndex calls
+	assertContains(t, output, `runtime.AtIndex(runtime.AtIndex(matrix, -1), -1)`)
+}
+
+func TestGenerateMixedChainedIndex(t *testing.T) {
+	input := `def main
+  x = matrix[0][-1]
+end`
+
+	output := compile(t, input)
+
+	// Positive literal uses native, negative uses AtIndex
+	assertContains(t, output, `runtime.AtIndex(matrix[0], -1)`)
 }
 
 func TestGenerateMapLiteral(t *testing.T) {
