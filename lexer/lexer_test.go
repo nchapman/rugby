@@ -1185,3 +1185,100 @@ if let x = y`
 		}
 	}
 }
+
+func TestSpaceBefore(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []bool // SpaceBefore for each token (excluding EOF)
+	}{
+		{
+			name:  "basic spacing",
+			input: "foo bar",
+			want:  []bool{false, true}, // foo=false, bar=true
+		},
+		{
+			name:  "no spaces",
+			input: "foo-1",
+			want:  []bool{false, false, false}, // foo=false, -=false, 1=false
+		},
+		{
+			name:  "spaces around operator",
+			input: "foo - 1",
+			want:  []bool{false, true, true}, // foo=false, -=true, 1=true
+		},
+		{
+			name:  "space before operator only",
+			input: "foo -1",
+			want:  []bool{false, true, false}, // foo=false, -=true, 1=false
+		},
+		{
+			name:  "method chain",
+			input: "a.b.c",
+			want:  []bool{false, false, false, false, false}, // a . b . c
+		},
+		{
+			name:  "method chain with arg",
+			input: "a.b x",
+			want:  []bool{false, false, false, true}, // a . b x
+		},
+		{
+			name:  "multiple args",
+			input: "foo a, b",
+			want:  []bool{false, true, false, true}, // foo a , b
+		},
+		{
+			name:  "string arg",
+			input: `puts "hello"`,
+			want:  []bool{false, true}, // puts "hello"
+		},
+		{
+			name:  "negative number",
+			input: "x = -1",
+			want:  []bool{false, true, true, false}, // x = - 1
+		},
+		{
+			name:  "bang method name",
+			input: "foo!",
+			want:  []bool{false}, // foo! is a single identifier
+		},
+		{
+			name:  "bang with space",
+			input: "foo !x",
+			want:  []bool{false, true, false}, // foo ! x
+		},
+		{
+			name:  "array literal",
+			input: "[1, 2]",
+			want:  []bool{false, false, false, true, false}, // [ 1 , 2 ]
+		},
+		{
+			name:  "symbol",
+			input: "x = :ok",
+			want:  []bool{false, true, true}, // x = :ok
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := New(tt.input)
+			var got []bool
+			for {
+				tok := l.NextToken()
+				if tok.Type == token.EOF {
+					break
+				}
+				got = append(got, tok.SpaceBefore)
+			}
+			if len(got) != len(tt.want) {
+				t.Errorf("token count = %d, want %d\ngot tokens: %v", len(got), len(tt.want), got)
+				return
+			}
+			for i, want := range tt.want {
+				if got[i] != want {
+					t.Errorf("token %d SpaceBefore = %v, want %v", i, got[i], want)
+				}
+			}
+		})
+	}
+}

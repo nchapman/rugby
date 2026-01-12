@@ -192,8 +192,8 @@ class User
 end
 
 user = User.new("Alice", "alice@example.com", 30)
-puts user.greeting      # Hi, I'm Alice
-puts user.adult?        # true
+puts user.greeting  # Hi, I'm Alice
+puts user.adult?    # true
 ```
 
 **Accessors:**
@@ -226,8 +226,8 @@ def announce(s : Speaker)
   puts s.speak
 end
 
-announce(Dog.new)  # Woof!
-announce(Cat.new)  # Meow!
+announce Dog.new  # Woof!
+announce Cat.new  # Meow!
 ```
 
 Use `implements` to explicitly declare conformance (optional but documents intent):
@@ -267,8 +267,8 @@ class Bot
   end
 end
 
-User.new("Alice").greet  # Hello, I'm Alice
-Bot.new("Helper").greet  # Hello, I'm Helper
+puts User.new("Alice").greet  # Hello, I'm Alice
+puts Bot.new("Helper").greet  # Hello, I'm Helper
 ```
 
 ### Visibility
@@ -329,7 +329,7 @@ end
 ```ruby
 result, err = some_operation()
 if err != nil
-  log.error("Operation failed: #{err}")
+  log.error "Operation failed: #{err}"
   return nil, err
 end
 ```
@@ -429,7 +429,7 @@ import fmt
 import strings
 import os
 
-fmt.Println("Hello from Go")
+fmt.Println "Hello from Go"
 
 # Both styles are equivalent - use whichever you prefer
 upper = strings.to_upper("hello")     # Rugby style
@@ -528,7 +528,7 @@ Rugby includes a standard library with Ruby-like APIs.
 import rugby/http
 
 resp = http.get("https://api.example.com/users")!
-if resp.ok()
+if resp.ok?
   users = resp.json_array()!
   for user in users
     puts user["name"]
@@ -564,7 +564,7 @@ import rugby/shell
 output = shell.run("git status --short")!
 puts output
 
-if shell.exists("docker")
+if shell.exists? "docker"
   shell.run("docker build -t myapp .")!
 end
 ```

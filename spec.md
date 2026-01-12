@@ -865,11 +865,43 @@ end
 
 ### 6.5 Calling Convention
 
-To avoid ambiguity, Rugby requires parentheses for method calls that are not property accessors.
+Rugby supports Ruby-style "command syntax" where parentheses are optional for function and method calls.
 
-*   **Valid:** `inc()`, `add(1, 2)`, `puts("hi")`
-*   **Invalid:** `inc` (ambiguous with function value), `add 1, 2` (except in top-level scripts where relaxed parsing may apply).
-*   **Properties:** `user.age` (getter) and `user.age = 5` (setter) do not use parentheses.
+**With parentheses (always valid):**
+
+```ruby
+inc()
+add(1, 2)
+puts("hello")
+user.save()
+```
+
+**Without parentheses (command syntax):**
+
+```ruby
+puts "hello"       # puts("hello")
+add 1, 2           # add(1, 2)
+foo.bar baz        # foo.bar(baz)
+print x + 1        # print(x + 1)
+```
+
+**Rules:**
+
+1. Arguments are comma-separated expressions
+2. The argument list ends at: newline, `do`, `{`, or logical operators (`and`, `or`)
+3. Arithmetic and comparison operators are included in arguments:
+   - `puts x + 1` → `puts(x + 1)`
+   - `puts x == y` → `puts(x == y)`
+4. Logical operators terminate arguments:
+   - `puts x or y` → `puts(x) or y`
+5. Unary minus disambiguation uses whitespace:
+   - `foo -1` → `foo(-1)` (space before `-`, no space after)
+   - `foo - 1` → `(foo - 1)` (space on both sides = binary)
+6. Collection literals with space are arguments:
+   - `foo [1, 2]` → `foo([1, 2])` (array argument)
+   - `foo[1]` → index expression (no space = indexing)
+7. **Properties:** `user.age` (getter) and `user.age = 5` (setter) do not use parentheses
+8. For clarity in complex expressions, parentheses are recommended
 
 ---
 

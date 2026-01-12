@@ -120,10 +120,11 @@ const (
 )
 
 type Token struct {
-	Type    TokenType
-	Literal string
-	Line    int
-	Column  int
+	Type        TokenType
+	Literal     string
+	Line        int
+	Column      int
+	SpaceBefore bool // true if whitespace preceded this token
 }
 
 var keywords = map[string]TokenType{

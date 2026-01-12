@@ -118,7 +118,7 @@ func (l *Lexer) peekChar() byte {
 func (l *Lexer) NextToken() token.Token {
 	var tok token.Token
 
-	l.skipWhitespace()
+	spaceBefore := l.skipWhitespace()
 
 	tok.Line = l.line
 	tok.Column = l.column
@@ -126,6 +126,7 @@ func (l *Lexer) NextToken() token.Token {
 	switch l.ch {
 	case '\n':
 		tok = l.newToken(token.NEWLINE, string(l.ch))
+		tok.SpaceBefore = spaceBefore
 		l.line++
 		l.column = 0
 	case '"':
@@ -133,6 +134,7 @@ func (l *Lexer) NextToken() token.Token {
 		tok.Literal = l.readString()
 		tok.Line = l.line
 		tok.Column = l.column
+		tok.SpaceBefore = spaceBefore
 		return tok
 	case '#':
 		l.readComment()
@@ -225,6 +227,7 @@ func (l *Lexer) NextToken() token.Token {
 			l.readChar() // consume the ':'
 			tok.Type = token.SYMBOL
 			tok.Literal = l.readIdentifier()
+			tok.SpaceBefore = spaceBefore
 			return tok
 		}
 		tok = l.newToken(token.COLON, ":")
@@ -283,15 +286,19 @@ func (l *Lexer) NextToken() token.Token {
 		if isLetter(l.ch) {
 			tok.Literal = l.readIdentifier()
 			tok.Type = token.LookupIdent(tok.Literal)
+			tok.SpaceBefore = spaceBefore
 			return tok
 		}
 		if isDigit(l.ch) {
-			return l.readNumber()
+			tok = l.readNumber()
+			tok.SpaceBefore = spaceBefore
+			return tok
 		}
 		tok = l.newToken(token.ILLEGAL, string(l.ch))
 	}
 
 	l.readChar()
+	tok.SpaceBefore = spaceBefore
 	return tok
 }
 
@@ -369,10 +376,14 @@ func (l *Lexer) readNumber() token.Token {
 	return token.Token{Type: token.INT, Literal: literal, Line: l.line, Column: l.column}
 }
 
-func (l *Lexer) skipWhitespace() {
+// skipWhitespace skips whitespace characters and returns true if any were skipped.
+func (l *Lexer) skipWhitespace() bool {
+	hadWhitespace := false
 	for l.ch == ' ' || l.ch == '\t' || l.ch == '\r' {
+		hadWhitespace = true
 		l.readChar()
 	}
+	return hadWhitespace
 }
 
 // readComment reads a comment and stores it in the Comments slice.

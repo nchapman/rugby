@@ -51,6 +51,12 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	// Infix parsing
 infixLoop:
 	for !p.peekTokenIs(token.NEWLINE) && !p.peekTokenIs(token.EOF) && precedence < p.peekPrecedence() {
+		// Check for command syntax before processing infix operators
+		// This handles cases like `foo -1` (command) vs `foo - 1` (binary)
+		if p.isCallableExpr(left) && p.looksLikeCommandArg() {
+			break infixLoop
+		}
+
 		switch p.peekToken.Type {
 		case token.PLUS, token.MINUS, token.STAR, token.SLASH, token.PERCENT,
 			token.EQ, token.NE, token.LT, token.GT, token.LE, token.GE,
@@ -83,6 +89,26 @@ infixLoop:
 			left = p.parseRescueExpr(left)
 		default:
 			break infixLoop
+		}
+	}
+
+	// Check for command syntax after the infix loop
+	// This enables `puts "hello"` instead of `puts("hello")`
+	// We check here because command arguments (like STRING) have no operator precedence,
+	// so the infix loop exits before we can handle them.
+	if p.isCallableExpr(left) && p.canStartCommandArg() {
+		left = p.parseCommandCall(left)
+
+		// After command syntax, continue checking for low-precedence operators
+		// like `and`/`or`. This allows `puts x and y` → `(puts(x)) and y`
+		for !p.peekTokenIs(token.NEWLINE) && !p.peekTokenIs(token.EOF) && precedence < p.peekPrecedence() {
+			switch p.peekToken.Type {
+			case token.AND, token.OR:
+				p.nextToken()
+				left = p.parseInfixExpr(left)
+			default:
+				return left
+			}
 		}
 	}
 
@@ -383,4 +409,112 @@ func (p *Parser) parseAwaitExpr() ast.Expression {
 	}
 
 	return &ast.AwaitExpr{Task: task, Line: line}
+}
+
+// isCallableExpr returns true if the expression can be called with command syntax.
+// Only identifiers and selector expressions (method calls) support command syntax.
+func (p *Parser) isCallableExpr(expr ast.Expression) bool {
+	switch expr.(type) {
+	case *ast.Ident, *ast.SelectorExpr:
+		return true
+	}
+	return false
+}
+
+// canStartCommandArg returns true if the peek token can begin a command argument.
+// This is used to detect command syntax (calls without parentheses).
+func (p *Parser) canStartCommandArg() bool {
+	t := p.peekToken.Type
+
+	// Must have space before the argument
+	if !p.peekToken.SpaceBefore {
+		return false
+	}
+
+	switch t {
+	// Literals and identifiers
+	case token.IDENT, token.INT, token.FLOAT, token.STRING, token.SYMBOL,
+		token.TRUE, token.FALSE, token.NIL, token.SELF:
+		return true
+	// Grouping and collection literals (not LBRACE - that's handled as a block)
+	case token.LPAREN, token.LBRACKET:
+		return true
+	// Instance variable
+	case token.AT:
+		return true
+	// Prefix operators - only if followed immediately by their operand (no space after)
+	// This handles `foo -1` (command with unary minus) vs `foo - 1` (binary)
+	case token.MINUS, token.NOT:
+		// For command syntax, treat prefix operators as arg starters
+		// The SpaceBefore check above ensures there's space before the operator
+		return true
+	}
+	return false
+}
+
+// looksLikeCommandArg checks if the peek token looks like a command argument
+// in contexts where it could also be an infix operator.
+// This handles ambiguous cases like:
+//   - `foo -1` (command with unary minus) vs `foo - 1` (binary subtraction)
+//   - `foo [1,2]` (command with array) vs `foo[1]` (index expression)
+func (p *Parser) looksLikeCommandArg() bool {
+	// Must have space before
+	if !p.peekToken.SpaceBefore {
+		return false
+	}
+
+	switch p.peekToken.Type {
+	case token.MINUS, token.NOT:
+		// For `-` or `not`: command syntax if space before but no space after operand
+		// `foo -1` → command (space before -, no space after)
+		// `foo - 1` → binary (space on both sides)
+		// Use lexer lookahead to check the token after the operator
+		state := p.l.SaveState()
+		savedCur := p.curToken
+		savedPeek := p.peekToken
+		p.nextToken() // move to the operator
+		nextHasSpace := p.peekToken.SpaceBefore
+		p.l.RestoreState(state)
+		p.curToken = savedCur
+		p.peekToken = savedPeek
+		return !nextHasSpace
+
+	case token.LBRACKET:
+		// `foo [1,2]` with space → array literal argument
+		// `foo[1]` without space → index expression (handled by SpaceBefore check)
+		return true
+
+		// Note: LBRACE is NOT handled here - `foo { }` is a block, not a map argument
+		// Use `foo({"a" => 1})` to pass a map explicitly
+	}
+
+	return false
+}
+
+// parseCommandCall parses a function call using command syntax (no parentheses).
+// Example: `puts "hello"` becomes CallExpr{Func: puts, Args: ["hello"]}
+func (p *Parser) parseCommandCall(fn ast.Expression) *ast.CallExpr {
+	call := &ast.CallExpr{Func: fn}
+
+	p.nextToken() // move to first argument token
+
+	// Parse first argument at andPrec level
+	// This includes ==, +, etc. but excludes and/or which terminate the argument list
+	arg := p.parseExpression(andPrec)
+	if arg == nil {
+		return call
+	}
+	call.Args = append(call.Args, arg)
+
+	// Parse additional comma-separated arguments
+	for p.peekTokenIs(token.COMMA) {
+		p.nextToken() // consume comma
+		p.nextToken() // move to next arg
+		arg := p.parseExpression(andPrec)
+		if arg != nil {
+			call.Args = append(call.Args, arg)
+		}
+	}
+
+	return call
 }

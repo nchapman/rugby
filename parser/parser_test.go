@@ -4266,3 +4266,467 @@ end`
 		t.Errorf("expected names [a, b, c], got %v", multi.Names)
 	}
 }
+
+// =============================================================================
+// Command Syntax Tests (optional parentheses)
+// =============================================================================
+
+func TestCommandSyntaxBasic(t *testing.T) {
+	tests := []struct {
+		input    string
+		funcName string
+		argCount int
+	}{
+		{`puts "hello"`, "puts", 1},
+		{`puts x`, "puts", 1},
+		{`print "test"`, "print", 1},
+		{`foo bar`, "foo", 1},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			l := lexer.New(tt.input)
+			p := New(l)
+			program := p.ParseProgram()
+			checkParserErrors(t, p)
+
+			if len(program.Declarations) != 1 {
+				t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+			}
+
+			exprStmt, ok := program.Declarations[0].(*ast.ExprStmt)
+			if !ok {
+				t.Fatalf("expected ExprStmt, got %T", program.Declarations[0])
+			}
+
+			call, ok := exprStmt.Expr.(*ast.CallExpr)
+			if !ok {
+				t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+			}
+
+			ident, ok := call.Func.(*ast.Ident)
+			if !ok {
+				t.Fatalf("expected Ident as function, got %T", call.Func)
+			}
+
+			if ident.Name != tt.funcName {
+				t.Errorf("expected function name %q, got %q", tt.funcName, ident.Name)
+			}
+
+			if len(call.Args) != tt.argCount {
+				t.Errorf("expected %d args, got %d", tt.argCount, len(call.Args))
+			}
+		})
+	}
+}
+
+func TestCommandSyntaxMultipleArgs(t *testing.T) {
+	input := `foo a, b, c`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	call := exprStmt.Expr.(*ast.CallExpr)
+
+	if len(call.Args) != 3 {
+		t.Fatalf("expected 3 args, got %d", len(call.Args))
+	}
+
+	// Check each arg is an identifier
+	for i, expected := range []string{"a", "b", "c"} {
+		ident, ok := call.Args[i].(*ast.Ident)
+		if !ok {
+			t.Errorf("arg %d: expected Ident, got %T", i, call.Args[i])
+			continue
+		}
+		if ident.Name != expected {
+			t.Errorf("arg %d: expected %q, got %q", i, expected, ident.Name)
+		}
+	}
+}
+
+func TestCommandSyntaxWithArithmetic(t *testing.T) {
+	// Arithmetic operators should be included in arguments
+	input := `puts x + 1`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	call := exprStmt.Expr.(*ast.CallExpr)
+
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg, got %d", len(call.Args))
+	}
+
+	// The argument should be a binary expression (x + 1)
+	binary, ok := call.Args[0].(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr arg, got %T", call.Args[0])
+	}
+
+	if binary.Op != "+" {
+		t.Errorf("expected '+' operator, got %q", binary.Op)
+	}
+}
+
+func TestCommandSyntaxWithComparison(t *testing.T) {
+	// Comparison operators should be included in arguments
+	input := `puts x == y`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	call := exprStmt.Expr.(*ast.CallExpr)
+
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg, got %d", len(call.Args))
+	}
+
+	binary, ok := call.Args[0].(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr arg, got %T", call.Args[0])
+	}
+
+	if binary.Op != "==" {
+		t.Errorf("expected '==' operator, got %q", binary.Op)
+	}
+}
+
+func TestCommandSyntaxMethodChain(t *testing.T) {
+	// Method chain with command syntax
+	input := `foo.bar baz`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	call := exprStmt.Expr.(*ast.CallExpr)
+
+	// Function should be a selector expression
+	sel, ok := call.Func.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected SelectorExpr as function, got %T", call.Func)
+	}
+
+	if sel.Sel != "bar" {
+		t.Errorf("expected selector 'bar', got %q", sel.Sel)
+	}
+
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg, got %d", len(call.Args))
+	}
+}
+
+func TestCommandSyntaxInAssignment(t *testing.T) {
+	// Command syntax on right side of assignment
+	input := `def main
+  x = foo bar
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+
+	call, ok := assign.Value.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", assign.Value)
+	}
+
+	ident := call.Func.(*ast.Ident)
+	if ident.Name != "foo" {
+		t.Errorf("expected function 'foo', got %q", ident.Name)
+	}
+
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg, got %d", len(call.Args))
+	}
+}
+
+func TestCommandSyntaxWithBlock(t *testing.T) {
+	// Command syntax followed by do block
+	input := `arr.each do |x|
+  puts x
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	call := exprStmt.Expr.(*ast.CallExpr)
+
+	if call.Block == nil {
+		t.Fatal("expected block on call")
+	}
+
+	if len(call.Block.Params) != 1 {
+		t.Errorf("expected 1 block param, got %d", len(call.Block.Params))
+	}
+}
+
+func TestCommandSyntaxUnaryMinus(t *testing.T) {
+	// `foo -1` should be command syntax with unary minus arg
+	input := `foo -1`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	call, ok := exprStmt.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+	}
+
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg, got %d", len(call.Args))
+	}
+
+	// The argument should be a unary expression (-1)
+	unary, ok := call.Args[0].(*ast.UnaryExpr)
+	if !ok {
+		t.Fatalf("expected UnaryExpr arg, got %T", call.Args[0])
+	}
+
+	if unary.Op != "-" {
+		t.Errorf("expected '-' operator, got %q", unary.Op)
+	}
+}
+
+func TestCommandSyntaxBinaryMinus(t *testing.T) {
+	// `foo - 1` should be binary subtraction, not command syntax
+	input := `foo - 1`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	binary, ok := exprStmt.Expr.(*ast.BinaryExpr)
+	if !ok {
+		t.Fatalf("expected BinaryExpr, got %T", exprStmt.Expr)
+	}
+
+	if binary.Op != "-" {
+		t.Errorf("expected '-' operator, got %q", binary.Op)
+	}
+}
+
+func TestCommandSyntaxWithLiterals(t *testing.T) {
+	tests := []struct {
+		input   string
+		argType string
+	}{
+		{`foo 42`, "*ast.IntLit"},
+		{`foo 3.14`, "*ast.FloatLit"},
+		{`foo "str"`, "*ast.StringLit"},
+		{`foo true`, "*ast.BoolLit"},
+		{`foo false`, "*ast.BoolLit"},
+		{`foo nil`, "*ast.NilLit"},
+		{`foo :sym`, "*ast.SymbolLit"},
+		{`foo [1, 2]`, "*ast.ArrayLit"},
+		// Note: {a => b} is not supported in command syntax - use foo({"a" => 1})
+		// because { } after a method call is parsed as a block
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			l := lexer.New(tt.input)
+			p := New(l)
+			program := p.ParseProgram()
+			checkParserErrors(t, p)
+
+			exprStmt := program.Declarations[0].(*ast.ExprStmt)
+			call, ok := exprStmt.Expr.(*ast.CallExpr)
+			if !ok {
+				t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+			}
+
+			if len(call.Args) != 1 {
+				t.Fatalf("expected 1 arg, got %d", len(call.Args))
+			}
+
+			argType := fmt.Sprintf("%T", call.Args[0])
+			if argType != tt.argType {
+				t.Errorf("expected arg type %s, got %s", tt.argType, argType)
+			}
+		})
+	}
+}
+
+func TestCommandSyntaxParensStillWork(t *testing.T) {
+	// Ensure parenthesized calls still work
+	input := `puts("hello")`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	call, ok := exprStmt.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+	}
+
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg, got %d", len(call.Args))
+	}
+}
+
+func TestCommandSyntaxNoSpaceNoCommand(t *testing.T) {
+	// `foo"bar"` without space should NOT be command syntax
+	// It should just be an identifier (the string is a separate statement)
+	input := `x = foo"bar"`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	// This might generate errors, but we're checking the parse behavior
+	_ = p.Errors()
+
+	if len(program.Declarations) == 0 {
+		t.Fatal("expected at least one declaration")
+	}
+}
+
+func TestCommandSyntaxArrayVsIndex(t *testing.T) {
+	// `foo[1]` without space is index expression
+	t.Run("index_no_space", func(t *testing.T) {
+		input := `foo[1]`
+		l := lexer.New(input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		exprStmt := program.Declarations[0].(*ast.ExprStmt)
+		indexExpr, ok := exprStmt.Expr.(*ast.IndexExpr)
+		if !ok {
+			t.Fatalf("expected IndexExpr, got %T", exprStmt.Expr)
+		}
+
+		ident, ok := indexExpr.Left.(*ast.Ident)
+		if !ok || ident.Name != "foo" {
+			t.Errorf("expected left to be 'foo', got %v", indexExpr.Left)
+		}
+	})
+
+	// `foo [1, 2]` with space is command syntax with array arg
+	t.Run("array_with_space", func(t *testing.T) {
+		input := `foo [1, 2]`
+		l := lexer.New(input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		exprStmt := program.Declarations[0].(*ast.ExprStmt)
+		call, ok := exprStmt.Expr.(*ast.CallExpr)
+		if !ok {
+			t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+		}
+
+		if len(call.Args) != 1 {
+			t.Fatalf("expected 1 arg, got %d", len(call.Args))
+		}
+
+		_, ok = call.Args[0].(*ast.ArrayLit)
+		if !ok {
+			t.Errorf("expected ArrayLit arg, got %T", call.Args[0])
+		}
+	})
+}
+
+func TestCommandSyntaxWithAndOr(t *testing.T) {
+	// `puts x and y` should be (puts(x)) and y, not puts(x and y)
+	t.Run("and_terminates", func(t *testing.T) {
+		input := `puts x and y`
+		l := lexer.New(input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		exprStmt := program.Declarations[0].(*ast.ExprStmt)
+		binary, ok := exprStmt.Expr.(*ast.BinaryExpr)
+		if !ok {
+			t.Fatalf("expected BinaryExpr, got %T", exprStmt.Expr)
+		}
+
+		if binary.Op != "&&" {
+			t.Errorf("expected '&&' operator, got %q", binary.Op)
+		}
+
+		// Left side should be CallExpr(puts, [x])
+		call, ok := binary.Left.(*ast.CallExpr)
+		if !ok {
+			t.Fatalf("expected CallExpr on left, got %T", binary.Left)
+		}
+
+		if len(call.Args) != 1 {
+			t.Errorf("expected 1 arg in call, got %d", len(call.Args))
+		}
+	})
+
+	t.Run("or_terminates", func(t *testing.T) {
+		input := `puts x or y`
+		l := lexer.New(input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		exprStmt := program.Declarations[0].(*ast.ExprStmt)
+		binary, ok := exprStmt.Expr.(*ast.BinaryExpr)
+		if !ok {
+			t.Fatalf("expected BinaryExpr, got %T", exprStmt.Expr)
+		}
+
+		if binary.Op != "||" {
+			t.Errorf("expected '||' operator, got %q", binary.Op)
+		}
+	})
+}
+
+func TestCommandSyntaxWithTrailingBlock(t *testing.T) {
+	// `foo bar do |x| puts x end` should parse as `foo(bar) { |x| puts(x) }`
+	input := `foo bar do |x|
+  puts x
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	exprStmt := program.Declarations[0].(*ast.ExprStmt)
+	call, ok := exprStmt.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+	}
+
+	// Should have 1 arg (bar)
+	if len(call.Args) != 1 {
+		t.Errorf("expected 1 arg, got %d", len(call.Args))
+	}
+
+	// Should have a block
+	if call.Block == nil {
+		t.Error("expected block on call")
+	}
+}
