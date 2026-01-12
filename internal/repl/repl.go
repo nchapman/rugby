@@ -37,6 +37,12 @@ type evalResult struct {
 	output string
 	err    error
 	input  string // original input for tracking assignments
+
+	// State changes to apply (avoids data races by not mutating during async eval)
+	addImport   string // import to add
+	addFunction string // function/class/interface to add
+	clearState  bool   // reset all state
+	clearOutput bool   // clear output (for reset)
 }
 
 // Model is the bubbletea model for the REPL.
@@ -98,6 +104,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case evalResult:
 		// Evaluation complete
 		m.evaluating = false
+
+		// Apply state changes from eval (done here to avoid data races)
+		if msg.clearState {
+			m.imports = nil
+			m.functions = nil
+			m.statements = nil
+		}
+		if msg.clearOutput {
+			m.output = nil
+		}
+		if msg.addImport != "" {
+			m.imports = append(m.imports, msg.addImport)
+		}
+		if msg.addFunction != "" {
+			m.functions = append(m.functions, msg.addFunction)
+		}
+
+		// Handle output
 		if msg.err != nil {
 			m.output = append(m.output, errorStyle.Render(msg.err.Error()))
 		} else if msg.output != "" {
@@ -201,7 +225,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Start async evaluation with spinner
 			m.evaluating = true
 			m.pendingInput = fullInput
-			return m, tea.Batch(m.spinner.Tick, m.runEval(fullInput))
+			m.counter++ // Increment before spawning to avoid race
+			return m, tea.Batch(m.spinner.Tick, m.runEval(fullInput, m.counter))
 		}
 	}
 
@@ -211,11 +236,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // runEval returns a command that runs evaluation asynchronously.
-func (m *Model) runEval(input string) tea.Cmd {
-	return func() tea.Msg {
-		result, err := m.eval(input)
-		return evalResult{output: result, err: err, input: input}
+// Counter is passed in to avoid race conditions on m.counter.
+func (m *Model) runEval(input string, counter int) tea.Cmd {
+	// Capture read-only state needed for eval to avoid races
+	ctx := evalContext{
+		imports:    append([]string{}, m.imports...),
+		functions:  append([]string{}, m.functions...),
+		statements: append([]string{}, m.statements...),
+		project:    m.project,
+		counter:    counter,
 	}
+	return func() tea.Msg {
+		return m.eval(input, ctx)
+	}
+}
+
+// evalContext holds read-only state captured before async evaluation.
+type evalContext struct {
+	imports    []string
+	functions  []string
+	statements []string
+	project    *builder.Project
+	counter    int
 }
 
 // View implements tea.Model.
@@ -344,58 +386,86 @@ func (m *Model) truncateOutput() {
 	}
 }
 
-// eval compiles and runs the input, returning the output.
-func (m *Model) eval(input string) (string, error) {
+// eval compiles and runs the input, returning an evalResult.
+// Uses ctx for read-only state to avoid data races during async evaluation.
+func (m *Model) eval(input string, ctx evalContext) evalResult {
+	result := evalResult{input: input}
+
 	// Handle special inputs
 	trimmed := strings.TrimSpace(input)
 	if trimmed == "exit" || trimmed == "quit" {
-		return "", fmt.Errorf("use Ctrl+D to exit")
+		result.err = fmt.Errorf("use Ctrl+D to exit")
+		return result
+	}
+
+	// Handle reset command
+	if trimmed == "reset" || trimmed == "clear" {
+		result.clearState = true
+		result.clearOutput = true
+		result.output = successStyle.Render("(state cleared)")
+		return result
+	}
+
+	// Handle help command
+	if trimmed == "help" {
+		result.output = mutedStyle.Render(`Commands:
+  reset, clear  - Clear all accumulated state
+  exit, quit    - Use Ctrl+D to exit
+  help          - Show this message`)
+		return result
 	}
 
 	// Accumulate state based on input type
 	if m.isImport(input) {
-		m.imports = append(m.imports, input)
-		return successStyle.Render("(imported)"), nil
+		result.addImport = input
+		result.output = successStyle.Render("(imported)")
+		return result
 	}
 
 	if m.isFunctionDef(input) {
-		m.functions = append(m.functions, input)
-		return successStyle.Render("(defined)"), nil
+		result.addFunction = input
+		result.output = successStyle.Render("(defined)")
+		return result
 	}
 
 	if m.isClassDef(input) {
-		m.functions = append(m.functions, input)
-		return successStyle.Render("(defined)"), nil
+		result.addFunction = input
+		result.output = successStyle.Render("(defined)")
+		return result
 	}
 
 	if m.isInterfaceDef(input) {
-		m.functions = append(m.functions, input)
-		return successStyle.Render("(defined)"), nil
+		result.addFunction = input
+		result.output = successStyle.Render("(defined)")
+		return result
 	}
 
 	// Check for valid project
-	if m.project == nil {
-		return "", fmt.Errorf("no Rugby project found - run from a project directory")
+	if ctx.project == nil {
+		result.err = fmt.Errorf("no Rugby project found - run from a project directory")
+		return result
 	}
 
-	// Build the program
-	program := m.buildProgram(input)
+	// Build the program using captured state
+	program := m.buildProgramFromContext(input, ctx)
 
 	// Ensure project dirs exist
-	if err := m.project.EnsureDirs(); err != nil {
-		return "", err
+	if err := ctx.project.EnsureDirs(); err != nil {
+		result.err = err
+		return result
 	}
 
 	// Write to temp file
-	replDir := filepath.Join(m.project.RugbyDir, "repl")
+	replDir := filepath.Join(ctx.project.RugbyDir, "repl")
 	if err := os.MkdirAll(replDir, 0755); err != nil {
-		return "", err
+		result.err = err
+		return result
 	}
 
-	m.counter++
-	srcFile := filepath.Join(replDir, fmt.Sprintf("repl_%d.rg", m.counter))
+	srcFile := filepath.Join(replDir, fmt.Sprintf("repl_%d.rg", ctx.counter))
 	if err := os.WriteFile(srcFile, []byte(program), 0644); err != nil {
-		return "", err
+		result.err = err
+		return result
 	}
 
 	// Parse and generate
@@ -404,20 +474,23 @@ func (m *Model) eval(input string) (string, error) {
 	ast := p.ParseProgram()
 
 	if len(p.Errors()) > 0 {
-		return "", fmt.Errorf("parse error: %s", p.Errors()[0])
+		result.err = fmt.Errorf("parse error: %s", p.Errors()[0])
+		return result
 	}
 
 	gen := codegen.New()
 	goCode, err := gen.Generate(ast)
 	if err != nil {
-		return "", fmt.Errorf("codegen error: %v", err)
+		result.err = fmt.Errorf("codegen error: %v", err)
+		return result
 	}
 
 	// Write Go file
-	goFile := filepath.Join(replDir, fmt.Sprintf("repl_%d.go", m.counter))
+	goFile := filepath.Join(replDir, fmt.Sprintf("repl_%d.go", ctx.counter))
 	err = os.WriteFile(goFile, []byte(goCode), 0644)
 	if err != nil {
-		return "", err
+		result.err = err
+		return result
 	}
 
 	// Create go.mod for the repl directory
@@ -428,12 +501,13 @@ go 1.25
 require rugby v0.0.0
 
 replace rugby => %s
-`, m.project.Root)
+`, ctx.project.Root)
 
 	goModFile := filepath.Join(replDir, "go.mod")
 	err = os.WriteFile(goModFile, []byte(goModContent), 0644)
 	if err != nil {
-		return "", err
+		result.err = err
+		return result
 	}
 
 	// Run go mod tidy (ignore errors - it may fail if no dependencies needed)
@@ -442,13 +516,14 @@ replace rugby => %s
 	_ = tidyCmd.Run()
 
 	// Compile
-	binFile := filepath.Join(replDir, fmt.Sprintf("repl_%d", m.counter))
+	binFile := filepath.Join(replDir, fmt.Sprintf("repl_%d", ctx.counter))
 	buildCmd := exec.Command("go", "build", "-o", binFile, goFile)
 	buildCmd.Dir = replDir
 
 	buildOut, err := buildCmd.CombinedOutput()
 	if err != nil {
-		return "", fmt.Errorf("build error: %s", strings.TrimSpace(string(buildOut)))
+		result.err = fmt.Errorf("build error: %s", strings.TrimSpace(string(buildOut)))
+		return result
 	}
 
 	// Run
@@ -466,12 +541,14 @@ replace rugby => %s
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			if exitErr.ExitCode() != 0 && output == "" {
-				return "", fmt.Errorf("runtime error (exit %d)", exitErr.ExitCode())
+				result.err = fmt.Errorf("runtime error (exit %d)", exitErr.ExitCode())
+				return result
 			}
 		}
 	}
 
-	return output, nil
+	result.output = output
+	return result
 }
 
 // isAssignment checks if the input is a variable assignment.
@@ -496,23 +573,34 @@ func (m *Model) getAssignmentVar(input string) string {
 	return ""
 }
 
-// buildProgram constructs a full Rugby program using bare script support.
-// Top-level statements are written directly and codegen wraps them in main().
+// buildProgram constructs a full Rugby program using current model state.
+// This is a convenience method that creates a context from model state.
 func (m *Model) buildProgram(input string) string {
+	ctx := evalContext{
+		imports:    m.imports,
+		functions:  m.functions,
+		statements: m.statements,
+	}
+	return m.buildProgramFromContext(input, ctx)
+}
+
+// buildProgramFromContext constructs a full Rugby program using captured state.
+// Top-level statements are written directly and codegen wraps them in main().
+func (m *Model) buildProgramFromContext(input string, ctx evalContext) string {
 	var buf strings.Builder
 
 	// Imports
-	for _, imp := range m.imports {
+	for _, imp := range ctx.imports {
 		buf.WriteString(imp + "\n")
 	}
 
 	// Function/class definitions
-	for _, fn := range m.functions {
+	for _, fn := range ctx.functions {
 		buf.WriteString(fn + "\n")
 	}
 
 	// Prior statements (for variable persistence)
-	for _, stmt := range m.statements {
+	for _, stmt := range ctx.statements {
 		buf.WriteString(stmt + "\n")
 	}
 
@@ -533,9 +621,9 @@ func (m *Model) buildProgram(input string) string {
 	return buf.String()
 }
 
-// Run starts the REPL.
-func Run() error {
-	fmt.Println(mutedStyle.Render("Rugby REPL v0.1") + " " + mutedStyle.Render("(Ctrl+D to quit)"))
+// Run starts the REPL with the given version string.
+func Run(version string) error {
+	fmt.Println(mutedStyle.Render(version+" REPL") + " " + mutedStyle.Render("(Ctrl+D to quit, 'help' for commands)"))
 	fmt.Println()
 
 	p := tea.NewProgram(New())

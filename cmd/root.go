@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"strings"
 
@@ -11,8 +12,11 @@ import (
 )
 
 var (
-	verbose bool
-	logger  *log.Logger
+	verbose     bool
+	showVersion bool
+	logger      = log.NewWithOptions(os.Stderr, log.Options{
+		ReportTimestamp: false,
+	})
 )
 
 var rootCmd = &cobra.Command{
@@ -31,6 +35,11 @@ Commands:
 	// Handle bare 'rugby file.rg' for backward compatibility
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		// Handle --version flag
+		if showVersion {
+			fmt.Println(getVersion())
+			return nil
+		}
 		// If first arg looks like a .rg file, run it
 		if len(args) > 0 && strings.HasSuffix(args[0], ".rg") {
 			return runFile(args[0], nil)
@@ -47,13 +56,11 @@ func Execute() error {
 func init() {
 	cobra.OnInitialize(initLogger)
 
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "verbose output")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "", false, "verbose output")
+	rootCmd.Flags().BoolVarP(&showVersion, "version", "V", false, "print version")
 }
 
 func initLogger() {
-	logger = log.NewWithOptions(os.Stderr, log.Options{
-		ReportTimestamp: false,
-	})
 	if verbose {
 		logger.SetLevel(log.DebugLevel)
 	}

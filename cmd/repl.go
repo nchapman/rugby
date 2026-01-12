@@ -17,11 +17,13 @@ Features:
   - Functions and classes can be defined
   - Multi-line input supported (def...end, if...end, etc.)
   - Up/Down arrows navigate history
+  - Type 'help' for available commands
+  - Type 'reset' to clear state
 
 Press Ctrl+D to exit.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return repl.Run()
+		return repl.Run(getVersion())
 	},
 }
 
