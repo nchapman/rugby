@@ -80,7 +80,9 @@ func Parse(s string) (string, error) {
 
 	// Validate hex characters
 	for _, c := range s {
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		isDigit := c >= '0' && c <= '9'
+		isHexLetter := c >= 'a' && c <= 'f'
+		if !isDigit && !isHexLetter {
 			return "", errors.New("uuid: invalid character")
 		}
 	}

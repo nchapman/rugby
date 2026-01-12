@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"sort"
 	"strings"
@@ -63,13 +64,13 @@ type Fields map[string]any
 
 // Logger is a structured logger.
 type Logger struct {
-	mu      sync.Mutex
-	out     io.Writer
-	level   Level
-	format  Format
-	fields  Fields
-	name    string
-	timeFn  func() time.Time
+	mu     sync.Mutex
+	out    io.Writer
+	level  Level
+	format Format
+	fields Fields
+	name   string
+	timeFn func() time.Time
 }
 
 // New creates a new logger with default settings.
@@ -134,12 +135,8 @@ func (l *Logger) With(fields Fields) *Logger {
 	defer l.mu.Unlock()
 
 	newFields := make(Fields)
-	for k, v := range l.fields {
-		newFields[k] = v
-	}
-	for k, v := range fields {
-		newFields[k] = v
-	}
+	maps.Copy(newFields, l.fields)
+	maps.Copy(newFields, fields)
 
 	return &Logger{
 		out:    l.out,
@@ -188,9 +185,7 @@ func mergeFields(fields []Fields) Fields {
 	}
 	result := make(Fields)
 	for _, f := range fields {
-		for k, v := range f {
-			result[k] = v
-		}
+		maps.Copy(result, f)
 	}
 	return result
 }
@@ -205,12 +200,8 @@ func (l *Logger) log(level Level, msg string, fields Fields) {
 
 	// Merge logger fields with call-site fields
 	allFields := make(Fields)
-	for k, v := range l.fields {
-		allFields[k] = v
-	}
-	for k, v := range fields {
-		allFields[k] = v
-	}
+	maps.Copy(allFields, l.fields)
+	maps.Copy(allFields, fields)
 
 	now := l.timeFn()
 
@@ -221,7 +212,7 @@ func (l *Logger) log(level Level, msg string, fields Fields) {
 		output = l.formatText(level, msg, allFields, now)
 	}
 
-	fmt.Fprintln(l.out, output)
+	_, _ = fmt.Fprintln(l.out, output)
 }
 
 func (l *Logger) formatText(level Level, msg string, fields Fields, t time.Time) string {
@@ -268,12 +259,10 @@ func (l *Logger) formatText(level Level, msg string, fields Fields, t time.Time)
 }
 
 func (l *Logger) formatJSON(level Level, msg string, fields Fields, t time.Time) string {
-	entry := make(map[string]any)
+	entry := make(Fields)
 
 	// Add user fields first, so reserved keys can't be overwritten
-	for k, v := range fields {
-		entry[k] = v
-	}
+	maps.Copy(entry, fields)
 
 	// Reserved keys (added last to ensure they aren't overwritten)
 	entry["time"] = t.Format(time.RFC3339Nano)

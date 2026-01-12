@@ -260,8 +260,12 @@ func TestReaderComment(t *testing.T) {
 
 func TestWriter(t *testing.T) {
 	w := NewWriter()
-	w.Write([]string{"a", "b", "c"})
-	w.Write([]string{"1", "2", "3"})
+	if err := w.Write([]string{"a", "b", "c"}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if err := w.Write([]string{"1", "2", "3"}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
 
 	got := w.String()
 	want := "a,b,c\n1,2,3\n"
@@ -273,7 +277,9 @@ func TestWriter(t *testing.T) {
 func TestWriterDelimiter(t *testing.T) {
 	w := NewWriter()
 	w.SetDelimiter(';')
-	w.Write([]string{"a", "b", "c"})
+	if err := w.Write([]string{"a", "b", "c"}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
 
 	got := w.String()
 	want := "a;b;c\n"
@@ -284,7 +290,9 @@ func TestWriterDelimiter(t *testing.T) {
 
 func TestWriterWriteAll(t *testing.T) {
 	w := NewWriter()
-	w.WriteAll([][]string{{"a", "b"}, {"1", "2"}})
+	if err := w.WriteAll([][]string{{"a", "b"}, {"1", "2"}}); err != nil {
+		t.Fatalf("WriteAll() error = %v", err)
+	}
 
 	got := w.String()
 	want := "a,b\n1,2\n"
@@ -295,7 +303,9 @@ func TestWriterWriteAll(t *testing.T) {
 
 func TestWriterBytes(t *testing.T) {
 	w := NewWriter()
-	w.Write([]string{"a", "b"})
+	if err := w.Write([]string{"a", "b"}); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
 
 	got := w.Bytes()
 	want := []byte("a,b\n")

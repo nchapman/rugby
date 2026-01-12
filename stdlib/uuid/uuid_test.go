@@ -41,7 +41,7 @@ func TestV4(t *testing.T) {
 
 func TestV4Uniqueness(t *testing.T) {
 	seen := make(map[string]bool)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		u, err := V4()
 		if err != nil {
 			t.Fatalf("V4() error = %v", err)
