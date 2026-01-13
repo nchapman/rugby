@@ -140,10 +140,16 @@ error: undefined: 'username' (did you mean 'user_name'?)
         - [ ] Go-to-definition.
         - [ ] Autocomplete.
 
-- [ ] **Enhanced Source Maps**
-    - [ ] Improve `//line` directive emission.
-    - [ ] Ensure panics in generated Go code point precisely to the Rugby source line.
+- [x] **Enhanced Source Maps** ✅
+    - [x] Added `Line` fields to all AST statement types (OrAssignStmt, CompoundAssignStmt, MultiAssignStmt, BreakStmt, NextStmt, DeferStmt).
+    - [x] Updated `getStatementLine()` to cover all statement types (declarations, assignments, control flow, jump statements, concurrency, testing).
+    - [x] Parser captures line numbers at statement start for accurate source mapping.
+    - [x] Added tests for line directive emission.
+    - [x] Panics in generated Go code now point precisely to the Rugby source line.
 
 - [ ] **Linter / Static Analysis**
     - [ ] Built upon the Semantic Analysis phase.
-    - [ ] Detect unused variables, unreachable code, and style violations.
+    - [ ] Add `Used` field to Symbol for tracking variable usage.
+    - [ ] Detect unused variables.
+    - [ ] Detect unreachable code after return/break/next.
+    - [ ] Add linter CLI integration (`rugby lint`).
