@@ -73,9 +73,11 @@ Testing generated string output is fragile, and single-error stopping slows down
     - [ ] Investigate compiling Modules to embedded Go structs.
     - [ ] Implement robust conflict resolution (Diamond Problem) during the semantic phase.
 
-- [ ] **Direct Math Operations**
-    - [ ] Replace `runtime.Add(x, y)` with `x + y` when types are known to be primitive `Int`/`Float`.
-    - [ ] Inline simple comparisons.
+- [x] **Direct Comparisons & Math Operations** ✅
+    - [x] Math operations already use direct `x + y` (not runtime calls).
+    - [x] Equality comparisons (`==`, `!=`) now use direct comparison for primitive types when type info is available.
+    - [x] Added `TypeInfo` interface to pass type information from semantic analysis to codegen.
+    - [x] Falls back to `runtime.Equal` for classes/unknown types (custom equality support).
 
 ## Phase 4: Debugging & Tooling
 

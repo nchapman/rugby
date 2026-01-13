@@ -18,6 +18,43 @@ import (
 	"github.com/nchapman/rugby/semantic"
 )
 
+// typeInfoAdapter adapts semantic.Analyzer to implement codegen.TypeInfo.
+// This enables codegen to use type information for optimizations.
+type typeInfoAdapter struct {
+	analyzer *semantic.Analyzer
+}
+
+// GetTypeKind returns the codegen.TypeKind for an AST node.
+func (t *typeInfoAdapter) GetTypeKind(node ast.Node) codegen.TypeKind {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return codegen.TypeUnknown
+	}
+	// Map semantic.TypeKind to codegen.TypeKind
+	switch typ.Kind {
+	case semantic.TypeInt:
+		return codegen.TypeInt
+	case semantic.TypeInt64:
+		return codegen.TypeInt64
+	case semantic.TypeFloat:
+		return codegen.TypeFloat
+	case semantic.TypeBool:
+		return codegen.TypeBool
+	case semantic.TypeString:
+		return codegen.TypeString
+	case semantic.TypeNil:
+		return codegen.TypeNil
+	case semantic.TypeArray:
+		return codegen.TypeArray
+	case semantic.TypeMap:
+		return codegen.TypeMap
+	case semantic.TypeClass:
+		return codegen.TypeClass
+	default:
+		return codegen.TypeUnknown
+	}
+}
+
 // Styles for pretty output
 var (
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
@@ -150,7 +187,9 @@ func (b *Builder) compileFile(inputPath string) (string, bool, error) {
 	hasTopLevel := hasTopLevelStatements(program)
 
 	// Generate with //line directive pointing to original source
-	gen := codegen.New(codegen.WithSourceFile(absPath))
+	// Pass type info from semantic analysis for optimization
+	typeInfo := &typeInfoAdapter{analyzer: analyzer}
+	gen := codegen.New(codegen.WithSourceFile(absPath), codegen.WithTypeInfo(typeInfo))
 	output, err := gen.Generate(program)
 	if err != nil {
 		return "", false, fmt.Errorf("code generation error in %s: %w", inputPath, err)

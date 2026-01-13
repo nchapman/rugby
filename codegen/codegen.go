@@ -42,6 +42,33 @@ type loopContext struct {
 	usesIncludeFlag bool   // for map - uses three-value returns
 }
 
+// TypeKind represents the kind of a type for codegen optimization decisions.
+// This is intentionally a subset of semantic.TypeKind - only types that affect
+// code generation optimizations are included. Unmapped types use TypeUnknown,
+// which triggers safe fallback behavior (e.g., runtime.Equal for comparisons).
+type TypeKind int
+
+const (
+	TypeUnknown TypeKind = iota
+	TypeInt
+	TypeInt64
+	TypeFloat
+	TypeBool
+	TypeString
+	TypeNil
+	TypeArray
+	TypeMap
+	TypeClass
+)
+
+// TypeInfo provides type information for AST nodes during code generation.
+// This enables optimizations like using direct == instead of runtime.Equal
+// when we know both operands are primitive types.
+type TypeInfo interface {
+	// GetTypeKind returns the type kind for an expression node.
+	GetTypeKind(node ast.Node) TypeKind
+}
+
 type Generator struct {
 	buf                strings.Builder
 	indent             int
@@ -66,6 +93,7 @@ type Generator struct {
 	inMainFunc         bool                       // true when generating code inside main() function
 	errors             []error                    // collected errors during generation
 	tempVarCounter     int                        // counter for generating unique temp variable names
+	typeInfo           TypeInfo                   // optional type info from semantic analysis
 }
 
 // addError records an error during code generation
@@ -110,6 +138,15 @@ func WithSourceFile(path string) Option {
 	return func(g *Generator) {
 		g.sourceFile = path
 		g.emitLineDir = true
+	}
+}
+
+// WithTypeInfo provides type information from semantic analysis for optimization.
+// When available, enables direct == comparisons for primitive types instead of
+// falling back to runtime.Equal.
+func WithTypeInfo(ti TypeInfo) Option {
+	return func(g *Generator) {
+		g.typeInfo = ti
 	}
 }
 

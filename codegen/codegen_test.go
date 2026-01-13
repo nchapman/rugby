@@ -4,8 +4,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nchapman/rugby/ast"
 	"github.com/nchapman/rugby/lexer"
 	"github.com/nchapman/rugby/parser"
+	"github.com/nchapman/rugby/semantic"
 )
 
 func TestGenerateHello(t *testing.T) {
@@ -325,6 +327,76 @@ func compile(t *testing.T, input string) string {
 	}
 
 	return output
+}
+
+// compileWithTypeInfo runs semantic analysis and passes type info to codegen.
+// This enables optimizations like direct == for primitive types.
+func compileWithTypeInfo(t *testing.T, input string) string {
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) > 0 {
+		for _, err := range p.Errors() {
+			t.Errorf("parser error: %s", err)
+		}
+		t.FailNow()
+	}
+
+	// Run semantic analysis
+	analyzer := semantic.NewAnalyzer()
+	errs := analyzer.Analyze(program)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			t.Errorf("semantic error: %s", err)
+		}
+		t.FailNow()
+	}
+
+	// Create type info adapter
+	typeInfo := &testTypeInfoAdapter{analyzer: analyzer}
+
+	gen := New(WithTypeInfo(typeInfo))
+	output, err := gen.Generate(program)
+	if err != nil {
+		t.Fatalf("codegen error: %v", err)
+	}
+
+	return output
+}
+
+// testTypeInfoAdapter adapts semantic.Analyzer to implement TypeInfo for tests.
+type testTypeInfoAdapter struct {
+	analyzer *semantic.Analyzer
+}
+
+func (t *testTypeInfoAdapter) GetTypeKind(node ast.Node) TypeKind {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return TypeUnknown
+	}
+	switch typ.Kind {
+	case semantic.TypeInt:
+		return TypeInt
+	case semantic.TypeInt64:
+		return TypeInt64
+	case semantic.TypeFloat:
+		return TypeFloat
+	case semantic.TypeBool:
+		return TypeBool
+	case semantic.TypeString:
+		return TypeString
+	case semantic.TypeNil:
+		return TypeNil
+	case semantic.TypeArray:
+		return TypeArray
+	case semantic.TypeMap:
+		return TypeMap
+	case semantic.TypeClass:
+		return TypeClass
+	default:
+		return TypeUnknown
+	}
 }
 
 func assertContains(t *testing.T, output, substr string) {
@@ -1937,8 +2009,99 @@ end`
 	output := compile(t, input)
 
 	// Mixed comparisons (variable vs literal) should use runtime.Equal
+	// (without type info, we fall back to safe runtime.Equal)
 	assertContains(t, output, `runtime.Equal(x, 5)`)
 	assertContains(t, output, `runtime.Equal("hello", name)`)
+}
+
+func TestEqualityOptimizationWithTypeInfo(t *testing.T) {
+	// When we have type info from semantic analysis, primitive type comparisons
+	// can use direct == instead of runtime.Equal
+	input := `def main
+  x : Int = 5
+  y : Int = 10
+  result = x == y
+end`
+
+	output := compileWithTypeInfo(t, input)
+
+	// With type info, Int == Int should use direct comparison
+	assertContains(t, output, `result := (x == y)`)
+	assertNotContains(t, output, `runtime.Equal(x, y)`)
+}
+
+func TestEqualityOptimizationStringVariables(t *testing.T) {
+	input := `def main
+  a : String = "hello"
+  b : String = "world"
+  same = a == b
+end`
+
+	output := compileWithTypeInfo(t, input)
+
+	// String == String with type info should use direct comparison
+	assertContains(t, output, `same := (a == b)`)
+	assertNotContains(t, output, `runtime.Equal(a, b)`)
+}
+
+func TestEqualityOptimizationBoolVariables(t *testing.T) {
+	input := `def main
+  a : Bool = true
+  b : Bool = false
+  same = a == b
+end`
+
+	output := compileWithTypeInfo(t, input)
+
+	// Bool == Bool with type info should use direct comparison
+	assertContains(t, output, `same := (a == b)`)
+	assertNotContains(t, output, `runtime.Equal(a, b)`)
+}
+
+func TestEqualityOptimizationFloatVariables(t *testing.T) {
+	input := `def main
+  a : Float = 1.5
+  b : Float = 2.5
+  same = a == b
+end`
+
+	output := compileWithTypeInfo(t, input)
+
+	// Float == Float with type info should use direct comparison
+	assertContains(t, output, `same := (a == b)`)
+	assertNotContains(t, output, `runtime.Equal(a, b)`)
+}
+
+func TestEqualityOptimizationClassVariablesStillUseRuntime(t *testing.T) {
+	input := `class User
+  def initialize(@name : String)
+  end
+end
+
+def main
+  a = User.new("alice")
+  b = User.new("bob")
+  same = a == b
+end`
+
+	output := compileWithTypeInfo(t, input)
+
+	// Class instances should still use runtime.Equal for custom equality support
+	assertContains(t, output, `runtime.Equal(a, b)`)
+}
+
+func TestNotEqualOptimizationWithTypeInfo(t *testing.T) {
+	input := `def main
+  x : Int = 5
+  y : Int = 10
+  different = x != y
+end`
+
+	output := compileWithTypeInfo(t, input)
+
+	// With type info, Int != Int should use direct comparison
+	assertContains(t, output, `different := (x != y)`)
+	assertNotContains(t, output, `!runtime.Equal(x, y)`)
 }
 
 func TestInterfaceDeclaration(t *testing.T) {

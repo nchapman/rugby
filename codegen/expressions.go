@@ -192,11 +192,10 @@ func (g *Generator) genRangeMethodCall(rangeExpr ast.Expression, method string, 
 }
 
 func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
-	leftLit := isPrimitiveLiteral(e.Left)
-	rightLit := isPrimitiveLiteral(e.Right)
-	needsRuntimeEqual := !leftLit || !rightLit
+	// Check if we can use direct comparison instead of runtime.Equal
+	canUseDirectEqual := g.canUseDirectComparison(e.Left, e.Right)
 
-	if e.Op == "==" && needsRuntimeEqual {
+	if e.Op == "==" && !canUseDirectEqual {
 		g.needsRuntime = true
 		g.buf.WriteString("runtime.Equal(")
 		g.genExpr(e.Left)
@@ -205,7 +204,7 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 		g.buf.WriteString(")")
 		return
 	}
-	if e.Op == "!=" && needsRuntimeEqual {
+	if e.Op == "!=" && !canUseDirectEqual {
 		g.needsRuntime = true
 		g.buf.WriteString("!runtime.Equal(")
 		g.genExpr(e.Left)
@@ -232,6 +231,36 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 	g.buf.WriteString(" ")
 	g.genExpr(e.Right)
 	g.buf.WriteString(")")
+}
+
+// canUseDirectComparison returns true if we can use Go's == operator directly
+// instead of runtime.Equal. This is possible when:
+// 1. Both operands are primitive literals, OR
+// 2. We have type info and both operands are primitive types (Int, Float, String, Bool)
+func (g *Generator) canUseDirectComparison(left, right ast.Expression) bool {
+	// Primitive literals can always use direct comparison
+	if isPrimitiveLiteral(left) && isPrimitiveLiteral(right) {
+		return true
+	}
+
+	// If we have type info, check if both types are primitive
+	if g.typeInfo != nil {
+		leftKind := g.typeInfo.GetTypeKind(left)
+		rightKind := g.typeInfo.GetTypeKind(right)
+		return isPrimitiveKind(leftKind) && isPrimitiveKind(rightKind)
+	}
+
+	return false
+}
+
+// isPrimitiveKind returns true for types that support direct == comparison in Go.
+func isPrimitiveKind(k TypeKind) bool {
+	switch k {
+	case TypeInt, TypeInt64, TypeFloat, TypeBool, TypeString:
+		return true
+	default:
+		return false
+	}
 }
 
 func isPrimitiveLiteral(e ast.Expression) bool {
