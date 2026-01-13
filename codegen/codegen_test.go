@@ -437,6 +437,79 @@ func assertNotContains(t *testing.T, output, substr string) {
 	}
 }
 
+// compileWithLineDirectives runs codegen with line directive emission enabled
+func compileWithLineDirectives(t *testing.T, input string, sourceFile string) string {
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) > 0 {
+		for _, err := range p.Errors() {
+			t.Errorf("parser error: %s", err)
+		}
+		t.FailNow()
+	}
+
+	gen := New(WithSourceFile(sourceFile))
+	output, err := gen.Generate(program)
+	if err != nil {
+		t.Fatalf("codegen error: %v", err)
+	}
+
+	return output
+}
+
+func TestLineDirectiveEmission(t *testing.T) {
+	input := `def main
+  x = 5
+  x += 1
+  y, ok = get_value()
+end
+
+def get_value() -> (Int, Bool)
+  return 42, true
+end`
+
+	output := compileWithLineDirectives(t, input, "test.rg")
+
+	// Should emit line directives for each statement type
+	assertContains(t, output, "//line test.rg:1") // def main
+	assertContains(t, output, "//line test.rg:2") // x = 5
+	assertContains(t, output, "//line test.rg:3") // x += 1
+	assertContains(t, output, "//line test.rg:4") // y, ok = get_value()
+	assertContains(t, output, "//line test.rg:7") // def get_value
+	assertContains(t, output, "//line test.rg:8") // return 42, true
+}
+
+func TestLineDirectiveForAllStatementTypes(t *testing.T) {
+	input := `def main
+  x = 1
+  x ||= 2
+  x += 3
+  defer cleanup()
+  for i in 0..5
+    next if i == 0
+    break if i == 3
+  end
+end
+
+def cleanup
+end`
+
+	output := compileWithLineDirectives(t, input, "statements.rg")
+
+	// All statement types should have line directives
+	assertContains(t, output, "//line statements.rg:1")  // def main
+	assertContains(t, output, "//line statements.rg:2")  // x = 1
+	assertContains(t, output, "//line statements.rg:3")  // x ||= 2
+	assertContains(t, output, "//line statements.rg:4")  // x += 3
+	assertContains(t, output, "//line statements.rg:5")  // defer
+	assertContains(t, output, "//line statements.rg:6")  // for
+	assertContains(t, output, "//line statements.rg:7")  // next
+	assertContains(t, output, "//line statements.rg:8")  // break
+	assertContains(t, output, "//line statements.rg:12") // def cleanup
+}
+
 func TestGenerateImportAlias(t *testing.T) {
 	input := `import encoding/json as json
 

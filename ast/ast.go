@@ -369,6 +369,7 @@ func (a *AssignStmt) stmtNode() {}
 type OrAssignStmt struct {
 	Name  string
 	Value Expression
+	Line  int // source line number (1-indexed)
 }
 
 func (o *OrAssignStmt) node()     {}
@@ -379,6 +380,7 @@ type CompoundAssignStmt struct {
 	Name  string // variable name
 	Op    string // operator: "+", "-", "*", "/"
 	Value Expression
+	Line  int // source line number (1-indexed)
 }
 
 func (c *CompoundAssignStmt) node()     {}
@@ -388,6 +390,7 @@ func (c *CompoundAssignStmt) stmtNode() {}
 type MultiAssignStmt struct {
 	Names []string   // variable names (e.g., ["val", "ok"])
 	Value Expression // expression returning multiple values
+	Line  int        // source line number (1-indexed)
 }
 
 func (m *MultiAssignStmt) node()     {}
@@ -499,6 +502,7 @@ type BreakStmt struct {
 	// Statement modifiers (e.g., "break if x == 2")
 	Condition Expression // nil if no modifier
 	IsUnless  bool       // true for "unless", false for "if"
+	Line      int        // source line number (1-indexed)
 }
 
 func (b *BreakStmt) node()     {}
@@ -509,6 +513,7 @@ type NextStmt struct {
 	// Statement modifiers (e.g., "next unless valid?")
 	Condition Expression // nil if no modifier
 	IsUnless  bool       // true for "unless", false for "if"
+	Line      int        // source line number (1-indexed)
 }
 
 func (n *NextStmt) node()     {}
@@ -540,6 +545,7 @@ func (r *PanicStmt) stmtNode() {}
 // DeferStmt represents a defer statement
 type DeferStmt struct {
 	Call *CallExpr
+	Line int // source line number (1-indexed)
 }
 
 func (d *DeferStmt) node()     {}

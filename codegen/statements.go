@@ -10,18 +10,37 @@ import (
 // getStatementLine returns the source line number for a statement, or 0 if unknown.
 func getStatementLine(stmt ast.Statement) int {
 	switch s := stmt.(type) {
+	// Declarations
 	case *ast.FuncDecl:
 		return s.Line
 	case *ast.ClassDecl:
 		return s.Line
 	case *ast.InterfaceDecl:
 		return s.Line
+	case *ast.ModuleDecl:
+		return s.Line
+	case *ast.MethodDecl:
+		return s.Line
+	case *ast.AccessorDecl:
+		return s.Line
+	case *ast.IncludeStmt:
+		return s.Line
+
+	// Assignments
 	case *ast.AssignStmt:
 		return s.Line
+	case *ast.OrAssignStmt:
+		return s.Line
+	case *ast.CompoundAssignStmt:
+		return s.Line
+	case *ast.MultiAssignStmt:
+		return s.Line
+
+	// Expressions
 	case *ast.ExprStmt:
 		return s.Line
-	case *ast.ReturnStmt:
-		return s.Line
+
+	// Control flow
 	case *ast.IfStmt:
 		return s.Line
 	case *ast.CaseStmt:
@@ -34,14 +53,30 @@ func getStatementLine(stmt ast.Statement) int {
 		return s.Line
 	case *ast.ForStmt:
 		return s.Line
+
+	// Jump statements
+	case *ast.ReturnStmt:
+		return s.Line
+	case *ast.BreakStmt:
+		return s.Line
+	case *ast.NextStmt:
+		return s.Line
 	case *ast.PanicStmt:
 		return s.Line
+	case *ast.DeferStmt:
+		return s.Line
+
+	// Concurrency
 	case *ast.GoStmt:
 		return s.Line
 	case *ast.ChanSendStmt:
 		return s.Line
 	case *ast.SelectStmt:
 		return s.Line
+	case *ast.ConcurrentlyStmt:
+		return s.Line
+
+	// Testing
 	case *ast.DescribeStmt:
 		return s.Line
 	case *ast.ItStmt:
@@ -54,8 +89,7 @@ func getStatementLine(stmt ast.Statement) int {
 		return s.Line
 	case *ast.AfterStmt:
 		return s.Line
-	case *ast.ConcurrentlyStmt:
-		return s.Line
+
 	default:
 		return 0
 	}

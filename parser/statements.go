@@ -130,6 +130,7 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 
 // parseMultiAssignStmt parses tuple unpacking: val, ok = expr
 func (p *Parser) parseMultiAssignStmt() *ast.MultiAssignStmt {
+	line := p.curToken.Line
 	names := []string{p.curToken.Literal}
 
 	// Collect all names separated by commas
@@ -156,7 +157,7 @@ func (p *Parser) parseMultiAssignStmt() *ast.MultiAssignStmt {
 	p.nextToken() // move past expression
 	p.skipNewlines()
 
-	return &ast.MultiAssignStmt{Names: names, Value: value}
+	return &ast.MultiAssignStmt{Names: names, Value: value, Line: line}
 }
 
 func (p *Parser) parseIfStmt() *ast.IfStmt {
@@ -656,16 +657,18 @@ func (p *Parser) parseLoopModifier(stmt ast.Statement) ast.Statement {
 }
 
 func (p *Parser) parseBreakStmt() *ast.BreakStmt {
+	line := p.curToken.Line
 	p.nextToken() // consume 'break'
-	stmt := &ast.BreakStmt{}
+	stmt := &ast.BreakStmt{Line: line}
 	stmt.Condition, stmt.IsUnless = p.parseStatementModifier()
 	p.skipNewlines()
 	return stmt
 }
 
 func (p *Parser) parseNextStmt() *ast.NextStmt {
+	line := p.curToken.Line
 	p.nextToken() // consume 'next'
-	stmt := &ast.NextStmt{}
+	stmt := &ast.NextStmt{Line: line}
 	stmt.Condition, stmt.IsUnless = p.parseStatementModifier()
 	p.skipNewlines()
 	return stmt
@@ -751,7 +754,7 @@ func (p *Parser) parseDeferStmt() *ast.DeferStmt {
 	p.nextToken() // move past expression
 	p.skipNewlines()
 
-	return &ast.DeferStmt{Call: call}
+	return &ast.DeferStmt{Call: call, Line: deferLine}
 }
 
 func (p *Parser) parseInstanceVarAssign() *ast.InstanceVarAssign {
@@ -783,6 +786,7 @@ func (p *Parser) parseInstanceVarAssign() *ast.InstanceVarAssign {
 }
 
 func (p *Parser) parseOrAssignStmt() *ast.OrAssignStmt {
+	line := p.curToken.Line
 	name := p.curToken.Literal
 	p.nextToken() // consume ident
 
@@ -802,10 +806,11 @@ func (p *Parser) parseOrAssignStmt() *ast.OrAssignStmt {
 	p.nextToken() // move past expression
 	p.skipNewlines()
 
-	return &ast.OrAssignStmt{Name: name, Value: value}
+	return &ast.OrAssignStmt{Name: name, Value: value, Line: line}
 }
 
 func (p *Parser) parseCompoundAssignStmt() *ast.CompoundAssignStmt {
+	line := p.curToken.Line
 	name := p.curToken.Literal
 	p.nextToken() // consume ident
 
@@ -836,7 +841,7 @@ func (p *Parser) parseCompoundAssignStmt() *ast.CompoundAssignStmt {
 	p.nextToken() // move past expression
 	p.skipNewlines()
 
-	return &ast.CompoundAssignStmt{Name: name, Op: op, Value: value}
+	return &ast.CompoundAssignStmt{Name: name, Op: op, Value: value, Line: line}
 }
 
 func (p *Parser) parseInstanceVarOrAssign() *ast.InstanceVarOrAssign {
