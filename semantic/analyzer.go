@@ -95,6 +95,10 @@ func (a *Analyzer) Analyze(program *ast.Program) []error {
 		a.collectDeclaration(decl)
 	}
 
+	// Resolve types: convert class types to interface types where appropriate
+	// This must happen after all declarations are collected so we know what interfaces exist
+	a.resolveTypes()
+
 	// Validate interface implementations
 	a.validateInterfaceImplementations()
 
@@ -230,6 +234,88 @@ func (a *Analyzer) formatMethodSignature(method *Symbol) string {
 		sig += " -> " + strings.Join(returns, ", ")
 	}
 	return sig
+}
+
+// resolveTypes converts TypeClass types to TypeInterface where the name matches a declared interface.
+// This is necessary because ParseType doesn't know about interfaces at parse time.
+func (a *Analyzer) resolveTypes() {
+	// Resolve function parameter and return types
+	for _, fn := range a.functions {
+		for _, param := range fn.Params {
+			a.resolveType(param.Type)
+		}
+		for i, rt := range fn.ReturnTypes {
+			fn.ReturnTypes[i] = a.resolveType(rt)
+		}
+	}
+
+	// Resolve class method parameter and return types
+	for _, cls := range a.classes {
+		for _, method := range cls.Methods {
+			for _, param := range method.Params {
+				a.resolveType(param.Type)
+			}
+			for i, rt := range method.ReturnTypes {
+				method.ReturnTypes[i] = a.resolveType(rt)
+			}
+		}
+	}
+
+	// Resolve module method parameter and return types
+	for _, mod := range a.modules {
+		for _, method := range mod.Methods {
+			for _, param := range method.Params {
+				a.resolveType(param.Type)
+			}
+			for i, rt := range method.ReturnTypes {
+				method.ReturnTypes[i] = a.resolveType(rt)
+			}
+		}
+	}
+
+	// Resolve interface method parameter and return types (for consistency)
+	for _, iface := range a.interfaces {
+		for _, method := range iface.Methods {
+			for _, param := range method.Params {
+				a.resolveType(param.Type)
+			}
+			for i, rt := range method.ReturnTypes {
+				method.ReturnTypes[i] = a.resolveType(rt)
+			}
+		}
+	}
+}
+
+// resolveType checks if a type is a TypeClass that should be TypeInterface.
+// If the type name matches a declared interface, it updates the type's Kind to TypeInterface.
+// Also recursively resolves nested types (optional, array, map, etc.)
+func (a *Analyzer) resolveType(t *Type) *Type {
+	if t == nil {
+		return t
+	}
+
+	// If this is a class type, check if it should be an interface
+	if t.Kind == TypeClass && t.Name != "" {
+		if _, isInterface := a.interfaces[t.Name]; isInterface {
+			t.Kind = TypeInterface
+		}
+	}
+
+	// Recursively resolve nested types
+	if t.Elem != nil {
+		a.resolveType(t.Elem)
+	}
+	if t.KeyType != nil {
+		a.resolveType(t.KeyType)
+	}
+	if t.ValueType != nil {
+		a.resolveType(t.ValueType)
+	}
+	for _, elem := range t.Elements {
+		a.resolveType(elem)
+	}
+
+	return t
 }
 
 // collectDeclaration does a quick first pass to register top-level names.

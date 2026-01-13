@@ -18,7 +18,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 04_loops.rg | ❌ FAIL | Predicate methods on arrays (any?, empty?) |
 | 05_functions.rg | ✅ PASS | Optional return types now work |
 | 06_classes.rg | ❌ FAIL | "missing return" for string-returning methods |
-| 07_interfaces.rg | ❌ FAIL | Structural typing for interface parameters |
+| 07_interfaces.rg | ✅ PASS | Interface structural typing now works |
 | 08_modules.rg | ❌ FAIL | Pointer printing instead of values |
 | 09_blocks.rg | ✅ PASS | Block methods now work |
 | 10_optionals.rg | ❌ FAIL | "if let" pattern not implemented |
@@ -74,6 +74,9 @@ Range indexing now slices arrays and strings.
 ### ~~BUG-016: concurrently expression~~ ✅ FIXED
 `concurrently do |scope| ... end` now works as an expression in assignment context.
 
+### ~~BUG-008: Interface structural typing~~ ✅ FIXED
+Classes now satisfy interfaces structurally. Interface methods are generated with PascalCase for Go compatibility. Type assertions (`is_a?` and `as`) work correctly on concrete types.
+
 ---
 
 ## Remaining Bugs
@@ -100,22 +103,6 @@ end
 ```
 **Error:** `missing return`
 **Expected:** Last expression should be implicit return
-
----
-
-### BUG-008: Structural typing for interface parameters (still failing)
-**File:** 07_interfaces.rg
-**Code:**
-```ruby
-def greet(s : Speaker)
-  puts s.speak
-end
-
-dog = Dog.new("Rex")
-greet(dog)  # Dog implements Speaker
-```
-**Error:** `cannot use Dog as Speaker for parameter 's' in greet`
-**Expected:** Structural typing should allow Dog (which has `speak -> String`) to be passed
 
 ---
 
@@ -197,16 +184,15 @@ wg = sync.WaitGroup.new
 ## Priority Order for Remaining Fixes
 
 ### High Priority
-1. **BUG-008**: Interface structural typing - core OOP feature
-2. **BUG-021**: Multi-value Go function returns - essential for Go interop
-3. **BUG-018**: Missing return detection - common pattern
+1. **BUG-021**: Multi-value Go function returns - essential for Go interop
+2. **BUG-018**: Missing return detection - common pattern
 
 ### Medium Priority
-4. **BUG-017**: Predicate methods on arrays
-5. **BUG-020**: "if let" pattern
-6. **BUG-022**: String methods
-7. **BUG-023**: Range.size method
+3. **BUG-017**: Predicate methods on arrays
+4. **BUG-020**: "if let" pattern
+5. **BUG-022**: String methods
+6. **BUG-023**: Range.size method
 
 ### Lower Priority
-8. **BUG-019**: Pointer printing
-9. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
+7. **BUG-019**: Pointer printing
+8. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new

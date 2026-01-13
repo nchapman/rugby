@@ -92,7 +92,13 @@ func (g *Generator) genExpr(expr ast.Expression) {
 	case *ast.CallExpr:
 		g.genCallExpr(e)
 	case *ast.SelectorExpr:
-		g.genSelectorExpr(e)
+		// In Ruby, obj.method is always a method call (not field access).
+		// For interface methods, convert SelectorExpr to CallExpr with no args.
+		if g.isInterfaceMethod(e.Sel) {
+			g.genCallExpr(&ast.CallExpr{Func: e, Args: nil})
+		} else {
+			g.genSelectorExpr(e)
+		}
 	case *ast.IndexExpr:
 		g.genIndexExpr(e)
 	case *ast.SafeNavExpr:
@@ -906,9 +912,10 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				g.buf.WriteString("false /* ERROR: is_a? requires exactly one type argument */")
 				return
 			}
-			g.buf.WriteString("func() bool { _, ok := ")
+			// Cast to any first to allow type assertion on concrete types
+			g.buf.WriteString("func() bool { _, ok := any(")
 			g.genExpr(fn.X)
-			g.buf.WriteString(".(")
+			g.buf.WriteString(").(")
 			g.genExpr(call.Args[0])
 			g.buf.WriteString("); return ok }()")
 			return
@@ -919,11 +926,12 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				g.buf.WriteString("func() (any, bool) { return nil, false }() /* ERROR: as requires exactly one type argument */")
 				return
 			}
+			// Cast to any first to allow type assertion on concrete types
 			g.buf.WriteString("func() (")
 			g.genExpr(call.Args[0])
-			g.buf.WriteString(", bool) { v, ok := ")
+			g.buf.WriteString(", bool) { v, ok := any(")
 			g.genExpr(fn.X)
-			g.buf.WriteString(".(")
+			g.buf.WriteString(").(")
 			g.genExpr(call.Args[0])
 			g.buf.WriteString("); return v, ok }()")
 			return
@@ -1619,9 +1627,17 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 		return
 	}
 
+	// Check if this method name matches any interface method
+	// If so, use PascalCase for Go interface compatibility
+	isInterfaceMethod := g.isInterfaceMethod(sel.Sel)
+
 	g.genExpr(sel.X)
 	g.buf.WriteString(".")
-	g.buf.WriteString(snakeToCamelWithAcronyms(sel.Sel))
+	if isInterfaceMethod {
+		g.buf.WriteString(snakeToPascalWithAcronyms(sel.Sel))
+	} else {
+		g.buf.WriteString(snakeToCamelWithAcronyms(sel.Sel))
+	}
 }
 
 func (g *Generator) isGoInterop(expr ast.Expression) bool {
@@ -1633,6 +1649,17 @@ func (g *Generator) isGoInterop(expr ast.Expression) bool {
 	default:
 		return false
 	}
+}
+
+// isInterfaceMethod checks if a method name matches any interface method in the program.
+// This is used to determine whether to use PascalCase (for interface methods) or camelCase.
+func (g *Generator) isInterfaceMethod(methodName string) bool {
+	for _, methods := range g.interfaceMethods {
+		if methods[methodName] {
+			return true
+		}
+	}
+	return false
 }
 
 // genArrayPropertyMethod handles property-style array and map method calls

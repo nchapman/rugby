@@ -97,7 +97,19 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	g.currentClassEmbeds = cls.Embeds
 	g.pubClasses[className] = cls.Pub
 	clear(g.classFields)
-	clear(g.currentClassModuleMethods) // Reset for new class
+	clear(g.currentClassModuleMethods)    // Reset for new class
+	clear(g.currentClassInterfaceMethods) // Reset for new class
+
+	// For structural typing support: export methods that match ANY interface method
+	// name in the program. In Go, interface methods must be exported (PascalCase),
+	// so any class method that could satisfy an interface must also be exported.
+	// This enables Go-style duck typing where classes can satisfy interfaces
+	// without explicit 'implements' declarations.
+	for _, methods := range g.interfaceMethods {
+		for methodName := range methods {
+			g.currentClassInterfaceMethods[methodName] = true
+		}
+	}
 
 	// Collect all fields: explicit, inferred, from accessors, and from included modules
 	// Track field names to avoid duplicates
@@ -307,6 +319,14 @@ func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, 
 func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
 	// Track this interface for zero-value generation
 	g.interfaces[iface.Name] = true
+
+	// Track interface methods for structural typing
+	if g.interfaceMethods[iface.Name] == nil {
+		g.interfaceMethods[iface.Name] = make(map[string]bool)
+	}
+	for _, method := range iface.Methods {
+		g.interfaceMethods[iface.Name][method.Name] = true
+	}
 
 	// Generate: type InterfaceName interface { ... }
 	g.buf.WriteString(fmt.Sprintf("type %s interface {\n", iface.Name))
@@ -536,8 +556,9 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	// Method name: convert snake_case to proper casing
 	// pub def in a pub class -> PascalCase (exported)
 	// def in any class -> camelCase (unexported)
+	// Methods required by interfaces must be exported (PascalCase) for Go interface satisfaction
 	var methodName string
-	if method.Pub {
+	if method.Pub || g.currentClassInterfaceMethods[method.Name] {
 		methodName = snakeToPascalWithAcronyms(method.Name)
 	} else {
 		methodName = snakeToCamelWithAcronyms(method.Name)

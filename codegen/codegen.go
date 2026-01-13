@@ -84,33 +84,35 @@ type TypeInfo interface {
 }
 
 type Generator struct {
-	buf                       strings.Builder
-	indent                    int
-	vars                      map[string]string          // track declared variables and their types (empty string = unknown type)
-	imports                   map[string]bool            // track import aliases for Go interop detection
-	needsRuntime              bool                       // track if rugby/runtime import is needed
-	needsFmt                  bool                       // track if fmt import is needed (string interpolation)
-	needsErrors               bool                       // track if errors import is needed (error_is?, error_as)
-	needsTestingImport        bool                       // track if testing import is needed
-	needsTestImport           bool                       // track if rugby/test import is needed
-	currentClass              string                     // current class being generated (for instance vars)
-	currentMethod             string                     // current method name being generated (for super)
-	currentMethodPub          bool                       // whether current method is pub (for super)
-	currentClassEmbeds        []string                   // embedded types (parent classes) of current class
-	currentClassModuleMethods map[string]bool            // methods from included modules (need self.method() call)
-	pubClasses                map[string]bool            // track public classes for constructor naming
-	classFields               map[string]string          // track fields of the current class and their types
-	accessorFields            map[string]bool            // track which fields have accessor methods (need underscore prefix)
-	modules                   map[string]*ast.ModuleDecl // track module definitions for include
-	interfaces                map[string]bool            // track declared interfaces for zero-value generation
-	sourceFile                string                     // original .rg filename for //line directives
-	emitLineDir               bool                       // whether to emit //line directives
-	currentReturnTypes        []string                   // return types of the current function/method
-	contexts                  []loopContext              // stack of loop/block contexts
-	inMainFunc                bool                       // true when generating code inside main() function
-	errors                    []error                    // collected errors during generation
-	tempVarCounter            int                        // counter for generating unique temp variable names
-	typeInfo                  TypeInfo                   // optional type info from semantic analysis
+	buf                          strings.Builder
+	indent                       int
+	vars                         map[string]string          // track declared variables and their types (empty string = unknown type)
+	imports                      map[string]bool            // track import aliases for Go interop detection
+	needsRuntime                 bool                       // track if rugby/runtime import is needed
+	needsFmt                     bool                       // track if fmt import is needed (string interpolation)
+	needsErrors                  bool                       // track if errors import is needed (error_is?, error_as)
+	needsTestingImport           bool                       // track if testing import is needed
+	needsTestImport              bool                       // track if rugby/test import is needed
+	currentClass                 string                     // current class being generated (for instance vars)
+	currentMethod                string                     // current method name being generated (for super)
+	currentMethodPub             bool                       // whether current method is pub (for super)
+	currentClassEmbeds           []string                   // embedded types (parent classes) of current class
+	currentClassModuleMethods    map[string]bool            // methods from included modules (need self.method() call)
+	pubClasses                   map[string]bool            // track public classes for constructor naming
+	classFields                  map[string]string          // track fields of the current class and their types
+	accessorFields               map[string]bool            // track which fields have accessor methods (need underscore prefix)
+	modules                      map[string]*ast.ModuleDecl // track module definitions for include
+	interfaces                   map[string]bool            // track declared interfaces for zero-value generation
+	interfaceMethods             map[string]map[string]bool // interface name -> method names (for interface implementation)
+	currentClassInterfaceMethods map[string]bool            // methods that must be exported for current class (to satisfy interfaces)
+	sourceFile                   string                     // original .rg filename for //line directives
+	emitLineDir                  bool                       // whether to emit //line directives
+	currentReturnTypes           []string                   // return types of the current function/method
+	contexts                     []loopContext              // stack of loop/block contexts
+	inMainFunc                   bool                       // true when generating code inside main() function
+	errors                       []error                    // collected errors during generation
+	tempVarCounter               int                        // counter for generating unique temp variable names
+	typeInfo                     TypeInfo                   // optional type info from semantic analysis
 }
 
 // addError records an error during code generation
@@ -182,14 +184,16 @@ func WithTypeInfo(ti TypeInfo) Option {
 
 func New(opts ...Option) *Generator {
 	g := &Generator{
-		vars:                      make(map[string]string),
-		imports:                   make(map[string]bool),
-		pubClasses:                make(map[string]bool),
-		classFields:               make(map[string]string),
-		accessorFields:            make(map[string]bool),
-		currentClassModuleMethods: make(map[string]bool),
-		modules:                   make(map[string]*ast.ModuleDecl),
-		interfaces:                make(map[string]bool),
+		vars:                         make(map[string]string),
+		imports:                      make(map[string]bool),
+		pubClasses:                   make(map[string]bool),
+		classFields:                  make(map[string]string),
+		accessorFields:               make(map[string]bool),
+		currentClassModuleMethods:    make(map[string]bool),
+		modules:                      make(map[string]*ast.ModuleDecl),
+		interfaces:                   make(map[string]bool),
+		interfaceMethods:             make(map[string]map[string]bool),
+		currentClassInterfaceMethods: make(map[string]bool),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -473,6 +477,20 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	// Check for conflict: both def main and top-level statements
 	if hasMainFunc && len(topLevelStmts) > 0 {
 		return "", fmt.Errorf("cannot mix top-level statements with 'def main'; use one or the other")
+	}
+
+	// Pre-pass: collect interface methods before generating code
+	// This ensures classes know which methods need to be exported to satisfy interfaces,
+	// even if interfaces are declared after classes in source order
+	for _, def := range definitions {
+		if iface, ok := def.(*ast.InterfaceDecl); ok {
+			if g.interfaceMethods[iface.Name] == nil {
+				g.interfaceMethods[iface.Name] = make(map[string]bool)
+			}
+			for _, method := range iface.Methods {
+				g.interfaceMethods[iface.Name][method.Name] = true
+			}
+		}
 	}
 
 	// First pass: generate definitions to determine what imports we need
