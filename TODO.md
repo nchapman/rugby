@@ -33,6 +33,26 @@ Currently, codegen does too much: type inference, error checking, and generation
     - [x] Class/interface instance equality validation (same class comparable, different classes error).
     - [x] Class constructor type inference (`Dog.new()` returns `Dog` type).
 
+- [x] **Comprehensive Type Validation** ✅
+    - [x] Return type validation (returned value must match declared return type).
+    - [x] Function argument type validation (arguments must match parameter types).
+    - [x] Conditional expression validation (`if`/`while`/`until`/ternary conditions must be Bool).
+    - [x] Array/string index type validation (index must be Int or Int64).
+    - [x] Compound assignment type checking (`+=` for numerics/strings, `-=`/`*=`/`/=`/`%=` for numerics).
+    - [x] Array/map element type homogeneity (all elements must have compatible types).
+    - [x] Case/when value type matching (when values must be comparable to subject type).
+    - [x] Channel send type validation (sent value must match channel element type).
+    - [x] Nil coalesce type compatibility (`??` right side must be assignable to unwrapped left type).
+    - [x] Test statement analysis (`describe`, `it`, `test`, `table`, `before`, `after` bodies analyzed).
+
+- [ ] **Remaining Type Checking Gaps** (Lower Priority)
+    - [ ] Method call type checking (currently returns `TypeUnknown` for all method calls).
+    - [ ] Interface implementation validation (verify class implements all interface methods).
+    - [ ] Block parameter type inference (currently assumes `TypeAny`).
+    - [ ] Method visibility enforcement (private methods callable from outside class).
+    - [ ] Safe navigation return type inference (`&.` currently returns `Optional[unknown]`).
+    - [ ] Bang operator validation (`!` should verify expression is error tuple).
+
 ## Phase 1.5: Testing & Development UX (Critical for Refactoring)
 
 Testing generated string output is fragile, and single-error stopping slows down development. We need behavioral tests and better error reporting to refactor `codegen` with confidence.
