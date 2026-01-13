@@ -1939,6 +1939,27 @@ end`
 	assertContains(t, output, `func (p *Point) String() string {`)
 }
 
+func TestToSWithImplicitReturn(t *testing.T) {
+	// to_s without explicit return should have implicit return for last expression
+	input := `class Point
+  def initialize(@x : Int, @y : Int)
+  end
+
+  def to_s -> String
+    "(#{@x}, #{@y})"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// to_s should compile to String() with return
+	assertContains(t, output, `func (p *Point) String() string {`)
+	assertContains(t, output, `return fmt.Sprintf("(%v, %v)"`)
+}
+
 func TestToSWithParamsFallsBack(t *testing.T) {
 	// to_s with parameters doesn't satisfy fmt.Stringer, so it's treated as a normal method
 	input := `class User
@@ -1957,6 +1978,27 @@ end`
 
 	// With parameters, to_s becomes toS (normal snake_case conversion)
 	assertContains(t, output, `func (u *User) toS(format string) {`)
+}
+
+func TestMessageWithImplicitReturn(t *testing.T) {
+	// message without explicit return should have implicit return for last expression
+	input := `class MyError
+  def initialize(@code : Int)
+  end
+
+  def message -> String
+    "Error code: #{@code}"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// message should compile to Error() with return
+	assertContains(t, output, `func (m *MyError) Error() string {`)
+	assertContains(t, output, `return fmt.Sprintf("Error code: %v"`)
 }
 
 func TestStringInterpolation(t *testing.T) {

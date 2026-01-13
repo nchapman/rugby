@@ -17,7 +17,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 03_control_flow.rg | ✅ PASS | None |
 | 04_loops.rg | ❌ FAIL | Predicate methods on arrays (any?, empty?) |
 | 05_functions.rg | ✅ PASS | Optional return types now work |
-| 06_classes.rg | ❌ FAIL | "missing return" for string-returning methods |
+| 06_classes.rg | ❌ FAIL | Multiple class bugs (see below) |
 | 07_interfaces.rg | ✅ PASS | Interface structural typing now works |
 | 08_modules.rg | ❌ FAIL | Pointer printing instead of values |
 | 09_blocks.rg | ✅ PASS | Block methods now work |
@@ -80,6 +80,9 @@ Classes now satisfy interfaces structurally. Interface methods are generated wit
 ### ~~BUG-021: Multi-value Go function returns~~ ✅ FIXED
 Underscore (`_`) is now recognized as a valid identifier, allowing patterns like `_, err = os.ReadFile(...)`. Multi-value assignments from Go functions now work correctly. Unknown types in multi-assignment are given `any` type.
 
+### ~~BUG-018: Missing return detection for string methods~~ ✅ FIXED
+The `to_s` and `message` methods now correctly generate implicit returns for the last expression when it's a string interpolation or other expression.
+
 ---
 
 ## Remaining Bugs
@@ -96,22 +99,64 @@ puts items.shift while items.any?
 
 ---
 
-### BUG-018: Missing return detection for string methods
-**File:** 06_classes.rg
-**Code:**
-```ruby
-def to_s -> String
-  "(#{@x}, #{@y})"
-end
-```
-**Error:** `missing return`
-**Expected:** Last expression should be implicit return
-
----
-
 ### BUG-019: Pointer printing instead of values
 **File:** 08_modules.rg
 **Error:** Prints memory addresses instead of values when printing objects
+
+---
+
+### BUG-026: Method calls without parentheses treated as field access
+**File:** 06_classes.rg
+**Code:**
+```ruby
+self.magnitude_squared == other.magnitude_squared
+```
+**Error:** `invalid operation: p.magnitudeSquared == other.magnitudeSquared (func can only be compared to nil)`
+**Expected:** Methods without parens should be called, not treated as field access
+
+---
+
+### BUG-027: Compound assignment to instance variable broken
+**File:** 06_classes.rg
+**Code:**
+```ruby
+@count += 1
+```
+**Error:** `c.count (variable of type int) is not used` and `1 (untyped int constant) is not used`
+**Expected:** `@count += 1` should generate `c.count = c.count + 1`
+
+---
+
+### BUG-028: to_s call resolves to wrong method name
+**File:** 06_classes.rg
+**Code:**
+```ruby
+puts "Point: #{p1.to_s}"
+```
+**Error:** `p1.toS undefined (type *Point has no field or method toS)`
+**Expected:** Calling `to_s` should invoke `String()` method
+
+---
+
+### BUG-029: Subclass constructors not generated
+**File:** 06_classes.rg
+**Code:**
+```ruby
+cat = Cat.new("Whiskers")
+```
+**Error:** `undefined: newCat`
+**Expected:** Subclasses should have constructors generated that call parent constructor
+
+---
+
+### BUG-030: Setter assignment not generating correct code
+**File:** 06_classes.rg
+**Code:**
+```ruby
+person.email = "alice.new@example.com"
+```
+**Error:** `"alice.new@example.com" (untyped string constant) is not used`
+**Expected:** Property setter should be invoked
 
 ---
 
@@ -176,15 +221,19 @@ wg = sync.WaitGroup.new
 
 ## Priority Order for Remaining Fixes
 
-### High Priority
-1. **BUG-018**: Missing return detection - common pattern
+### High Priority (06_classes.rg blockers)
+1. **BUG-026**: Method calls without parentheses - common pattern
+2. **BUG-027**: Compound assignment to instance variable
+3. **BUG-028**: to_s call resolves to wrong method name
+4. **BUG-029**: Subclass constructors not generated
+5. **BUG-030**: Setter assignment not generating correct code
 
 ### Medium Priority
-2. **BUG-017**: Predicate methods on arrays
-3. **BUG-020**: "if let" pattern
-4. **BUG-022**: String methods
-5. **BUG-023**: Range.size method
+6. **BUG-017**: Predicate methods on arrays
+7. **BUG-020**: "if let" pattern
+8. **BUG-022**: String methods
+9. **BUG-023**: Range.size method
 
 ### Lower Priority
-6. **BUG-019**: Pointer printing
-7. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
+10. **BUG-019**: Pointer printing
+11. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new

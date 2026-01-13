@@ -28,7 +28,7 @@ func allExamples() []example {
 
 		// Examples with known bugs (see BUGS.md)
 		{file: "04_loops.rg", hasBugs: true},       // predicate methods on arrays (any?, empty?)
-		{file: "06_classes.rg", hasBugs: true},     // "missing return" for string methods
+		{file: "06_classes.rg", hasBugs: true},     // Multiple class-related issues
 		{file: "07_interfaces.rg"},                 // interface structural typing now works
 		{file: "08_modules.rg", hasBugs: true},     // pointer printing instead of values
 		{file: "10_optionals.rg", hasBugs: true},   // "if let" pattern not implemented

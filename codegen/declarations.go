@@ -486,7 +486,19 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	if method.Name == "to_s" && len(method.Params) == 0 {
 		g.buf.WriteString(fmt.Sprintf("func (%s *%s) String() string {\n", recv, className))
 		g.indent++
-		for _, stmt := range method.Body {
+		// Generate body statements, with implicit return for last expression
+		for i, stmt := range method.Body {
+			isLast := i == len(method.Body)-1
+			if isLast {
+				// If last statement is an expression, add return
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+					continue
+				}
+			}
 			g.genStatement(stmt)
 		}
 		g.indent--
@@ -502,7 +514,19 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	if method.Name == "message" && len(method.Params) == 0 {
 		g.buf.WriteString(fmt.Sprintf("func (%s *%s) Error() string {\n", recv, className))
 		g.indent++
-		for _, stmt := range method.Body {
+		// Generate body statements, with implicit return for last expression
+		for i, stmt := range method.Body {
+			isLast := i == len(method.Body)-1
+			if isLast {
+				// If last statement is an expression, add return
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+					continue
+				}
+			}
 			g.genStatement(stmt)
 		}
 		g.indent--
