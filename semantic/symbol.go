@@ -31,6 +31,7 @@ type Symbol struct {
 	// For functions/methods
 	Params      []*Symbol // parameter symbols
 	ReturnTypes []*Type   // return types
+	Variadic    bool      // true if last param is variadic (accepts multiple args)
 
 	// For classes/interfaces
 	Fields  map[string]*Symbol // field symbols

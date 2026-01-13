@@ -15,6 +15,7 @@ import (
 	"github.com/nchapman/rugby/codegen"
 	"github.com/nchapman/rugby/lexer"
 	"github.com/nchapman/rugby/parser"
+	"github.com/nchapman/rugby/semantic"
 )
 
 // Styles for pretty output
@@ -138,6 +139,13 @@ func (b *Builder) compileFile(inputPath string) (string, bool, error) {
 		return "", false, b.formatParseErrors(inputPath, p.Errors())
 	}
 
+	// Semantic analysis
+	analyzer := semantic.NewAnalyzer()
+	semanticErrors := analyzer.Analyze(program)
+	if len(semanticErrors) > 0 {
+		return "", false, b.formatSemanticErrors(inputPath, semanticErrors)
+	}
+
 	// Check if this file has top-level statements
 	hasTopLevel := hasTopLevelStatements(program)
 
@@ -222,6 +230,16 @@ func (b *Builder) formatParseErrors(file string, errors []string) error {
 	msg.WriteString(errorStyle.Render("Parse errors") + " in " + fileStyle.Render(file) + ":\n")
 	for _, e := range errors {
 		msg.WriteString(fmt.Sprintf("  %s:%s\n", file, e))
+	}
+	return fmt.Errorf("%s", msg.String())
+}
+
+// formatSemanticErrors formats semantic analysis errors for display.
+func (b *Builder) formatSemanticErrors(file string, errors []error) error {
+	var msg strings.Builder
+	msg.WriteString(errorStyle.Render("Semantic errors") + " in " + fileStyle.Render(file) + ":\n")
+	for _, e := range errors {
+		msg.WriteString(fmt.Sprintf("  %s: %s\n", file, e.Error()))
 	}
 	return fmt.Errorf("%s", msg.String())
 }

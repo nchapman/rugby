@@ -42,19 +42,20 @@ func NewAnalyzer() *Analyzer {
 func (a *Analyzer) defineBuiltins() {
 	// Kernel functions
 	builtins := []struct {
-		name    string
-		params  []*Type
-		returns []*Type
+		name     string
+		params   []*Type
+		returns  []*Type
+		variadic bool
 	}{
-		{"puts", []*Type{TypeAnyVal}, nil},
-		{"print", []*Type{TypeAnyVal}, nil},
-		{"p", []*Type{TypeAnyVal}, nil},
-		{"gets", nil, []*Type{TypeStringVal}},
-		{"exit", []*Type{TypeIntVal}, nil},
-		{"sleep", []*Type{TypeFloatVal}, nil},
-		{"rand", []*Type{TypeIntVal}, []*Type{TypeIntVal}},
-		{"error", []*Type{TypeStringVal}, []*Type{TypeErrorVal}},
-		{"panic", []*Type{TypeStringVal}, nil},
+		{"puts", []*Type{TypeAnyVal}, nil, true},
+		{"print", []*Type{TypeAnyVal}, nil, true},
+		{"p", []*Type{TypeAnyVal}, nil, true},
+		{"gets", nil, []*Type{TypeStringVal}, false},
+		{"exit", []*Type{TypeIntVal}, nil, false},
+		{"sleep", []*Type{TypeFloatVal}, nil, false},
+		{"rand", []*Type{TypeIntVal}, []*Type{TypeIntVal}, false},
+		{"error", []*Type{TypeStringVal}, []*Type{TypeErrorVal}, false},
+		{"panic", []*Type{TypeStringVal}, nil, false},
 	}
 
 	for _, b := range builtins {
@@ -63,6 +64,7 @@ func (a *Analyzer) defineBuiltins() {
 			params[i] = NewParam("arg"+string(rune('0'+i)), pt)
 		}
 		fn := NewFunction(b.name, params, b.returns)
+		fn.Variadic = b.variadic
 		mustDefine(a.globalScope, fn)
 		a.functions[b.name] = fn
 	}
@@ -1019,14 +1021,27 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 	// Analyze function/receiver
 	funcType := a.analyzeExpr(call.Func)
 
-	// Analyze arguments
+	// Analyze arguments and check for splat (which makes arity checking unreliable)
+	hasSplat := false
 	for _, arg := range call.Args {
 		a.analyzeExpr(arg)
+		if _, ok := arg.(*ast.SplatExpr); ok {
+			hasSplat = true
+		}
 	}
 
 	// Analyze block if present
 	if call.Block != nil {
 		a.analyzeBlock(call.Block)
+	}
+
+	// Check argument count for known functions (skip if call uses splat)
+	if !hasSplat {
+		if ident, ok := call.Func.(*ast.Ident); ok {
+			if fn := a.functions[ident.Name]; fn != nil {
+				a.checkArity(ident.Name, fn, call)
+			}
+		}
 	}
 
 	// Try to determine return type
@@ -1037,7 +1052,7 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 		return NewTupleType(funcType.Returns...)
 	}
 
-	// Check for known function
+	// Check for known function and return type
 	if ident, ok := call.Func.(*ast.Ident); ok {
 		if fn := a.functions[ident.Name]; fn != nil {
 			if len(fn.ReturnTypes) > 0 {
@@ -1050,6 +1065,26 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 	}
 
 	return TypeUnknownVal
+}
+
+// checkArity verifies the argument count matches the function's parameter count.
+func (a *Analyzer) checkArity(name string, fn *Symbol, call *ast.CallExpr) {
+	expected := len(fn.Params)
+	got := len(call.Args)
+
+	if fn.Variadic {
+		// Variadic functions accept any number of arguments (including zero)
+		// The params slice contains the base parameter type for documentation
+		return
+	}
+
+	if got != expected {
+		a.addError(&ArityMismatchError{
+			Name:     name,
+			Expected: expected,
+			Got:      got,
+		})
+	}
 }
 
 func (a *Analyzer) analyzeBlock(block *ast.BlockExpr) {

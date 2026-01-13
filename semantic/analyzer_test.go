@@ -555,3 +555,118 @@ func TestAnalyzeErrorMessages(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyzeArityMismatch(t *testing.T) {
+	input := `
+def add(a : Int, b : Int) -> Int
+  a + b
+end
+
+add(1)
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+	if len(errs) == 0 {
+		t.Fatal("expected error for wrong number of arguments")
+	}
+
+	found := false
+	for _, err := range errs {
+		if arity, ok := err.(*ArityMismatchError); ok {
+			if arity.Name == "add" && arity.Expected == 2 && arity.Got == 1 {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected ArityMismatchError for 'add', got: %v", errs)
+	}
+}
+
+func TestAnalyzeArityMismatchTooMany(t *testing.T) {
+	input := `
+def greet(name : String)
+  puts name
+end
+
+greet("Alice", "Bob")
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+	if len(errs) == 0 {
+		t.Fatal("expected error for wrong number of arguments")
+	}
+
+	found := false
+	for _, err := range errs {
+		if arity, ok := err.(*ArityMismatchError); ok {
+			if arity.Name == "greet" && arity.Expected == 1 && arity.Got == 2 {
+				found = true
+				break
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected ArityMismatchError for 'greet', got: %v", errs)
+	}
+}
+
+func TestAnalyzeArityCorrect(t *testing.T) {
+	input := `
+def add(a : Int, b : Int) -> Int
+  a + b
+end
+
+result = add(1, 2)
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+	if len(errs) > 0 {
+		t.Errorf("unexpected errors: %v", errs)
+	}
+}
+
+func TestAnalyzeBuiltinVariadic(t *testing.T) {
+	tests := []struct {
+		input string
+	}{
+		{`puts "hello"`},
+		{`puts "hello", "world"`},
+		{`puts "a", "b", "c", "d"`},
+		{`print "one", "two", "three"`},
+		{`p 1, 2, 3`},
+	}
+
+	for _, tt := range tests {
+		p := parse(t, tt.input)
+		program := p.ParseProgram()
+		if len(p.Errors()) > 0 {
+			t.Fatalf("parse errors for %q: %v", tt.input, p.Errors())
+		}
+
+		a := NewAnalyzer()
+		errs := a.Analyze(program)
+		if len(errs) > 0 {
+			t.Errorf("for %q: expected no errors, got: %v", tt.input, errs)
+		}
+	}
+}
