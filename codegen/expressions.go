@@ -436,7 +436,30 @@ func (g *Generator) genArrayLit(arr *ast.ArrayLit) {
 		return
 	}
 
-	// Try to infer element type
+	// Determine array type using semantic type info or fallback inference
+	arrayType := g.getArrayType(arr)
+
+	g.buf.WriteString(arrayType + "{")
+	for i, elem := range arr.Elements {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.genExpr(elem)
+	}
+	g.buf.WriteString("}")
+}
+
+// getArrayType returns the Go type string for an array literal (e.g., "[]int").
+// Uses semantic type info when available, falls back to expression inference.
+func (g *Generator) getArrayType(arr *ast.ArrayLit) string {
+	// Try semantic type info first (most reliable)
+	if g.typeInfo != nil {
+		if goType := g.typeInfo.GetGoType(arr); goType != "" {
+			return goType
+		}
+	}
+
+	// Fall back to expression-based inference
 	elemType := "any"
 	if len(arr.Elements) > 0 {
 		firstType := g.inferTypeFromExpr(arr.Elements[0])
@@ -451,15 +474,7 @@ func (g *Generator) genArrayLit(arr *ast.ArrayLit) {
 			elemType = mapType(firstType)
 		}
 	}
-
-	g.buf.WriteString("[]" + elemType + "{")
-	for i, elem := range arr.Elements {
-		if i > 0 {
-			g.buf.WriteString(", ")
-		}
-		g.genExpr(elem)
-	}
-	g.buf.WriteString("}")
+	return "[]" + elemType
 }
 
 func (g *Generator) genArrayLitWithSplat(arr *ast.ArrayLit) {
@@ -587,7 +602,10 @@ func (g *Generator) genMapLit(m *ast.MapLit) {
 		return
 	}
 
-	g.buf.WriteString("map[any]any{")
+	// Determine map type using semantic type info or fallback inference
+	goMapType := g.getMapType(m)
+
+	g.buf.WriteString(goMapType + "{")
 	for i, entry := range m.Entries {
 		if i > 0 {
 			g.buf.WriteString(", ")
@@ -597,6 +615,45 @@ func (g *Generator) genMapLit(m *ast.MapLit) {
 		g.genExpr(entry.Value)
 	}
 	g.buf.WriteString("}")
+}
+
+// getMapType returns the Go type string for a map literal (e.g., "map[string]int").
+// Uses semantic type info when available, falls back to expression inference.
+func (g *Generator) getMapType(m *ast.MapLit) string {
+	// Try semantic type info first (most reliable)
+	if g.typeInfo != nil {
+		if goType := g.typeInfo.GetGoType(m); goType != "" {
+			return goType
+		}
+	}
+
+	// Fall back to expression-based inference
+	if len(m.Entries) > 0 {
+		keyType := g.inferTypeFromExpr(m.Entries[0].Key)
+		valType := g.inferTypeFromExpr(m.Entries[0].Value)
+		keysConsistent := true
+		valsConsistent := true
+
+		for _, e := range m.Entries[1:] {
+			if g.inferTypeFromExpr(e.Key) != keyType {
+				keysConsistent = false
+			}
+			if g.inferTypeFromExpr(e.Value) != valType {
+				valsConsistent = false
+			}
+		}
+
+		goKeyType := "any"
+		goValType := "any"
+		if keysConsistent && keyType != "" {
+			goKeyType = mapType(keyType)
+		}
+		if valsConsistent && valType != "" {
+			goValType = mapType(valType)
+		}
+		return "map[" + goKeyType + "]" + goValType
+	}
+	return "map[any]any"
 }
 
 func (g *Generator) genMapLitWithSplat(m *ast.MapLit) {

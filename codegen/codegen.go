@@ -63,10 +63,18 @@ const (
 
 // TypeInfo provides type information for AST nodes during code generation.
 // This enables optimizations like using direct == instead of runtime.Equal
-// when we know both operands are primitive types.
+// when we know both operands are primitive types, and generating typed
+// slices/maps instead of []any/map[any]any.
 type TypeInfo interface {
 	// GetTypeKind returns the type kind for an expression node.
 	GetTypeKind(node ast.Node) TypeKind
+
+	// GetGoType returns the Go type string for an AST node.
+	// For example: "int", "string", "[]int", "map[string]int".
+	// Returns empty string if:
+	// - No type info is available for the node
+	// - The node's type cannot be converted to a Go type
+	GetGoType(node ast.Node) string
 }
 
 type Generator struct {

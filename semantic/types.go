@@ -268,3 +268,66 @@ func (t *Type) Unwrap() *Type {
 	}
 	return t
 }
+
+// GoType returns the Go type string for this type.
+// For example: "int", "string", "[]int", "map[string]int".
+// Returns empty string if type is unknown or cannot be represented.
+func (t *Type) GoType() string {
+	if t == nil {
+		return ""
+	}
+	switch t.Kind {
+	case TypeInt:
+		return "int"
+	case TypeInt64:
+		return "int64"
+	case TypeFloat:
+		return "float64"
+	case TypeBool:
+		return "bool"
+	case TypeString:
+		return "string"
+	case TypeBytes:
+		return "[]byte"
+	case TypeNil:
+		return "any" // nil can be any type
+	case TypeAny, TypeUnknown:
+		return "any"
+	case TypeError:
+		return "error"
+	case TypeArray:
+		if t.Elem != nil {
+			elemType := t.Elem.GoType()
+			if elemType != "" {
+				return "[]" + elemType
+			}
+		}
+		return "[]any"
+	case TypeMap:
+		keyType := "any"
+		valType := "any"
+		if t.KeyType != nil {
+			if kt := t.KeyType.GoType(); kt != "" {
+				keyType = kt
+			}
+		}
+		if t.ValueType != nil {
+			if vt := t.ValueType.GoType(); vt != "" {
+				valType = vt
+			}
+		}
+		return "map[" + keyType + "]" + valType
+	case TypeClass:
+		if t.Name != "" {
+			return "*" + t.Name
+		}
+		return "any"
+	case TypeInterface:
+		if t.Name != "" {
+			return t.Name
+		}
+		return "any"
+	default:
+		return ""
+	}
+}

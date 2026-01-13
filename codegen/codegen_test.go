@@ -399,6 +399,14 @@ func (t *testTypeInfoAdapter) GetTypeKind(node ast.Node) TypeKind {
 	}
 }
 
+func (t *testTypeInfoAdapter) GetGoType(node ast.Node) string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return ""
+	}
+	return typ.GoType()
+}
+
 func assertContains(t *testing.T, output, substr string) {
 	if !strings.Contains(output, substr) {
 		t.Errorf("expected output to contain %q, got:\n%s", substr, output)
@@ -878,7 +886,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `map[any]any{"a": 1, "b": 2}`)
+	// Map type is now inferred from consistent key/value types
+	assertContains(t, output, `map[string]int{"a": 1, "b": 2}`)
 }
 
 func TestGenerateEmptyMap(t *testing.T) {
@@ -2102,6 +2111,70 @@ end`
 	// With type info, Int != Int should use direct comparison
 	assertContains(t, output, `different := (x != y)`)
 	assertNotContains(t, output, `!runtime.Equal(x, y)`)
+}
+
+// Monomorphization tests - arrays and maps generate concrete types when element types are known
+
+func TestMonomorphizedArrayWithTypeInfo(t *testing.T) {
+	input := `def main
+  nums = [1, 2, 3]
+  strings = ["a", "b"]
+end`
+
+	output := compileWithTypeInfo(t, input)
+
+	// With type info, arrays should generate typed slices
+	assertContains(t, output, `[]int{1, 2, 3}`)
+	assertContains(t, output, `[]string{"a", "b"}`)
+	assertNotContains(t, output, `[]any`)
+}
+
+func TestMonomorphizedMapWithTypeInfo(t *testing.T) {
+	input := `def main
+  counts = {"a" => 1, "b" => 2}
+  names = {1 => "one", 2 => "two"}
+end`
+
+	output := compileWithTypeInfo(t, input)
+
+	// With type info, maps should generate typed maps
+	assertContains(t, output, `map[string]int{"a": 1, "b": 2}`)
+	assertContains(t, output, `map[int]string{1: "one", 2: "two"}`)
+	assertNotContains(t, output, `map[any]any`)
+}
+
+func TestMixedTypeArrayFallsBackToAny(t *testing.T) {
+	// Without type info, mixed types can't be statically determined
+	input := `def main
+  mixed = [1, "two"]
+end`
+
+	output := compile(t, input)
+
+	// Mixed types should fall back to []any
+	assertContains(t, output, `[]any{1, "two"}`)
+}
+
+func TestEmptyArrayUsesAny(t *testing.T) {
+	input := `def main
+  empty = []
+end`
+
+	output := compile(t, input)
+
+	// Empty arrays use []any since no element type info available
+	assertContains(t, output, `[]any{}`)
+}
+
+func TestEmptyMapUsesAny(t *testing.T) {
+	input := `def main
+  empty = {}
+end`
+
+	output := compile(t, input)
+
+	// Empty maps use map[any]any since no key/value type info available
+	assertContains(t, output, `map[any]any{}`)
 }
 
 func TestInterfaceDeclaration(t *testing.T) {

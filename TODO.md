@@ -60,10 +60,12 @@ Testing generated string output is fragile, and single-error stopping slows down
 
 ## Phase 3: Code Generation Optimizations
 
-- [ ] **Monomorphization / Generics**
-    - [ ] Utilize the Typed AST from Phase 1.
-    - [ ] Generate native Go types (`[]int`, `map[string]User`) instead of `[]any` / `map[any]any`.
-    - [ ] Reduce runtime reflection and interface conversion overhead.
+- [x] **Monomorphization / Generics** ✅
+    - [x] Utilize the Typed AST from Phase 1.
+    - [x] Generate native Go types (`[]int`, `map[string]int`) instead of `[]any` / `map[any]any` for literals.
+    - [x] Extended `TypeInfo` interface with `GetGoType()` method for Go type string generation.
+    - [x] Added `GoType()` method to `semantic.Type` for centralized type-to-Go conversion.
+    - [ ] Further optimization: propagate types through variable assignments and function returns.
 
 - [ ] **Zero-Value Fixes**
     - [ ] Ensure `zeroValue` generation logic correctly handles interfaces and custom types to avoid runtime panics or nil pointer dereferences.

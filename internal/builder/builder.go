@@ -55,6 +55,15 @@ func (t *typeInfoAdapter) GetTypeKind(node ast.Node) codegen.TypeKind {
 	}
 }
 
+// GetGoType returns the Go type string for an AST node.
+func (t *typeInfoAdapter) GetGoType(node ast.Node) string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return ""
+	}
+	return typ.GoType()
+}
+
 // Styles for pretty output
 var (
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
