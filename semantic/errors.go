@@ -159,3 +159,68 @@ func (e *UnaryTypeMismatchError) Error() string {
 	}
 	return msg
 }
+
+// ReturnTypeMismatchError reports when a returned value doesn't match the declared return type.
+type ReturnTypeMismatchError struct {
+	Expected *Type
+	Got      *Type
+	Line     int
+}
+
+func (e *ReturnTypeMismatchError) Error() string {
+	msg := fmt.Sprintf("cannot return %s as %s", e.Got, e.Expected)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// ArgumentTypeMismatchError reports when an argument type doesn't match the parameter type.
+type ArgumentTypeMismatchError struct {
+	FuncName  string
+	ParamName string
+	Expected  *Type
+	Got       *Type
+	ArgIndex  int
+	Line      int
+}
+
+func (e *ArgumentTypeMismatchError) Error() string {
+	msg := fmt.Sprintf("cannot use %s as %s in argument to %s", e.Got, e.Expected, e.FuncName)
+	if e.ParamName != "" {
+		msg = fmt.Sprintf("cannot use %s as %s for parameter '%s' in %s", e.Got, e.Expected, e.ParamName, e.FuncName)
+	}
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// ConditionTypeMismatchError reports when a condition expression is not Bool.
+type ConditionTypeMismatchError struct {
+	Got     *Type
+	Context string // "if", "while", "until"
+	Line    int
+}
+
+func (e *ConditionTypeMismatchError) Error() string {
+	msg := fmt.Sprintf("%s condition must be Bool, got %s", e.Context, e.Got)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// IndexTypeMismatchError reports when an array/string index is not Int.
+type IndexTypeMismatchError struct {
+	Got  *Type
+	Line int
+}
+
+func (e *IndexTypeMismatchError) Error() string {
+	msg := fmt.Sprintf("array/string index must be Int, got %s", e.Got)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}

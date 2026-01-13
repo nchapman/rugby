@@ -953,3 +953,896 @@ end`,
 		})
 	}
 }
+
+func TestAnalyzeReturnTypeValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name: "correct return type",
+			input: `def add(a : Int, b : Int) -> Int
+  return a + b
+end`,
+			wantErr: false,
+		},
+		{
+			name: "wrong return type - string instead of int",
+			input: `def add(a : Int, b : Int) -> Int
+  return "hello"
+end`,
+			wantErr: true,
+		},
+		{
+			name: "wrong return type - bool instead of string",
+			input: `def getName -> String
+  return true
+end`,
+			wantErr: true,
+		},
+		{
+			name: "compatible numeric return - int for float",
+			input: `def getFloat -> Float
+  return 42
+end`,
+			wantErr: false, // Int is assignable to Float
+		},
+		{
+			name: "no return type declared - any return allowed",
+			input: `def anything
+  return "whatever"
+end`,
+			wantErr: false,
+		},
+		{
+			name: "return array of correct type",
+			input: `def getNumbers -> Array[Int]
+  return [1, 2, 3]
+end`,
+			wantErr: false,
+		},
+		{
+			name: "return array of wrong element type",
+			input: `def getNumbers -> Array[Int]
+  return ["a", "b"]
+end`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr && len(errs) == 0 {
+				t.Errorf("expected error, got none")
+			} else if !tt.wantErr && len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeArgumentTypeValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name: "correct argument types",
+			input: `def greet(name : String, age : Int)
+  puts name
+end
+
+greet("Alice", 30)`,
+			wantErr: false,
+		},
+		{
+			name: "wrong argument type - int instead of string",
+			input: `def greet(name : String)
+  puts name
+end
+
+greet(42)`,
+			wantErr: true,
+		},
+		{
+			name: "wrong argument type - string instead of int",
+			input: `def addOne(x : Int) -> Int
+  return x + 1
+end
+
+addOne("hello")`,
+			wantErr: true,
+		},
+		{
+			name: "compatible numeric - int for float param",
+			input: `def double(x : Float) -> Float
+  return x * 2.0
+end
+
+double(5)`,
+			wantErr: false, // Int is assignable to Float
+		},
+		{
+			name: "wrong second argument type",
+			input: `def compute(a : Int, b : Int) -> Int
+  return a + b
+end
+
+compute(1, "two")`,
+			wantErr: true,
+		},
+		{
+			name: "array argument with correct element type",
+			input: `def sumAll(nums : Array[Int]) -> Int
+  return 0
+end
+
+sumAll([1, 2, 3])`,
+			wantErr: false,
+		},
+		{
+			name: "array argument with wrong element type",
+			input: `def sumAll(nums : Array[Int]) -> Int
+  return 0
+end
+
+sumAll(["a", "b"])`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr && len(errs) == 0 {
+				t.Errorf("expected error, got none")
+			} else if !tt.wantErr && len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeConditionTypeValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		context string // expected context in error message
+	}{
+		// Valid conditions
+		{
+			name:    "if with bool literal",
+			input:   "if true\n  puts \"yes\"\nend",
+			wantErr: false,
+		},
+		{
+			name:    "if with comparison",
+			input:   "if 1 < 2\n  puts \"yes\"\nend",
+			wantErr: false,
+		},
+		{
+			name:    "if with bool variable",
+			input:   "flag = true\nif flag\n  puts \"yes\"\nend",
+			wantErr: false,
+		},
+		{
+			name:    "while with bool",
+			input:   "x = true\nwhile x\n  x = false\nend",
+			wantErr: false,
+		},
+		{
+			name:    "until with bool",
+			input:   "done = false\nuntil done\n  done = true\nend",
+			wantErr: false,
+		},
+		{
+			name:    "unless with bool",
+			input:   "unless false\n  puts \"yes\"\nend",
+			wantErr: false,
+		},
+
+		// Invalid conditions - if
+		{
+			name:    "if with int",
+			input:   "if 42\n  puts \"yes\"\nend",
+			wantErr: true,
+			context: "if",
+		},
+		{
+			name:    "if with string",
+			input:   "if \"hello\"\n  puts \"yes\"\nend",
+			wantErr: true,
+			context: "if",
+		},
+		{
+			name:    "if with array",
+			input:   "if [1, 2, 3]\n  puts \"yes\"\nend",
+			wantErr: true,
+			context: "if",
+		},
+
+		// Invalid conditions - while
+		{
+			name:    "while with int",
+			input:   "while 1\n  break\nend",
+			wantErr: true,
+			context: "while",
+		},
+		{
+			name:    "while with string",
+			input:   "while \"go\"\n  break\nend",
+			wantErr: true,
+			context: "while",
+		},
+
+		// Invalid conditions - until
+		{
+			name:    "until with int",
+			input:   "until 0\n  break\nend",
+			wantErr: true,
+			context: "until",
+		},
+		{
+			name:    "until with float",
+			input:   "until 3.14\n  break\nend",
+			wantErr: true,
+			context: "until",
+		},
+
+		// Invalid conditions - unless
+		{
+			name:    "unless with int",
+			input:   "unless 0\n  puts \"yes\"\nend",
+			wantErr: true,
+			context: "unless",
+		},
+
+		// Ternary expressions
+		{
+			name:    "ternary with bool condition",
+			input:   "x = true ? 1 : 2",
+			wantErr: false,
+		},
+		{
+			name:    "ternary with comparison condition",
+			input:   "x = (1 < 2) ? \"yes\" : \"no\"",
+			wantErr: false,
+		},
+		{
+			name:    "ternary with int condition",
+			input:   "x = 42 ? 1 : 2",
+			wantErr: true,
+			context: "ternary",
+		},
+		{
+			name:    "ternary with string condition",
+			input:   "x = \"hello\" ? 1 : 2",
+			wantErr: true,
+			context: "ternary",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				found := false
+				for _, err := range errs {
+					if condErr, ok := err.(*ConditionTypeMismatchError); ok {
+						if condErr.Context == tt.context {
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					t.Errorf("expected ConditionTypeMismatchError with context %q, got: %v", tt.context, errs)
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeIndexTypeValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		// Valid array indexing
+		{
+			name:    "array with int literal index",
+			input:   "arr = [1, 2, 3]\nx = arr[0]",
+			wantErr: false,
+		},
+		{
+			name:    "array with int variable index",
+			input:   "arr = [1, 2, 3]\ni = 1\nx = arr[i]",
+			wantErr: false,
+		},
+		{
+			name: "array with int64 index",
+			input: `def main
+  arr = [1, 2, 3]
+  i : Int64 = 1
+  x = arr[i]
+end`,
+			wantErr: false,
+		},
+
+		// Valid string indexing
+		{
+			name:    "string with int literal index",
+			input:   "s = \"hello\"\nc = s[0]",
+			wantErr: false,
+		},
+		{
+			name:    "string with int variable index",
+			input:   "s = \"hello\"\ni = 2\nc = s[i]",
+			wantErr: false,
+		},
+
+		// Valid map indexing (any key type is allowed)
+		{
+			name:    "map with string key",
+			input:   "m = {\"a\" => 1}\nv = m[\"a\"]",
+			wantErr: false,
+		},
+		{
+			name:    "map with int key",
+			input:   "m = {1 => \"one\"}\nv = m[1]",
+			wantErr: false,
+		},
+
+		// Invalid array indexing
+		{
+			name:    "array with string index",
+			input:   "arr = [1, 2, 3]\nx = arr[\"first\"]",
+			wantErr: true,
+		},
+		{
+			name:    "array with float index",
+			input:   "arr = [1, 2, 3]\nx = arr[1.5]",
+			wantErr: true,
+		},
+		{
+			name:    "array with bool index",
+			input:   "arr = [1, 2, 3]\nx = arr[true]",
+			wantErr: true,
+		},
+
+		// Invalid string indexing
+		{
+			name:    "string with string index",
+			input:   "s = \"hello\"\nc = s[\"x\"]",
+			wantErr: true,
+		},
+		{
+			name:    "string with float index",
+			input:   "s = \"hello\"\nc = s[2.5]",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				found := false
+				for _, err := range errs {
+					if _, ok := err.(*IndexTypeMismatchError); ok {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("expected IndexTypeMismatchError, got: %v", errs)
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeCompoundAssignmentTypeValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		wantOp  string
+	}{
+		// Valid compound assignments
+		{
+			name:    "int += int",
+			input:   "x = 5\nx += 3",
+			wantErr: false,
+		},
+		{
+			name:    "float += float",
+			input:   "x = 5.0\nx += 3.0",
+			wantErr: false,
+		},
+		{
+			name:    "int += float (numeric widening)",
+			input:   "x = 5\nx += 3.0",
+			wantErr: false,
+		},
+		{
+			name:    "string += string",
+			input:   "s = \"hello\"\ns += \" world\"",
+			wantErr: false,
+		},
+		{
+			name:    "int -= int",
+			input:   "x = 10\nx -= 3",
+			wantErr: false,
+		},
+		{
+			name:    "int *= int",
+			input:   "x = 5\nx *= 2",
+			wantErr: false,
+		},
+		{
+			name:    "int /= int",
+			input:   "x = 10\nx /= 2",
+			wantErr: false,
+		},
+
+		// Invalid compound assignments
+		{
+			name:    "int += string",
+			input:   "x = 5\nx += \"hello\"",
+			wantErr: true,
+			wantOp:  "+=",
+		},
+		{
+			name:    "string += int",
+			input:   "s = \"hello\"\ns += 5",
+			wantErr: true,
+			wantOp:  "+=",
+		},
+		{
+			name:    "string -= string",
+			input:   "s = \"hello\"\ns -= \"world\"",
+			wantErr: true,
+			wantOp:  "-=",
+		},
+		{
+			name:    "string *= int",
+			input:   "s = \"hello\"\ns *= 3",
+			wantErr: true,
+			wantOp:  "*=",
+		},
+		{
+			name:    "bool += bool",
+			input:   "b = true\nb += false",
+			wantErr: true,
+			wantOp:  "+=",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				found := false
+				for _, err := range errs {
+					if opErr, ok := err.(*OperatorTypeMismatchError); ok {
+						if opErr.Op == tt.wantOp {
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					t.Errorf("expected OperatorTypeMismatchError for %q, got: %v", tt.wantOp, errs)
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeArrayMapHomogeneity(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		context string // expected context in error
+	}{
+		// Valid homogeneous arrays
+		{
+			name:    "int array",
+			input:   "arr = [1, 2, 3]",
+			wantErr: false,
+		},
+		{
+			name:    "string array",
+			input:   "arr = [\"a\", \"b\", \"c\"]",
+			wantErr: false,
+		},
+		{
+			name:    "float array",
+			input:   "arr = [1.0, 2.5, 3.14]",
+			wantErr: false,
+		},
+		{
+			name:    "mixed numeric array (int and float)",
+			input:   "arr = [1, 2.5, 3]",
+			wantErr: false, // numeric widening allowed
+		},
+		{
+			name:    "empty array",
+			input:   "arr = []",
+			wantErr: false,
+		},
+
+		// Invalid heterogeneous arrays
+		{
+			name:    "int and string in array",
+			input:   "arr = [1, \"hello\", 3]",
+			wantErr: true,
+			context: "array element",
+		},
+		{
+			name:    "string and bool in array",
+			input:   "arr = [\"a\", true, \"c\"]",
+			wantErr: true,
+			context: "array element",
+		},
+		{
+			name:    "int and bool in array",
+			input:   "arr = [1, false, 3]",
+			wantErr: true,
+			context: "array element",
+		},
+
+		// Valid homogeneous maps
+		{
+			name:    "string to int map",
+			input:   "m = {\"a\" => 1, \"b\" => 2}",
+			wantErr: false,
+		},
+		{
+			name:    "int to string map",
+			input:   "m = {1 => \"one\", 2 => \"two\"}",
+			wantErr: false,
+		},
+		{
+			name:    "empty map",
+			input:   "m = {}",
+			wantErr: false,
+		},
+
+		// Invalid heterogeneous maps - key type
+		{
+			name:    "mixed key types (string and int)",
+			input:   "m = {\"a\" => 1, 2 => 3}",
+			wantErr: true,
+			context: "map key",
+		},
+
+		// Invalid heterogeneous maps - value type
+		{
+			name:    "mixed value types (int and string)",
+			input:   "m = {\"a\" => 1, \"b\" => \"two\"}",
+			wantErr: true,
+			context: "map value",
+		},
+		{
+			name:    "mixed value types (string and bool)",
+			input:   "m = {1 => \"one\", 2 => true}",
+			wantErr: true,
+			context: "map value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				found := false
+				for _, err := range errs {
+					if typeErr, ok := err.(*TypeMismatchError); ok {
+						if typeErr.Context == tt.context {
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					t.Errorf("expected TypeMismatchError with context %q, got: %v", tt.context, errs)
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeCaseWhenTypeMatching(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		// Valid case statements
+		{
+			name: "case int when int",
+			input: `x = 5
+case x
+when 1
+  puts "one"
+when 2
+  puts "two"
+end`,
+			wantErr: false,
+		},
+		{
+			name: "case string when string",
+			input: `s = "hello"
+case s
+when "hello"
+  puts "hi"
+when "bye"
+  puts "goodbye"
+end`,
+			wantErr: false,
+		},
+		{
+			name: "case with numeric widening",
+			input: `x = 5
+case x
+when 1.0
+  puts "one"
+end`,
+			wantErr: false, // Int and Float are comparable
+		},
+		{
+			name: "case without subject (bool when)",
+			input: `x = 5
+case
+when x > 0
+  puts "positive"
+when x < 0
+  puts "negative"
+end`,
+			wantErr: false,
+		},
+
+		// Invalid case statements
+		{
+			name: "case int when string",
+			input: `x = 5
+case x
+when "hello"
+  puts "mismatch"
+end`,
+			wantErr: true,
+		},
+		{
+			name: "case string when int",
+			input: `s = "hello"
+case s
+when 42
+  puts "mismatch"
+end`,
+			wantErr: true,
+		},
+		{
+			name: "case int when bool",
+			input: `x = 5
+case x
+when true
+  puts "mismatch"
+end`,
+			wantErr: true,
+		},
+		{
+			name: "case bool when string",
+			input: `b = true
+case b
+when "yes"
+  puts "mismatch"
+end`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				found := false
+				for _, err := range errs {
+					if typeErr, ok := err.(*TypeMismatchError); ok {
+						if typeErr.Context == "case when value" {
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					t.Errorf("expected TypeMismatchError with context 'case when value', got: %v", errs)
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeNilCoalesceTypeValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		context string
+	}{
+		// Valid nil coalesce operations
+		{
+			name: "optional int with int default",
+			input: `def check(x : Int?)
+  y = x ?? 0
+end`,
+			wantErr: false,
+		},
+		{
+			name: "optional string with string default",
+			input: `def check(x : String?)
+  y = x ?? "default"
+end`,
+			wantErr: false,
+		},
+		{
+			name: "optional float with int default (numeric widening)",
+			input: `def check(x : Float?)
+  y = x ?? 0
+end`,
+			wantErr: false,
+		},
+
+		// Invalid nil coalesce operations
+		{
+			name: "optional int with string default",
+			input: `def check(x : Int?)
+  y = x ?? "hello"
+end`,
+			wantErr: true,
+			context: "nil coalesce default value",
+		},
+		{
+			name: "optional string with int default",
+			input: `def check(x : String?)
+  y = x ?? 42
+end`,
+			wantErr: true,
+			context: "nil coalesce default value",
+		},
+		{
+			name: "non-optional left side",
+			input: `x = 5
+y = x ?? 0`,
+			wantErr: true,
+			context: "nil coalesce left side",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				found := false
+				for _, err := range errs {
+					if typeErr, ok := err.(*TypeMismatchError); ok {
+						if typeErr.Context == tt.context {
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					t.Errorf("expected TypeMismatchError with context %q, got: %v", tt.context, errs)
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}

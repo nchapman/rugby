@@ -305,6 +305,21 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 		if s.Message != nil {
 			a.analyzeExpr(s.Message)
 		}
+	case *ast.ChanSendStmt:
+		a.analyzeChanSend(s)
+	// Test statements
+	case *ast.DescribeStmt:
+		a.analyzeDescribe(s)
+	case *ast.ItStmt:
+		a.analyzeIt(s)
+	case *ast.TestStmt:
+		a.analyzeTest(s)
+	case *ast.TableStmt:
+		a.analyzeTable(s)
+	case *ast.BeforeStmt:
+		a.analyzeBefore(s)
+	case *ast.AfterStmt:
+		a.analyzeAfter(s)
 	}
 }
 
@@ -500,7 +515,39 @@ func (a *Analyzer) analyzeCompoundAssign(s *ast.CompoundAssignStmt) {
 		return
 	}
 
-	a.analyzeExpr(s.Value)
+	valueType := a.analyzeExpr(s.Value)
+	varType := existing.Type
+
+	// Skip if either type is unknown
+	if varType.Kind == TypeUnknown || varType.Kind == TypeAny ||
+		valueType.Kind == TypeUnknown || valueType.Kind == TypeAny {
+		return
+	}
+
+	// Validate types based on operator
+	switch s.Op {
+	case "+":
+		// += works for numeric types and string concatenation
+		if varType.Kind == TypeString && valueType.Kind == TypeString {
+			return // string concatenation OK
+		}
+		if !a.isNumeric(varType) || !a.isNumeric(valueType) {
+			a.addError(&OperatorTypeMismatchError{
+				Op:        "+=",
+				LeftType:  varType,
+				RightType: valueType,
+			})
+		}
+	case "-", "*", "/", "%":
+		// These only work for numeric types
+		if !a.isNumeric(varType) || !a.isNumeric(valueType) {
+			a.addError(&OperatorTypeMismatchError{
+				Op:        s.Op + "=",
+				LeftType:  varType,
+				RightType: valueType,
+			})
+		}
+	}
 }
 
 func (a *Analyzer) analyzeOrAssign(s *ast.OrAssignStmt) {
@@ -515,6 +562,11 @@ func (a *Analyzer) analyzeOrAssign(s *ast.OrAssignStmt) {
 }
 
 func (a *Analyzer) analyzeIf(s *ast.IfStmt) {
+	context := "if"
+	if s.IsUnless {
+		context = "unless"
+	}
+
 	// Handle assignment in condition (if let pattern)
 	if s.AssignName != "" && s.AssignExpr != nil {
 		exprType := a.analyzeExpr(s.AssignExpr)
@@ -539,7 +591,8 @@ func (a *Analyzer) analyzeIf(s *ast.IfStmt) {
 		}
 		a.scope = prevScope
 	} else {
-		a.analyzeExpr(s.Cond)
+		// Check that condition is Bool
+		a.checkCondition(s.Cond, context, s.Line)
 
 		// Analyze then branch
 		a.pushScope()
@@ -551,7 +604,7 @@ func (a *Analyzer) analyzeIf(s *ast.IfStmt) {
 
 	// Analyze elsif branches
 	for _, elsif := range s.ElseIfs {
-		a.analyzeExpr(elsif.Cond)
+		a.checkCondition(elsif.Cond, "elsif", 0) // ElseIfClause doesn't have Line field
 		a.pushScope()
 		for _, stmt := range elsif.Body {
 			a.analyzeStatement(stmt)
@@ -570,7 +623,7 @@ func (a *Analyzer) analyzeIf(s *ast.IfStmt) {
 }
 
 func (a *Analyzer) analyzeWhile(s *ast.WhileStmt) {
-	a.analyzeExpr(s.Cond)
+	a.checkCondition(s.Cond, "while", s.Line)
 
 	a.pushLoopScope()
 	for _, stmt := range s.Body {
@@ -580,7 +633,7 @@ func (a *Analyzer) analyzeWhile(s *ast.WhileStmt) {
 }
 
 func (a *Analyzer) analyzeUntil(s *ast.UntilStmt) {
-	a.analyzeExpr(s.Cond)
+	a.checkCondition(s.Cond, "until", s.Line)
 
 	a.pushLoopScope()
 	for _, stmt := range s.Body {
@@ -632,9 +685,30 @@ func (a *Analyzer) analyzeReturn(s *ast.ReturnStmt) {
 		return
 	}
 
-	// Analyze return values
+	// Analyze return values and collect their types
+	var returnTypes []*Type
 	for _, val := range s.Values {
-		a.analyzeExpr(val)
+		typ := a.analyzeExpr(val)
+		returnTypes = append(returnTypes, typ)
+	}
+
+	// Validate return types against declared return types
+	expectedTypes := fnScope.ReturnTypes
+	if len(expectedTypes) > 0 {
+		// Check each return value against expected type
+		for i, got := range returnTypes {
+			if i >= len(expectedTypes) {
+				break // Extra return values (could be another error)
+			}
+			expected := expectedTypes[i]
+			if !a.isAssignable(expected, got) {
+				a.addError(&ReturnTypeMismatchError{
+					Expected: expected,
+					Got:      got,
+					Line:     s.Line,
+				})
+			}
+		}
 	}
 
 	// Analyze condition if present
@@ -664,13 +738,26 @@ func (a *Analyzer) analyzeNext(s *ast.NextStmt) {
 }
 
 func (a *Analyzer) analyzeCase(s *ast.CaseStmt) {
+	var subjectType *Type
 	if s.Subject != nil {
-		a.analyzeExpr(s.Subject)
+		subjectType = a.analyzeExpr(s.Subject)
 	}
 
 	for _, when := range s.WhenClauses {
 		for _, val := range when.Values {
-			a.analyzeExpr(val)
+			valType := a.analyzeExpr(val)
+
+			// Validate when value type matches subject type
+			if subjectType != nil && subjectType.Kind != TypeUnknown && subjectType.Kind != TypeAny &&
+				valType.Kind != TypeUnknown && valType.Kind != TypeAny {
+				if !a.areTypesComparable(subjectType, valType) {
+					a.addError(&TypeMismatchError{
+						Expected: subjectType,
+						Got:      valType,
+						Context:  "case when value",
+					})
+				}
+			}
 		}
 		a.pushScope()
 		for _, stmt := range when.Body {
@@ -736,6 +823,38 @@ func (a *Analyzer) analyzeGo(s *ast.GoStmt) {
 	}
 }
 
+func (a *Analyzer) analyzeChanSend(s *ast.ChanSendStmt) {
+	chanType := a.analyzeExpr(s.Chan)
+	valueType := a.analyzeExpr(s.Value)
+
+	// Validate channel type
+	if chanType.Kind != TypeChan && chanType.Kind != TypeUnknown && chanType.Kind != TypeAny {
+		a.addError(&TypeMismatchError{
+			Expected: &Type{Kind: TypeChan},
+			Got:      chanType,
+			Context:  "channel send",
+			Line:     s.Line,
+		})
+		return
+	}
+
+	// Validate value type matches channel element type
+	if chanType.Kind == TypeChan && chanType.Elem != nil {
+		elemType := chanType.Elem
+		if elemType.Kind != TypeUnknown && elemType.Kind != TypeAny &&
+			valueType.Kind != TypeUnknown && valueType.Kind != TypeAny {
+			if !a.isAssignable(elemType, valueType) {
+				a.addError(&TypeMismatchError{
+					Expected: elemType,
+					Got:      valueType,
+					Context:  "channel send value",
+					Line:     s.Line,
+				})
+			}
+		}
+	}
+}
+
 func (a *Analyzer) analyzeSelect(s *ast.SelectStmt) {
 	for _, c := range s.Cases {
 		if c.Chan != nil {
@@ -774,6 +893,56 @@ func (a *Analyzer) analyzeSelect(s *ast.SelectStmt) {
 		}
 		a.popScope()
 	}
+}
+
+// Test statement analysis functions
+
+func (a *Analyzer) analyzeDescribe(s *ast.DescribeStmt) {
+	a.pushScope()
+	for _, stmt := range s.Body {
+		a.analyzeStatement(stmt)
+	}
+	a.popScope()
+}
+
+func (a *Analyzer) analyzeIt(s *ast.ItStmt) {
+	a.pushScope()
+	for _, stmt := range s.Body {
+		a.analyzeStatement(stmt)
+	}
+	a.popScope()
+}
+
+func (a *Analyzer) analyzeTest(s *ast.TestStmt) {
+	a.pushScope()
+	for _, stmt := range s.Body {
+		a.analyzeStatement(stmt)
+	}
+	a.popScope()
+}
+
+func (a *Analyzer) analyzeTable(s *ast.TableStmt) {
+	a.pushScope()
+	for _, stmt := range s.Body {
+		a.analyzeStatement(stmt)
+	}
+	a.popScope()
+}
+
+func (a *Analyzer) analyzeBefore(s *ast.BeforeStmt) {
+	a.pushScope()
+	for _, stmt := range s.Body {
+		a.analyzeStatement(stmt)
+	}
+	a.popScope()
+}
+
+func (a *Analyzer) analyzeAfter(s *ast.AfterStmt) {
+	a.pushScope()
+	for _, stmt := range s.Body {
+		a.analyzeStatement(stmt)
+	}
+	a.popScope()
 }
 
 // analyzeExpr analyzes an expression and returns its type.
@@ -829,11 +998,26 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 	case *ast.ArrayLit:
 		var elemType *Type
 		for _, elem := range e.Elements {
+			// Skip splat expressions - they expand to multiple elements
+			if _, isSplat := elem.(*ast.SplatExpr); isSplat {
+				a.analyzeExpr(elem)
+				continue
+			}
+
 			et := a.analyzeExpr(elem)
 			if elemType == nil {
 				elemType = et
+			} else if elemType.Kind != TypeUnknown && elemType.Kind != TypeAny &&
+				et.Kind != TypeUnknown && et.Kind != TypeAny {
+				// Validate element type matches (allow numeric widening)
+				if !a.isAssignable(elemType, et) && !a.isAssignable(et, elemType) {
+					a.addError(&TypeMismatchError{
+						Expected: elemType,
+						Got:      et,
+						Context:  "array element",
+					})
+				}
 			}
-			// TODO: unify types
 		}
 		if elemType == nil {
 			elemType = TypeAnyVal
@@ -845,17 +1029,38 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		for _, entry := range e.Entries {
 			if entry.Splat != nil {
 				a.analyzeExpr(entry.Splat)
-			} else {
-				if entry.Key != nil {
-					kt := a.analyzeExpr(entry.Key)
-					if keyType == nil {
-						keyType = kt
+				continue
+			}
+
+			if entry.Key != nil {
+				kt := a.analyzeExpr(entry.Key)
+				if keyType == nil {
+					keyType = kt
+				} else if keyType.Kind != TypeUnknown && keyType.Kind != TypeAny &&
+					kt.Kind != TypeUnknown && kt.Kind != TypeAny {
+					// Validate key type matches
+					if !a.isAssignable(keyType, kt) && !a.isAssignable(kt, keyType) {
+						a.addError(&TypeMismatchError{
+							Expected: keyType,
+							Got:      kt,
+							Context:  "map key",
+						})
 					}
 				}
-				if entry.Value != nil {
-					vt := a.analyzeExpr(entry.Value)
-					if valueType == nil {
-						valueType = vt
+			}
+			if entry.Value != nil {
+				vt := a.analyzeExpr(entry.Value)
+				if valueType == nil {
+					valueType = vt
+				} else if valueType.Kind != TypeUnknown && valueType.Kind != TypeAny &&
+					vt.Kind != TypeUnknown && vt.Kind != TypeAny {
+					// Validate value type matches
+					if !a.isAssignable(valueType, vt) && !a.isAssignable(vt, valueType) {
+						a.addError(&TypeMismatchError{
+							Expected: valueType,
+							Got:      vt,
+							Context:  "map value",
+						})
 					}
 				}
 			}
@@ -897,22 +1102,35 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 
 	case *ast.IndexExpr:
 		leftType := a.analyzeExpr(e.Left)
-		a.analyzeExpr(e.Index)
+		indexType := a.analyzeExpr(e.Index)
 
 		switch leftType.Kind {
 		case TypeArray:
+			// Array index must be Int
+			a.checkIndexType(indexType)
 			typ = leftType.Elem
 		case TypeMap:
+			// Map key type is checked separately (not requiring Int)
 			// Map access returns optional
 			typ = NewOptionalType(leftType.ValueType)
 		case TypeString:
+			// String index must be Int
+			a.checkIndexType(indexType)
 			typ = TypeStringVal
 		default:
 			typ = TypeUnknownVal
 		}
 
 	case *ast.TernaryExpr:
-		a.analyzeExpr(e.Condition)
+		condType := a.analyzeExpr(e.Condition)
+		// Validate condition is Bool (consistent with if/while/until)
+		if condType.Kind != TypeUnknown && condType.Kind != TypeAny && condType.Kind != TypeBool {
+			a.addError(&ConditionTypeMismatchError{
+				Got:     condType,
+				Context: "ternary",
+				Line:    0, // TernaryExpr doesn't have Line field
+			})
+		}
 		thenType := a.analyzeExpr(e.Then)
 		elseType := a.analyzeExpr(e.Else)
 		// Return the more specific type
@@ -925,9 +1143,31 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 	case *ast.NilCoalesceExpr:
 		leftType := a.analyzeExpr(e.Left)
 		rightType := a.analyzeExpr(e.Right)
-		// Result is the unwrapped left type or right type
-		if leftType.Kind == TypeOptional {
-			typ = leftType.Elem
+
+		// Validate left side is optional
+		if leftType.Kind != TypeOptional && leftType.Kind != TypeUnknown && leftType.Kind != TypeAny {
+			a.addError(&TypeMismatchError{
+				Expected: &Type{Kind: TypeOptional},
+				Got:      leftType,
+				Context:  "nil coalesce left side",
+			})
+		}
+
+		// Validate right type is compatible with unwrapped left type
+		if leftType.Kind == TypeOptional && leftType.Elem != nil {
+			unwrappedType := leftType.Elem
+			if unwrappedType.Kind != TypeUnknown && unwrappedType.Kind != TypeAny &&
+				rightType.Kind != TypeUnknown && rightType.Kind != TypeAny {
+				// Right value must be assignable to the unwrapped type (unidirectional)
+				if !a.isAssignable(unwrappedType, rightType) {
+					a.addError(&TypeMismatchError{
+						Expected: unwrappedType,
+						Got:      rightType,
+						Context:  "nil coalesce default value",
+					})
+				}
+			}
+			typ = unwrappedType
 		} else {
 			typ = rightType
 		}
@@ -1021,10 +1261,12 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 	// Analyze function/receiver
 	funcType := a.analyzeExpr(call.Func)
 
-	// Analyze arguments and check for splat (which makes arity checking unreliable)
+	// Analyze arguments and collect types, check for splat
 	hasSplat := false
+	var argTypes []*Type
 	for _, arg := range call.Args {
-		a.analyzeExpr(arg)
+		argType := a.analyzeExpr(arg)
+		argTypes = append(argTypes, argType)
 		if _, ok := arg.(*ast.SplatExpr); ok {
 			hasSplat = true
 		}
@@ -1035,11 +1277,12 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 		a.analyzeBlock(call.Block)
 	}
 
-	// Check argument count for known functions (skip if call uses splat)
+	// Check argument count and types for known functions (skip if call uses splat)
 	if !hasSplat {
 		if ident, ok := call.Func.(*ast.Ident); ok {
 			if fn := a.functions[ident.Name]; fn != nil {
 				a.checkArity(ident.Name, fn, call)
+				a.checkArgumentTypes(ident.Name, fn, argTypes)
 			}
 		}
 	}
@@ -1092,6 +1335,75 @@ func (a *Analyzer) checkArity(name string, fn *Symbol, call *ast.CallExpr) {
 			Name:     name,
 			Expected: expected,
 			Got:      got,
+		})
+	}
+}
+
+// checkArgumentTypes verifies each argument type matches the corresponding parameter type.
+func (a *Analyzer) checkArgumentTypes(name string, fn *Symbol, argTypes []*Type) {
+	if fn.Variadic {
+		// Skip type checking for variadic functions (like puts, print)
+		return
+	}
+
+	for i, param := range fn.Params {
+		if i >= len(argTypes) {
+			break // Not enough arguments - checkArity will report this
+		}
+		argType := argTypes[i]
+		paramType := param.Type
+
+		// Skip if either type is unknown or any
+		if argType.Kind == TypeUnknown || argType.Kind == TypeAny {
+			continue
+		}
+		if paramType == nil || paramType.Kind == TypeUnknown || paramType.Kind == TypeAny {
+			continue
+		}
+
+		if !a.isAssignable(paramType, argType) {
+			a.addError(&ArgumentTypeMismatchError{
+				FuncName:  name,
+				ParamName: param.Name,
+				Expected:  paramType,
+				Got:       argType,
+				ArgIndex:  i,
+			})
+		}
+	}
+}
+
+// checkCondition validates that a condition expression evaluates to Bool.
+func (a *Analyzer) checkCondition(cond ast.Expression, context string, line int) {
+	condType := a.analyzeExpr(cond)
+
+	// Skip if type is unknown or any
+	if condType.Kind == TypeUnknown || condType.Kind == TypeAny {
+		return
+	}
+
+	// Condition must be Bool
+	if condType.Kind != TypeBool {
+		a.addError(&ConditionTypeMismatchError{
+			Got:     condType,
+			Context: context,
+			Line:    line,
+		})
+	}
+}
+
+// checkIndexType validates that an array/string index is Int.
+func (a *Analyzer) checkIndexType(indexType *Type) {
+	// Skip if type is unknown or any
+	if indexType.Kind == TypeUnknown || indexType.Kind == TypeAny {
+		return
+	}
+
+	// Index must be Int (Int64 is also acceptable for indexing)
+	if indexType.Kind != TypeInt && indexType.Kind != TypeInt64 {
+		a.addError(&IndexTypeMismatchError{
+			Got:  indexType,
+			Line: 0, // IndexExpr doesn't have Line field
 		})
 	}
 }
