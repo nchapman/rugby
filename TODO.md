@@ -109,15 +109,22 @@ error: undefined: 'username' (did you mean 'user_name'?)
     - [x] Generate native Go types (`[]int`, `map[string]int`) instead of `[]any` / `map[any]any` for literals.
     - [x] Extended `TypeInfo` interface with `GetGoType()` method for Go type string generation.
     - [x] Added `GoType()` method to `semantic.Type` for centralized type-to-Go conversion.
-    - [ ] Further optimization: propagate types through variable assignments and function returns.
+    - [x] Type propagation: `inferTypeFromExpr()` now uses semantic type info for variables assigned from function calls.
 
-- [ ] **Zero-Value Fixes**
-    - [ ] Ensure `zeroValue` generation logic correctly handles interfaces and custom types to avoid runtime panics or nil pointer dereferences.
+- [x] **Zero-Value Fixes** ✅
+    - [x] Added `interfaces` map to Generator to track declared interface types.
+    - [x] `zeroValue()` now returns `nil` for custom interfaces (previously generated invalid `InterfaceName{}`).
+    - [x] Added safeguard for qualified Go types (e.g., `io.Reader`) to return `nil`.
 
-- [ ] **Module/Mixin Overhaul**
+- [x] **Module/Mixin Conflict Detection** ✅
+    - [x] Detect duplicate methods/accessors when multiple modules are included.
+    - [x] Class methods/accessors intentionally override module versions (no error).
+    - [x] Two modules defining same method/accessor produces clear error message.
+    - [x] Added `Errors()` method to Generator for accessing collected errors.
+
+- [ ] **Module/Mixin Architecture** (Future)
     - [ ] Move away from "copy-paste" flattening of modules into classes.
     - [ ] Investigate compiling Modules to embedded Go structs.
-    - [ ] Implement robust conflict resolution (Diamond Problem) during the semantic phase.
 
 - [x] **Direct Comparisons & Math Operations** ✅
     - [x] Math operations already use direct `x + y` (not runtime calls).
