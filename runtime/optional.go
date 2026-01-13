@@ -172,9 +172,93 @@ func CoalesceString(opt *string, def string) string {
 	return def
 }
 
+// CoalesceStringAny handles nil coalescing for safe navigation results (which return any).
+// If opt is nil or is a nil interface, returns def.
+// If opt is a string, returns it directly.
+// If opt is a *string, returns the dereferenced value.
+func CoalesceStringAny(opt any, def string) string {
+	if opt == nil {
+		return def
+	}
+	switch v := opt.(type) {
+	case string:
+		return v
+	case *string:
+		if v != nil {
+			return *v
+		}
+		return def
+	default:
+		return def
+	}
+}
+
 func CoalesceBool(opt *bool, def bool) bool {
 	if opt != nil {
 		return *opt
 	}
 	return def
+}
+
+// OptionalResult wraps a result from optional map operations.
+// Use Ok() to check if present, Unwrap() to get the value.
+type OptionalResult struct {
+	Value   any
+	Present bool
+}
+
+// Ok returns true if the optional result contains a value.
+func (r OptionalResult) Ok() bool {
+	return r.Present
+}
+
+// Unwrap returns the value or panics if empty.
+func (r OptionalResult) Unwrap() any {
+	return r.Value
+}
+
+// OptionalMap applies a function to an optional value if present.
+// For pointer-based optionals (*T).
+func OptionalMap[T any, R any](opt *T, fn func(T) R) OptionalResult {
+	if opt == nil {
+		return OptionalResult{Present: false}
+	}
+	return OptionalResult{Value: fn(*opt), Present: true}
+}
+
+// OptionalMapString is a type-specific version for *string optionals.
+func OptionalMapString(opt *string, fn func(string) string) OptionalResult {
+	if opt == nil {
+		return OptionalResult{Present: false}
+	}
+	return OptionalResult{Value: fn(*opt), Present: true}
+}
+
+// OptionalMapAny handles optionals when the inner type is unknown.
+func OptionalMapAny(opt any, fn func(any) any) OptionalResult {
+	if opt == nil {
+		return OptionalResult{Present: false}
+	}
+	return OptionalResult{Value: fn(opt), Present: true}
+}
+
+// OptionalEach executes a function on an optional value if present.
+func OptionalEach[T any](opt *T, fn func(T)) {
+	if opt != nil {
+		fn(*opt)
+	}
+}
+
+// OptionalEachString is a type-specific version for *string optionals.
+func OptionalEachString(opt *string, fn func(string)) {
+	if opt != nil {
+		fn(*opt)
+	}
+}
+
+// OptionalEachAny handles optionals when the inner type is unknown.
+func OptionalEachAny(opt any, fn func(any)) {
+	if opt != nil {
+		fn(opt)
+	}
 }

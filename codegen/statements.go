@@ -302,6 +302,14 @@ func (g *Generator) genCompoundAssignStmt(s *ast.CompoundAssignStmt) {
 
 // genMultiAssignStmt generates code for tuple unpacking: val, ok = expr
 func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
+	// Check if the value expression returns an optional type (T?)
+	// If so, we need special handling for the comma-ok pattern
+	valueType := g.inferTypeFromExpr(s.Value)
+	if len(s.Names) == 2 && isOptionalType(valueType) {
+		g.genMultiAssignFromOptional(s, valueType)
+		return
+	}
+
 	g.writeIndent()
 
 	// Get tuple element types from type info
@@ -353,6 +361,68 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
+}
+
+// genMultiAssignFromOptional handles tuple unpacking from optionals: val, ok = optional_expr
+// Generates: _tmp := expr; ok := _tmp != nil; var val T; if ok { val = *_tmp }
+func (g *Generator) genMultiAssignFromOptional(s *ast.MultiAssignStmt, optType string) {
+	valName := s.Names[0]
+	okName := s.Names[1]
+
+	// Get the unwrapped type (remove the ?)
+	unwrappedType := strings.TrimSuffix(optType, "?")
+	goType := mapType(unwrappedType)
+
+	// Generate temp variable assignment
+	tempVar := fmt.Sprintf("_opt%d", g.tempVarCounter)
+	g.tempVarCounter++
+
+	g.writeIndent()
+	g.buf.WriteString(tempVar)
+	g.buf.WriteString(" := ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+
+	// Generate ok assignment
+	g.writeIndent()
+	if !g.isDeclared(okName) && okName != "_" {
+		g.buf.WriteString(okName)
+		g.buf.WriteString(" := ")
+		g.vars[okName] = "Bool"
+	} else {
+		g.buf.WriteString(okName)
+		g.buf.WriteString(" = ")
+	}
+	g.buf.WriteString(tempVar)
+	g.buf.WriteString(" != nil\n")
+
+	// Generate val declaration with zero value
+	if valName != "_" {
+		g.writeIndent()
+		if !g.isDeclared(valName) {
+			g.buf.WriteString("var ")
+			g.buf.WriteString(valName)
+			g.buf.WriteString(" ")
+			g.buf.WriteString(goType)
+			g.buf.WriteString("\n")
+			g.vars[valName] = unwrappedType
+		}
+
+		// Generate conditional assignment
+		g.writeIndent()
+		g.buf.WriteString("if ")
+		g.buf.WriteString(okName)
+		g.buf.WriteString(" {\n")
+		g.indent++
+		g.writeIndent()
+		g.buf.WriteString(valName)
+		g.buf.WriteString(" = *")
+		g.buf.WriteString(tempVar)
+		g.buf.WriteString("\n")
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	}
 }
 
 func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
@@ -823,15 +893,49 @@ func (g *Generator) genIfStmt(s *ast.IfStmt) {
 	g.writeIndent()
 	g.buf.WriteString("if ")
 
-	// Handle assignment-in-condition pattern: if (n = s.to_i?) or if let n = s.to_i?()
-	// Generates: if n, ok := runtime.StringToInt(s); ok {
+	// Handle assignment-in-condition pattern: if let n = expr
+	// For pointer-based optionals (T?): if _tmp := expr; _tmp != nil { n := *_tmp; ... }
+	// For tuple-returning functions: if n, ok := expr; ok { ... }
 	if s.AssignName != "" {
-		g.buf.WriteString(s.AssignName)
-		g.buf.WriteString(", ok := ")
-		g.genExpr(s.AssignExpr)
-		g.buf.WriteString("; ok {\n")
-		// Track the variable with its inferred type
-		g.vars[s.AssignName] = g.inferTypeFromExpr(s.AssignExpr)
+		exprType := g.inferTypeFromExpr(s.AssignExpr)
+
+		if isOptionalType(exprType) {
+			// Pointer-based optional: generate temp var and nil check
+			tempVar := fmt.Sprintf("_iflet%d", g.tempVarCounter)
+			g.tempVarCounter++
+			g.buf.WriteString(tempVar)
+			g.buf.WriteString(" := ")
+			g.genExpr(s.AssignExpr)
+			g.buf.WriteString("; ")
+			g.buf.WriteString(tempVar)
+			g.buf.WriteString(" != nil {\n")
+
+			// Unwrap the pointer into the user's variable
+			g.indent++
+			g.writeIndent()
+			g.buf.WriteString(s.AssignName)
+			g.buf.WriteString(" := *")
+			g.buf.WriteString(tempVar)
+			g.buf.WriteString("\n")
+			// Silence "declared and not used" error if variable isn't referenced
+			g.writeIndent()
+			g.buf.WriteString("_ = ")
+			g.buf.WriteString(s.AssignName)
+			g.buf.WriteString("\n")
+			g.indent--
+
+			// Track the variable with its unwrapped type
+			unwrappedType := strings.TrimSuffix(exprType, "?")
+			g.vars[s.AssignName] = unwrappedType
+		} else {
+			// Tuple-returning function: if n, ok := expr; ok { ... }
+			g.buf.WriteString(s.AssignName)
+			g.buf.WriteString(", ok := ")
+			g.genExpr(s.AssignExpr)
+			g.buf.WriteString("; ok {\n")
+			// Track the variable with its inferred type
+			g.vars[s.AssignName] = exprType
+		}
 	} else {
 		// For unless, negate the condition
 		if s.IsUnless {

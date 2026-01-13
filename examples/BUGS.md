@@ -21,7 +21,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 07_interfaces.rg | ✅ PASS | Interface structural typing now works |
 | 08_modules.rg | ❌ FAIL | Pointer printing instead of values |
 | 09_blocks.rg | ✅ PASS | Block methods now work |
-| 10_optionals.rg | ❌ FAIL | "if let" pattern not implemented |
+| 10_optionals.rg | ✅ PASS | Optional handling now works (if let, safe nav, tuple unpacking, map/each) |
 | 11_errors.rg | ❌ FAIL | os.ReadFile multi-value return issues |
 | 12_strings.rg | ❌ FAIL | String methods (contains?, etc.) |
 | 13_ranges.rg | ❌ FAIL | Range.size method not implemented |
@@ -107,6 +107,15 @@ Instance variables accessed in subclasses now correctly use the underscore prefi
 ### ~~BUG-017: Predicate methods on arrays~~ ✅ FIXED
 Array methods `any?`, `empty?`, `shift`, and `pop` now work correctly. `any?` returns true if the array has any elements, `empty?` returns the opposite. `shift` removes and returns the first element, `pop` removes and returns the last element. These methods correctly modify the underlying array via pointer semantics.
 
+### ~~BUG-020: "if let" pattern and optional handling~~ ✅ FIXED
+Full optional support now works:
+- `if let` pattern: binds unwrapped value when optional is present
+- Safe navigation (`&.`): method chaining through optionals
+- Tuple unpacking: `val, ok = optional_expr` extracts value and presence flag
+- Nil coalescing (`??`): provides default values for nil optionals
+- Optional methods: `ok?`, `nil?`, `present?`, `absent?`, `unwrap` work on optionals
+- `map`/`each` on optionals: transforms or iterates if value is present
+
 ---
 
 ## Remaining Bugs
@@ -116,20 +125,6 @@ Array methods `any?`, `empty?`, `shift`, and `pop` now work correctly. `any?` re
 **Error:** Prints memory addresses instead of values when printing objects
 
 ---
-
-### BUG-020: "if let" pattern not implemented
-**File:** 10_optionals.rg
-**Code:**
-```ruby
-if let user = find_user(2)
-  puts "Found: #{user.name}"
-end
-```
-**Error:** `assignment mismatch: 2 variables but findUser returns 1 value`
-**Expected:** `if let` should bind the unwrapped value
-
----
-
 
 ### BUG-022: String methods not implemented
 **File:** 12_strings.rg
@@ -178,13 +173,10 @@ wg = sync.WaitGroup.new
 
 ## Priority Order for Remaining Fixes
 
-### High Priority
-1. **BUG-020**: "if let" pattern
-
 ### Medium Priority
-2. **BUG-022**: String methods
-3. **BUG-023**: Range.size method
+1. **BUG-022**: String methods
+2. **BUG-023**: Range.size method
 
 ### Lower Priority
-4. **BUG-019**: Pointer printing
-5. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
+3. **BUG-019**: Pointer printing
+4. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new

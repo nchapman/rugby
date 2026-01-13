@@ -308,6 +308,9 @@ func (g *Generator) genNilCoalesceExpr(e *ast.NilCoalesceExpr) {
 	g.needsRuntime = true
 	leftType := g.inferTypeFromExpr(e.Left)
 
+	// Check if the left side is a safe navigation expression (returns any)
+	_, isSafeNav := e.Left.(*ast.SafeNavExpr)
+
 	switch leftType {
 	case "Int?":
 		g.buf.WriteString("runtime.CoalesceInt(")
@@ -316,7 +319,12 @@ func (g *Generator) genNilCoalesceExpr(e *ast.NilCoalesceExpr) {
 	case "Float?":
 		g.buf.WriteString("runtime.CoalesceFloat(")
 	case "String?":
-		g.buf.WriteString("runtime.CoalesceString(")
+		// Use CoalesceStringAny for safe navigation (which returns any)
+		if isSafeNav {
+			g.buf.WriteString("runtime.CoalesceStringAny(")
+		} else {
+			g.buf.WriteString("runtime.CoalesceString(")
+		}
 	case "Bool?":
 		g.buf.WriteString("runtime.CoalesceBool(")
 	default:
@@ -385,23 +393,38 @@ func (g *Generator) genSymbolToProcExpr(e *ast.SymbolToProcExpr) {
 }
 
 func (g *Generator) genSafeNavExpr(e *ast.SafeNavExpr) {
-	// obj&.method -> func() any { _snN := obj; if _snN != nil { return (*_snN).method } else { return nil } }()
+	// obj&.method -> func() any { _snN := obj; if _snN != nil { return (*_snN).method() } else { return nil } }()
 	varName := fmt.Sprintf("_sn%d", g.tempVarCounter)
 	g.tempVarCounter++
 
 	g.buf.WriteString("func() any { ")
 	g.buf.WriteString(varName)
 	g.buf.WriteString(" := ")
-	g.genExpr(e.Receiver)
+
+	// If the receiver is a selector expression, we need to call it as a method.
+	// Safe navigation is used with optional-returning getters/methods, so the receiver
+	// must be called (not just referenced as a field).
+	if sel, ok := e.Receiver.(*ast.SelectorExpr); ok {
+		g.genExpr(e.Receiver)
+		// Always call selector expressions in safe nav context - they return optionals
+		// which means they must be methods/getters, not raw field accesses.
+		if !strings.HasPrefix(sel.Sel, "_") {
+			g.buf.WriteString("()")
+		}
+	} else {
+		g.genExpr(e.Receiver)
+	}
+
 	g.buf.WriteString("; if ")
 	g.buf.WriteString(varName)
 	g.buf.WriteString(" != nil { return ")
 
-	// Use (*var).field
+	// Use (*var).selector() - call it as a method
 	g.buf.WriteString("(*")
 	g.buf.WriteString(varName)
 	g.buf.WriteString(").")
-	g.buf.WriteString(e.Selector)
+	g.buf.WriteString(snakeToCamelWithAcronyms(e.Selector))
+	g.buf.WriteString("()")
 
 	g.buf.WriteString(" } else { return nil } }()")
 }
@@ -1113,6 +1136,19 @@ func (g *Generator) genBlockCall(call *ast.CallExpr) {
 	method := sel.Sel
 	block := call.Block
 
+	// Check if receiver is an optional type - needs special handling
+	receiverType := g.inferTypeFromExpr(sel.X)
+	if isOptionalType(receiverType) {
+		switch method {
+		case "map":
+			g.genOptionalMapBlock(sel.X, block, receiverType)
+			return
+		case "each":
+			g.genOptionalEachBlock(sel.X, block, receiverType)
+			return
+		}
+	}
+
 	switch method {
 	case "each":
 		g.genEachBlock(sel.X, block)
@@ -1140,6 +1176,85 @@ func (g *Generator) genBlockCall(call *ast.CallExpr) {
 	}
 
 	g.buf.WriteString(fmt.Sprintf("/* unsupported block method: %s */", method))
+}
+
+// genOptionalMapBlock generates code for optional.map { |x| ... }
+func (g *Generator) genOptionalMapBlock(receiver ast.Expression, block *ast.BlockExpr, optType string) {
+	g.needsRuntime = true
+
+	varName := "_"
+	if len(block.Params) > 0 {
+		varName = block.Params[0]
+	}
+
+	// Determine the inner type (without ?)
+	innerType := strings.TrimSuffix(optType, "?")
+	goType := mapType(innerType)
+
+	g.buf.WriteString("runtime.OptionalMapString(")
+	g.genExpr(receiver)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(goType)
+	g.buf.WriteString(") string {\n")
+
+	g.indent++
+	g.pushContext(ctxTransformBlock)
+
+	// Generate all but last statement normally
+	for i, stmt := range block.Body {
+		if i == len(block.Body)-1 {
+			// Last statement - generate as return
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+			} else {
+				g.genStatement(stmt)
+			}
+		} else {
+			g.genStatement(stmt)
+		}
+	}
+
+	g.popContext()
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genOptionalEachBlock generates code for optional.each { |x| ... }
+func (g *Generator) genOptionalEachBlock(receiver ast.Expression, block *ast.BlockExpr, optType string) {
+	g.needsRuntime = true
+
+	varName := "_"
+	if len(block.Params) > 0 {
+		varName = block.Params[0]
+	}
+
+	// Determine the inner type (without ?)
+	innerType := strings.TrimSuffix(optType, "?")
+	goType := mapType(innerType)
+
+	g.buf.WriteString("runtime.OptionalEachString(")
+	g.genExpr(receiver)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(goType)
+	g.buf.WriteString(") {\n")
+
+	g.indent++
+	for _, stmt := range block.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
 }
 
 func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) {
@@ -1734,6 +1849,21 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 			g.genExpr(sel.X)
 			return
 		}
+	}
+
+	// Fallback for OptionalResult methods (from optional.map operations)
+	// These use PascalCase methods: Ok(), Unwrap()
+	// Note: ok? is typically wrapped in CallExpr (predicate methods), so don't add ()
+	// But unwrap is used as a property and needs () to call the method
+	if sel.Sel == "ok?" {
+		g.genExpr(sel.X)
+		g.buf.WriteString(".Ok")
+		return
+	}
+	if sel.Sel == "unwrap" {
+		g.genExpr(sel.X)
+		g.buf.WriteString(".Unwrap()")
+		return
 	}
 
 	// Handle property-style array/map method calls
