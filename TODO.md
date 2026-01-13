@@ -47,10 +47,11 @@ Testing generated string output is fragile, and single-error stopping slows down
 
 ## Phase 2: Architecture & Maintainability
 
-- [ ] **Visitor Pattern**
-    - [ ] Define a `Visitor` interface for AST nodes (`Accept(v Visitor)`).
-    - [ ] Refactor `codegen` to implement the `Visitor` interface.
-    - *Note:* Prioritize this **after** the semantic pass is working. Avoid over-engineering; simpler switch statements are acceptable if they remain readable.
+- [x] **Visitor Pattern** - DECIDED: Keep current approach ✅
+    - The type-switch dispatch pattern in `genStatement` and `genExpr` is idiomatic Go and readable.
+    - Codegen is already well-organized: `statements.go`, `expressions.go`, `declarations.go`.
+    - Added doc comments and logical groupings to switch statements for maintainability.
+    - *Revisit if:* We need multiple code generation backends (e.g., LLVM) or cross-cutting concerns.
 
 - [ ] **Dependency Graph & Build System**
     - [ ] Analyze imports to build a dependency graph of `.rg` files.

@@ -7,8 +7,17 @@ import (
 	"github.com/nchapman/rugby/ast"
 )
 
+// genStatement dispatches to the appropriate generator for each statement type.
+// Statement types are organized into logical groups:
+//   - Declarations: functions, classes, interfaces, modules
+//   - Assignments: simple, compound, multi-value, instance variables
+//   - Control flow: conditionals, loops
+//   - Jump statements: break, next, return, panic, defer
+//   - Concurrency: go, select, channels, structured concurrency
+//   - Testing: describe, it, test, table
 func (g *Generator) genStatement(stmt ast.Statement) {
 	switch s := stmt.(type) {
+	// Declarations
 	case *ast.FuncDecl:
 		g.genFuncDecl(s)
 	case *ast.ClassDecl:
@@ -17,8 +26,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genInterfaceDecl(s)
 	case *ast.ModuleDecl:
 		g.genModuleDecl(s)
-	case *ast.ExprStmt:
-		g.genExprStmt(s)
+
+	// Assignments
 	case *ast.AssignStmt:
 		g.genAssignStmt(s)
 	case *ast.OrAssignStmt:
@@ -31,18 +40,28 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genInstanceVarAssign(s)
 	case *ast.InstanceVarOrAssign:
 		g.genInstanceVarOrAssign(s)
+
+	// Expression statements
+	case *ast.ExprStmt:
+		g.genExprStmt(s)
+
+	// Control flow: conditionals
 	case *ast.IfStmt:
 		g.genIfStmt(s)
 	case *ast.CaseStmt:
 		g.genCaseStmt(s)
 	case *ast.CaseTypeStmt:
 		g.genCaseTypeStmt(s)
+
+	// Control flow: loops
 	case *ast.WhileStmt:
 		g.genWhileStmt(s)
 	case *ast.UntilStmt:
 		g.genUntilStmt(s)
 	case *ast.ForStmt:
 		g.genForStmt(s)
+
+	// Jump statements
 	case *ast.BreakStmt:
 		g.genBreakStmt(s)
 	case *ast.NextStmt:
@@ -53,7 +72,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genPanicStmt(s)
 	case *ast.DeferStmt:
 		g.genDeferStmt(s)
-	// Concurrency constructs
+
+	// Concurrency
 	case *ast.GoStmt:
 		g.genGoStmt(s)
 	case *ast.SelectStmt:
@@ -62,7 +82,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genChanSendStmt(s)
 	case *ast.ConcurrentlyStmt:
 		g.genConcurrentlyStmt(s)
-	// Testing constructs
+
+	// Testing
 	case *ast.DescribeStmt:
 		g.genDescribeStmt(s)
 	case *ast.ItStmt:
@@ -71,6 +92,7 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genTestStmt(s)
 	case *ast.TableStmt:
 		g.genTableStmt(s)
+
 	default:
 		g.addError(fmt.Errorf("unhandled statement type: %T", stmt))
 	}

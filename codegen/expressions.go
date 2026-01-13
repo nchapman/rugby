@@ -7,12 +7,17 @@ import (
 	"github.com/nchapman/rugby/ast"
 )
 
+// genExpr dispatches to the appropriate generator for each expression type.
+// Expression types are organized into logical groups:
+//   - Literals: strings, numbers, bools, nil, symbols, arrays, maps, ranges
+//   - Identifiers: variables, instance variables, self
+//   - Operators: binary, unary, ternary, nil-coalescing
+//   - Access: calls, selectors, indexing, safe navigation
+//   - Concurrency: spawn, await
+//   - Special: super, symbol-to-proc
 func (g *Generator) genExpr(expr ast.Expression) {
 	switch e := expr.(type) {
-	case *ast.CallExpr:
-		g.genCallExpr(e)
-	case *ast.SelectorExpr:
-		g.genSelectorExpr(e)
+	// Literals: simple values
 	case *ast.StringLit:
 		g.buf.WriteString(fmt.Sprintf("%q", e.Value))
 	case *ast.InterpolatedString:
@@ -31,12 +36,16 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.buf.WriteString("nil")
 	case *ast.SymbolLit:
 		g.buf.WriteString(fmt.Sprintf("%q", e.Value))
+
+	// Literals: composite values
 	case *ast.ArrayLit:
 		g.genArrayLit(e)
-	case *ast.IndexExpr:
-		g.genIndexExpr(e)
 	case *ast.MapLit:
 		g.genMapLit(e)
+	case *ast.RangeLit:
+		g.genRangeLit(e)
+
+	// Identifiers
 	case *ast.Ident:
 		// Handle 'self' keyword - compiles to receiver variable
 		if e.Name == "self" {
@@ -59,24 +68,36 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		} else {
 			g.buf.WriteString(fmt.Sprintf("/* @%s outside class */", e.Name))
 		}
-	case *ast.SuperExpr:
-		g.genSuperExpr(e)
+
+	// Operators
 	case *ast.BinaryExpr:
 		g.genBinaryExpr(e)
 	case *ast.UnaryExpr:
 		g.genUnaryExpr(e)
-	case *ast.RangeLit:
-		g.genRangeLit(e)
-	case *ast.NilCoalesceExpr:
-		g.genNilCoalesceExpr(e)
 	case *ast.TernaryExpr:
 		g.genTernaryExpr(e)
+	case *ast.NilCoalesceExpr:
+		g.genNilCoalesceExpr(e)
+
+	// Access: calls, member access, indexing
+	case *ast.CallExpr:
+		g.genCallExpr(e)
+	case *ast.SelectorExpr:
+		g.genSelectorExpr(e)
+	case *ast.IndexExpr:
+		g.genIndexExpr(e)
 	case *ast.SafeNavExpr:
 		g.genSafeNavExpr(e)
+
+	// Concurrency
 	case *ast.SpawnExpr:
 		g.genSpawnExpr(e)
 	case *ast.AwaitExpr:
 		g.genAwaitExpr(e)
+
+	// Special
+	case *ast.SuperExpr:
+		g.genSuperExpr(e)
 	case *ast.SymbolToProcExpr:
 		g.genSymbolToProcExpr(e)
 	}
