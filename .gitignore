@@ -3,3 +3,25 @@ examples/*.go
 !examples/*_test.go
 !examples/doc.go
 .rugby/
+
+# Compiled example binaries (no extension)
+examples/fizzbuzz
+examples/field_inference
+examples/hello
+examples/http_json
+examples/json_simple
+examples/01_hello
+examples/02_types
+examples/03_control_flow
+examples/04_loops
+examples/05_functions
+examples/06_classes
+examples/07_interfaces
+examples/08_modules
+examples/09_blocks
+examples/10_optionals
+examples/11_errors
+examples/12_strings
+examples/13_ranges
+examples/14_go_interop
+examples/15_concurrency
