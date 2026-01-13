@@ -6447,9 +6447,8 @@ end`
 	if intLit.Line != 2 {
 		t.Errorf("expected Line 2, got %d", intLit.Line)
 	}
-	// Note: Column is reported after token due to lexer's read-ahead behavior
-	if intLit.Column != 9 {
-		t.Errorf("expected Column 9, got %d", intLit.Column)
+	if intLit.Column != 7 {
+		t.Errorf("expected Column 7, got %d", intLit.Column)
 	}
 }
 
@@ -6470,9 +6469,8 @@ end`
 	if floatLit.Line != 2 {
 		t.Errorf("expected Line 2, got %d", floatLit.Line)
 	}
-	// Note: Column is reported after token due to lexer's read-ahead behavior
-	if floatLit.Column != 11 {
-		t.Errorf("expected Column 11, got %d", floatLit.Column)
+	if floatLit.Column != 7 {
+		t.Errorf("expected Column 7, got %d", floatLit.Column)
 	}
 }
 

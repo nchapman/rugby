@@ -575,6 +575,7 @@ func stripLeadingWhitespace(s string) string {
 
 func (l *Lexer) readNumber() token.Token {
 	pos := l.pos
+	startLine, startCol := l.line, l.column
 	isFloat := false
 
 	for isDigit(l.ch) {
@@ -591,9 +592,9 @@ func (l *Lexer) readNumber() token.Token {
 
 	literal := l.input[pos:l.pos]
 	if isFloat {
-		return token.Token{Type: token.FLOAT, Literal: literal, Line: l.line, Column: l.column}
+		return token.Token{Type: token.FLOAT, Literal: literal, Line: startLine, Column: startCol}
 	}
-	return token.Token{Type: token.INT, Literal: literal, Line: l.line, Column: l.column}
+	return token.Token{Type: token.INT, Literal: literal, Line: startLine, Column: startCol}
 }
 
 // skipWhitespace skips whitespace characters and returns true if any were skipped.
