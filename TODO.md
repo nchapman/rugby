@@ -45,13 +45,15 @@ Currently, codegen does too much: type inference, error checking, and generation
     - [x] Nil coalesce type compatibility (`??` right side must be assignable to unwrapped left type).
     - [x] Test statement analysis (`describe`, `it`, `test`, `table`, `before`, `after` bodies analyzed).
 
-- [ ] **Remaining Type Checking Gaps** (Lower Priority)
-    - [ ] Method call type checking (currently returns `TypeUnknown` for all method calls).
-    - [ ] Interface implementation validation (verify class implements all interface methods).
-    - [ ] Block parameter type inference (currently assumes `TypeAny`).
-    - [ ] Method visibility enforcement (private methods callable from outside class).
-    - [ ] Safe navigation return type inference (`&.` currently returns `Optional[unknown]`).
-    - [ ] Bang operator validation (`!` should verify expression is error tuple).
+- [x] **Method & Interface Type Checking** ✅
+    - [x] Method call type checking (added `lookupMethod` with built-in method signatures for String, Int, Float, Array, Map, Range, Optional).
+    - [x] Interface implementation validation (verify class implements all interface methods with matching signatures).
+    - [x] Bang operator validation (`!` verifies expression is error tuple and function returns error).
+
+- [x] **Remaining Type Checking** ✅
+    - [x] Block parameter type inference (infers types from receiver: `Array[T].each` → block param is `T`).
+    - [x] Safe navigation return type inference (`&.` now returns `Optional[T]` based on field/method type).
+    - Note: Method visibility (`pub`) controls package exports (Go-style), not Ruby-style private methods.
 
 ## Phase 1.5: Testing & Development UX (Critical for Refactoring)
 

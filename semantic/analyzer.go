@@ -78,12 +78,141 @@ func (a *Analyzer) Analyze(program *ast.Program) []error {
 		a.collectDeclaration(decl)
 	}
 
+	// Validate interface implementations
+	a.validateInterfaceImplementations()
+
 	// Second pass: analyze bodies
 	for _, decl := range program.Declarations {
 		a.analyzeStatement(decl)
 	}
 
 	return a.errors
+}
+
+// validateInterfaceImplementations checks that classes implement their declared interfaces.
+func (a *Analyzer) validateInterfaceImplementations() {
+	for _, cls := range a.classes {
+		for _, ifaceName := range cls.Implements {
+			iface := a.interfaces[ifaceName]
+			if iface == nil {
+				a.addError(&UndefinedError{
+					Name: ifaceName,
+					Line: cls.Line,
+				})
+				continue
+			}
+
+			// Check each interface method is implemented
+			for methodName, ifaceMethod := range iface.Methods {
+				clsMethod := cls.GetMethod(methodName)
+				if clsMethod == nil {
+					a.addError(&InterfaceNotImplementedError{
+						ClassName:     cls.Name,
+						InterfaceName: ifaceName,
+						MissingMethod: methodName,
+						Line:          cls.Line,
+					})
+					continue
+				}
+
+				// Check parameter count matches
+				if len(clsMethod.Params) != len(ifaceMethod.Params) {
+					a.addError(&MethodSignatureMismatchError{
+						ClassName:     cls.Name,
+						InterfaceName: ifaceName,
+						MethodName:    methodName,
+						Expected:      a.formatMethodSignature(ifaceMethod),
+						Got:           a.formatMethodSignature(clsMethod),
+						Line:          clsMethod.Line,
+					})
+					continue
+				}
+
+				// Check parameter types match
+				for i, ifaceParam := range ifaceMethod.Params {
+					clsParam := clsMethod.Params[i]
+					if !a.typesMatch(ifaceParam.Type, clsParam.Type) {
+						a.addError(&MethodSignatureMismatchError{
+							ClassName:     cls.Name,
+							InterfaceName: ifaceName,
+							MethodName:    methodName,
+							Expected:      a.formatMethodSignature(ifaceMethod),
+							Got:           a.formatMethodSignature(clsMethod),
+							Line:          clsMethod.Line,
+						})
+						break
+					}
+				}
+
+				// Check return types match
+				if len(clsMethod.ReturnTypes) != len(ifaceMethod.ReturnTypes) {
+					a.addError(&MethodSignatureMismatchError{
+						ClassName:     cls.Name,
+						InterfaceName: ifaceName,
+						MethodName:    methodName,
+						Expected:      a.formatMethodSignature(ifaceMethod),
+						Got:           a.formatMethodSignature(clsMethod),
+						Line:          clsMethod.Line,
+					})
+					continue
+				}
+
+				for i, ifaceRet := range ifaceMethod.ReturnTypes {
+					clsRet := clsMethod.ReturnTypes[i]
+					if !a.typesMatch(ifaceRet, clsRet) {
+						a.addError(&MethodSignatureMismatchError{
+							ClassName:     cls.Name,
+							InterfaceName: ifaceName,
+							MethodName:    methodName,
+							Expected:      a.formatMethodSignature(ifaceMethod),
+							Got:           a.formatMethodSignature(clsMethod),
+							Line:          clsMethod.Line,
+						})
+						break
+					}
+				}
+			}
+		}
+	}
+}
+
+// typesMatch checks if two types are compatible for interface implementation.
+func (a *Analyzer) typesMatch(expected, got *Type) bool {
+	if expected == nil || got == nil {
+		return true // Unknown types are compatible
+	}
+	if expected.Kind == TypeUnknown || got.Kind == TypeUnknown {
+		return true
+	}
+	if expected.Kind == TypeAny || got.Kind == TypeAny {
+		return true
+	}
+	return expected.Equals(got)
+}
+
+// formatMethodSignature returns a human-readable method signature.
+func (a *Analyzer) formatMethodSignature(method *Symbol) string {
+	var params []string
+	for _, p := range method.Params {
+		if p.Type != nil {
+			params = append(params, p.Type.String())
+		} else {
+			params = append(params, "unknown")
+		}
+	}
+
+	var returns []string
+	for _, r := range method.ReturnTypes {
+		if r != nil {
+			returns = append(returns, r.String())
+		}
+	}
+
+	sig := "(" + strings.Join(params, ", ") + ")"
+	if len(returns) > 0 {
+		sig += " -> " + strings.Join(returns, ", ")
+	}
+	return sig
 }
 
 // collectDeclaration does a quick first pass to register top-level names.
@@ -973,7 +1102,19 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			a.addError(&UndefinedError{Name: e.Name, Candidates: a.findSimilar(e.Name)})
 			typ = TypeUnknownVal
 		} else {
-			typ = sym.Type
+			// In Rugby, no-arg functions are called implicitly (like Ruby)
+			// So `get_user` returns User?, not () -> User?
+			if sym.Kind == SymFunction && len(sym.Params) == 0 {
+				if len(sym.ReturnTypes) == 1 {
+					typ = sym.ReturnTypes[0]
+				} else if len(sym.ReturnTypes) > 1 {
+					typ = NewTupleType(sym.ReturnTypes...)
+				} else {
+					typ = TypeUnknownVal
+				}
+			} else {
+				typ = sym.Type
+			}
 		}
 
 	case *ast.InstanceVar:
@@ -1091,13 +1232,46 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		typ = a.analyzeCall(e)
 
 	case *ast.SelectorExpr:
-		a.analyzeExpr(e.X)
-		// For now, return unknown for method calls
-		// TODO: look up method return type
-		if strings.HasSuffix(e.Sel, "?") {
-			typ = TypeBoolVal
-		} else {
-			typ = TypeUnknownVal
+		receiverType := a.analyzeExpr(e.X)
+
+		// Special case: ClassName.new is a constructor (returns instance of class)
+		if e.Sel == "new" {
+			if classIdent, ok := e.X.(*ast.Ident); ok {
+				if _, isClass := a.classes[classIdent.Name]; isClass {
+					typ = NewClassType(classIdent.Name)
+				}
+			}
+		}
+
+		// Check for class field access
+		if typ == nil && receiverType.Kind == TypeClass && receiverType.Name != "" {
+			if cls := a.classes[receiverType.Name]; cls != nil {
+				// Check for field (getter)
+				if field := cls.GetField(e.Sel); field != nil {
+					typ = field.Type
+				}
+			}
+		}
+
+		// If not a field, look up method
+		if typ == nil {
+			if method := a.lookupMethod(receiverType, e.Sel); method != nil {
+				// Store method info for later use in CallExpr
+				if len(method.ReturnTypes) == 1 {
+					typ = method.ReturnTypes[0]
+				} else if len(method.ReturnTypes) > 1 {
+					typ = NewTupleType(method.ReturnTypes...)
+				}
+			}
+		}
+
+		// Fallback: predicate methods return Bool
+		if typ == nil {
+			if strings.HasSuffix(e.Sel, "?") {
+				typ = TypeBoolVal
+			} else {
+				typ = TypeUnknownVal
+			}
 		}
 
 	case *ast.IndexExpr:
@@ -1174,19 +1348,92 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 
 	case *ast.SafeNavExpr:
 		recvType := a.analyzeExpr(e.Receiver)
-		// Safe navigation returns optional
-		if recvType.Kind == TypeOptional {
-			// Already optional, stays optional
-			typ = recvType
+
+		// Get the underlying type (unwrap if optional)
+		innerType := recvType
+		if recvType.Kind == TypeOptional && recvType.Elem != nil {
+			innerType = recvType.Elem
+		}
+
+		// Look up the field or method on the inner type
+		var resultType *Type
+		if innerType.Kind == TypeClass && innerType.Name != "" {
+			if cls := a.classes[innerType.Name]; cls != nil {
+				// Check for field first
+				if field := cls.GetField(e.Selector); field != nil {
+					resultType = field.Type
+				} else if method := cls.GetMethod(e.Selector); method != nil {
+					// Method call - use return type
+					if len(method.ReturnTypes) == 1 {
+						resultType = method.ReturnTypes[0]
+					} else if len(method.ReturnTypes) > 1 {
+						resultType = NewTupleType(method.ReturnTypes...)
+					}
+				}
+			}
+		}
+
+		// Try builtin methods if no class field/method found
+		if resultType == nil {
+			if method := a.lookupBuiltinMethod(innerType, e.Selector); method != nil {
+				if len(method.ReturnTypes) == 1 {
+					resultType = method.ReturnTypes[0]
+				} else if len(method.ReturnTypes) > 1 {
+					resultType = NewTupleType(method.ReturnTypes...)
+				}
+			}
+		}
+
+		// Default to unknown if we couldn't determine the type
+		if resultType == nil {
+			resultType = TypeUnknownVal
+		}
+
+		// Safe navigation always returns optional (unless result is already optional)
+		if resultType.Kind == TypeOptional {
+			typ = resultType
 		} else {
-			typ = NewOptionalType(TypeUnknownVal)
+			typ = NewOptionalType(resultType)
 		}
 
 	case *ast.BangExpr:
 		innerType := a.analyzeExpr(e.Expr)
+
+		// Validate that inner expression is an error tuple (T, error) or just error
+		isErrorTuple := false
+		if innerType.Kind == TypeTuple && len(innerType.Elements) >= 1 {
+			lastElem := innerType.Elements[len(innerType.Elements)-1]
+			if lastElem.Kind == TypeError {
+				isErrorTuple = true
+			}
+		} else if innerType.Kind == TypeError {
+			isErrorTuple = true
+		}
+
+		if !isErrorTuple && innerType.Kind != TypeUnknown && innerType.Kind != TypeAny {
+			a.addError(&BangOnNonErrorError{
+				Got:  innerType,
+				Line: 0, // BangExpr doesn't have Line field
+			})
+		}
+
+		// Validate that enclosing function returns error (or we're at top-level/main)
+		fnScope := a.scope.FunctionScope()
+		if fnScope != nil && len(fnScope.ReturnTypes) > 0 {
+			lastReturn := fnScope.ReturnTypes[len(fnScope.ReturnTypes)-1]
+			if lastReturn.Kind != TypeError && lastReturn.Kind != TypeUnknown && lastReturn.Kind != TypeAny {
+				a.addError(&BangOutsideErrorFunctionError{
+					Line: 0, // BangExpr doesn't have Line field
+				})
+			}
+		}
+		// If no function scope (top-level), bang is allowed (prints error and exits)
+
 		// Bang unwraps (T, error) to T
 		if innerType.Kind == TypeTuple && len(innerType.Elements) >= 2 {
 			typ = innerType.Elements[0]
+		} else if innerType.Kind == TypeError {
+			typ = TypeUnknownVal // error-only return, no value
 		} else {
 			typ = innerType
 		}
@@ -1258,9 +1505,6 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 }
 
 func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
-	// Analyze function/receiver
-	funcType := a.analyzeExpr(call.Func)
-
 	// Analyze arguments and collect types, check for splat
 	hasSplat := false
 	var argTypes []*Type
@@ -1272,7 +1516,105 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 		}
 	}
 
-	// Analyze block if present
+	// Handle method calls: receiver.method(args)
+	if sel, ok := call.Func.(*ast.SelectorExpr); ok {
+		receiverType := a.analyzeExpr(sel.X)
+
+		// Analyze block with inferred parameter types
+		if call.Block != nil {
+			blockParamTypes := a.inferBlockParamTypes(receiverType, sel.Sel)
+			a.analyzeBlockWithTypes(call.Block, blockParamTypes)
+		}
+
+		// Check for class constructor call: ClassName.new(args)
+		if sel.Sel == "new" {
+			if classIdent, ok := sel.X.(*ast.Ident); ok {
+				if cls, isClass := a.classes[classIdent.Name]; isClass {
+					// Check initialize method arguments
+					if initMethod := cls.GetMethod("initialize"); initMethod != nil && !hasSplat {
+						a.checkArity("initialize", initMethod, call)
+						a.checkArgumentTypes(classIdent.Name+".new", initMethod, argTypes)
+					}
+					return NewClassType(classIdent.Name)
+				}
+			}
+		}
+
+		// Look up method on receiver type
+		if method := a.lookupMethod(receiverType, sel.Sel); method != nil {
+			// Check argument count and types
+			if !hasSplat {
+				methodName := sel.Sel
+				if receiverType.Kind == TypeClass && receiverType.Name != "" {
+					methodName = receiverType.Name + "." + sel.Sel
+				}
+				a.checkArity(methodName, method, call)
+				a.checkArgumentTypes(methodName, method, argTypes)
+			}
+
+			// Return method's return type
+			if len(method.ReturnTypes) == 1 {
+				return method.ReturnTypes[0]
+			} else if len(method.ReturnTypes) > 1 {
+				return NewTupleType(method.ReturnTypes...)
+			}
+			return TypeUnknownVal
+		}
+
+		// Fallback for unknown methods
+		if strings.HasSuffix(sel.Sel, "?") {
+			return TypeBoolVal
+		}
+		return TypeUnknownVal
+	}
+
+	// Handle safe navigation method calls: receiver&.method(args)
+	if safeNav, ok := call.Func.(*ast.SafeNavExpr); ok {
+		recvType := a.analyzeExpr(safeNav.Receiver)
+
+		// Unwrap optional to get inner type
+		innerType := recvType
+		if recvType.Kind == TypeOptional && recvType.Elem != nil {
+			innerType = recvType.Elem
+		}
+
+		// Analyze block with inferred parameter types
+		if call.Block != nil {
+			blockParamTypes := a.inferBlockParamTypes(innerType, safeNav.Selector)
+			a.analyzeBlockWithTypes(call.Block, blockParamTypes)
+		}
+
+		// Look up method on inner type and check arguments
+		var resultType *Type
+		if method := a.lookupMethod(innerType, safeNav.Selector); method != nil {
+			if !hasSplat {
+				a.checkArity(safeNav.Selector, method, call)
+				a.checkArgumentTypes(safeNav.Selector, method, argTypes)
+			}
+
+			if len(method.ReturnTypes) == 1 {
+				resultType = method.ReturnTypes[0]
+			} else if len(method.ReturnTypes) > 1 {
+				resultType = NewTupleType(method.ReturnTypes...)
+			}
+		}
+
+		// Default to unknown if we couldn't determine the type
+		if resultType == nil {
+			resultType = TypeUnknownVal
+		}
+
+		// Safe navigation returns optional (unless already optional)
+		if resultType.Kind == TypeOptional {
+			return resultType
+		}
+		return NewOptionalType(resultType)
+	}
+
+	// Handle direct function calls: func(args)
+	funcType := a.analyzeExpr(call.Func)
+
+	// Analyze block if present (no type hints for direct function calls)
 	if call.Block != nil {
 		a.analyzeBlock(call.Block)
 	}
@@ -1287,7 +1629,7 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 		}
 	}
 
-	// Try to determine return type
+	// Try to determine return type from function type
 	if funcType.Kind == TypeFunc && len(funcType.Returns) > 0 {
 		if len(funcType.Returns) == 1 {
 			return funcType.Returns[0]
@@ -1303,15 +1645,6 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 					return fn.ReturnTypes[0]
 				}
 				return NewTupleType(fn.ReturnTypes...)
-			}
-		}
-	}
-
-	// Check for class constructor call: ClassName.new(args)
-	if sel, ok := call.Func.(*ast.SelectorExpr); ok && sel.Sel == "new" {
-		if classIdent, ok := sel.X.(*ast.Ident); ok {
-			if _, isClass := a.classes[classIdent.Name]; isClass {
-				return NewClassType(classIdent.Name)
 			}
 		}
 	}
@@ -1409,11 +1742,21 @@ func (a *Analyzer) checkIndexType(indexType *Type) {
 }
 
 func (a *Analyzer) analyzeBlock(block *ast.BlockExpr) {
+	a.analyzeBlockWithTypes(block, nil)
+}
+
+func (a *Analyzer) analyzeBlockWithTypes(block *ast.BlockExpr, paramTypes []*Type) {
 	blockScope := NewScope(ScopeIterator, a.scope)
 
-	// Add block parameters
-	for _, param := range block.Params {
-		mustDefine(blockScope, NewParam(param, TypeAnyVal))
+	// Add block parameters with inferred types
+	for i, param := range block.Params {
+		var paramType *Type
+		if i < len(paramTypes) && paramTypes[i] != nil {
+			paramType = paramTypes[i]
+		} else {
+			paramType = TypeAnyVal
+		}
+		mustDefine(blockScope, NewParam(param, paramType))
 	}
 
 	prevScope := a.scope
@@ -1724,4 +2067,326 @@ func (a *Analyzer) GetInterface(name string) *Symbol {
 // GetFunction returns the function symbol by name.
 func (a *Analyzer) GetFunction(name string) *Symbol {
 	return a.functions[name]
+}
+
+// lookupMethod finds a method on the given type.
+// Returns nil if not found.
+func (a *Analyzer) lookupMethod(receiverType *Type, methodName string) *Symbol {
+	if receiverType == nil {
+		return nil
+	}
+
+	// Check for class methods
+	if receiverType.Kind == TypeClass && receiverType.Name != "" {
+		if cls := a.classes[receiverType.Name]; cls != nil {
+			if method := cls.GetMethod(methodName); method != nil {
+				return method
+			}
+		}
+	}
+
+	// Check for interface methods
+	if receiverType.Kind == TypeInterface && receiverType.Name != "" {
+		if iface := a.interfaces[receiverType.Name]; iface != nil {
+			if method := iface.GetMethod(methodName); method != nil {
+				return method
+			}
+		}
+	}
+
+	// Check for built-in methods on primitive types
+	return a.lookupBuiltinMethod(receiverType, methodName)
+}
+
+// inferBlockParamTypes returns the expected types for block parameters
+// based on the receiver type and method name.
+func (a *Analyzer) inferBlockParamTypes(receiverType *Type, methodName string) []*Type {
+	if receiverType == nil {
+		return nil
+	}
+
+	switch receiverType.Kind {
+	case TypeArray:
+		elemType := receiverType.Elem
+		if elemType == nil {
+			elemType = TypeAnyVal
+		}
+		switch methodName {
+		case "each", "map", "select", "filter", "reject", "find", "detect", "any?", "all?", "none?":
+			return []*Type{elemType}
+		case "each_with_index":
+			return []*Type{elemType, TypeIntVal}
+		case "reduce":
+			// reduce takes |accumulator, element|, accumulator type is unknown
+			return []*Type{TypeAnyVal, elemType}
+		}
+
+	case TypeMap:
+		keyType := receiverType.KeyType
+		valueType := receiverType.ValueType
+		if keyType == nil {
+			keyType = TypeAnyVal
+		}
+		if valueType == nil {
+			valueType = TypeAnyVal
+		}
+		switch methodName {
+		case "each", "select", "reject":
+			return []*Type{keyType, valueType}
+		case "each_key":
+			return []*Type{keyType}
+		case "each_value":
+			return []*Type{valueType}
+		}
+
+	case TypeRange:
+		switch methodName {
+		case "each":
+			return []*Type{TypeIntVal}
+		}
+
+	case TypeInt, TypeInt64:
+		switch methodName {
+		case "times", "upto", "downto":
+			return []*Type{TypeIntVal}
+		}
+
+	case TypeOptional:
+		innerType := receiverType.Elem
+		if innerType == nil {
+			innerType = TypeAnyVal
+		}
+		switch methodName {
+		case "each", "map":
+			return []*Type{innerType}
+		}
+	}
+
+	return nil
+}
+
+// lookupBuiltinMethod returns method info for built-in type methods.
+func (a *Analyzer) lookupBuiltinMethod(receiverType *Type, methodName string) *Symbol {
+	switch receiverType.Kind {
+	case TypeString:
+		return a.stringMethod(methodName)
+	case TypeInt, TypeInt64:
+		return a.intMethod(methodName)
+	case TypeFloat:
+		return a.floatMethod(methodName)
+	case TypeArray:
+		return a.arrayMethod(methodName, receiverType.Elem)
+	case TypeMap:
+		return a.mapMethod(methodName, receiverType.KeyType, receiverType.ValueType)
+	case TypeRange:
+		return a.rangeMethod(methodName)
+	case TypeChan:
+		return a.chanMethod(methodName, receiverType.Elem)
+	case TypeOptional:
+		return a.optionalMethod(methodName, receiverType.Elem)
+	}
+	return nil
+}
+
+// String methods
+func (a *Analyzer) stringMethod(name string) *Symbol {
+	switch name {
+	case "length", "size":
+		return NewMethod(name, nil, []*Type{TypeIntVal})
+	case "char_length":
+		return NewMethod(name, nil, []*Type{TypeIntVal})
+	case "empty?":
+		return NewMethod(name, nil, []*Type{TypeBoolVal})
+	case "upcase", "downcase", "strip", "lstrip", "rstrip", "reverse":
+		return NewMethod(name, nil, []*Type{TypeStringVal})
+	case "include?", "contains?", "start_with?", "end_with?":
+		return NewMethod(name, []*Symbol{NewParam("s", TypeStringVal)}, []*Type{TypeBoolVal})
+	case "replace":
+		return NewMethod(name, []*Symbol{NewParam("old", TypeStringVal), NewParam("new", TypeStringVal)}, []*Type{TypeStringVal})
+	case "split":
+		return NewMethod(name, []*Symbol{NewParam("sep", TypeStringVal)}, []*Type{NewArrayType(TypeStringVal)})
+	case "chars", "lines":
+		return NewMethod(name, nil, []*Type{NewArrayType(TypeStringVal)})
+	case "bytes":
+		return NewMethod(name, nil, []*Type{TypeBytesVal})
+	case "to_i":
+		return NewMethod(name, nil, []*Type{TypeIntVal, TypeErrorVal})
+	case "to_f":
+		return NewMethod(name, nil, []*Type{TypeFloatVal, TypeErrorVal})
+	}
+	return nil
+}
+
+// Int methods
+func (a *Analyzer) intMethod(name string) *Symbol {
+	switch name {
+	case "even?", "odd?", "zero?", "positive?", "negative?":
+		return NewMethod(name, nil, []*Type{TypeBoolVal})
+	case "abs":
+		return NewMethod(name, nil, []*Type{TypeIntVal})
+	case "clamp":
+		return NewMethod(name, []*Symbol{NewParam("min", TypeIntVal), NewParam("max", TypeIntVal)}, []*Type{TypeIntVal})
+	case "to_s":
+		return NewMethod(name, nil, []*Type{TypeStringVal})
+	case "to_f":
+		return NewMethod(name, nil, []*Type{TypeFloatVal})
+	case "times", "upto", "downto":
+		// These take a block and return nil
+		return NewMethod(name, nil, nil)
+	}
+	return nil
+}
+
+// Float methods
+func (a *Analyzer) floatMethod(name string) *Symbol {
+	switch name {
+	case "floor", "ceil", "round", "truncate":
+		return NewMethod(name, nil, []*Type{TypeFloatVal})
+	case "zero?", "positive?", "negative?", "nan?", "infinite?":
+		return NewMethod(name, nil, []*Type{TypeBoolVal})
+	case "abs":
+		return NewMethod(name, nil, []*Type{TypeFloatVal})
+	case "to_i":
+		return NewMethod(name, nil, []*Type{TypeIntVal})
+	case "to_s":
+		return NewMethod(name, nil, []*Type{TypeStringVal})
+	}
+	return nil
+}
+
+// Array methods
+func (a *Analyzer) arrayMethod(name string, elemType *Type) *Symbol {
+	if elemType == nil {
+		elemType = TypeAnyVal
+	}
+	switch name {
+	case "length", "size":
+		return NewMethod(name, nil, []*Type{TypeIntVal})
+	case "empty?":
+		return NewMethod(name, nil, []*Type{TypeBoolVal})
+	case "first", "last":
+		return NewMethod(name, nil, []*Type{NewOptionalType(elemType)})
+	case "include?", "contains?":
+		return NewMethod(name, []*Symbol{NewParam("val", elemType)}, []*Type{TypeBoolVal})
+	case "reverse", "sort":
+		// In-place mutation, returns self
+		return NewMethod(name, nil, nil)
+	case "reversed", "sorted":
+		// Return new array
+		return NewMethod(name, nil, []*Type{NewArrayType(elemType)})
+	case "compact":
+		return NewMethod(name, nil, []*Type{NewArrayType(elemType)})
+	case "sum":
+		// Returns element type for numeric arrays
+		return NewMethod(name, nil, []*Type{elemType})
+	case "min", "max":
+		return NewMethod(name, nil, []*Type{NewOptionalType(elemType)})
+	case "each", "each_with_index", "map", "select", "filter", "reject", "find", "detect", "reduce", "any?", "all?", "none?":
+		// Block methods - return type depends on method
+		switch name {
+		case "each", "each_with_index":
+			return NewMethod(name, nil, nil)
+		case "map":
+			// Returns Array[R] where R is block return - use unknown for now
+			return NewMethod(name, nil, []*Type{NewArrayType(TypeUnknownVal)})
+		case "select", "filter", "reject":
+			return NewMethod(name, nil, []*Type{NewArrayType(elemType)})
+		case "find", "detect":
+			return NewMethod(name, nil, []*Type{NewOptionalType(elemType)})
+		case "reduce":
+			return NewMethod(name, nil, []*Type{TypeUnknownVal})
+		case "any?", "all?", "none?":
+			return NewMethod(name, nil, []*Type{TypeBoolVal})
+		}
+	case "join":
+		return NewMethod(name, []*Symbol{NewParam("sep", TypeStringVal)}, []*Type{TypeStringVal})
+	case "push", "pop", "shift", "unshift":
+		return NewMethod(name, nil, nil)
+	}
+	return nil
+}
+
+// Map methods
+func (a *Analyzer) mapMethod(name string, keyType, valueType *Type) *Symbol {
+	if keyType == nil {
+		keyType = TypeAnyVal
+	}
+	if valueType == nil {
+		valueType = TypeAnyVal
+	}
+	switch name {
+	case "length", "size":
+		return NewMethod(name, nil, []*Type{TypeIntVal})
+	case "empty?":
+		return NewMethod(name, nil, []*Type{TypeBoolVal})
+	case "keys":
+		return NewMethod(name, nil, []*Type{NewArrayType(keyType)})
+	case "values":
+		return NewMethod(name, nil, []*Type{NewArrayType(valueType)})
+	case "has_key?", "key?":
+		return NewMethod(name, []*Symbol{NewParam("key", keyType)}, []*Type{TypeBoolVal})
+	case "fetch":
+		return NewMethod(name, []*Symbol{NewParam("key", keyType), NewParam("default", valueType)}, []*Type{valueType})
+	case "merge":
+		return NewMethod(name, []*Symbol{NewParam("other", NewMapType(keyType, valueType))}, []*Type{NewMapType(keyType, valueType)})
+	case "each", "each_key", "each_value", "select", "reject":
+		switch name {
+		case "each", "each_key", "each_value":
+			return NewMethod(name, nil, nil)
+		case "select", "reject":
+			return NewMethod(name, nil, []*Type{NewMapType(keyType, valueType)})
+		}
+	case "delete":
+		return NewMethod(name, []*Symbol{NewParam("key", keyType)}, []*Type{NewOptionalType(valueType)})
+	}
+	return nil
+}
+
+// Range methods
+func (a *Analyzer) rangeMethod(name string) *Symbol {
+	switch name {
+	case "include?", "contains?":
+		return NewMethod(name, []*Symbol{NewParam("val", TypeIntVal)}, []*Type{TypeBoolVal})
+	case "to_a":
+		return NewMethod(name, nil, []*Type{NewArrayType(TypeIntVal)})
+	case "size", "length":
+		return NewMethod(name, nil, []*Type{TypeIntVal})
+	case "each":
+		return NewMethod(name, nil, nil)
+	}
+	return nil
+}
+
+// Channel methods
+func (a *Analyzer) chanMethod(name string, elemType *Type) *Symbol {
+	if elemType == nil {
+		elemType = TypeAnyVal
+	}
+	switch name {
+	case "receive":
+		return NewMethod(name, nil, []*Type{elemType})
+	case "try_receive":
+		return NewMethod(name, nil, []*Type{NewOptionalType(elemType)})
+	case "close":
+		return NewMethod(name, nil, nil)
+	}
+	return nil
+}
+
+// Optional methods
+func (a *Analyzer) optionalMethod(name string, innerType *Type) *Symbol {
+	if innerType == nil {
+		innerType = TypeAnyVal
+	}
+	switch name {
+	case "ok?", "present?":
+		return NewMethod(name, nil, []*Type{TypeBoolVal})
+	case "nil?", "absent?":
+		return NewMethod(name, nil, []*Type{TypeBoolVal})
+	case "unwrap":
+		return NewMethod(name, nil, []*Type{innerType})
+	case "map", "each":
+		return NewMethod(name, nil, nil) // Block methods
+	}
+	return nil
 }

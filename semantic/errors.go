@@ -224,3 +224,66 @@ func (e *IndexTypeMismatchError) Error() string {
 	}
 	return msg
 }
+
+// InterfaceNotImplementedError reports when a class doesn't implement an interface.
+type InterfaceNotImplementedError struct {
+	ClassName     string
+	InterfaceName string
+	MissingMethod string
+	Line          int
+}
+
+func (e *InterfaceNotImplementedError) Error() string {
+	msg := fmt.Sprintf("class %s does not implement interface %s: missing method '%s'",
+		e.ClassName, e.InterfaceName, e.MissingMethod)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// MethodSignatureMismatchError reports when a method signature doesn't match interface.
+type MethodSignatureMismatchError struct {
+	ClassName     string
+	InterfaceName string
+	MethodName    string
+	Expected      string
+	Got           string
+	Line          int
+}
+
+func (e *MethodSignatureMismatchError) Error() string {
+	msg := fmt.Sprintf("class %s method '%s' has wrong signature for interface %s: expected %s, got %s",
+		e.ClassName, e.MethodName, e.InterfaceName, e.Expected, e.Got)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// BangOnNonErrorError reports when ! is used on a non-error expression.
+type BangOnNonErrorError struct {
+	Got  *Type
+	Line int
+}
+
+func (e *BangOnNonErrorError) Error() string {
+	msg := fmt.Sprintf("cannot use '!' on expression of type %s (expected (T, error) tuple)", e.Got)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// BangOutsideErrorFunctionError reports when ! is used in a function that doesn't return error.
+type BangOutsideErrorFunctionError struct {
+	Line int
+}
+
+func (e *BangOutsideErrorFunctionError) Error() string {
+	msg := "'!' can only be used in functions that return error"
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}

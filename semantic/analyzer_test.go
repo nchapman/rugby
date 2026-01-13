@@ -1846,3 +1846,960 @@ y = x ?? 0`,
 		})
 	}
 }
+
+func TestAnalyzeMethodCallTypeChecking(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		// String method return types
+		{
+			name: "string length returns Int",
+			input: `s = "hello"
+x : Int = s.length`,
+			wantErr: false,
+		},
+		{
+			name: "string upcase returns String",
+			input: `s = "hello"
+x : String = s.upcase`,
+			wantErr: false,
+		},
+		{
+			name: "string empty? returns Bool",
+			input: `s = "hello"
+x : Bool = s.empty?`,
+			wantErr: false,
+		},
+		{
+			name: "string split returns Array[String]",
+			input: `s = "a,b,c"
+words = s.split(",")
+first : String = words[0]`,
+			wantErr: false,
+		},
+
+		// Array method return types
+		{
+			name: "array length returns Int",
+			input: `arr = [1, 2, 3]
+x : Int = arr.length`,
+			wantErr: false,
+		},
+		{
+			name: "array first returns Optional",
+			input: `arr = [1, 2, 3]
+x = arr.first
+y = x ?? 0`,
+			wantErr: false,
+		},
+		{
+			name: "array empty? returns Bool",
+			input: `arr = [1, 2, 3]
+x : Bool = arr.empty?`,
+			wantErr: false,
+		},
+
+		// Int method return types
+		{
+			name: "int abs returns Int",
+			input: `n = -5
+x : Int = n.abs`,
+			wantErr: false,
+		},
+		{
+			name: "int even? returns Bool",
+			input: `n = 4
+x : Bool = n.even?`,
+			wantErr: false,
+		},
+		{
+			name: "int to_s returns String",
+			input: `n = 42
+x : String = n.to_s`,
+			wantErr: false,
+		},
+
+		// Float method return types
+		{
+			name: "float floor returns Float",
+			input: `f = 3.14
+x : Float = f.floor`,
+			wantErr: false,
+		},
+		{
+			name: "float nan? returns Bool",
+			input: `f = 3.14
+x : Bool = f.nan?`,
+			wantErr: false,
+		},
+
+		// Map method return types
+		{
+			name: "map keys returns array of keys",
+			input: `m = {"a" => 1, "b" => 2}
+keys = m.keys
+first : String = keys[0]`,
+			wantErr: false,
+		},
+		{
+			name: "map values returns array of values",
+			input: `m = {"a" => 1, "b" => 2}
+vals = m.values
+first : Int = vals[0]`,
+			wantErr: false,
+		},
+		{
+			name: "map has_key? returns Bool",
+			input: `m = {"a" => 1}
+x : Bool = m.has_key?("a")`,
+			wantErr: false,
+		},
+
+		// Class method return types
+		{
+			name: "class method returns declared type",
+			input: `
+class User
+  def initialize(@name : String)
+  end
+
+  def get_name -> String
+    @name
+  end
+end
+
+u = User.new("Alice")
+name : String = u.get_name`,
+			wantErr: false,
+		},
+		{
+			name: "class method with wrong assignment type",
+			input: `
+class User
+  def initialize(@name : String)
+  end
+
+  def get_name -> String
+    @name
+  end
+end
+
+u = User.new("Alice")
+name : Int = u.get_name`,
+			wantErr: true,
+			errMsg:  "assignment",
+		},
+
+		// Chained method calls
+		{
+			name: "chained string methods",
+			input: `s = "hello world"
+x : String = s.upcase.strip`,
+			wantErr: false,
+		},
+		{
+			name: "chained array methods",
+			input: `arr = [3, 1, 2]
+sorted = arr.sorted
+len : Int = sorted.length`,
+			wantErr: false,
+		},
+
+		// Method argument type checking
+		{
+			name: "string include? with correct arg type",
+			input: `s = "hello"
+x = s.include?("ell")`,
+			wantErr: false,
+		},
+
+		// Range method return types
+		{
+			name: "range to_a returns array of Int",
+			input: `r = 1..5
+arr = r.to_a
+x : Int = arr[0]`,
+			wantErr: false,
+		},
+		{
+			name: "range include? returns Bool",
+			input: `r = 1..10
+x : Bool = r.include?(5)`,
+			wantErr: false,
+		},
+
+		// Note: Channel tests require Chan to be a known type, skipped for now
+
+		// Optional method return types
+		{
+			name: "optional ok? returns Bool",
+			input: `def get_val -> Int?
+  5
+end
+x = get_val
+y : Bool = x.ok?`,
+			wantErr: false,
+		},
+		{
+			name: "optional unwrap returns inner type",
+			input: `def get_val -> Int?
+  5
+end
+x = get_val
+y : Int = x.unwrap`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				if tt.errMsg != "" {
+					found := false
+					for _, err := range errs {
+						if strings.Contains(err.Error(), tt.errMsg) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected error containing %q, got: %v", tt.errMsg, errs)
+					}
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeBangOperator(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "bang at top level (allowed for scripts)",
+			input: `
+def read_file(path : String) -> (String, error)
+  return "contents", nil
+end
+
+data = read_file("test.txt")!
+puts data`,
+			wantErr: false,
+		},
+		{
+			name: "bang in non-error-returning function",
+			input: `
+def read_file(path : String) -> (String, error)
+  return "contents", nil
+end
+
+def process -> String
+  read_file("test.txt")!
+end`,
+			wantErr: true,
+			errMsg:  "can only be used in functions that return error",
+		},
+		{
+			name: "bang on error-only return",
+			input: `
+def validate(x : Int) -> error
+  nil
+end
+
+def process -> error
+  validate(5)!
+  nil
+end`,
+			wantErr: false,
+		},
+		{
+			name: "bang on non-error function",
+			input: `
+def get_value -> Int
+  42
+end
+
+def process -> error
+  get_value!
+  nil
+end`,
+			wantErr: true,
+			errMsg:  "cannot use '!'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				if tt.errMsg != "" {
+					found := false
+					for _, err := range errs {
+						if strings.Contains(err.Error(), tt.errMsg) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected error containing %q, got: %v", tt.errMsg, errs)
+					}
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeInterfaceImplementation(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "class correctly implements interface",
+			input: `
+interface Speaker
+  def speak -> String
+end
+
+class Dog implements Speaker
+  def speak -> String
+    "woof"
+  end
+end`,
+			wantErr: false,
+		},
+		{
+			name: "class missing interface method",
+			input: `
+interface Speaker
+  def speak -> String
+end
+
+class Dog implements Speaker
+end`,
+			wantErr: true,
+			errMsg:  "missing method 'speak'",
+		},
+		{
+			name: "class with wrong return type",
+			input: `
+interface Speaker
+  def speak -> String
+end
+
+class Dog implements Speaker
+  def speak -> Int
+    42
+  end
+end`,
+			wantErr: true,
+			errMsg:  "wrong signature",
+		},
+		{
+			name: "class with wrong parameter type",
+			input: `
+interface Greeter
+  def greet(name : String) -> String
+end
+
+class FormalGreeter implements Greeter
+  def greet(name : Int) -> String
+    "Hello"
+  end
+end`,
+			wantErr: true,
+			errMsg:  "wrong signature",
+		},
+		{
+			name: "class with wrong parameter count",
+			input: `
+interface Adder
+  def add(a : Int, b : Int) -> Int
+end
+
+class Calculator implements Adder
+  def add(a : Int) -> Int
+    a
+  end
+end`,
+			wantErr: true,
+			errMsg:  "wrong signature",
+		},
+		{
+			name: "undefined interface",
+			input: `
+class Dog implements NonExistent
+  def speak -> String
+    "woof"
+  end
+end`,
+			wantErr: true,
+			errMsg:  "undefined: 'NonExistent'",
+		},
+		{
+			name: "interface with multiple methods",
+			input: `
+interface Animal
+  def speak -> String
+  def move -> String
+end
+
+class Dog implements Animal
+  def speak -> String
+    "woof"
+  end
+  def move -> String
+    "run"
+  end
+end`,
+			wantErr: false,
+		},
+		{
+			name: "interface with multiple methods - one missing",
+			input: `
+interface Animal
+  def speak -> String
+  def move -> String
+end
+
+class Dog implements Animal
+  def speak -> String
+    "woof"
+  end
+end`,
+			wantErr: true,
+			errMsg:  "missing method 'move'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				if tt.errMsg != "" {
+					found := false
+					for _, err := range errs {
+						if strings.Contains(err.Error(), tt.errMsg) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected error containing %q, got: %v", tt.errMsg, errs)
+					}
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeClassMethodArgumentTypeChecking(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "class method with correct argument type",
+			input: `
+class Calculator
+  def add(a : Int, b : Int) -> Int
+    a + b
+  end
+end
+
+c = Calculator.new
+result = c.add(1, 2)`,
+			wantErr: false,
+		},
+		{
+			name: "class method with wrong argument type",
+			input: `
+class Calculator
+  def add(a : Int, b : Int) -> Int
+    a + b
+  end
+end
+
+c = Calculator.new
+result = c.add("hello", 2)`,
+			wantErr: true,
+			errMsg:  "cannot use String as Int",
+		},
+		{
+			name: "class method with wrong arity",
+			input: `
+class Calculator
+  def add(a : Int, b : Int) -> Int
+    a + b
+  end
+end
+
+c = Calculator.new
+result = c.add(1)`,
+			wantErr: true,
+			errMsg:  "wrong number of arguments",
+		},
+		{
+			name: "constructor with correct argument types",
+			input: `
+class User
+  def initialize(@name : String, @age : Int)
+  end
+end
+
+u = User.new("Alice", 30)`,
+			wantErr: false,
+		},
+		{
+			name: "constructor with wrong argument type",
+			input: `
+class User
+  def initialize(@name : String, @age : Int)
+  end
+end
+
+u = User.new(123, 30)`,
+			wantErr: true,
+			errMsg:  "cannot use Int as String",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				if tt.errMsg != "" {
+					found := false
+					for _, err := range errs {
+						if strings.Contains(err.Error(), tt.errMsg) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected error containing %q, got: %v", tt.errMsg, errs)
+					}
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeBlockParameterTypeInference(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "array.each block param is element type",
+			input: `
+arr = [1, 2, 3]
+arr.each do |x|
+  y = x + 1
+end
+`,
+			wantErr: false,
+		},
+		{
+			name: "array.each type mismatch in block",
+			input: `
+arr = [1, 2, 3]
+arr.each do |x|
+  y = x + "string"
+end
+`,
+			wantErr: true,
+			errMsg:  "cannot use '+' with types Int and String",
+		},
+		{
+			name: "array.map block param is element type",
+			input: `
+arr = ["a", "b", "c"]
+arr.map do |s|
+  s.length
+end
+`,
+			wantErr: false,
+		},
+		{
+			name: "array.each_with_index has elem and int params",
+			input: `
+arr = ["a", "b"]
+arr.each_with_index do |elem, idx|
+  x = idx + 1
+  y = elem.length
+end
+`,
+			wantErr: false,
+		},
+		{
+			name: "map.each has key and value params",
+			input: `
+m = {"a" => 1, "b" => 2}
+m.each do |k, v|
+  x = k.length
+  y = v + 1
+end
+`,
+			wantErr: false,
+		},
+		{
+			name: "map.each type mismatch on key",
+			input: `
+m = {"a" => 1}
+m.each do |k, v|
+  x = k + 1
+end
+`,
+			wantErr: true,
+			errMsg:  "cannot use '+' with types String and Int",
+		},
+		{
+			name: "map.each_key has key param",
+			input: `
+m = {"a" => 1}
+m.each_key do |k|
+  x = k.length
+end
+`,
+			wantErr: false,
+		},
+		{
+			name: "map.each_value has value param",
+			input: `
+m = {"a" => 1}
+m.each_value do |v|
+  x = v + 1
+end
+`,
+			wantErr: false,
+		},
+		{
+			name: "int.times block param is int",
+			input: `
+5.times do |i|
+  x = i + 1
+end
+`,
+			wantErr: false,
+		},
+		{
+			name: "int.times type mismatch",
+			input: `
+5.times do |i|
+  x = i + "string"
+end
+`,
+			wantErr: true,
+			errMsg:  "cannot use '+' with types Int and String",
+		},
+		{
+			name: "range.each block param is int",
+			input: `
+(1..10).each do |n|
+  x = n + 1
+end
+`,
+			wantErr: false,
+		},
+		{
+			name: "array.select block param is element type",
+			input: `
+nums = [1, 2, 3, 4, 5]
+nums.select do |n|
+  n > 2
+end
+`,
+			wantErr: false,
+		},
+		{
+			name: "array.reduce has accumulator and element params",
+			input: `
+nums = [1, 2, 3]
+nums.reduce do |acc, n|
+  n + 1
+end
+`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				if tt.errMsg != "" {
+					found := false
+					for _, err := range errs {
+						if strings.Contains(err.Error(), tt.errMsg) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected error containing %q, got: %v", tt.errMsg, errs)
+					}
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeSafeNavigationReturnType(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "safe nav on class field returns optional of field type",
+			input: `
+class User
+  def initialize(@name : String)
+  end
+end
+
+def get_user -> User?
+  nil
+end
+
+u = get_user
+# name should be String?, so we can use string methods after unwrap
+if let name = u&.name
+  x = name.length
+end
+`,
+			wantErr: false,
+		},
+		{
+			name: "safe nav on string method returns optional",
+			input: `
+def get_string -> String?
+  "hello"
+end
+s = get_string
+# length returns Int, so safe nav returns Int?
+len = s&.length
+`,
+			wantErr: false,
+		},
+		{
+			name: "safe nav on array method returns optional",
+			input: `
+def get_array -> Array[Int]?
+  [1, 2, 3]
+end
+arr = get_array
+# first returns Int?, safe nav returns Int? (doesn't double wrap)
+first = arr&.first
+`,
+			wantErr: false,
+		},
+		{
+			name: "safe nav result used correctly with if-let",
+			input: `
+class User
+  def initialize(@age : Int)
+  end
+end
+
+def find_user -> User?
+  nil
+end
+
+u = find_user
+if let age = u&.age
+  x = age + 1
+end
+`,
+			wantErr: false,
+		},
+		{
+			name: "safe nav on non-optional also returns optional",
+			input: `
+s = "hello"
+# Even on non-optional, safe nav returns optional
+len = s&.length
+`,
+			wantErr: false,
+		},
+		{
+			name: "chained safe navigation",
+			input: `
+class Address
+  def initialize(@city : String)
+  end
+end
+
+class User
+  def initialize(@address : Address?)
+  end
+end
+
+def find_user -> User?
+  nil
+end
+
+u = find_user
+# Chained: u&.address returns Address?, then &.city returns String?
+city = u&.address&.city
+`,
+			wantErr: false,
+		},
+		{
+			name: "safe nav method call with arguments type checked",
+			input: `
+class Calculator
+  def add(a : Int, b : Int) -> Int
+    a + b
+  end
+end
+
+def get_calc -> Calculator?
+  nil
+end
+
+c = get_calc
+result = c&.add(1, 2)
+`,
+			wantErr: false,
+		},
+		{
+			name: "safe nav method call with wrong argument type",
+			input: `
+class Calculator
+  def add(a : Int, b : Int) -> Int
+    a + b
+  end
+end
+
+def get_calc -> Calculator?
+  nil
+end
+
+c = get_calc
+result = c&.add("wrong", 2)
+`,
+			wantErr: true,
+			errMsg:  "cannot use String as Int",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				if tt.errMsg != "" {
+					found := false
+					for _, err := range errs {
+						if strings.Contains(err.Error(), tt.errMsg) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected error containing %q, got: %v", tt.errMsg, errs)
+					}
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
