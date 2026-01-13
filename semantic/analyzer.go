@@ -1101,20 +1101,25 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		if sym == nil {
 			a.addError(&UndefinedError{Name: e.Name, Candidates: a.findSimilar(e.Name)})
 			typ = TypeUnknownVal
-		} else {
+		} else if sym.Kind == SymFunction {
 			// In Rugby, no-arg functions are called implicitly (like Ruby)
-			// So `get_user` returns User?, not () -> User?
-			if sym.Kind == SymFunction && len(sym.Params) == 0 {
-				if len(sym.ReturnTypes) == 1 {
-					typ = sym.ReturnTypes[0]
-				} else if len(sym.ReturnTypes) > 1 {
-					typ = NewTupleType(sym.ReturnTypes...)
-				} else {
-					typ = TypeUnknownVal
-				}
+			// Functions with required params must use parentheses
+			// Variadic functions can be called with 0 args, so they're allowed
+			if len(sym.Params) > 0 && !sym.Variadic {
+				a.addError(&MethodRequiresArgumentsError{
+					MethodName: e.Name,
+					ParamCount: len(sym.Params),
+				})
+				typ = TypeUnknownVal
+			} else if len(sym.ReturnTypes) == 1 {
+				typ = sym.ReturnTypes[0]
+			} else if len(sym.ReturnTypes) > 1 {
+				typ = NewTupleType(sym.ReturnTypes...)
 			} else {
-				typ = sym.Type
+				typ = TypeUnknownVal
 			}
+		} else {
+			typ = sym.Type
 		}
 
 	case *ast.InstanceVar:
@@ -1257,7 +1262,8 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		if typ == nil {
 			if method := a.lookupMethod(receiverType, e.Sel); method != nil {
 				// Only allow implicit call for methods with no required params
-				if len(method.Params) > 0 {
+				// Variadic methods can be called with 0 args, so they're allowed
+				if len(method.Params) > 0 && !method.Variadic {
 					a.addError(&MethodRequiresArgumentsError{
 						MethodName: e.Sel,
 						ParamCount: len(method.Params),
@@ -1370,7 +1376,8 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 					resultType = field.Type
 				} else if method := cls.GetMethod(e.Selector); method != nil {
 					// Only allow implicit call for methods with no required params
-					if len(method.Params) > 0 {
+					// Variadic methods can be called with 0 args, so they're allowed
+					if len(method.Params) > 0 && !method.Variadic {
 						a.addError(&MethodRequiresArgumentsError{
 							MethodName: e.Selector,
 							ParamCount: len(method.Params),
@@ -1389,7 +1396,8 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		if resultType == nil {
 			if method := a.lookupBuiltinMethod(innerType, e.Selector); method != nil {
 				// Only allow implicit call for methods with no required params
-				if len(method.Params) > 0 {
+				// Variadic methods can be called with 0 args, so they're allowed
+				if len(method.Params) > 0 && !method.Variadic {
 					a.addError(&MethodRequiresArgumentsError{
 						MethodName: e.Selector,
 						ParamCount: len(method.Params),
@@ -1631,7 +1639,15 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 	}
 
 	// Handle direct function calls: func(args)
-	funcType := a.analyzeExpr(call.Func)
+	// Note: Don't call analyzeExpr on Ident here - that would trigger the
+	// "requires arguments" error even though args ARE being provided via CallExpr.
+	// We handle Ident function lookups directly below.
+	// For other expressions (e.g., function stored in variable), we still need
+	// to analyze them to get type information.
+	var funcType *Type
+	if _, isIdent := call.Func.(*ast.Ident); !isIdent {
+		funcType = a.analyzeExpr(call.Func)
+	}
 
 	// Analyze block if present (no type hints for direct function calls)
 	if call.Block != nil {
@@ -1649,7 +1665,7 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 	}
 
 	// Try to determine return type from function type
-	if funcType.Kind == TypeFunc && len(funcType.Returns) > 0 {
+	if funcType != nil && funcType.Kind == TypeFunc && len(funcType.Returns) > 0 {
 		if len(funcType.Returns) == 1 {
 			return funcType.Returns[0]
 		}

@@ -2824,6 +2824,18 @@ y = x + 1
 			wantErr: false,
 		},
 		{
+			name: "function with required params without parens errors",
+			input: `
+def greet(name : String) -> String
+  "Hello"
+end
+
+x = greet
+`,
+			wantErr: true,
+			errMsg:  "method 'greet' requires 1 argument(s)",
+		},
+		{
 			name: "no-arg method implicit call",
 			input: `
 class Counter
@@ -2915,6 +2927,11 @@ x = c.add(1, 2)
 s = "hello"
 x = s.length.abs
 `,
+			wantErr: false,
+		},
+		{
+			name:    "variadic function implicit call (no args)",
+			input:   `puts`,
 			wantErr: false,
 		},
 	}
