@@ -2803,3 +2803,153 @@ result = c&.add("wrong", 2)
 		})
 	}
 }
+
+func TestAnalyzeImplicitMethodCalls(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "no-arg function implicit call",
+			input: `
+def get_value -> Int
+  42
+end
+
+x = get_value
+y = x + 1
+`,
+			wantErr: false,
+		},
+		{
+			name: "no-arg method implicit call",
+			input: `
+class Counter
+  def count -> Int
+    10
+  end
+end
+
+c = Counter.new
+x = c.count + 1
+`,
+			wantErr: false,
+		},
+		{
+			name: "method with required params without parens errors",
+			input: `
+class Calculator
+  def add(a : Int, b : Int) -> Int
+    a + b
+  end
+end
+
+c = Calculator.new
+x = c.add
+`,
+			wantErr: true,
+			errMsg:  "method 'add' requires 2 argument(s)",
+		},
+		{
+			name: "method with one required param without parens errors",
+			input: `
+class Greeter
+  def greet(name : String) -> String
+    "Hello"
+  end
+end
+
+g = Greeter.new
+x = g.greet
+`,
+			wantErr: true,
+			errMsg:  "method 'greet' requires 1 argument(s)",
+		},
+		{
+			name: "builtin method with required param without parens errors",
+			input: `
+s = "hello"
+x = s.include?
+`,
+			wantErr: true,
+			errMsg:  "method 'include?' requires 1 argument(s)",
+		},
+		{
+			name: "safe nav method with required params without parens errors",
+			input: `
+class Calculator
+  def add(a : Int, b : Int) -> Int
+    a + b
+  end
+end
+
+def get_calc -> Calculator?
+  nil
+end
+
+c = get_calc
+x = c&.add
+`,
+			wantErr: true,
+			errMsg:  "method 'add' requires 2 argument(s)",
+		},
+		{
+			name: "method with parens and args works",
+			input: `
+class Calculator
+  def add(a : Int, b : Int) -> Int
+    a + b
+  end
+end
+
+c = Calculator.new
+x = c.add(1, 2)
+`,
+			wantErr: false,
+		},
+		{
+			name: "chained no-arg methods work",
+			input: `
+s = "hello"
+x = s.length.abs
+`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				if tt.errMsg != "" {
+					found := false
+					for _, err := range errs {
+						if strings.Contains(err.Error(), tt.errMsg) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected error containing %q, got: %v", tt.errMsg, errs)
+					}
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}

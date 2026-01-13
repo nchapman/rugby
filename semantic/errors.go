@@ -287,3 +287,18 @@ func (e *BangOutsideErrorFunctionError) Error() string {
 	}
 	return msg
 }
+
+// MethodRequiresArgumentsError reports when a method requiring arguments is called without them.
+type MethodRequiresArgumentsError struct {
+	MethodName string
+	ParamCount int
+	Line       int
+}
+
+func (e *MethodRequiresArgumentsError) Error() string {
+	msg := fmt.Sprintf("method '%s' requires %d argument(s)", e.MethodName, e.ParamCount)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}

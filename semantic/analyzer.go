@@ -1256,8 +1256,14 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		// If not a field, look up method
 		if typ == nil {
 			if method := a.lookupMethod(receiverType, e.Sel); method != nil {
-				// Store method info for later use in CallExpr
-				if len(method.ReturnTypes) == 1 {
+				// Only allow implicit call for methods with no required params
+				if len(method.Params) > 0 {
+					a.addError(&MethodRequiresArgumentsError{
+						MethodName: e.Sel,
+						ParamCount: len(method.Params),
+					})
+					typ = TypeUnknownVal
+				} else if len(method.ReturnTypes) == 1 {
 					typ = method.ReturnTypes[0]
 				} else if len(method.ReturnTypes) > 1 {
 					typ = NewTupleType(method.ReturnTypes...)
@@ -1363,8 +1369,14 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				if field := cls.GetField(e.Selector); field != nil {
 					resultType = field.Type
 				} else if method := cls.GetMethod(e.Selector); method != nil {
-					// Method call - use return type
-					if len(method.ReturnTypes) == 1 {
+					// Only allow implicit call for methods with no required params
+					if len(method.Params) > 0 {
+						a.addError(&MethodRequiresArgumentsError{
+							MethodName: e.Selector,
+							ParamCount: len(method.Params),
+						})
+						resultType = TypeUnknownVal
+					} else if len(method.ReturnTypes) == 1 {
 						resultType = method.ReturnTypes[0]
 					} else if len(method.ReturnTypes) > 1 {
 						resultType = NewTupleType(method.ReturnTypes...)
@@ -1376,7 +1388,14 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		// Try builtin methods if no class field/method found
 		if resultType == nil {
 			if method := a.lookupBuiltinMethod(innerType, e.Selector); method != nil {
-				if len(method.ReturnTypes) == 1 {
+				// Only allow implicit call for methods with no required params
+				if len(method.Params) > 0 {
+					a.addError(&MethodRequiresArgumentsError{
+						MethodName: e.Selector,
+						ParamCount: len(method.Params),
+					})
+					resultType = TypeUnknownVal
+				} else if len(method.ReturnTypes) == 1 {
 					resultType = method.ReturnTypes[0]
 				} else if len(method.ReturnTypes) > 1 {
 					resultType = NewTupleType(method.ReturnTypes...)
