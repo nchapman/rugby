@@ -23,7 +23,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 09_blocks.rg | ✅ PASS | Block methods now work |
 | 10_optionals.rg | ✅ PASS | Optional handling now works (if let, safe nav, tuple unpacking, map/each) |
 | 11_errors.rg | ❌ FAIL | os.ReadFile multi-value return issues |
-| 12_strings.rg | ❌ FAIL | String methods (contains?, etc.) |
+| 12_strings.rg | ✅ PASS | String methods now work |
 | 13_ranges.rg | ❌ FAIL | Range.size method not implemented |
 | 14_go_interop.rg | ✅ PASS | Multi-value Go function returns now work |
 | 15_concurrency.rg | ❌ FAIL | Chan generic syntax, sync.WaitGroup.new |
@@ -116,6 +116,9 @@ Full optional support now works:
 - Optional methods: `ok?`, `nil?`, `present?`, `absent?`, `unwrap` work on optionals
 - `map`/`each` on optionals: transforms or iterates if value is present
 
+### ~~BUG-022: String methods~~ ✅ FIXED
+String methods (`contains?`, `start_with?`, `end_with?`, `empty?`, `replace`, `lines`) now work correctly. Added runtime functions and stdLib table entries for all methods. Fixed type normalization in genCallExpr to properly match Go type names to Rugby type names.
+
 ---
 
 ## Remaining Bugs
@@ -123,17 +126,6 @@ Full optional support now works:
 ### BUG-019: Pointer printing instead of values
 **File:** 08_modules.rg
 **Error:** Prints memory addresses instead of values when printing objects
-
----
-
-### BUG-022: String methods not implemented
-**File:** 12_strings.rg
-**Code:**
-```ruby
-greeting.contains?("World")
-```
-**Error:** `greeting.contains undefined (type string has no field or method contains)`
-**Expected:** String methods like `contains?`, `starts_with?`, etc. should work
 
 ---
 
@@ -171,11 +163,24 @@ wg = sync.WaitGroup.new
 
 ---
 
+### BUG-033: String positive indexing returns byte value instead of character
+**File:** 12_strings.rg
+**Code:**
+```ruby
+word = "Rugby"
+puts "word[0]: #{word[0]}"
+```
+**Actual Output:** `word[0]: 82` (byte value)
+**Expected:** `word[0]: R` (character)
+**Note:** Negative indexing works correctly (`word[-1]` returns `y`). Positive indexing goes through Go's native string indexing which returns bytes.
+
+---
+
 ## Priority Order for Remaining Fixes
 
 ### Medium Priority
-1. **BUG-022**: String methods
-2. **BUG-023**: Range.size method
+1. **BUG-023**: Range.size method
+2. **BUG-033**: String positive indexing
 
 ### Lower Priority
 3. **BUG-019**: Pointer printing

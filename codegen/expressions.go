@@ -1001,6 +1001,17 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		}
 
 		recvType := g.inferTypeFromExpr(fn.X)
+		// Normalize Go types to Rugby type names for stdLib lookup
+		lookupType := recvType
+		switch recvType {
+		case "int", "int64":
+			lookupType = "Int"
+		case "float64":
+			lookupType = "Float"
+		case "string":
+			lookupType = "String"
+		}
+
 		var methodDef MethodDef
 		found := false
 
@@ -1022,8 +1033,8 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			}
 		}
 
-		if recvType != "" {
-			if methods, ok := stdLib[recvType]; ok {
+		if lookupType != "" {
+			if methods, ok := stdLib[lookupType]; ok {
 				if def, ok := methods[fn.Sel]; ok {
 					methodDef = def
 					found = true

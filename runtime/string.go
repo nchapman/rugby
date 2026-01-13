@@ -90,9 +90,33 @@ func Capitalize(s string) string {
 }
 
 // StringContains returns true if the string contains the substring.
-// Ruby: str.include?(substr)
+// Ruby: str.include?(substr), str.contains?(substr)
 func StringContains(s, substr string) bool {
 	return strings.Contains(s, substr)
+}
+
+// StringStartsWith returns true if the string starts with the prefix.
+// Ruby: str.start_with?(prefix)
+func StringStartsWith(s, prefix string) bool {
+	return strings.HasPrefix(s, prefix)
+}
+
+// StringEndsWith returns true if the string ends with the suffix.
+// Ruby: str.end_with?(suffix)
+func StringEndsWith(s, suffix string) bool {
+	return strings.HasSuffix(s, suffix)
+}
+
+// StringEmpty returns true if the string is empty.
+// Ruby: str.empty?
+func StringEmpty(s string) bool {
+	return s == ""
+}
+
+// StringLines splits a string by newlines.
+// Ruby: str.lines
+func StringLines(s string) []string {
+	return strings.Split(s, "\n")
 }
 
 // Replace replaces all occurrences of old with new.
