@@ -27,10 +27,11 @@ Currently, codegen does too much: type inference, error checking, and generation
         - [x] Type mismatches (e.g., `Int + String`) - binary expression and comparison type checking.
     - Provides rich error messages with "Did you mean?" suggestions.
 
-- [ ] **Extended Type Checking** (Future)
-    - [ ] Unary expression type checking (`not 5` should error, `not` requires Bool).
-    - [ ] Composite type equality (arrays/maps of same element type should be comparable).
-    - [ ] Class/interface instance equality validation.
+- [x] **Extended Type Checking** ✅
+    - [x] Unary expression type checking (`not 5` errors, `not` requires Bool, `-` requires numeric).
+    - [x] Composite type equality (arrays/maps of same element type are comparable, different types error).
+    - [x] Class/interface instance equality validation (same class comparable, different classes error).
+    - [x] Class constructor type inference (`Dog.new()` returns `Dog` type).
 
 ## Phase 1.5: Testing & Development UX (Critical for Refactoring)
 

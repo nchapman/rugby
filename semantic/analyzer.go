@@ -880,7 +880,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 
 	case *ast.UnaryExpr:
 		operandType := a.analyzeExpr(e.Expr)
-		typ = a.inferUnaryType(e.Op, operandType)
+		typ = a.checkUnaryExpr(e.Op, operandType)
 
 	case *ast.CallExpr:
 		typ = a.analyzeCall(e)
@@ -1064,6 +1064,15 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 		}
 	}
 
+	// Check for class constructor call: ClassName.new(args)
+	if sel, ok := call.Func.(*ast.SelectorExpr); ok && sel.Sel == "new" {
+		if classIdent, ok := sel.X.(*ast.Ident); ok {
+			if _, isClass := a.classes[classIdent.Name]; isClass {
+				return NewClassType(classIdent.Name)
+			}
+		}
+	}
+
 	return TypeUnknownVal
 }
 
@@ -1228,6 +1237,34 @@ func (a *Analyzer) inferUnaryType(op string, operand *Type) *Type {
 		return TypeBoolVal
 	case "-":
 		return operand
+	default:
+		return TypeUnknownVal
+	}
+}
+
+// checkUnaryExpr validates the operand type for a unary expression and returns the result type.
+func (a *Analyzer) checkUnaryExpr(op string, operand *Type) *Type {
+	// Skip checking if operand type is unknown/any (can't validate)
+	if operand.Kind == TypeUnknown || operand.Kind == TypeAny {
+		return a.inferUnaryType(op, operand)
+	}
+
+	switch op {
+	case "not", "!":
+		// Logical not: operand must be Bool
+		if operand.Kind != TypeBool {
+			a.addError(&UnaryTypeMismatchError{Op: op, OperandType: operand, Expected: "Bool"})
+		}
+		return TypeBoolVal
+
+	case "-":
+		// Unary minus: operand must be numeric
+		if !a.isNumeric(operand) {
+			a.addError(&UnaryTypeMismatchError{Op: op, OperandType: operand, Expected: "numeric"})
+			return TypeUnknownVal
+		}
+		return operand
+
 	default:
 		return TypeUnknownVal
 	}

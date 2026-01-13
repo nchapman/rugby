@@ -749,23 +749,111 @@ func TestAnalyzeOperatorTypeMismatch(t *testing.T) {
 	}
 }
 
+func TestAnalyzeUnaryTypeMismatch(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantOp   string
+		wantErr  bool
+		expected string // expected type in error message
+	}{
+		// Logical not errors - 'not' requires Bool (parser converts 'not' to '!' in AST)
+		{"not int", `x = not 5`, "!", true, "Bool"},
+		{"not string", `x = not "hello"`, "!", true, "Bool"},
+		{"not float", `x = not 3.14`, "!", true, "Bool"},
+		{"not array", `x = not [1, 2, 3]`, "!", true, "Bool"},
+
+		// Unary minus errors - '-' requires numeric
+		{"minus string", `x = -"hello"`, "-", true, "numeric"},
+		{"minus bool", `x = -true`, "-", true, "numeric"},
+		{"minus array", `x = -[1, 2]`, "-", true, "numeric"},
+
+		// Valid operations - should NOT error
+		{"not bool", `x = not true`, "", false, ""},
+		{"not false", `x = not false`, "", false, ""},
+		{"minus int", `x = -5`, "", false, ""},
+		{"minus float", `x = -3.14`, "", false, ""},
+		{"minus int64", `def main
+  x : Int64 = 5
+  y = -x
+end`, "", false, ""},
+		{"double minus", `x = --5`, "", false, ""},
+		{"not not bool", `x = not not true`, "", false, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error for %q, got none", tt.input)
+					return
+				}
+				found := false
+				for _, err := range errs {
+					if unaryErr, ok := err.(*UnaryTypeMismatchError); ok {
+						if unaryErr.Op == tt.wantOp && unaryErr.Expected == tt.expected {
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					t.Errorf("expected UnaryTypeMismatchError for '%s' (expected %s), got: %v", tt.wantOp, tt.expected, errs)
+				}
+			} else {
+				if len(errs) > 0 {
+					t.Errorf("expected no errors, got: %v", errs)
+				}
+			}
+		})
+	}
+}
+
 func TestAnalyzeEqualityComparison(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
 		wantErr bool
 	}{
-		// Valid equality comparisons
+		// Valid equality comparisons - primitives
 		{"int equals int", `x = 1 == 2`, false},
 		{"string equals string", `x = "a" == "b"`, false},
 		{"bool equals bool", `x = true == false`, false},
 		{"int not-equals int", `x = 1 != 2`, false},
 		{"numeric mixed", `x = 1 == 2.0`, false}, // int and float are comparable
 
-		// Invalid equality comparisons
+		// Valid equality comparisons - arrays with same element type
+		{"int array equals int array", `x = [1, 2] == [3, 4]`, false},
+		{"string array equals string array", `x = ["a"] == ["b"]`, false},
+		{"nested int array", `x = [[1, 2], [3]] == [[4]]`, false},
+
+		// Valid equality comparisons - maps with same key/value types
+		{"string-int map equals", `x = {"a" => 1} == {"b" => 2}`, false},
+		{"int-string map equals", `x = {1 => "a"} == {2 => "b"}`, false},
+
+		// Invalid equality comparisons - primitives
 		{"int equals string", `x = 1 == "hello"`, true},
 		{"bool equals int", `x = true == 1`, true},
 		{"string equals bool", `x = "true" == true`, true},
+
+		// Invalid equality comparisons - arrays with different element types
+		{"int array equals string array", `x = [1, 2] == ["a", "b"]`, true},
+		{"bool array equals int array", `x = [true] == [1]`, true},
+
+		// Invalid equality comparisons - maps with different types
+		{"different key types", `x = {"a" => 1} == {1 => 1}`, true},
+		{"different value types", `x = {"a" => 1} == {"a" => "one"}`, true},
+
+		// Class instance equality (requires class definitions to be tested separately)
 	}
 
 	for _, tt := range tests {
@@ -781,6 +869,84 @@ func TestAnalyzeEqualityComparison(t *testing.T) {
 
 			if tt.wantErr && len(errs) == 0 {
 				t.Errorf("expected error for %q, got none", tt.input)
+			} else if !tt.wantErr && len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeClassInstanceEquality(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name: "same class instances comparable",
+			input: `class Dog
+  def initialize(name : String)
+    @name : String = name
+  end
+end
+
+def main
+  dog1 = Dog.new("Fido")
+  dog2 = Dog.new("Rex")
+  x = dog1 == dog2
+end`,
+			wantErr: false,
+		},
+		{
+			name: "different class instances not comparable",
+			input: `class Dog
+  def initialize(name : String)
+    @name : String = name
+  end
+end
+
+class Cat
+  def initialize(name : String)
+    @name : String = name
+  end
+end
+
+def main
+  dog = Dog.new("Fido")
+  cat = Cat.new("Whiskers")
+  x = dog == cat
+end`,
+			wantErr: true,
+		},
+		{
+			name: "class compared with primitive not comparable",
+			input: `class Dog
+  def initialize(name : String)
+    @name : String = name
+  end
+end
+
+def main
+  dog = Dog.new("Fido")
+  x = dog == "hello"
+end`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr && len(errs) == 0 {
+				t.Errorf("expected error, got none")
 			} else if !tt.wantErr && len(errs) > 0 {
 				t.Errorf("expected no errors, got: %v", errs)
 			}

@@ -142,3 +142,20 @@ func (e *OperatorTypeMismatchError) Error() string {
 	}
 	return msg
 }
+
+// UnaryTypeMismatchError reports a type error in a unary expression.
+type UnaryTypeMismatchError struct {
+	Op          string
+	OperandType *Type
+	Expected    string // e.g., "Bool", "numeric"
+	Line        int
+	Column      int
+}
+
+func (e *UnaryTypeMismatchError) Error() string {
+	msg := fmt.Sprintf("cannot use '%s' with type %s (expected %s)", e.Op, e.OperandType, e.Expected)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
