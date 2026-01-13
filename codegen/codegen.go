@@ -260,9 +260,48 @@ func isValueTypeOptional(t string) bool {
 	return valueTypes[base]
 }
 
+// typeKindToRugby converts a TypeKind to a Rugby type string.
+// Returns empty string for TypeClass (class names vary) and TypeUnknown,
+// which signals the caller to fall back to AST-based inference.
+func typeKindToRugby(kind TypeKind) string {
+	switch kind {
+	case TypeInt:
+		return "Int"
+	case TypeInt64:
+		return "Int64"
+	case TypeFloat:
+		return "Float"
+	case TypeBool:
+		return "Bool"
+	case TypeString:
+		return "String"
+	case TypeNil:
+		return "Nil"
+	case TypeArray:
+		return "Array"
+	case TypeMap:
+		return "Map"
+	case TypeClass:
+		return "" // Class names are dynamic, fall back to AST inference
+	default:
+		return ""
+	}
+}
+
 // inferTypeFromExpr attempts to infer the type from an expression
 // Returns the inferred type or empty string if unknown
 func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
+	// First try semantic type info if available
+	if g.typeInfo != nil {
+		kind := g.typeInfo.GetTypeKind(expr)
+		if kind != TypeUnknown {
+			if rubyType := typeKindToRugby(kind); rubyType != "" {
+				return rubyType
+			}
+		}
+	}
+
+	// Fall back to AST-based inference
 	switch e := expr.(type) {
 	case *ast.CallExpr:
 		if sel, ok := e.Func.(*ast.SelectorExpr); ok {

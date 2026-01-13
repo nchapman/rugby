@@ -2161,6 +2161,30 @@ end`
 	assertNotContains(t, output, `map[any]any`)
 }
 
+func TestTypeInfoForVariableAssignments(t *testing.T) {
+	// Test that semantic type info enables proper type inference for function call results.
+	// The key test is that with type info, later operations on the variable use the
+	// correct type, enabling optimizations like direct comparison.
+	input := `def get_count() -> Int
+  return 42
+end
+
+def main
+  count = get_count()
+  same = count == 42
+end`
+
+	// With type info: count is known to be Int, so == uses direct comparison
+	outputWithTypeInfo := compileWithTypeInfo(t, input)
+	assertContains(t, outputWithTypeInfo, `count := getCount()`)
+	assertContains(t, outputWithTypeInfo, `same := (count == 42)`)
+
+	// Without type info: count type is unknown, so == uses runtime.Equal
+	outputWithoutTypeInfo := compile(t, input)
+	assertContains(t, outputWithoutTypeInfo, `count := getCount()`)
+	assertContains(t, outputWithoutTypeInfo, `runtime.Equal(count, 42)`)
+}
+
 func TestMixedTypeArrayFallsBackToAny(t *testing.T) {
 	// Without type info, mixed types can't be statically determined
 	input := `def main
