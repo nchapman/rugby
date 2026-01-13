@@ -68,105 +68,25 @@ Testing generated string output is fragile, and single-error stopping slows down
     - [x] Added `synchronize()` and `syncToEnd()` utilities for future recovery improvements.
     - [x] Test added verifying multiple errors reported in one parse pass.
 
-## Phase 1.75: Error Experience (Rust/Elm-Quality Errors)
+## Phase 1.75: Error Experience ✅
 
-Goal: Compiler errors should be helpful teachers, not cryptic complaints. Inspired by Rust and Elm's famously friendly error messages.
+Compiler errors display with source context, colors, and precise locations.
 
-### Error Rendering System ✅
+- [x] Source context: 1-3 lines of code with line numbers
+- [x] Colored output with TTY detection and `NO_COLOR` support
+- [x] `--color=always|never|auto` flag
+- [x] Underlines (`^~~~`) pointing to error location
+- [x] "Did you mean?" suggestions for typos
 
-- [x] **Source Context Display**
-    - [x] Store source code reference in compiler context (pass through lexer → parser → semantic).
-    - [x] Display 1-3 lines of source code with each error.
-    - [x] Show line numbers in left gutter (dimmed).
-    - [x] Handle edge cases: first/last lines, very long lines (truncate with `...`).
-
-- [x] **Precise Error Spans**
-    - [x] Audit AST nodes to ensure all have start position (Line, Column).
-    - [ ] Add end position (EndLine, EndColumn) to AST nodes that span multiple tokens.
-    - [ ] Update lexer to track token end positions.
-    - [x] Render underlines (`^~~~`) or carets (`^`) pointing to exact error location.
-    - [ ] Support multi-line spans for things like unclosed blocks.
-
-- [x] **Terminal Formatting**
-    - [x] Create `errors/formatter.go` with `FormatError(err, source) string`.
-    - [x] Add color support (detect TTY, respect `NO_COLOR` env var):
-        - Red: error header and primary underline.
-        - Cyan: help suggestions.
-        - Yellow: warnings.
-        - Blue: notes and secondary locations.
-        - Dim: line numbers, context lines.
-    - [x] Bold for error message text.
-    - [x] Support `--color=always|never|auto` flag.
-
-### Rich Error Information
-
-- [ ] **Multi-Part Error Messages**
-    - [ ] Primary message: What went wrong.
-    - [ ] Secondary locations: "note: `x` was declared here" with source snippet.
-    - [ ] Help text: Actionable suggestion for how to fix.
-    - [ ] Update error structs to support `Notes []Note` and `Help string` fields.
-
-- [ ] **Contextual Help Suggestions**
-    - [ ] Type mismatches: "help: consider converting with `.to_i` or `.to_s`".
-    - [ ] Missing methods: "help: did you forget to define `initialize`?".
-    - [ ] Wrong argument count: "help: this function expects 2 arguments: `(name: String, age: Int)`".
-    - [ ] Undefined with typo: "help: a variable with a similar name exists: `username`" (already partial).
-    - [ ] Missing return: "help: add `-> ReturnType` to function signature or remove `return`".
-    - [ ] Optional misuse: "help: use `value?` to unwrap or `value ?? default` for fallback".
-
-- [ ] **"Did You Mean?" Enhancements**
-    - [ ] Improve Levenshtein distance threshold based on identifier length.
-    - [ ] Consider scope (prefer suggestions from current/parent scope over globals).
-    - [ ] Suggest methods when calling undefined function on a typed value.
-    - [ ] Suggest imports when using undefined types that exist in stdlib.
-
-### Error Codes & Documentation
-
-- [ ] **Error Code System**
-    - [ ] Assign unique codes to each error type (e.g., `E001`, `E002`).
-    - [ ] Display code in error output: `error[E042]: type mismatch`.
-    - [ ] Create `--explain E042` flag to show detailed explanation.
-    - [ ] Generate error index documentation (for website/docs).
-
-- [ ] **Detailed Explanations**
-    - [ ] Write extended explanations for each error code.
-    - [ ] Include: why this is an error, common causes, examples of fixes.
-    - [ ] Link to relevant language documentation.
-
-### Error Aggregation & Prioritization
-
-- [ ] **Smart Error Limiting**
-    - [ ] Limit to N errors per file (default 10), with "and N more errors" summary.
-    - [ ] Prioritize errors: syntax errors first, then semantic, then warnings.
-    - [ ] Deduplicate cascading errors (e.g., undefined variable used 10 times → 1 error).
-
-- [ ] **Related Error Grouping**
-    - [ ] Group errors by location (same function/class).
-    - [ ] Identify and suppress cascading errors caused by earlier errors.
-    - [ ] "Fix this first" hints for errors that likely cause others.
-
-### Example Target Output
-
+Example output:
 ```
-error[E023]: type mismatch in argument
-  --> src/main.rg:15:12
+error: undefined: 'username' (did you mean 'user_name'?)
+  --> src/main.rg:15:5
    |
 14 |   user = find_user(name)
-15 |   greet(user.age)
-   |         ^^^^^^^^
-   |         |
-   |         expected String, found Int
-   |
-note: function `greet` defined here
-  --> src/main.rg:3:1
-   |
- 3 | def greet(name : String)
-   | ^^^^^^^^^^^^^^^^^^^^^^^^
-   |
-help: convert Int to String with `.to_s`
-   |
-15 |   greet(user.age.to_s)
-   |                 +++++
+15 |   puts username
+   |        ^^^^^^^^
+16 | end
 ```
 
 ## Phase 2: Architecture & Maintainability
