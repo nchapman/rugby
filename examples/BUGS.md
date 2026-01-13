@@ -15,7 +15,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 01_hello.rg | ✅ PASS | None |
 | 02_types.rg | ✅ PASS | Int/Float methods now work |
 | 03_control_flow.rg | ✅ PASS | None |
-| 04_loops.rg | ❌ FAIL | Predicate methods on arrays (any?, empty?) |
+| 04_loops.rg | ✅ PASS | Predicate methods on arrays now work |
 | 05_functions.rg | ✅ PASS | Optional return types now work |
 | 06_classes.rg | ✅ PASS | Subclass constructors, method calls without parens now work |
 | 07_interfaces.rg | ✅ PASS | Interface structural typing now works |
@@ -104,21 +104,12 @@ Method parameters with class types are now correctly generated as pointer types 
 ### ~~BUG-032: Embedded struct field access~~ ✅ FIXED
 Instance variables accessed in subclasses now correctly use the underscore prefix from parent class accessor fields, fixing issues where `@name` would resolve to a method value instead of the actual field value.
 
+### ~~BUG-017: Predicate methods on arrays~~ ✅ FIXED
+Array methods `any?`, `empty?`, `shift`, and `pop` now work correctly. `any?` returns true if the array has any elements, `empty?` returns the opposite. `shift` removes and returns the first element, `pop` removes and returns the last element. These methods correctly modify the underlying array via pointer semantics.
+
 ---
 
 ## Remaining Bugs
-
-### BUG-017: Predicate methods on arrays
-**File:** 04_loops.rg
-**Code:**
-```ruby
-items = [1, 2, 3]
-puts items.shift while items.any?
-```
-**Error:** `items.any undefined (type []int has no field or method any)`
-**Expected:** `any?` and `empty?` should work on arrays
-
----
 
 ### BUG-019: Pointer printing instead of values
 **File:** 08_modules.rg
@@ -188,13 +179,12 @@ wg = sync.WaitGroup.new
 ## Priority Order for Remaining Fixes
 
 ### High Priority
-1. **BUG-017**: Predicate methods on arrays
-2. **BUG-020**: "if let" pattern
+1. **BUG-020**: "if let" pattern
 
 ### Medium Priority
-3. **BUG-022**: String methods
-4. **BUG-023**: Range.size method
+2. **BUG-022**: String methods
+3. **BUG-023**: Range.size method
 
 ### Lower Priority
-5. **BUG-019**: Pointer printing
-6. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
+4. **BUG-019**: Pointer printing
+5. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new

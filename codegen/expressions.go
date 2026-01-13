@@ -861,6 +861,122 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			return
 		}
 
+		// Handle array/slice method calls FIRST, before stdLib lookup
+		recvTypeForArray := g.inferTypeFromExpr(fn.X)
+		if strings.HasPrefix(recvTypeForArray, "[]") || recvTypeForArray == "Array" || strings.HasPrefix(recvTypeForArray, "Array[") {
+			elemType := g.inferArrayElementGoType(fn.X)
+			switch fn.Sel {
+			case "any?":
+				// any? without a block returns true if array has any elements
+				g.buf.WriteString("(len(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(") > 0)")
+				return
+			case "empty?":
+				// empty? returns true if array has no elements
+				g.buf.WriteString("(len(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(") == 0)")
+				return
+			case "shift":
+				// shift removes and returns the first element, needs pointer
+				g.needsRuntime = true
+				switch elemType {
+				case "int":
+					g.buf.WriteString("runtime.ShiftInt(&")
+				case "string":
+					g.buf.WriteString("runtime.ShiftString(&")
+				case "float64":
+					g.buf.WriteString("runtime.ShiftFloat(&")
+				default:
+					g.buf.WriteString("runtime.ShiftAny(&")
+				}
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			case "pop":
+				// pop removes and returns the last element, needs pointer
+				g.needsRuntime = true
+				switch elemType {
+				case "int":
+					g.buf.WriteString("runtime.PopInt(&")
+				case "string":
+					g.buf.WriteString("runtime.PopString(&")
+				case "float64":
+					g.buf.WriteString("runtime.PopFloat(&")
+				default:
+					g.buf.WriteString("runtime.PopAny(&")
+				}
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			case "sum":
+				g.needsRuntime = true
+				if elemType == "float64" {
+					g.buf.WriteString("runtime.SumFloat(")
+				} else {
+					g.buf.WriteString("runtime.SumInt(")
+				}
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			case "min":
+				g.needsRuntime = true
+				if elemType == "float64" {
+					g.buf.WriteString("runtime.MinFloatPtr(")
+				} else {
+					g.buf.WriteString("runtime.MinIntPtr(")
+				}
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			case "max":
+				g.needsRuntime = true
+				if elemType == "float64" {
+					g.buf.WriteString("runtime.MaxFloatPtr(")
+				} else {
+					g.buf.WriteString("runtime.MaxIntPtr(")
+				}
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			case "first":
+				g.needsRuntime = true
+				g.buf.WriteString("runtime.FirstPtr(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			case "last":
+				g.needsRuntime = true
+				g.buf.WriteString("runtime.LastPtr(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			case "sorted":
+				g.needsRuntime = true
+				g.buf.WriteString("runtime.Sort(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			case "include?", "contains?":
+				g.needsRuntime = true
+				g.buf.WriteString("runtime.Contains(")
+				g.genExpr(fn.X)
+				if len(call.Args) > 0 {
+					g.buf.WriteString(", ")
+					g.genExpr(call.Args[0])
+				}
+				g.buf.WriteString(")")
+				return
+			case "length", "size":
+				// Array length uses Go's built-in len()
+				g.buf.WriteString("len(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			}
+		}
+
 		recvType := g.inferTypeFromExpr(fn.X)
 		var methodDef MethodDef
 		found := false
@@ -1726,10 +1842,10 @@ func (g *Generator) genArrayPropertyMethod(sel *ast.SelectorExpr) bool {
 	elemType := g.inferArrayElementGoType(sel.X)
 
 	// Handle array property methods
-	if strings.HasPrefix(receiverType, "[]") || receiverType == "Array" {
-		g.needsRuntime = true
+	if strings.HasPrefix(receiverType, "[]") || receiverType == "Array" || strings.HasPrefix(receiverType, "Array[") {
 		switch sel.Sel {
 		case "sum":
+			g.needsRuntime = true
 			if elemType == "float64" {
 				g.buf.WriteString("runtime.SumFloat(")
 			} else {
@@ -1739,6 +1855,7 @@ func (g *Generator) genArrayPropertyMethod(sel *ast.SelectorExpr) bool {
 			g.buf.WriteString(")")
 			return true
 		case "min":
+			g.needsRuntime = true
 			// Use Ptr versions that return *T for optional coalescing
 			if elemType == "float64" {
 				g.buf.WriteString("runtime.MinFloatPtr(")
@@ -1749,6 +1866,7 @@ func (g *Generator) genArrayPropertyMethod(sel *ast.SelectorExpr) bool {
 			g.buf.WriteString(")")
 			return true
 		case "max":
+			g.needsRuntime = true
 			if elemType == "float64" {
 				g.buf.WriteString("runtime.MaxFloatPtr(")
 			} else {
@@ -1758,17 +1876,64 @@ func (g *Generator) genArrayPropertyMethod(sel *ast.SelectorExpr) bool {
 			g.buf.WriteString(")")
 			return true
 		case "first":
+			g.needsRuntime = true
 			g.buf.WriteString("runtime.FirstPtr(")
 			g.genExpr(sel.X)
 			g.buf.WriteString(")")
 			return true
 		case "last":
+			g.needsRuntime = true
 			g.buf.WriteString("runtime.LastPtr(")
 			g.genExpr(sel.X)
 			g.buf.WriteString(")")
 			return true
 		case "sorted":
+			g.needsRuntime = true
 			g.buf.WriteString("runtime.Sort(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		case "any?":
+			// any? without a block returns true if array has any elements
+			g.buf.WriteString("(len(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(") > 0)")
+			return true
+		case "empty?":
+			// empty? returns true if array has no elements
+			g.buf.WriteString("(len(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(") == 0)")
+			return true
+		case "shift":
+			// shift removes and returns the first element, needs pointer
+			g.needsRuntime = true
+			switch elemType {
+			case "int":
+				g.buf.WriteString("runtime.ShiftInt(&")
+			case "string":
+				g.buf.WriteString("runtime.ShiftString(&")
+			case "float64":
+				g.buf.WriteString("runtime.ShiftFloat(&")
+			default:
+				g.buf.WriteString("runtime.ShiftAny(&")
+			}
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		case "pop":
+			// pop removes and returns the last element, needs pointer
+			g.needsRuntime = true
+			switch elemType {
+			case "int":
+				g.buf.WriteString("runtime.PopInt(&")
+			case "string":
+				g.buf.WriteString("runtime.PopString(&")
+			case "float64":
+				g.buf.WriteString("runtime.PopFloat(&")
+			default:
+				g.buf.WriteString("runtime.PopAny(&")
+			}
 			g.genExpr(sel.X)
 			g.buf.WriteString(")")
 			return true

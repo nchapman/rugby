@@ -1373,3 +1373,171 @@ func TestCallMethod_NotFound(t *testing.T) {
 	}()
 	CallMethod(obj, "nonexistent_method")
 }
+
+func TestShift(t *testing.T) {
+	// Generic Shift
+	arr := []int{1, 2, 3}
+	val, ok := Shift(&arr)
+	if !ok || val != 1 {
+		t.Errorf("Shift: got %d, ok=%v, want 1, ok=true", val, ok)
+	}
+	if !reflect.DeepEqual(arr, []int{2, 3}) {
+		t.Errorf("Shift: remaining %v, want [2 3]", arr)
+	}
+
+	// Empty slice
+	empty := []int{}
+	val, ok = Shift(&empty)
+	if ok {
+		t.Errorf("Shift empty: ok=%v, want false", ok)
+	}
+
+	// Single element
+	single := []string{"only"}
+	strVal, strOk := Shift(&single)
+	if !strOk || strVal != "only" || len(single) != 0 {
+		t.Errorf("Shift single: got %q, remaining %v", strVal, single)
+	}
+}
+
+func TestShiftInt(t *testing.T) {
+	arr := []int{10, 20, 30}
+	val := ShiftInt(&arr)
+	if val != 10 {
+		t.Errorf("ShiftInt: got %d, want 10", val)
+	}
+	if !reflect.DeepEqual(arr, []int{20, 30}) {
+		t.Errorf("ShiftInt: remaining %v, want [20 30]", arr)
+	}
+
+	// Empty returns zero
+	empty := []int{}
+	val = ShiftInt(&empty)
+	if val != 0 {
+		t.Errorf("ShiftInt empty: got %d, want 0", val)
+	}
+}
+
+func TestShiftString(t *testing.T) {
+	arr := []string{"a", "b", "c"}
+	val := ShiftString(&arr)
+	if val != "a" {
+		t.Errorf("ShiftString: got %q, want 'a'", val)
+	}
+	if !reflect.DeepEqual(arr, []string{"b", "c"}) {
+		t.Errorf("ShiftString: remaining %v, want ['b' 'c']", arr)
+	}
+
+	// Empty returns empty string
+	empty := []string{}
+	val = ShiftString(&empty)
+	if val != "" {
+		t.Errorf("ShiftString empty: got %q, want ''", val)
+	}
+}
+
+func TestShiftFloat(t *testing.T) {
+	arr := []float64{1.1, 2.2, 3.3}
+	val := ShiftFloat(&arr)
+	if val != 1.1 {
+		t.Errorf("ShiftFloat: got %f, want 1.1", val)
+	}
+	if !reflect.DeepEqual(arr, []float64{2.2, 3.3}) {
+		t.Errorf("ShiftFloat: remaining %v, want [2.2 3.3]", arr)
+	}
+}
+
+func TestShiftAny(t *testing.T) {
+	arr := []any{1, "two", 3.0}
+	val := ShiftAny(&arr)
+	if val != 1 {
+		t.Errorf("ShiftAny: got %v, want 1", val)
+	}
+	if len(arr) != 2 {
+		t.Errorf("ShiftAny: remaining length %d, want 2", len(arr))
+	}
+}
+
+func TestPop(t *testing.T) {
+	// Generic Pop
+	arr := []int{1, 2, 3}
+	val, ok := Pop(&arr)
+	if !ok || val != 3 {
+		t.Errorf("Pop: got %d, ok=%v, want 3, ok=true", val, ok)
+	}
+	if !reflect.DeepEqual(arr, []int{1, 2}) {
+		t.Errorf("Pop: remaining %v, want [1 2]", arr)
+	}
+
+	// Empty slice
+	empty := []int{}
+	val, ok = Pop(&empty)
+	if ok {
+		t.Errorf("Pop empty: ok=%v, want false", ok)
+	}
+
+	// Single element
+	single := []string{"only"}
+	strVal, strOk := Pop(&single)
+	if !strOk || strVal != "only" || len(single) != 0 {
+		t.Errorf("Pop single: got %q, remaining %v", strVal, single)
+	}
+}
+
+func TestPopInt(t *testing.T) {
+	arr := []int{10, 20, 30}
+	val := PopInt(&arr)
+	if val != 30 {
+		t.Errorf("PopInt: got %d, want 30", val)
+	}
+	if !reflect.DeepEqual(arr, []int{10, 20}) {
+		t.Errorf("PopInt: remaining %v, want [10 20]", arr)
+	}
+
+	// Empty returns zero
+	empty := []int{}
+	val = PopInt(&empty)
+	if val != 0 {
+		t.Errorf("PopInt empty: got %d, want 0", val)
+	}
+}
+
+func TestPopString(t *testing.T) {
+	arr := []string{"a", "b", "c"}
+	val := PopString(&arr)
+	if val != "c" {
+		t.Errorf("PopString: got %q, want 'c'", val)
+	}
+	if !reflect.DeepEqual(arr, []string{"a", "b"}) {
+		t.Errorf("PopString: remaining %v, want ['a' 'b']", arr)
+	}
+
+	// Empty returns empty string
+	empty := []string{}
+	val = PopString(&empty)
+	if val != "" {
+		t.Errorf("PopString empty: got %q, want ''", val)
+	}
+}
+
+func TestPopFloat(t *testing.T) {
+	arr := []float64{1.1, 2.2, 3.3}
+	val := PopFloat(&arr)
+	if val != 3.3 {
+		t.Errorf("PopFloat: got %f, want 3.3", val)
+	}
+	if !reflect.DeepEqual(arr, []float64{1.1, 2.2}) {
+		t.Errorf("PopFloat: remaining %v, want [1.1 2.2]", arr)
+	}
+}
+
+func TestPopAny(t *testing.T) {
+	arr := []any{1, "two", 3.0}
+	val := PopAny(&arr)
+	if val != 3.0 {
+		t.Errorf("PopAny: got %v, want 3.0", val)
+	}
+	if len(arr) != 2 {
+		t.Errorf("PopAny: remaining length %d, want 2", len(arr))
+	}
+}

@@ -503,6 +503,112 @@ func Sample[T any](slice []T) (T, bool) {
 	return slice[rand.Intn(len(slice))], true
 }
 
+// Shift removes and returns the first element of the slice.
+// Modifies the original slice in place via pointer.
+// Ruby: arr.shift
+func Shift[T any](slice *[]T) (T, bool) {
+	if len(*slice) == 0 {
+		var zero T
+		return zero, false
+	}
+	first := (*slice)[0]
+	*slice = (*slice)[1:]
+	return first, true
+}
+
+// ShiftInt removes and returns the first element of an int slice.
+func ShiftInt(slice *[]int) int {
+	if len(*slice) == 0 {
+		return 0
+	}
+	first := (*slice)[0]
+	*slice = (*slice)[1:]
+	return first
+}
+
+// ShiftString removes and returns the first element of a string slice.
+func ShiftString(slice *[]string) string {
+	if len(*slice) == 0 {
+		return ""
+	}
+	first := (*slice)[0]
+	*slice = (*slice)[1:]
+	return first
+}
+
+// ShiftFloat removes and returns the first element of a float64 slice.
+func ShiftFloat(slice *[]float64) float64 {
+	if len(*slice) == 0 {
+		return 0
+	}
+	first := (*slice)[0]
+	*slice = (*slice)[1:]
+	return first
+}
+
+// ShiftAny removes and returns the first element of an any slice.
+func ShiftAny(slice *[]any) any {
+	if len(*slice) == 0 {
+		return nil
+	}
+	first := (*slice)[0]
+	*slice = (*slice)[1:]
+	return first
+}
+
+// Pop removes and returns the last element of the slice.
+// Modifies the original slice in place via pointer.
+// Ruby: arr.pop
+func Pop[T any](slice *[]T) (T, bool) {
+	if len(*slice) == 0 {
+		var zero T
+		return zero, false
+	}
+	last := (*slice)[len(*slice)-1]
+	*slice = (*slice)[:len(*slice)-1]
+	return last, true
+}
+
+// PopInt removes and returns the last element of an int slice.
+func PopInt(slice *[]int) int {
+	if len(*slice) == 0 {
+		return 0
+	}
+	last := (*slice)[len(*slice)-1]
+	*slice = (*slice)[:len(*slice)-1]
+	return last
+}
+
+// PopString removes and returns the last element of a string slice.
+func PopString(slice *[]string) string {
+	if len(*slice) == 0 {
+		return ""
+	}
+	last := (*slice)[len(*slice)-1]
+	*slice = (*slice)[:len(*slice)-1]
+	return last
+}
+
+// PopFloat removes and returns the last element of a float64 slice.
+func PopFloat(slice *[]float64) float64 {
+	if len(*slice) == 0 {
+		return 0
+	}
+	last := (*slice)[len(*slice)-1]
+	*slice = (*slice)[:len(*slice)-1]
+	return last
+}
+
+// PopAny removes and returns the last element of an any slice.
+func PopAny(slice *[]any) any {
+	if len(*slice) == 0 {
+		return nil
+	}
+	last := (*slice)[len(*slice)-1]
+	*slice = (*slice)[:len(*slice)-1]
+	return last
+}
+
 // FirstN returns the first n elements.
 func FirstN[T any](slice []T, n int) []T {
 	if n <= 0 {
