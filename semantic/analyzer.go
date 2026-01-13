@@ -746,6 +746,19 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 				}
 			}
 		}
+	} else {
+		// For Go interop or unknown types, define all variables with unknown types.
+		// This supports patterns like: result, err = strconv.Atoi("123")
+		// where we don't know the exact return types but need to allow multi-value assignment.
+		for _, name := range s.Names {
+			if name == "_" {
+				continue
+			}
+			existing := a.scope.LookupLocal(name)
+			if existing == nil {
+				_ = a.scope.DefineOrShadow(NewVariable(name, TypeAnyVal))
+			}
+		}
 	}
 }
 

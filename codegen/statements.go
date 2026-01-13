@@ -297,8 +297,12 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 	g.writeIndent()
 
 	// Check if any names are new declarations
+	// Skip blank identifier (_) as it doesn't affect declaration status
 	allDeclared := true
 	for _, name := range s.Names {
+		if name == "_" {
+			continue
+		}
 		if !g.isDeclared(name) {
 			allDeclared = false
 			break

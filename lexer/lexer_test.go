@@ -1632,3 +1632,35 @@ func TestStringInterpolationWithNestedQuotes(t *testing.T) {
 		}
 	}
 }
+
+func TestBlankIdentifier(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []token.TokenType
+	}{
+		{"_", []token.TokenType{token.IDENT}},
+		{"_, err", []token.TokenType{token.IDENT, token.COMMA, token.IDENT}},
+		{"_foo", []token.TokenType{token.IDENT}},
+		{"_, _ = x, y", []token.TokenType{token.IDENT, token.COMMA, token.IDENT, token.ASSIGN, token.IDENT, token.COMMA, token.IDENT}},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		for i, exp := range tt.expected {
+			tok := l.NextToken()
+			if tok.Type != exp {
+				t.Errorf("input %q: token[%d] wrong type. expected=%q, got=%q", tt.input, i, exp, tok.Type)
+			}
+		}
+	}
+
+	// Verify standalone _ is correctly identified
+	l := New("_")
+	tok := l.NextToken()
+	if tok.Type != token.IDENT {
+		t.Errorf("expected IDENT for '_', got %v", tok.Type)
+	}
+	if tok.Literal != "_" {
+		t.Errorf("expected literal '_', got %q", tok.Literal)
+	}
+}

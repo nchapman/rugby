@@ -35,7 +35,7 @@ func allExamples() []example {
 		{file: "11_errors.rg", hasBugs: true},      // os.ReadFile multi-value return
 		{file: "12_strings.rg", hasBugs: true},     // string methods (contains?, etc.)
 		{file: "13_ranges.rg", hasBugs: true},      // range.size method
-		{file: "14_go_interop.rg", hasBugs: true},  // multi-value assignment (err undefined)
+		{file: "14_go_interop.rg"},                 // multi-value Go function returns now work
 		{file: "15_concurrency.rg", hasBugs: true}, // Chan generic syntax, sync.WaitGroup.new
 
 		// Legacy working examples

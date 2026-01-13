@@ -25,7 +25,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 11_errors.rg | ❌ FAIL | os.ReadFile multi-value return issues |
 | 12_strings.rg | ❌ FAIL | String methods (contains?, etc.) |
 | 13_ranges.rg | ❌ FAIL | Range.size method not implemented |
-| 14_go_interop.rg | ❌ FAIL | Multi-value assignment (err undefined) |
+| 14_go_interop.rg | ✅ PASS | Multi-value Go function returns now work |
 | 15_concurrency.rg | ❌ FAIL | Chan generic syntax, sync.WaitGroup.new |
 
 ---
@@ -77,6 +77,9 @@ Range indexing now slices arrays and strings.
 ### ~~BUG-008: Interface structural typing~~ ✅ FIXED
 Classes now satisfy interfaces structurally. Interface methods are generated with PascalCase for Go compatibility. Type assertions (`is_a?` and `as`) work correctly on concrete types.
 
+### ~~BUG-021: Multi-value Go function returns~~ ✅ FIXED
+Underscore (`_`) is now recognized as a valid identifier, allowing patterns like `_, err = os.ReadFile(...)`. Multi-value assignments from Go functions now work correctly. Unknown types in multi-assignment are given `any` type.
+
 ---
 
 ## Remaining Bugs
@@ -125,16 +128,6 @@ end
 
 ---
 
-### BUG-021: Multi-value Go function returns
-**File:** 11_errors.rg, 14_go_interop.rg
-**Code:**
-```ruby
-_, read_err = os.read_file("/nonexistent/file")
-```
-**Error:** `assignment mismatch` or `undefined: 'err'`
-**Expected:** Go functions returning multiple values should work
-
----
 
 ### BUG-022: String methods not implemented
 **File:** 12_strings.rg
@@ -184,15 +177,14 @@ wg = sync.WaitGroup.new
 ## Priority Order for Remaining Fixes
 
 ### High Priority
-1. **BUG-021**: Multi-value Go function returns - essential for Go interop
-2. **BUG-018**: Missing return detection - common pattern
+1. **BUG-018**: Missing return detection - common pattern
 
 ### Medium Priority
-3. **BUG-017**: Predicate methods on arrays
-4. **BUG-020**: "if let" pattern
-5. **BUG-022**: String methods
-6. **BUG-023**: Range.size method
+2. **BUG-017**: Predicate methods on arrays
+3. **BUG-020**: "if let" pattern
+4. **BUG-022**: String methods
+5. **BUG-023**: Range.size method
 
 ### Lower Priority
-7. **BUG-019**: Pointer printing
-8. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
+6. **BUG-019**: Pointer printing
+7. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new

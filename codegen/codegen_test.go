@@ -4075,6 +4075,36 @@ end`
 	assertContains(t, output, `a, b, c := getTriple()`)
 }
 
+func TestMultiAssignmentWithBlankIdentifier(t *testing.T) {
+	input := `def main
+  _, err = get_data()
+  puts err
+end
+
+def get_data() -> (Int, Bool)
+  return 42, true
+end`
+
+	output := compile(t, input)
+
+	// Should preserve blank identifier
+	assertContains(t, output, `_, err := getData()`)
+}
+
+func TestMultiAssignmentBlankIdentifierGoInterop(t *testing.T) {
+	input := `import strconv
+
+def main
+  _, err = strconv.Atoi("123")
+  puts err
+end`
+
+	output := compile(t, input)
+
+	// Should preserve blank identifier for Go interop
+	assertContains(t, output, `_, err := strconv.Atoi("123")`)
+}
+
 func TestOptionalMethodOk(t *testing.T) {
 	input := `def check(opt : Int?) -> Bool
   return opt.ok?
