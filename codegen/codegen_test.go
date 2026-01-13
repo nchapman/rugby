@@ -425,6 +425,14 @@ func (t *testTypeInfoAdapter) GetGoType(node ast.Node) string {
 	return typ.GoType()
 }
 
+func (t *testTypeInfoAdapter) GetRugbyType(node ast.Node) string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return ""
+	}
+	return typ.String()
+}
+
 func assertContains(t *testing.T, output, substr string) {
 	if !strings.Contains(output, substr) {
 		t.Errorf("expected output to contain %q, got:\n%s", substr, output)
@@ -965,9 +973,9 @@ end`
 
 	output := compile(t, input)
 
-	// Ternary with method calls in branches
-	assertContains(t, output, `return list.first`)
-	assertContains(t, output, `return list.last`)
+	// Ternary with method calls in branches - first/last are runtime functions
+	assertContains(t, output, `return runtime.First(list)`)
+	assertContains(t, output, `return runtime.Last(list)`)
 }
 
 func TestGenerateMapLiteral(t *testing.T) {
@@ -1124,7 +1132,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Reduce(nums, 0, func(acc any, n any) (any, bool) {`)
+	// With type inference, acc is typed based on initial value (int)
+	assertContains(t, output, `runtime.Reduce(nums, 0, func(acc int, n any) (int, bool) {`)
 	assertContains(t, output, `return (acc + n), true`)
 }
 
@@ -1137,7 +1146,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Find(nums, func(n any) (bool, bool) {`)
+	// FindPtr returns *T for optional coalescing support
+	assertContains(t, output, `runtime.FindPtr(nums, func(n any) (bool, bool) {`)
 	assertContains(t, output, `return runtime.Equal((n % 2), 0), true`)
 }
 
@@ -4138,7 +4148,7 @@ end`
 func TestAccessorGetter(t *testing.T) {
 	input := `pub class User
   getter name : String
-  
+
   def initialize(@name : String)
   end
 end
@@ -4148,17 +4158,17 @@ end`
 
 	output := compile(t, input)
 
-	// Should have the field in the struct
-	assertContains(t, output, "name string")
+	// Should have the field in the struct (with underscore prefix for accessors)
+	assertContains(t, output, "_name string")
 	// Should have a getter method
 	assertContains(t, output, "func (u *User) Name() string {")
-	assertContains(t, output, "return u.name")
+	assertContains(t, output, "return u._name")
 }
 
 func TestAccessorSetter(t *testing.T) {
 	input := `pub class User
   setter email : String
-  
+
   def initialize(@email : String)
   end
 end
@@ -4168,17 +4178,17 @@ end`
 
 	output := compile(t, input)
 
-	// Should have the field in the struct
-	assertContains(t, output, "email string")
+	// Should have the field in the struct (with underscore prefix for accessors)
+	assertContains(t, output, "_email string")
 	// Should have a setter method
 	assertContains(t, output, "func (u *User) SetEmail(v string) {")
-	assertContains(t, output, "u.email = v")
+	assertContains(t, output, "u._email = v")
 }
 
 func TestAccessorProperty(t *testing.T) {
 	input := `pub class Counter
   property value : Int
-  
+
   def initialize(@value : Int)
   end
 end
@@ -4188,13 +4198,13 @@ end`
 
 	output := compile(t, input)
 
-	// Should have the field in the struct
-	assertContains(t, output, "value int")
+	// Should have the field in the struct (with underscore prefix for accessors)
+	assertContains(t, output, "_value int")
 	// Should have both getter and setter methods
 	assertContains(t, output, "func (c *Counter) Value() int {")
-	assertContains(t, output, "return c.value")
+	assertContains(t, output, "return c._value")
 	assertContains(t, output, "func (c *Counter) SetValue(v int) {")
-	assertContains(t, output, "c.value = v")
+	assertContains(t, output, "c._value = v")
 }
 
 func TestAccessorNonPubClass(t *testing.T) {

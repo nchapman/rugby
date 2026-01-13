@@ -1,5 +1,7 @@
 package runtime
 
+import "fmt"
+
 // Times iterates n times, calling the function with the current index (0 to n-1).
 // The callback returns false to break, true to continue.
 func Times(n int, fn func(int) bool) {
@@ -84,4 +86,34 @@ func Even(n int) bool {
 // Ruby: n.odd?
 func Odd(n int) bool {
 	return n%2 != 0
+}
+
+// Positive returns true if n is positive (> 0).
+// Ruby: n.positive?
+func Positive(n int) bool {
+	return n > 0
+}
+
+// Negative returns true if n is negative (< 0).
+// Ruby: n.negative?
+func Negative(n int) bool {
+	return n < 0
+}
+
+// Zero returns true if n is zero.
+// Ruby: n.zero?
+func Zero(n int) bool {
+	return n == 0
+}
+
+// IntToString converts an int to its string representation.
+// Ruby: n.to_s
+func IntToString(n int) string {
+	return fmt.Sprintf("%d", n)
+}
+
+// IntToFloat converts an int to a float64.
+// Ruby: n.to_f
+func IntToFloat(n int) float64 {
+	return float64(n)
 }

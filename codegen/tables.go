@@ -48,8 +48,8 @@ var blockMethods = map[string]blockMethod{
 	"select": {runtimeFunc: "runtime.Select", returnType: "bool"},
 	"filter": {runtimeFunc: "runtime.Select", returnType: "bool"},
 	"reject": {runtimeFunc: "runtime.Reject", returnType: "bool"},
-	"find":   {runtimeFunc: "runtime.Find", returnType: "bool"},
-	"detect": {runtimeFunc: "runtime.Find", returnType: "bool"},
+	"find":   {runtimeFunc: "runtime.FindPtr", returnType: "bool"},
+	"detect": {runtimeFunc: "runtime.FindPtr", returnType: "bool"},
 	"reduce": {runtimeFunc: "runtime.Reduce", returnType: "any", hasAccumulator: true},
 	"any?":   {runtimeFunc: "runtime.Any", returnType: "bool"},
 	"all?":   {runtimeFunc: "runtime.All", returnType: "bool"},
@@ -68,26 +68,30 @@ type MethodDef struct {
 // ReceiverType -> MethodName -> MethodDef
 var stdLib = map[string]map[string]MethodDef{
 	"Array": {
-		"join":     {RuntimeFunc: "runtime.Join", ReturnType: "String"},
-		"flatten":  {RuntimeFunc: "runtime.Flatten", ReturnType: "Array"},
-		"uniq":     {RuntimeFunc: "runtime.Uniq", ReturnType: "Array"},
-		"sort":     {RuntimeFunc: "runtime.Sort", ReturnType: "Array"},
-		"shuffle":  {RuntimeFunc: "runtime.Shuffle", ReturnType: "Array"},
-		"sample":   {RuntimeFunc: "runtime.Sample", ReturnType: ""}, // T
-		"first":    {RuntimeFunc: "runtime.First", ReturnType: ""},  // T
-		"last":     {RuntimeFunc: "runtime.Last", ReturnType: ""},   // T
-		"reverse":  {RuntimeFunc: "runtime.Reversed", ReturnType: "Array"},
-		"rotate":   {RuntimeFunc: "runtime.Rotate", ReturnType: "Array"},
-		"include?": {RuntimeFunc: "runtime.Contains", ReturnType: "Bool"},
+		"join":      {RuntimeFunc: "runtime.Join", ReturnType: "String"},
+		"flatten":   {RuntimeFunc: "runtime.Flatten", ReturnType: "Array"},
+		"uniq":      {RuntimeFunc: "runtime.Uniq", ReturnType: "Array"},
+		"sort":      {RuntimeFunc: "runtime.Sort", ReturnType: "Array"},
+		"sorted":    {RuntimeFunc: "runtime.Sort", ReturnType: "Array"},
+		"shuffle":   {RuntimeFunc: "runtime.Shuffle", ReturnType: "Array"},
+		"sample":    {RuntimeFunc: "runtime.Sample", ReturnType: ""}, // T
+		"first":     {RuntimeFunc: "runtime.First", ReturnType: ""},  // T
+		"last":      {RuntimeFunc: "runtime.Last", ReturnType: ""},   // T
+		"reverse":   {RuntimeFunc: "runtime.Reversed", ReturnType: "Array"},
+		"rotate":    {RuntimeFunc: "runtime.Rotate", ReturnType: "Array"},
+		"include?":  {RuntimeFunc: "runtime.Contains", ReturnType: "Bool"},
+		"contains?": {RuntimeFunc: "runtime.Contains", ReturnType: "Bool"},
 	},
 	"Map": {
-		"keys":     {RuntimeFunc: "runtime.Keys", ReturnType: "Array"},
-		"values":   {RuntimeFunc: "runtime.Values", ReturnType: "Array"},
-		"has_key?": {RuntimeFunc: "runtime.MapHasKey", ReturnType: "Bool"},
-		"delete":   {RuntimeFunc: "runtime.MapDelete", ReturnType: ""}, // V
-		"clear":    {RuntimeFunc: "runtime.MapClear", ReturnType: ""},
-		"invert":   {RuntimeFunc: "runtime.MapInvert", ReturnType: "Map"},
-		"merge":    {RuntimeFunc: "runtime.Merge", ReturnType: "Map"},
+		"keys":      {RuntimeFunc: "runtime.Keys", ReturnType: "Array"},
+		"values":    {RuntimeFunc: "runtime.Values", ReturnType: "Array"},
+		"has_key?":  {RuntimeFunc: "runtime.MapHasKey", ReturnType: "Bool"},
+		"contains?": {RuntimeFunc: "runtime.MapHasKey", ReturnType: "Bool"},
+		"delete":    {RuntimeFunc: "runtime.MapDelete", ReturnType: ""}, // V
+		"clear":     {RuntimeFunc: "runtime.MapClear", ReturnType: ""},
+		"invert":    {RuntimeFunc: "runtime.MapInvert", ReturnType: "Map"},
+		"merge":     {RuntimeFunc: "runtime.Merge", ReturnType: "Map"},
+		"fetch":     {RuntimeFunc: "runtime.Fetch", ReturnType: ""}, // V
 	},
 	"String": {
 		"split":      {RuntimeFunc: "runtime.Split", ReturnType: "Array"},
@@ -106,10 +110,27 @@ var stdLib = map[string]map[string]MethodDef{
 		"to_f":       {RuntimeFunc: "runtime.StringToFloat", ReturnType: "(Float, error)"},
 	},
 	"Int": {
-		"even?": {RuntimeFunc: "runtime.Even", ReturnType: "Bool"},
-		"odd?":  {RuntimeFunc: "runtime.Odd", ReturnType: "Bool"},
-		"abs":   {RuntimeFunc: "runtime.Abs", ReturnType: "Int"},
-		"clamp": {RuntimeFunc: "runtime.Clamp", ReturnType: "Int"},
+		"even?":     {RuntimeFunc: "runtime.Even", ReturnType: "Bool"},
+		"odd?":      {RuntimeFunc: "runtime.Odd", ReturnType: "Bool"},
+		"abs":       {RuntimeFunc: "runtime.Abs", ReturnType: "Int"},
+		"clamp":     {RuntimeFunc: "runtime.Clamp", ReturnType: "Int"},
+		"positive?": {RuntimeFunc: "runtime.Positive", ReturnType: "Bool"},
+		"negative?": {RuntimeFunc: "runtime.Negative", ReturnType: "Bool"},
+		"zero?":     {RuntimeFunc: "runtime.Zero", ReturnType: "Bool"},
+		"to_s":      {RuntimeFunc: "runtime.IntToString", ReturnType: "String"},
+		"to_f":      {RuntimeFunc: "runtime.IntToFloat", ReturnType: "Float"},
+	},
+	"Float": {
+		"floor":     {RuntimeFunc: "runtime.Floor", ReturnType: "Int"},
+		"ceil":      {RuntimeFunc: "runtime.Ceil", ReturnType: "Int"},
+		"round":     {RuntimeFunc: "runtime.Round", ReturnType: "Int"},
+		"truncate":  {RuntimeFunc: "runtime.Truncate", ReturnType: "Int"},
+		"abs":       {RuntimeFunc: "runtime.FloatAbs", ReturnType: "Float"},
+		"positive?": {RuntimeFunc: "runtime.FloatPositive", ReturnType: "Bool"},
+		"negative?": {RuntimeFunc: "runtime.FloatNegative", ReturnType: "Bool"},
+		"zero?":     {RuntimeFunc: "runtime.FloatZero", ReturnType: "Bool"},
+		"to_s":      {RuntimeFunc: "runtime.FloatToString", ReturnType: "String"},
+		"to_i":      {RuntimeFunc: "runtime.FloatToInt", ReturnType: "Int"},
 	},
 	"Math": { // Global Math module calls (Math.sqrt -> runtime.Sqrt)
 		"sqrt":  {RuntimeFunc: "runtime.Sqrt", ReturnType: "Float"},

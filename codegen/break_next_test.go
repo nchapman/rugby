@@ -86,7 +86,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Map([]int{1, 2, 3}, func(x any) (any, bool, bool) {`)
+	// Element type is inferred from array literal as int
+	assertContains(t, output, `runtime.Map([]int{1, 2, 3}, func(x int) (any, bool, bool) {`)
 
 	assertContains(t, output, `if runtime.Equal(x, 2) {`)
 
@@ -144,7 +145,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Select([]int{1, 2, 3}, func(x any) (bool, bool) {`)
+	// Element type is inferred from array literal as int
+	assertContains(t, output, `runtime.Select([]int{1, 2, 3}, func(x int) (bool, bool) {`)
 
 	assertContains(t, output, `if runtime.Equal(x, 2) {`)
 
@@ -181,7 +183,8 @@ func TestBreakInReduceBlock(t *testing.T) {
 end`
 
 	output := compile(t, input)
-	assertContains(t, output, `runtime.Reduce([]int{1, 2, 3}, 0, func(acc any, x any) (any, bool) {`)
+	// acc type is inferred from initial value (int), element type from array literal (int)
+	assertContains(t, output, `runtime.Reduce([]int{1, 2, 3}, 0, func(acc int, x int) (int, bool) {`)
 	assertContains(t, output, `if runtime.Equal(x, 3) {`)
 	assertContains(t, output, `return nil, false`)
 	assertContains(t, output, `return (acc + x), true`)

@@ -97,10 +97,13 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	g.currentClassEmbeds = cls.Embeds
 	g.pubClasses[className] = cls.Pub
 	clear(g.classFields)
+	clear(g.currentClassModuleMethods) // Reset for new class
 
 	// Collect all fields: explicit, inferred, from accessors, and from included modules
 	// Track field names to avoid duplicates
+	// accessorFields tracks which field names come from accessors (need underscore prefix)
 	fieldNames := make(map[string]bool)
+	clear(g.accessorFields) // Reset for new class
 	allFields := make([]*ast.FieldDecl, 0, len(cls.Fields)+len(cls.Accessors))
 	for _, f := range cls.Fields {
 		if !fieldNames[f.Name] {
@@ -109,6 +112,9 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		}
 	}
 	for _, acc := range cls.Accessors {
+		// Always track accessor fields for underscore prefix, even if field already exists
+		// (field might come from parameter promotion in initialize)
+		g.accessorFields[acc.Name] = true
 		if !fieldNames[acc.Name] {
 			allFields = append(allFields, &ast.FieldDecl{Name: acc.Name, Type: acc.Type})
 			fieldNames[acc.Name] = true
@@ -149,6 +155,8 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			}
 		}
 		for _, acc := range mod.Accessors {
+			// Always track accessor fields for underscore prefix
+			g.accessorFields[acc.Name] = true
 			if !fieldNames[acc.Name] {
 				allFields = append(allFields, &ast.FieldDecl{Name: acc.Name, Type: acc.Type})
 				fieldNames[acc.Name] = true
@@ -182,12 +190,23 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			} else {
 				methodSources[m.Name] = fmt.Sprintf("module '%s'", modName)
 				allMethods = append(allMethods, m)
+				// Track as module method for bare identifier resolution in class methods
+				g.currentClassModuleMethods[m.Name] = true
 			}
+		}
+	}
+
+	// Also add underscore prefix for fields that have methods with the same name
+	// This handles cases like: field @name + method def name -> ... (without accessor declarations)
+	for _, m := range allMethods {
+		if fieldNames[m.Name] && !g.accessorFields[m.Name] {
+			g.accessorFields[m.Name] = true
 		}
 	}
 
 	// Emit struct definition
 	// Class names are already PascalCase by convention; pub affects field/method visibility
+	// Accessor fields use underscore prefix (e.g., _name) to avoid Go field/method name conflict
 	hasContent := len(cls.Embeds) > 0 || len(allFields) > 0
 	if hasContent {
 		g.buf.WriteString(fmt.Sprintf("type %s struct {\n", className))
@@ -197,11 +216,16 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			g.buf.WriteString("\n")
 		}
 		for _, field := range allFields {
-			g.classFields[field.Name] = field.Type // Store field type
+			g.classFields[field.Name] = field.Type // Store field type (original name for lookup)
+			// Use underscore prefix for accessor fields to avoid conflict with getter/setter methods
+			goFieldName := field.Name
+			if g.accessorFields[field.Name] {
+				goFieldName = "_" + field.Name
+			}
 			if field.Type != "" {
-				g.buf.WriteString(fmt.Sprintf("\t%s %s\n", field.Name, mapType(field.Type)))
+				g.buf.WriteString(fmt.Sprintf("\t%s %s\n", goFieldName, mapType(field.Type)))
 			} else {
-				g.buf.WriteString(fmt.Sprintf("\t%s any\n", field.Name))
+				g.buf.WriteString(fmt.Sprintf("\t%s any\n", goFieldName))
 			}
 		}
 		g.buf.WriteString("}\n\n")
@@ -246,11 +270,14 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, pub bool) {
 	recv := receiverName(className)
 	goType := mapType(acc.Type)
+	// Internal field has underscore prefix to avoid conflict with method name
+	internalField := "_" + acc.Name
 
 	// Generate getter for "getter" and "property"
 	if acc.Kind == "getter" || acc.Kind == "property" {
-		// getter/property generates: func (r *T) Name() T { return r.name }
-		// Method name is PascalCase if pub class, camelCase otherwise
+		// getter/property generates: func (r *T) name() T { return r._name }
+		// Method name matches Rugby accessor name (camelCase for consistency)
+		// Field has underscore prefix to avoid Go field/method name conflict
 		var methodName string
 		if pub {
 			methodName = snakeToPascalWithAcronyms(acc.Name)
@@ -258,14 +285,13 @@ func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, 
 			methodName = snakeToCamelWithAcronyms(acc.Name)
 		}
 		g.buf.WriteString(fmt.Sprintf("func (%s *%s) %s() %s {\n", recv, className, methodName, goType))
-		g.buf.WriteString(fmt.Sprintf("\treturn %s.%s\n", recv, acc.Name))
+		g.buf.WriteString(fmt.Sprintf("\treturn %s.%s\n", recv, internalField))
 		g.buf.WriteString("}\n\n")
 	}
 
 	// Generate setter for "setter" and "property"
 	if acc.Kind == "setter" || acc.Kind == "property" {
-		// setter/property generates: func (r *T) SetName(v T) { r.name = v }
-		// Method name is SetPascalCase if pub class, setcamelCase otherwise
+		// setter/property generates: func (r *T) SetName(v T) { r._name = v }
 		var methodName string
 		if pub {
 			methodName = "Set" + snakeToPascalWithAcronyms(acc.Name)
@@ -273,7 +299,7 @@ func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, 
 			methodName = "set" + snakeToPascalWithAcronyms(acc.Name)
 		}
 		g.buf.WriteString(fmt.Sprintf("func (%s *%s) %s(v %s) {\n", recv, className, methodName, goType))
-		g.buf.WriteString(fmt.Sprintf("\t%s.%s = v\n", recv, acc.Name))
+		g.buf.WriteString(fmt.Sprintf("\t%s.%s = v\n", recv, internalField))
 		g.buf.WriteString("}\n\n")
 	}
 }
@@ -388,7 +414,12 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 
 	// Auto-assign promoted parameters
 	for _, promoted := range promotedParams {
-		g.buf.WriteString(fmt.Sprintf("\t%s.%s = %s\n", recv, promoted.fieldName, promoted.paramName))
+		// Use underscore prefix for accessor fields
+		goFieldName := promoted.fieldName
+		if g.accessorFields[promoted.fieldName] {
+			goFieldName = "_" + promoted.fieldName
+		}
+		g.buf.WriteString(fmt.Sprintf("\t%s.%s = %s\n", recv, goFieldName, promoted.paramName))
 	}
 
 	// Generate body (instance var assignments become field sets)

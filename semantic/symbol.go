@@ -16,6 +16,7 @@ const (
 	SymModule
 	SymField
 	SymParam
+	SymGoPackage // Go package import
 )
 
 // Symbol represents a named entity in the program.

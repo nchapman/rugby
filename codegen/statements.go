@@ -195,7 +195,12 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 	g.writeIndent()
 	if g.currentClass != "" {
 		recv := receiverName(g.currentClass)
-		g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, s.Name))
+		// Use underscore prefix for accessor fields to match struct definition
+		goFieldName := s.Name
+		if g.accessorFields[s.Name] {
+			goFieldName = "_" + s.Name
+		}
+		g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, goFieldName))
 
 		// Check for optional wrapping
 		fieldType := g.classFields[s.Name]
@@ -333,7 +338,12 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 	}
 
 	recv := receiverName(g.currentClass)
-	field := fmt.Sprintf("%s.%s", recv, s.Name)
+	// Use underscore prefix for accessor fields to match struct definition
+	goFieldName := s.Name
+	if g.accessorFields[s.Name] {
+		goFieldName = "_" + s.Name
+	}
+	field := fmt.Sprintf("%s.%s", recv, goFieldName)
 	fieldType := g.classFields[s.Name]
 
 	// Generate check
@@ -457,10 +467,39 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 		g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
 		g.genExpr(s.Value)
 		g.buf.WriteString(")")
+	} else if goType := g.getShiftLeftTargetType(s.Value); goType != "" {
+		// ShiftLeft returns any, so we need a type assertion for typed slice assignment
+		g.genExpr(s.Value)
+		g.buf.WriteString(".(")
+		g.buf.WriteString(goType)
+		g.buf.WriteString(")")
 	} else {
 		g.genExpr(s.Value)
 	}
 	g.buf.WriteString("\n")
+}
+
+// getShiftLeftTargetType returns the Go type for ShiftLeft type assertion if needed.
+// Returns empty string if no assertion is needed.
+func (g *Generator) getShiftLeftTargetType(expr ast.Expression) string {
+	binExpr, ok := expr.(*ast.BinaryExpr)
+	if !ok || binExpr.Op != "<<" {
+		return ""
+	}
+
+	// Get the Go type of the left operand (the array/channel being appended to)
+	if g.typeInfo != nil {
+		if goType := g.typeInfo.GetGoType(binExpr.Left); goType != "" && strings.HasPrefix(goType, "[]") {
+			return goType
+		}
+	}
+
+	// Fall back to inferring element type from left operand
+	elemType := g.inferArrayElementGoType(binExpr.Left)
+	if elemType != "any" && elemType != "" {
+		return "[]" + elemType
+	}
+	return ""
 }
 
 // genBangAssign generates code for: x = call()!
@@ -1301,10 +1340,33 @@ func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
 }
 
 func (g *Generator) genPanicStmt(s *ast.PanicStmt) {
-	g.writeIndent()
-	g.buf.WriteString("panic(")
-	g.genExpr(s.Message)
-	g.buf.WriteString(")\n")
+	if s.Condition != nil {
+		// panic "msg" if cond  ->  if cond { panic("msg") }
+		// panic "msg" unless cond  ->  if !cond { panic("msg") }
+		g.writeIndent()
+		g.buf.WriteString("if ")
+		if s.IsUnless {
+			g.buf.WriteString("!(")
+			g.genExpr(s.Condition)
+			g.buf.WriteString(")")
+		} else {
+			g.genExpr(s.Condition)
+		}
+		g.buf.WriteString(" {\n")
+		g.indent++
+		g.writeIndent()
+		g.buf.WriteString("panic(")
+		g.genExpr(s.Message)
+		g.buf.WriteString(")\n")
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	} else {
+		g.writeIndent()
+		g.buf.WriteString("panic(")
+		g.genExpr(s.Message)
+		g.buf.WriteString(")\n")
+	}
 }
 
 func (g *Generator) genDeferStmt(s *ast.DeferStmt) {
@@ -1427,8 +1489,11 @@ func (g *Generator) genConcurrentlyStmt(s *ast.ConcurrentlyStmt) {
 	g.buf.WriteString(" {\n")
 	g.indent++
 
-	// Create scope variable
+	// Create scope variable (use fallback if not specified)
 	scopeVar := s.ScopeVar
+	if scopeVar == "" {
+		scopeVar = "_scope"
+	}
 	g.vars[scopeVar] = "Scope"
 
 	// Create scope object

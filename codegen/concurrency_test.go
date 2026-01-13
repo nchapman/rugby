@@ -177,6 +177,48 @@ end`
 	}
 }
 
+func TestConcurrentlyExpression(t *testing.T) {
+	// Test concurrently as an expression (used in assignment)
+	input := `result = concurrently do |scope|
+	a = scope.spawn { 1 }
+	await a
+	42
+end`
+
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) != 0 {
+		t.Errorf("parser errors: %v", p.Errors())
+		return
+	}
+
+	g := New()
+	code, err := g.Generate(program)
+	if err != nil {
+		t.Errorf("codegen error: %v", err)
+		return
+	}
+
+	// Should generate assignment with IIFE
+	if !strings.Contains(code, "result := func() any") {
+		t.Errorf("expected 'result := func() any', got:\n%s", code)
+	}
+	// Should generate NewScope
+	if !strings.Contains(code, "runtime.NewScope") {
+		t.Errorf("expected 'runtime.NewScope', got:\n%s", code)
+	}
+	// Should generate defer scope.Wait()
+	if !strings.Contains(code, "defer scope.Wait()") {
+		t.Errorf("expected 'defer scope.Wait()', got:\n%s", code)
+	}
+	// Should return the last expression
+	if !strings.Contains(code, "return 42") {
+		t.Errorf("expected 'return 42', got:\n%s", code)
+	}
+}
+
 func TestChannelCreation(t *testing.T) {
 	tests := []struct {
 		input    string

@@ -59,6 +59,7 @@ const (
 	TypeArray
 	TypeMap
 	TypeClass
+	TypeOptional
 )
 
 // TypeInfo provides type information for AST nodes during code generation.
@@ -75,34 +76,41 @@ type TypeInfo interface {
 	// - No type info is available for the node
 	// - The node's type cannot be converted to a Go type
 	GetGoType(node ast.Node) string
+
+	// GetRugbyType returns the Rugby type string for an AST node.
+	// For example: "Int", "String", "String?", "Array[Int]".
+	// Returns empty string if no type info is available.
+	GetRugbyType(node ast.Node) string
 }
 
 type Generator struct {
-	buf                strings.Builder
-	indent             int
-	vars               map[string]string          // track declared variables and their types (empty string = unknown type)
-	imports            map[string]bool            // track import aliases for Go interop detection
-	needsRuntime       bool                       // track if rugby/runtime import is needed
-	needsFmt           bool                       // track if fmt import is needed (string interpolation)
-	needsErrors        bool                       // track if errors import is needed (error_is?, error_as)
-	needsTestingImport bool                       // track if testing import is needed
-	needsTestImport    bool                       // track if rugby/test import is needed
-	currentClass       string                     // current class being generated (for instance vars)
-	currentMethod      string                     // current method name being generated (for super)
-	currentMethodPub   bool                       // whether current method is pub (for super)
-	currentClassEmbeds []string                   // embedded types (parent classes) of current class
-	pubClasses         map[string]bool            // track public classes for constructor naming
-	classFields        map[string]string          // track fields of the current class and their types
-	modules            map[string]*ast.ModuleDecl // track module definitions for include
-	interfaces         map[string]bool            // track declared interfaces for zero-value generation
-	sourceFile         string                     // original .rg filename for //line directives
-	emitLineDir        bool                       // whether to emit //line directives
-	currentReturnTypes []string                   // return types of the current function/method
-	contexts           []loopContext              // stack of loop/block contexts
-	inMainFunc         bool                       // true when generating code inside main() function
-	errors             []error                    // collected errors during generation
-	tempVarCounter     int                        // counter for generating unique temp variable names
-	typeInfo           TypeInfo                   // optional type info from semantic analysis
+	buf                       strings.Builder
+	indent                    int
+	vars                      map[string]string          // track declared variables and their types (empty string = unknown type)
+	imports                   map[string]bool            // track import aliases for Go interop detection
+	needsRuntime              bool                       // track if rugby/runtime import is needed
+	needsFmt                  bool                       // track if fmt import is needed (string interpolation)
+	needsErrors               bool                       // track if errors import is needed (error_is?, error_as)
+	needsTestingImport        bool                       // track if testing import is needed
+	needsTestImport           bool                       // track if rugby/test import is needed
+	currentClass              string                     // current class being generated (for instance vars)
+	currentMethod             string                     // current method name being generated (for super)
+	currentMethodPub          bool                       // whether current method is pub (for super)
+	currentClassEmbeds        []string                   // embedded types (parent classes) of current class
+	currentClassModuleMethods map[string]bool            // methods from included modules (need self.method() call)
+	pubClasses                map[string]bool            // track public classes for constructor naming
+	classFields               map[string]string          // track fields of the current class and their types
+	accessorFields            map[string]bool            // track which fields have accessor methods (need underscore prefix)
+	modules                   map[string]*ast.ModuleDecl // track module definitions for include
+	interfaces                map[string]bool            // track declared interfaces for zero-value generation
+	sourceFile                string                     // original .rg filename for //line directives
+	emitLineDir               bool                       // whether to emit //line directives
+	currentReturnTypes        []string                   // return types of the current function/method
+	contexts                  []loopContext              // stack of loop/block contexts
+	inMainFunc                bool                       // true when generating code inside main() function
+	errors                    []error                    // collected errors during generation
+	tempVarCounter            int                        // counter for generating unique temp variable names
+	typeInfo                  TypeInfo                   // optional type info from semantic analysis
 }
 
 // addError records an error during code generation
@@ -174,12 +182,14 @@ func WithTypeInfo(ti TypeInfo) Option {
 
 func New(opts ...Option) *Generator {
 	g := &Generator{
-		vars:        make(map[string]string),
-		imports:     make(map[string]bool),
-		pubClasses:  make(map[string]bool),
-		classFields: make(map[string]string),
-		modules:     make(map[string]*ast.ModuleDecl),
-		interfaces:  make(map[string]bool),
+		vars:                      make(map[string]string),
+		imports:                   make(map[string]bool),
+		pubClasses:                make(map[string]bool),
+		classFields:               make(map[string]string),
+		accessorFields:            make(map[string]bool),
+		currentClassModuleMethods: make(map[string]bool),
+		modules:                   make(map[string]*ast.ModuleDecl),
+		interfaces:                make(map[string]bool),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -288,6 +298,34 @@ func typeKindToRugby(kind TypeKind) string {
 	}
 }
 
+// inferArrayElementGoType returns the Go element type for an array/slice expression.
+// For example, if expr evaluates to []int, this returns "int".
+// Returns "any" if the element type cannot be determined.
+func (g *Generator) inferArrayElementGoType(expr ast.Expression) string {
+	if g.typeInfo != nil {
+		goType := g.typeInfo.GetGoType(expr)
+		if strings.HasPrefix(goType, "[]") {
+			return goType[2:] // Remove "[]" prefix
+		}
+	}
+	// Fall back to AST-based inference
+	switch e := expr.(type) {
+	case *ast.ArrayLit:
+		if len(e.Elements) > 0 {
+			return mapType(g.inferTypeFromExpr(e.Elements[0]))
+		}
+	case *ast.Ident:
+		// Check if we have the variable type
+		if typ, ok := g.vars[e.Name]; ok {
+			goType := mapType(typ)
+			if strings.HasPrefix(goType, "[]") {
+				return goType[2:]
+			}
+		}
+	}
+	return "any"
+}
+
 // inferTypeFromExpr attempts to infer the type from an expression
 // Returns the inferred type or empty string if unknown
 func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
@@ -295,6 +333,12 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 	if g.typeInfo != nil {
 		kind := g.typeInfo.GetTypeKind(expr)
 		if kind != TypeUnknown {
+			// For optional types, use GetRugbyType to get the full type (e.g., "String?")
+			if kind == TypeOptional {
+				if rugbyType := g.typeInfo.GetRugbyType(expr); rugbyType != "" {
+					return rugbyType
+				}
+			}
 			if rubyType := typeKindToRugby(kind); rubyType != "" {
 				return rubyType
 			}

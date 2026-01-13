@@ -718,6 +718,9 @@ func (p *Parser) parsePanicStmt() *ast.PanicStmt {
 
 	stmt.Message = p.parseExpression(lowest)
 	p.nextToken() // move past expression
+
+	// Check for statement modifier (panic "msg" if cond)
+	stmt.Condition, stmt.IsUnless = p.parseStatementModifier()
 	p.skipNewlines()
 	return stmt
 }
@@ -809,7 +812,7 @@ func (p *Parser) parseOrAssignStmt() *ast.OrAssignStmt {
 	return &ast.OrAssignStmt{Name: name, Value: value, Line: line}
 }
 
-func (p *Parser) parseCompoundAssignStmt() *ast.CompoundAssignStmt {
+func (p *Parser) parseCompoundAssignStmt() ast.Statement {
 	line := p.curToken.Line
 	name := p.curToken.Literal
 	p.nextToken() // consume ident
@@ -839,9 +842,16 @@ func (p *Parser) parseCompoundAssignStmt() *ast.CompoundAssignStmt {
 	}
 
 	p.nextToken() // move past expression
-	p.skipNewlines()
 
-	return &ast.CompoundAssignStmt{Name: name, Op: op, Value: value, Line: line}
+	stmt := &ast.CompoundAssignStmt{Name: name, Op: op, Value: value, Line: line}
+
+	// Check for loop modifier (e.g., "counter += 1 until counter == 3")
+	if loopStmt := p.parseLoopModifier(stmt); loopStmt != nil {
+		return loopStmt
+	}
+
+	p.skipNewlines()
+	return stmt
 }
 
 func (p *Parser) parseInstanceVarOrAssign() *ast.InstanceVarOrAssign {

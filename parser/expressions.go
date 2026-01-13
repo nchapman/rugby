@@ -48,6 +48,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseSpawnExpr()
 	case token.AWAIT:
 		left = p.parseAwaitExpr()
+	case token.CONCURRENTLY:
+		left = p.parseConcurrentlyExpr()
 	case token.AMP:
 		left = p.parseSymbolToProc()
 	default:
@@ -485,6 +487,36 @@ func (p *Parser) parseSymbolToProc() ast.Expression {
 
 	// Symbol token literal is just the method name (lexer strips the colon)
 	return &ast.SymbolToProcExpr{Method: p.curToken.Literal}
+}
+
+// parseConcurrentlyExpr parses: concurrently do |scope| ... end (in expression context)
+func (p *Parser) parseConcurrentlyExpr() ast.Expression {
+	line := p.curToken.Line
+	p.nextToken() // consume 'concurrently'
+
+	// Expect 'do' keyword
+	if !p.curTokenIs(token.DO) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after 'concurrently'")
+		return nil
+	}
+
+	// Use parseBlock which handles the block parsing properly
+	block := p.parseBlock(token.END)
+	if block == nil {
+		return nil
+	}
+
+	// Extract scope variable from block params (first param is the scope)
+	var scopeVar string
+	if len(block.Params) > 0 {
+		scopeVar = block.Params[0]
+	}
+
+	return &ast.ConcurrentlyExpr{
+		ScopeVar: scopeVar,
+		Body:     block.Body,
+		Line:     line,
+	}
 }
 
 // isCallableExpr returns true if the expression can be called with command syntax.

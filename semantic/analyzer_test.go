@@ -2585,8 +2585,8 @@ end
 			name: "array.reduce has accumulator and element params",
 			input: `
 nums = [1, 2, 3]
-nums.reduce do |acc, n|
-  n + 1
+nums.reduce(0) do |acc, n|
+  acc + n
 end
 `,
 			wantErr: false,

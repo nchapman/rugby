@@ -188,6 +188,21 @@ func Find[T any](slice []T, predicate func(T) (bool, bool)) (T, bool) {
 	return zero, false
 }
 
+// FindPtr returns a pointer to the first element matching the predicate, or nil.
+// Used for optional coalescing in Rugby.
+func FindPtr[T any](slice []T, predicate func(T) (bool, bool)) *T {
+	for i, v := range slice {
+		match, cont := predicate(v)
+		if match {
+			return &slice[i]
+		}
+		if !cont {
+			break
+		}
+	}
+	return nil
+}
+
 // Any returns true if any element matches the predicate.
 func Any[T any](slice []T, predicate func(T) (bool, bool)) bool {
 	for _, v := range slice {
@@ -344,6 +359,64 @@ func MaxFloat(slice []float64) (float64, bool) {
 		return 0, false
 	}
 	return slices.Max(slice), true
+}
+
+// MinIntPtr returns a pointer to the minimum value, or nil if empty.
+// Used for optional coalescing in Rugby.
+func MinIntPtr(slice []int) *int {
+	if len(slice) == 0 {
+		return nil
+	}
+	v := slices.Min(slice)
+	return &v
+}
+
+// MaxIntPtr returns a pointer to the maximum value, or nil if empty.
+// Used for optional coalescing in Rugby.
+func MaxIntPtr(slice []int) *int {
+	if len(slice) == 0 {
+		return nil
+	}
+	v := slices.Max(slice)
+	return &v
+}
+
+// MinFloatPtr returns a pointer to the minimum value, or nil if empty.
+// Used for optional coalescing in Rugby.
+func MinFloatPtr(slice []float64) *float64 {
+	if len(slice) == 0 {
+		return nil
+	}
+	v := slices.Min(slice)
+	return &v
+}
+
+// MaxFloatPtr returns a pointer to the maximum value, or nil if empty.
+// Used for optional coalescing in Rugby.
+func MaxFloatPtr(slice []float64) *float64 {
+	if len(slice) == 0 {
+		return nil
+	}
+	v := slices.Max(slice)
+	return &v
+}
+
+// FirstPtr returns a pointer to the first element, or nil if empty.
+// Used for optional coalescing in Rugby.
+func FirstPtr[T any](slice []T) *T {
+	if len(slice) == 0 {
+		return nil
+	}
+	return &slice[0]
+}
+
+// LastPtr returns a pointer to the last element, or nil if empty.
+// Used for optional coalescing in Rugby.
+func LastPtr[T any](slice []T) *T {
+	if len(slice) == 0 {
+		return nil
+	}
+	return &slice[len(slice)-1]
 }
 
 // Join concatenates elements into a string using the separator.
@@ -735,6 +808,44 @@ func CallMethod(obj any, methodName string) any {
 	// Handle nil receiver
 	if obj == nil {
 		panic(fmt.Sprintf("CallMethod: cannot call %q on nil", methodName))
+	}
+
+	// Handle runtime string methods (Go strings don't have these as methods)
+	if s, ok := obj.(string); ok {
+		switch methodName {
+		case "upcase":
+			return Upcase(s)
+		case "downcase":
+			return Downcase(s)
+		case "capitalize":
+			return Capitalize(s)
+		case "strip":
+			return Strip(s)
+		case "lstrip":
+			return Lstrip(s)
+		case "rstrip":
+			return Rstrip(s)
+		case "reverse":
+			return StringReverse(s)
+		case "chars":
+			return Chars(s)
+		case "length":
+			return CharLength(s)
+		case "empty?":
+			return len(s) == 0
+		}
+	}
+
+	// Handle runtime int methods
+	if n, ok := obj.(int); ok {
+		switch methodName {
+		case "even?":
+			return Even(n)
+		case "odd?":
+			return Odd(n)
+		case "abs":
+			return Abs(n)
+		}
 	}
 
 	val := reflect.ValueOf(obj)

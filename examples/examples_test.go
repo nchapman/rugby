@@ -21,22 +21,22 @@ func allExamples() []example {
 	return []example{
 		// Working examples
 		{file: "01_hello.rg", expectedOutput: "Hello, Rugby!\nHello, World!\n2 + 3 = 5\n"},
+		{file: "02_types.rg"}, // Int/Float methods now work
 		{file: "03_control_flow.rg", expectedOutput: "Grade: B\nNot empty!\nPositive\nNot zero\nMax: 5\nOK\nWeekend\nNice\nString: hello\nInt: 42\nFloat: 3.14\n"},
+		{file: "05_functions.rg"}, // Optional return types now work
+		{file: "09_blocks.rg"},    // Block methods now work
 
 		// Examples with known bugs (see BUGS.md)
-		{file: "02_types.rg", hasBugs: true},           // BUG-001,002,003: Int/Float methods not implemented
-		{file: "04_loops.rg", hasBugs: true},           // BUG-004,005: ||= and loop modifiers not implemented
-		{file: "05_functions.rg", hasBugs: true},       // BUG-006: Optional return types
-		{file: "06_classes.rg", hasBugs: true},         // BUG-007: getter/property with param promotion
-		{file: "07_interfaces.rg", hasBugs: true},      // BUG-008: Interface structural typing
-		{file: "08_modules.rg", hasBugs: true},         // BUG-009: Module method resolution
-		{file: "09_blocks.rg", hasBugs: true},          // BUG-010: Block methods with arguments
-		{file: "10_optionals.rg", hasBugs: true},       // BUG-006,011: Optional types
-		{file: "11_errors.rg", hasBugs: true},          // BUG-012,013,014: Go imports, rescue => err
-		{file: "12_strings.rg", hasBugs: true},         // BUG-015: Range slicing
-		{file: "13_ranges.rg", hasBugs: true},          // BUG-015: Range slicing
-		{file: "14_go_interop.rg", hasBugs: true},      // BUG-012: Go imports
-		{file: "15_concurrency.rg", hasBugs: true},     // BUG-016: concurrently not implemented
+		{file: "04_loops.rg", hasBugs: true},       // predicate methods on arrays (any?, empty?)
+		{file: "06_classes.rg", hasBugs: true},     // "missing return" for string methods
+		{file: "07_interfaces.rg", hasBugs: true},  // interface structural typing still failing
+		{file: "08_modules.rg", hasBugs: true},     // pointer printing instead of values
+		{file: "10_optionals.rg", hasBugs: true},   // "if let" pattern not implemented
+		{file: "11_errors.rg", hasBugs: true},      // os.ReadFile multi-value return
+		{file: "12_strings.rg", hasBugs: true},     // string methods (contains?, etc.)
+		{file: "13_ranges.rg", hasBugs: true},      // range.size method
+		{file: "14_go_interop.rg", hasBugs: true},  // multi-value assignment (err undefined)
+		{file: "15_concurrency.rg", hasBugs: true}, // Chan generic syntax, sync.WaitGroup.new
 
 		// Legacy working examples
 		{file: "fizzbuzz.rg", expectedOutput: "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n"},

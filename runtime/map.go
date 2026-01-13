@@ -2,6 +2,17 @@ package runtime
 
 import "maps"
 
+// MapEach iterates over a map, calling the function for each key-value pair.
+// The callback returns false to break, true to continue.
+// Ruby: hash.each { |k, v| ... }
+func MapEach[K comparable, V any](m map[K]V, fn func(K, V) bool) {
+	for k, v := range m {
+		if !fn(k, v) {
+			break
+		}
+	}
+}
+
 // Keys returns all keys from the map.
 // Ruby: hash.keys
 func Keys[K comparable, V any](m map[K]V) []K {

@@ -58,13 +58,22 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			// Check for kernel functions that can be used without parens
 			g.needsRuntime = true
 			g.buf.WriteString(runtimeCall)
+		} else if g.currentClass != "" && g.currentClassModuleMethods[e.Name] {
+			// Module method call within class - generate as self.method()
+			recv := receiverName(g.currentClass)
+			g.buf.WriteString(fmt.Sprintf("%s.%s()", recv, e.Name))
 		} else {
 			g.buf.WriteString(e.Name)
 		}
 	case *ast.InstanceVar:
 		if g.currentClass != "" {
 			recv := receiverName(g.currentClass)
-			g.buf.WriteString(fmt.Sprintf("%s.%s", recv, e.Name))
+			// Use underscore prefix for accessor fields to match struct definition
+			goFieldName := e.Name
+			if g.accessorFields[e.Name] {
+				goFieldName = "_" + e.Name
+			}
+			g.buf.WriteString(fmt.Sprintf("%s.%s", recv, goFieldName))
 		} else {
 			g.buf.WriteString(fmt.Sprintf("/* @%s outside class */", e.Name))
 		}
@@ -94,6 +103,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genSpawnExpr(e)
 	case *ast.AwaitExpr:
 		g.genAwaitExpr(e)
+	case *ast.ConcurrentlyExpr:
+		g.genConcurrentlyExpr(e)
 
 	// Special
 	case *ast.SuperExpr:
@@ -1005,11 +1016,36 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 
 	g.needsRuntime = true
 
+	// Check if iterating over a map with two parameters (key, value)
+	// Use semantic analysis for Go type if available
+	var goType string
+	if g.typeInfo != nil {
+		goType = g.typeInfo.GetGoType(iterable)
+	}
+	if goType == "" {
+		goType = g.inferTypeFromExpr(iterable)
+	}
+
+	// Check for map iteration with two parameters
+	isMapIteration := len(block.Params) >= 2 && (strings.HasPrefix(goType, "map[") || goType == "Map")
+
+	if isMapIteration {
+		// If we have semantic type info with specific map type, use it; otherwise infer
+		if strings.HasPrefix(goType, "map[") {
+			g.genMapEachBlock(iterable, block, goType)
+		} else {
+			// Fall back to any types for untyped maps
+			g.genMapEachBlock(iterable, block, "map[any]any")
+		}
+		return
+	}
+
 	varName := "_"
 	if len(block.Params) > 0 {
 		varName = block.Params[0]
 	}
 
+	// runtime.Each uses any, not generics
 	g.buf.WriteString("runtime.Each(")
 	g.genExpr(iterable)
 	g.buf.WriteString(", func(")
@@ -1030,6 +1066,83 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 
 	g.writeIndent()
 	g.buf.WriteString("})")
+}
+
+func (g *Generator) genMapEachBlock(iterable ast.Expression, block *ast.BlockExpr, mapType string) {
+	keyName := block.Params[0]
+	valueName := block.Params[1]
+
+	// Extract key and value types from map[K]V
+	keyType, valueType := g.parseMapType(mapType)
+
+	g.buf.WriteString("runtime.MapEach(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(keyName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(keyType)
+	g.buf.WriteString(", ")
+	g.buf.WriteString(valueName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(valueType)
+	g.buf.WriteString(") bool {\n")
+
+	prevKeyType, keyWasDefinedBefore := g.vars[keyName]
+	prevValueType, valueWasDefinedBefore := g.vars[valueName]
+	g.vars[keyName] = keyType
+	g.vars[valueName] = valueType
+
+	g.pushContext(ctxIterBlock)
+	g.indent++
+	for _, stmt := range block.Body {
+		g.genStatement(stmt)
+	}
+	g.writeIndent()
+	g.buf.WriteString("return true\n")
+	g.indent--
+	g.popContext()
+
+	if keyWasDefinedBefore {
+		g.vars[keyName] = prevKeyType
+	} else {
+		delete(g.vars, keyName)
+	}
+	if valueWasDefinedBefore {
+		g.vars[valueName] = prevValueType
+	} else {
+		delete(g.vars, valueName)
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// parseMapType extracts key and value types from a Go map type string like "map[string]int"
+func (g *Generator) parseMapType(mapType string) (keyType, valueType string) {
+	// map[string]int -> keyType="string", valueType="int"
+	if !strings.HasPrefix(mapType, "map[") {
+		return "any", "any"
+	}
+	rest := mapType[4:] // Skip "map["
+	bracketCount := 1
+	keyEnd := 0
+	for i, c := range rest {
+		if c == '[' {
+			bracketCount++
+		} else if c == ']' {
+			bracketCount--
+			if bracketCount == 0 {
+				keyEnd = i
+				break
+			}
+		}
+	}
+	if keyEnd == 0 {
+		return "any", "any"
+	}
+	keyType = rest[:keyEnd]
+	valueType = rest[keyEnd+1:]
+	return keyType, valueType
 }
 
 func (g *Generator) genRangeEachBlock(rangeExpr ast.Expression, block *ast.BlockExpr) {
@@ -1074,6 +1187,7 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 		indexName = block.Params[1]
 	}
 
+	// runtime.EachWithIndex uses any, not generics
 	g.buf.WriteString("runtime.EachWithIndex(")
 	g.genExpr(iterable)
 	g.buf.WriteString(", func(")
@@ -1237,10 +1351,13 @@ func (g *Generator) genScopedSpawnBlock(scope ast.Expression, block *ast.BlockEx
 
 func (g *Generator) genSymbolToProcBlockCall(iterable ast.Expression, stp *ast.SymbolToProcExpr, method blockMethod) {
 	g.needsRuntime = true
+	elemType := g.inferArrayElementGoType(iterable)
 	g.buf.WriteString(method.runtimeFunc)
 	g.buf.WriteString("(")
 	g.genExpr(iterable)
-	g.buf.WriteString(", func(x any) (")
+	g.buf.WriteString(", func(x ")
+	g.buf.WriteString(elemType)
+	g.buf.WriteString(") (")
 	g.buf.WriteString(method.returnType)
 	g.buf.WriteString(", bool, bool) { return runtime.CallMethod(x, \"")
 	g.buf.WriteString(stp.Method)
@@ -1251,6 +1368,9 @@ func (g *Generator) genSymbolToProcBlockCall(iterable ast.Expression, stp *ast.S
 
 func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExpr, args []ast.Expression, method blockMethod) {
 	g.needsRuntime = true
+
+	// Infer element type for the block parameter
+	elemType := g.inferArrayElementGoType(iterable)
 
 	var param1Name, param2Name string
 	if method.hasAccumulator {
@@ -1286,17 +1406,30 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 	}
 
 	g.buf.WriteString(", func(")
+	returnType := method.returnType
 	if method.hasAccumulator {
+		// For reduce: infer acc type from initial value, element is inferred from iterable
+		accType := "any"
+		if len(args) > 0 {
+			accType = mapType(g.inferTypeFromExpr(args[0]))
+		}
+		// Return type matches accumulator type
+		returnType = accType
 		g.buf.WriteString(param1Name)
-		g.buf.WriteString(" any, ")
+		g.buf.WriteString(" ")
+		g.buf.WriteString(accType)
+		g.buf.WriteString(", ")
 		g.buf.WriteString(param2Name)
-		g.buf.WriteString(" any")
+		g.buf.WriteString(" ")
+		g.buf.WriteString(elemType)
 	} else {
+		// For map/select/etc: element is inferred type
 		g.buf.WriteString(param1Name)
-		g.buf.WriteString(" any")
+		g.buf.WriteString(" ")
+		g.buf.WriteString(elemType)
 	}
 	g.buf.WriteString(") (")
-	g.buf.WriteString(method.returnType)
+	g.buf.WriteString(returnType)
 	if method.usesIncludeFlag {
 		g.buf.WriteString(", bool, bool) {\n")
 	} else {
@@ -1310,7 +1443,7 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 		g.vars[param2Name] = ""
 	}
 
-	g.pushContextWithInclude(ctxTransformBlock, method.returnType, method.usesIncludeFlag)
+	g.pushContextWithInclude(ctxTransformBlock, returnType, method.usesIncludeFlag)
 	g.indent++
 
 	if len(block.Body) > 0 {
@@ -1469,6 +1602,16 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 		}
 	}
 
+	// Handle property-style array/map method calls
+	if g.genArrayPropertyMethod(sel) {
+		return
+	}
+
+	// Handle property-style stdLib method calls (Int.even?, Float.floor, etc.)
+	if g.genStdLibPropertyMethod(sel) {
+		return
+	}
+
 	if g.isGoInterop(sel.X) {
 		g.genExpr(sel.X)
 		g.buf.WriteString(".")
@@ -1490,6 +1633,124 @@ func (g *Generator) isGoInterop(expr ast.Expression) bool {
 	default:
 		return false
 	}
+}
+
+// genArrayPropertyMethod handles property-style array and map method calls
+// like nums.sum, nums.first, m.keys, etc.
+// Returns true if the method was handled, false otherwise.
+func (g *Generator) genArrayPropertyMethod(sel *ast.SelectorExpr) bool {
+	receiverType := g.inferTypeFromExpr(sel.X)
+	elemType := g.inferArrayElementGoType(sel.X)
+
+	// Handle array property methods
+	if strings.HasPrefix(receiverType, "[]") || receiverType == "Array" {
+		g.needsRuntime = true
+		switch sel.Sel {
+		case "sum":
+			if elemType == "float64" {
+				g.buf.WriteString("runtime.SumFloat(")
+			} else {
+				g.buf.WriteString("runtime.SumInt(")
+			}
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		case "min":
+			// Use Ptr versions that return *T for optional coalescing
+			if elemType == "float64" {
+				g.buf.WriteString("runtime.MinFloatPtr(")
+			} else {
+				g.buf.WriteString("runtime.MinIntPtr(")
+			}
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		case "max":
+			if elemType == "float64" {
+				g.buf.WriteString("runtime.MaxFloatPtr(")
+			} else {
+				g.buf.WriteString("runtime.MaxIntPtr(")
+			}
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		case "first":
+			g.buf.WriteString("runtime.FirstPtr(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		case "last":
+			g.buf.WriteString("runtime.LastPtr(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		case "sorted":
+			g.buf.WriteString("runtime.Sort(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		}
+	}
+
+	// Handle map property methods
+	if strings.HasPrefix(receiverType, "map[") || receiverType == "Map" {
+		g.needsRuntime = true
+		switch sel.Sel {
+		case "keys":
+			g.buf.WriteString("runtime.Keys(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		case "values":
+			g.buf.WriteString("runtime.Values(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		}
+	}
+
+	return false
+}
+
+// genStdLibPropertyMethod handles property-style method calls on Int, Float, String types
+// like x.even?, x.abs, f.floor, s.upcase, etc.
+// Returns true if the method was handled, false otherwise.
+func (g *Generator) genStdLibPropertyMethod(sel *ast.SelectorExpr) bool {
+	receiverType := g.inferTypeFromExpr(sel.X)
+
+	// Map common Go types to Rugby types for lookup
+	lookupType := receiverType
+	switch receiverType {
+	case "int", "int64":
+		lookupType = "Int"
+	case "float64":
+		lookupType = "Float"
+	case "string":
+		lookupType = "String"
+	}
+
+	if methods, ok := stdLib[lookupType]; ok {
+		if def, ok := methods[sel.Sel]; ok {
+			g.needsRuntime = true
+			g.buf.WriteString(def.RuntimeFunc)
+			g.buf.WriteString("(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		}
+	}
+
+	// Also check uniqueMethods for methods with unique names
+	if def, ok := uniqueMethods[sel.Sel]; ok {
+		g.needsRuntime = true
+		g.buf.WriteString(def.RuntimeFunc)
+		g.buf.WriteString("(")
+		g.genExpr(sel.X)
+		g.buf.WriteString(")")
+		return true
+	}
+
+	return false
 }
 
 func (g *Generator) genSpawnExpr(e *ast.SpawnExpr) {
@@ -1527,4 +1788,52 @@ func (g *Generator) genAwaitExpr(e *ast.AwaitExpr) {
 	g.buf.WriteString("runtime.Await(")
 	g.genExpr(e.Task)
 	g.buf.WriteString(")")
+}
+
+func (g *Generator) genConcurrentlyExpr(e *ast.ConcurrentlyExpr) {
+	g.needsRuntime = true
+	g.buf.WriteString("func() any {\n")
+	g.indent++
+
+	// Create scope variable
+	scopeVar := e.ScopeVar
+	if scopeVar == "" {
+		scopeVar = "_scope"
+	}
+	g.vars[scopeVar] = "Scope"
+
+	// Create scope object
+	g.writeIndent()
+	g.buf.WriteString(fmt.Sprintf("%s := runtime.NewScope()\n", scopeVar))
+
+	// Generate: defer scope.Wait()
+	g.writeIndent()
+	g.buf.WriteString(fmt.Sprintf("defer %s.Wait()\n", scopeVar))
+
+	// Generate body, returning the last expression's value
+	if len(e.Body) > 0 {
+		for i, stmt := range e.Body {
+			if i == len(e.Body)-1 {
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+				} else {
+					g.genStatement(stmt)
+					g.writeIndent()
+					g.buf.WriteString("return nil\n")
+				}
+			} else {
+				g.genStatement(stmt)
+			}
+		}
+	} else {
+		g.writeIndent()
+		g.buf.WriteString("return nil\n")
+	}
+
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}()")
 }

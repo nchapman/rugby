@@ -211,6 +211,61 @@ end`
 	}
 }
 
+func TestParseConcurrentlyExpression(t *testing.T) {
+	// Test concurrently as an expression (used in assignment)
+	tests := []struct {
+		input    string
+		desc     string
+		scopeVar string
+		bodyLen  int
+	}{
+		{`result = concurrently do |scope|
+	a = scope.spawn { 1 }
+	await a
+end`, "concurrently with scope var", "scope", 2},
+		{`result = concurrently do |s|
+	s.spawn { compute() }
+	42
+end`, "concurrently with short scope var", "s", 2},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+
+		if len(p.Errors()) != 0 {
+			t.Errorf("%s: parser errors: %v", tt.desc, p.Errors())
+			continue
+		}
+
+		if len(program.Declarations) != 1 {
+			t.Errorf("%s: expected 1 declaration, got %d", tt.desc, len(program.Declarations))
+			continue
+		}
+
+		assignStmt, ok := program.Declarations[0].(*ast.AssignStmt)
+		if !ok {
+			t.Errorf("%s: expected AssignStmt, got %T", tt.desc, program.Declarations[0])
+			continue
+		}
+
+		concExpr, ok := assignStmt.Value.(*ast.ConcurrentlyExpr)
+		if !ok {
+			t.Errorf("%s: expected ConcurrentlyExpr, got %T", tt.desc, assignStmt.Value)
+			continue
+		}
+
+		if concExpr.ScopeVar != tt.scopeVar {
+			t.Errorf("%s: expected scope var '%s', got '%s'", tt.desc, tt.scopeVar, concExpr.ScopeVar)
+		}
+
+		if len(concExpr.Body) != tt.bodyLen {
+			t.Errorf("%s: expected %d statements in body, got %d", tt.desc, tt.bodyLen, len(concExpr.Body))
+		}
+	}
+}
+
 func TestParseChannelOperations(t *testing.T) {
 	tests := []struct {
 		input string

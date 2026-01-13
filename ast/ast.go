@@ -533,10 +533,12 @@ type ReturnStmt struct {
 func (r *ReturnStmt) node()     {}
 func (r *ReturnStmt) stmtNode() {}
 
-// PanicStmt represents a panic: panic "message"
+// PanicStmt represents a panic: panic "message" [if|unless cond]
 type PanicStmt struct {
-	Message Expression // the panic message/value
-	Line    int        // source line number
+	Message   Expression // the panic message/value
+	Condition Expression // optional condition for statement modifier (panic "msg" if cond)
+	IsUnless  bool       // true if modifier is "unless" instead of "if"
+	Line      int        // source line number
 }
 
 func (r *PanicStmt) node()     {}
@@ -820,3 +822,14 @@ type ConcurrentlyStmt struct {
 
 func (c *ConcurrentlyStmt) node()     {}
 func (c *ConcurrentlyStmt) stmtNode() {}
+
+// ConcurrentlyExpr is the expression form of concurrently: result = concurrently do |scope| ... end
+// Returns the last expression in the block
+type ConcurrentlyExpr struct {
+	ScopeVar string      // the scope variable name (e.g., "scope")
+	Body     []Statement // statements inside the block
+	Line     int         // source line number
+}
+
+func (c *ConcurrentlyExpr) node()     {}
+func (c *ConcurrentlyExpr) exprNode() {}

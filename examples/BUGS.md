@@ -4,132 +4,101 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 
 ## Summary
 
-| Example | Status | Bugs |
-|---------|--------|------|
+| Example | Status | Notes |
+|---------|--------|-------|
 | 01_hello.rg | ✅ PASS | None |
-| 02_types.rg | ❌ FAIL | Integer/Float methods not implemented |
+| 02_types.rg | ✅ PASS | Int/Float methods now work |
 | 03_control_flow.rg | ✅ PASS | None |
-| 04_loops.rg | ❌ FAIL | `||=` not implemented, loop modifiers not implemented |
-| 05_functions.rg | ❌ FAIL | Cannot return concrete type from optional return |
-| 06_classes.rg | ❌ FAIL | getter/property with parameter promotion broken |
-| 07_interfaces.rg | ❌ FAIL | Structural typing for interface parameters broken |
-| 08_modules.rg | ❌ FAIL | Module method calls from within class broken |
-| 09_blocks.rg | ❌ FAIL | Block methods with arguments (reduce, upto, etc) broken |
-| 10_optionals.rg | ❌ FAIL | Optional return types, passing concrete to optional param |
-| 11_errors.rg | ❌ FAIL | Go imports not recognized, rescue => err not implemented |
-| 12_strings.rg | ❌ FAIL | Range slicing not implemented |
-| 13_ranges.rg | ❌ FAIL | Range slicing not implemented |
-| 14_go_interop.rg | ❌ FAIL | Go imports not recognized |
-| 15_concurrency.rg | ❌ FAIL | `concurrently` not implemented |
+| 04_loops.rg | ❌ FAIL | Predicate methods on arrays (any?, empty?) |
+| 05_functions.rg | ✅ PASS | Optional return types now work |
+| 06_classes.rg | ❌ FAIL | "missing return" for string-returning methods |
+| 07_interfaces.rg | ❌ FAIL | Structural typing for interface parameters |
+| 08_modules.rg | ❌ FAIL | Pointer printing instead of values |
+| 09_blocks.rg | ✅ PASS | Block methods now work |
+| 10_optionals.rg | ❌ FAIL | "if let" pattern not implemented |
+| 11_errors.rg | ❌ FAIL | os.ReadFile multi-value return issues |
+| 12_strings.rg | ❌ FAIL | String methods (contains?, etc.) |
+| 13_ranges.rg | ❌ FAIL | Range.size method not implemented |
+| 14_go_interop.rg | ❌ FAIL | Multi-value assignment (err undefined) |
+| 15_concurrency.rg | ❌ FAIL | Chan generic syntax, sync.WaitGroup.new |
 
 ---
 
-## Bug Details
+## Fixed Bugs
 
-### BUG-001: Integer methods not implemented (spec 12.6)
-**File:** 02_types.rg
-**Spec:** Section 12.6
-**Code:**
-```ruby
-x = -7
-puts x.even?      # should work
-puts x.odd?       # should work
-puts x.abs        # should work
-puts x.positive?  # should work
-```
-**Error:** `x.even undefined (type int has no field or method even)`
-**Expected:** These methods should be inlined to Go expressions or runtime calls.
+### ~~BUG-001: Integer methods~~ ✅ FIXED
+Integer methods (`even?`, `odd?`, `abs`, `positive?`, `negative?`, `zero?`, `to_s`, `to_f`) now work via runtime calls.
+
+### ~~BUG-002: Float methods~~ ✅ FIXED
+Float methods (`floor`, `ceil`, `round`, `truncate`, `abs`, `positive?`, `negative?`, `zero?`, `to_s`, `to_i`) now work via runtime calls.
+
+### ~~BUG-003: Integer to_s/to_f~~ ✅ FIXED
+Conversion methods now implemented.
+
+### ~~BUG-004: `||=` operator~~ ✅ FIXED
+The `||=` operator now works correctly.
+
+### ~~BUG-005: Loop modifiers~~ ✅ FIXED
+Statement modifiers (`while`/`until` after statements) now work, including with compound assignment.
+
+### ~~BUG-006: Optional return types~~ ✅ FIXED
+Can now return concrete types from optional return type functions.
+
+### ~~BUG-007: getter/property with parameter promotion~~ ✅ FIXED
+Getter accessors now work with parameter promotion.
+
+### ~~BUG-009: Module method resolution~~ ✅ FIXED
+Methods from included modules are now callable within the class.
+
+### ~~BUG-010: Block methods with arguments~~ ✅ FIXED
+`reduce`, `upto`, `downto` and other block methods with initial values now work.
+
+### ~~BUG-011: Optional parameters~~ ✅ FIXED
+Can now pass concrete types to optional parameters.
+
+### ~~BUG-012: Go package imports~~ ✅ FIXED
+Go standard library imports are now recognized.
+
+### ~~BUG-013: rescue => err binding~~ ✅ FIXED
+Error binding in rescue blocks now works.
+
+### ~~BUG-015: Range slicing~~ ✅ FIXED
+Range indexing now slices arrays and strings.
+
+### ~~BUG-016: concurrently expression~~ ✅ FIXED
+`concurrently do |scope| ... end` now works as an expression in assignment context.
 
 ---
 
-### BUG-002: Float methods not implemented (spec 12.7)
-**File:** 02_types.rg
-**Spec:** Section 12.7
-**Code:**
-```ruby
-f = 3.7
-puts f.floor   # should call math.Floor
-puts f.ceil    # should call math.Ceil
-puts f.round   # should call math.Round
-```
-**Error:** `f.floor undefined (type float64 has no field or method floor)`
+## Remaining Bugs
 
----
-
-### BUG-003: Integer to_s/to_f not implemented (spec 12.6)
-**File:** 02_types.rg
-**Spec:** Section 12.6
-**Code:**
-```ruby
-num = 42
-puts num.to_s  # should call strconv.Itoa
-puts num.to_f  # should cast to float64
-```
-**Error:** `num.toS undefined`
-
----
-
-### BUG-004: `||=` operator not implemented (spec 5.1)
+### BUG-017: Predicate methods on arrays
 **File:** 04_loops.rg
-**Spec:** Section 5.1
-**Code:**
-```ruby
-cache : String? = nil
-cache ||= "default value"
-```
-**Error:** Parser fails with `expected 'end' to close function`
-
----
-
-### BUG-005: Loop modifiers not implemented (spec 5.6)
-**File:** 04_loops.rg
-**Spec:** Section 5.6
 **Code:**
 ```ruby
 items = [1, 2, 3]
 puts items.shift while items.any?
-
-counter = 0
-counter += 1 until counter == 3
 ```
-**Error:** Parser fails - doesn't recognize `statement while condition` form
+**Error:** `items.any undefined (type []int has no field or method any)`
+**Expected:** `any?` and `empty?` should work on arrays
 
 ---
 
-### BUG-006: Cannot return concrete type from optional return type (spec 4.4)
-**File:** 05_functions.rg, 10_optionals.rg
-**Spec:** Section 4.4
-**Code:**
-```ruby
-def find_user(id : Int) -> String?
-  return "Alice" if id == 1
-  nil
-end
-```
-**Error:** `cannot return String as String?`
-**Expected:** Concrete `String` should be implicitly convertible to `String?`
-
----
-
-### BUG-007: getter/property conflicts with parameter promotion
+### BUG-018: Missing return detection for string methods
 **File:** 06_classes.rg
-**Spec:** Section 7.4
 **Code:**
 ```ruby
-class Person
-  getter name : String
-  def initialize(@name : String)
-  end
+def to_s -> String
+  "(#{@x}, #{@y})"
 end
 ```
-**Error:** `field and method with the same name name`
-**Expected:** getter should work seamlessly with parameter promotion
+**Error:** `missing return`
+**Expected:** Last expression should be implicit return
 
 ---
 
-### BUG-008: Structural typing for interface parameters broken
+### BUG-008: Structural typing for interface parameters (still failing)
 **File:** 07_interfaces.rg
-**Spec:** Section 7.6, 9
 **Code:**
 ```ruby
 def greet(s : Speaker)
@@ -144,152 +113,94 @@ greet(dog)  # Dog implements Speaker
 
 ---
 
-### BUG-009: Module method calls within class not resolved
+### BUG-019: Pointer printing instead of values
 **File:** 08_modules.rg
-**Spec:** Section 8
-**Code:**
-```ruby
-module Greetable
-  def greet -> String
-    "Hello!"
-  end
-end
-
-class Greeter
-  include Greetable
-
-  def personalized_greet -> String
-    "#{greet} I'm #{@name}."  # calling greet from module
-  end
-end
-```
-**Error:** `undefined: 'greet'`
-**Expected:** Methods from included modules should be callable within the class
+**Error:** Prints memory addresses instead of values when printing objects
 
 ---
 
-### BUG-010: Block methods with arguments broken (spec 12.3, 12.6)
-**File:** 09_blocks.rg
-**Spec:** Section 12.3, 12.6
-**Code:**
-```ruby
-nums.reduce(0) { |acc, n| acc + n }
-1.upto(3) { |i| puts i }
-3.downto(1) { |i| puts i }
-```
-**Error:** `wrong number of arguments for 'reduce': expected 0, got 1`
-**Expected:** These methods take an initial value argument
-
----
-
-### BUG-011: Cannot pass concrete type to optional parameter
+### BUG-020: "if let" pattern not implemented
 **File:** 10_optionals.rg
-**Spec:** Section 4.4
 **Code:**
 ```ruby
-class User
-  def initialize(@name : String, @address : Address?)
-  end
+if let user = find_user(2)
+  puts "Found: #{user.name}"
 end
-
-addr = Address.new("NYC", "10001")
-user = User.new("Charlie", addr)  # addr is Address, param is Address?
 ```
-**Error:** `cannot use Address as Address? for parameter '@address'`
+**Error:** `assignment mismatch: 2 variables but findUser returns 1 value`
+**Expected:** `if let` should bind the unwrapped value
 
 ---
 
-### BUG-012: Go package imports not recognized
+### BUG-021: Multi-value Go function returns
 **File:** 11_errors.rg, 14_go_interop.rg
-**Spec:** Section 11
 **Code:**
 ```ruby
-import errors
-import strings
-import os
-
-errors.New("message")
-strings.ToUpper("hello")
-os.read_file("/path")
+_, read_err = os.read_file("/nonexistent/file")
 ```
-**Error:** `undefined: 'errors'`, `undefined: 'strings'`
-**Expected:** Go standard library imports should work
+**Error:** `assignment mismatch` or `undefined: 'err'`
+**Expected:** Go functions returning multiple values should work
 
 ---
 
-### BUG-013: `rescue => err` binding not implemented (spec 15.3)
-**File:** 11_errors.rg
-**Spec:** Section 15.3
+### BUG-022: String methods not implemented
+**File:** 12_strings.rg
 **Code:**
 ```ruby
-data = divide(5, 0) rescue => err do
-  puts "Error: #{err}"
-  -999
-end
+greeting.contains?("World")
 ```
-**Expected:** Error should be captured in `err` variable
+**Error:** `greeting.contains undefined (type string has no field or method contains)`
+**Expected:** String methods like `contains?`, `starts_with?`, etc. should work
 
 ---
 
-### BUG-014: `error_is?` and `error_as` not implemented (spec 15.7)
-**File:** 11_errors.rg
-**Spec:** Section 15.7
+### BUG-023: Range.size method
+**File:** 13_ranges.rg
 **Code:**
 ```ruby
-if error_is?(err, os.ErrNotExist)
-  puts "File not found"
-end
+r = 1..10
+puts r.size
 ```
+**Error:** `invalid argument: r for built-in len`
+**Expected:** Range should have a `size` method
 
 ---
 
-### BUG-015: Range slicing not implemented (spec 4.2)
-**File:** 12_strings.rg, 13_ranges.rg
-**Spec:** Section 4.2
-**Code:**
-```ruby
-word = "Rugby"
-puts word[0..2]      # should return "Rug"
-
-letters = ["a", "b", "c", "d", "e"]
-puts letters[1..3]   # should return ["b", "c", "d"]
-```
-**Error:** `array/string index must be Int, got Range`
-**Expected:** Range indexing should slice arrays and strings
-
----
-
-### BUG-016: `concurrently` not implemented (spec 13.5)
+### BUG-024: Chan generic syntax not recognized
 **File:** 15_concurrency.rg
-**Spec:** Section 13.5
 **Code:**
 ```ruby
-result = concurrently do |scope|
-  t1 = scope.spawn { compute(10) }
-  await t1
-end
+ch = Chan[Int].new(3)
 ```
-**Error:** `block can only follow a method call`
+**Error:** `undefined: 'Chan'`
+**Expected:** Generic channel syntax should work
 
 ---
 
-## Priority Order for Fixes
+### BUG-025: sync.WaitGroup.new syntax
+**File:** 15_concurrency.rg
+**Code:**
+```ruby
+wg = sync.WaitGroup.new
+```
+**Error:** `sync.WaitGroup.New undefined`
+**Expected:** `.new` should map to Go's zero-value initialization or constructor
 
-### High Priority (Breaks fundamental features)
-1. **BUG-006**: Optional return types - fundamental to Rugby's error handling
-2. **BUG-011**: Optional parameters - fundamental to optional types
-3. **BUG-008**: Interface structural typing - core OOP feature
-4. **BUG-012**: Go imports - essential for Go interop
-5. **BUG-015**: Range slicing - common Ruby idiom
+---
 
-### Medium Priority (Breaks common patterns)
-6. **BUG-007**: getter/property with parameter promotion
-7. **BUG-009**: Module method resolution
-8. **BUG-010**: Block methods with arguments (reduce, upto, downto)
-9. **BUG-001/002/003**: Numeric methods
+## Priority Order for Remaining Fixes
 
-### Lower Priority (Advanced features)
-10. **BUG-004**: `||=` operator
-11. **BUG-005**: Loop modifiers
-12. **BUG-013/014**: Advanced error handling
-13. **BUG-016**: Structured concurrency
+### High Priority
+1. **BUG-008**: Interface structural typing - core OOP feature
+2. **BUG-021**: Multi-value Go function returns - essential for Go interop
+3. **BUG-018**: Missing return detection - common pattern
+
+### Medium Priority
+4. **BUG-017**: Predicate methods on arrays
+5. **BUG-020**: "if let" pattern
+6. **BUG-022**: String methods
+7. **BUG-023**: Range.size method
+
+### Lower Priority
+8. **BUG-019**: Pointer printing
+9. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new

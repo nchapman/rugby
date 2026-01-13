@@ -73,6 +73,23 @@ func (a *Analyzer) defineBuiltins() {
 // Analyze performs semantic analysis on the program.
 // Returns the list of errors found during analysis.
 func (a *Analyzer) Analyze(program *ast.Program) []error {
+	// Register Go package imports as valid identifiers
+	for _, imp := range program.Imports {
+		name := imp.Alias
+		if name == "" {
+			// Use last part of path as implicit alias (e.g., "encoding/json" -> "json")
+			parts := strings.Split(imp.Path, "/")
+			name = parts[len(parts)-1]
+		}
+		// Register the import as a Go package symbol in global scope
+		sym := &Symbol{
+			Name: name,
+			Kind: SymGoPackage,
+			Type: TypeAnyVal, // Go packages can have any methods
+		}
+		mustDefine(a.globalScope, sym)
+	}
+
 	// First pass: collect all top-level declarations (classes, interfaces, modules, functions)
 	for _, decl := range program.Declarations {
 		a.collectDeclaration(decl)
@@ -499,6 +516,16 @@ func (a *Analyzer) analyzeClassDecl(c *ast.ClassDecl) {
 	// Add fields to scope
 	for name, field := range cls.Fields {
 		mustDefine(classScope, NewVariable(name, field.Type))
+	}
+
+	// Add methods from included modules to scope
+	// These become callable as bare functions within class methods
+	for _, modName := range cls.Includes {
+		if mod := a.modules[modName]; mod != nil {
+			for _, method := range mod.Methods {
+				mustDefine(classScope, method)
+			}
+		}
 	}
 
 	// Analyze methods
@@ -1101,9 +1128,9 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		if sym == nil {
 			a.addError(&UndefinedError{Name: e.Name, Line: e.Line, Column: e.Column, Candidates: a.findSimilar(e.Name)})
 			typ = TypeUnknownVal
-		} else if sym.Kind == SymFunction {
-			// In Rugby, no-arg functions are called implicitly (like Ruby)
-			// Functions with required params must use parentheses
+		} else if sym.Kind == SymFunction || sym.Kind == SymMethod {
+			// In Rugby, no-arg functions/methods are called implicitly (like Ruby)
+			// Functions/methods with required params must use parentheses
 			// Variadic functions can be called with 0 args, so they're allowed
 			if len(sym.Params) > 0 && !sym.Variadic {
 				a.addError(&MethodRequiresArgumentsError{
@@ -1292,17 +1319,27 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 
 		switch leftType.Kind {
 		case TypeArray:
-			// Array index must be Int
-			a.checkIndexType(indexType)
-			typ = leftType.Elem
+			if indexType.Kind == TypeRange {
+				// Array slice with range - returns a slice of same type
+				typ = leftType
+			} else {
+				// Array index must be Int
+				a.checkIndexType(indexType)
+				typ = leftType.Elem
+			}
 		case TypeMap:
 			// Map key type is checked separately (not requiring Int)
 			// Map access returns optional
 			typ = NewOptionalType(leftType.ValueType)
 		case TypeString:
-			// String index must be Int
-			a.checkIndexType(indexType)
-			typ = TypeStringVal
+			if indexType.Kind == TypeRange {
+				// String slice with range - returns a string
+				typ = TypeStringVal
+			} else {
+				// String index must be Int
+				a.checkIndexType(indexType)
+				typ = TypeStringVal
+			}
 		default:
 			typ = TypeUnknownVal
 		}
@@ -1470,7 +1507,19 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		if e.Default != nil {
 			typ = a.analyzeExpr(e.Default)
 		} else if e.Block != nil {
-			a.analyzeBlock(e.Block)
+			// Create a new scope for the block and register error binding if present
+			blockScope := NewScope(ScopeBlock, a.scope)
+			if e.ErrName != "" {
+				// Register the error binding variable with error type
+				mustDefine(blockScope, NewSymbol(e.ErrName, SymVariable, TypeErrorVal))
+			}
+			// Analyze the block with the new scope
+			prevScope := a.scope
+			a.scope = blockScope
+			for _, stmt := range e.Block.Body {
+				a.analyzeStatement(stmt)
+			}
+			a.scope = prevScope
 			typ = TypeUnknownVal
 		} else {
 			typ = TypeUnknownVal
@@ -1489,6 +1538,20 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		} else {
 			typ = TypeUnknownVal
 		}
+
+	case *ast.ConcurrentlyExpr:
+		// Create block scope for the concurrently block
+		blockScope := NewScope(ScopeBlock, a.scope)
+		if e.ScopeVar != "" {
+			mustDefine(blockScope, NewSymbol(e.ScopeVar, SymVariable, TypeUnknownVal))
+		}
+		prevScope := a.scope
+		a.scope = blockScope
+		for _, stmt := range e.Body {
+			a.analyzeStatement(stmt)
+		}
+		a.scope = prevScope
+		typ = TypeUnknownVal // Returns any
 
 	case *ast.BlockExpr:
 		a.analyzeBlock(e)
@@ -1976,6 +2039,23 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 		return to.Kind == TypeOptional || to.Kind == TypeError
 	}
 
+	// Optional types: concrete type T can be assigned to T?
+	// This enables returning String from a String? function, passing Address to Address? param, etc.
+	if to.Kind == TypeOptional && to.Elem != nil {
+		// If the source type matches the optional's inner type, it's assignable
+		if a.isAssignable(to.Elem, from) {
+			return true
+		}
+	}
+
+	// Interface structural typing: a class can be assigned to an interface
+	// if it has all the required methods (Go-style structural typing)
+	if to.Kind == TypeInterface && to.Name != "" && from.Kind == TypeClass && from.Name != "" {
+		if a.classImplementsInterface(from.Name, to.Name) {
+			return true
+		}
+	}
+
 	// Numeric widening: Int can be assigned to Int64 or Float
 	if from.Kind == TypeInt {
 		if to.Kind == TypeInt64 || to.Kind == TypeFloat {
@@ -1988,6 +2068,50 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 	}
 
 	return to.Equals(from)
+}
+
+// classImplementsInterface checks if a class structurally implements an interface.
+// This enables Go-style duck typing where explicit 'implements' is not required.
+func (a *Analyzer) classImplementsInterface(className, interfaceName string) bool {
+	cls := a.classes[className]
+	iface := a.interfaces[interfaceName]
+	if cls == nil || iface == nil {
+		return false
+	}
+
+	// Check each interface method is implemented by the class
+	for methodName, ifaceMethod := range iface.Methods {
+		clsMethod := cls.GetMethod(methodName)
+		if clsMethod == nil {
+			return false
+		}
+
+		// Check parameter count matches
+		if len(clsMethod.Params) != len(ifaceMethod.Params) {
+			return false
+		}
+
+		// Check parameter types match
+		for i, ifaceParam := range ifaceMethod.Params {
+			clsParam := clsMethod.Params[i]
+			if !a.typesMatch(ifaceParam.Type, clsParam.Type) {
+				return false
+			}
+		}
+
+		// Check return types match
+		if len(clsMethod.ReturnTypes) != len(ifaceMethod.ReturnTypes) {
+			return false
+		}
+		for i, ifaceRet := range ifaceMethod.ReturnTypes {
+			clsRet := clsMethod.ReturnTypes[i]
+			if !a.typesMatch(ifaceRet, clsRet) {
+				return false
+			}
+		}
+	}
+
+	return true
 }
 
 // findSimilar finds similar names for "did you mean?" suggestions.
@@ -2265,9 +2389,12 @@ func (a *Analyzer) intMethod(name string) *Symbol {
 		return NewMethod(name, nil, []*Type{TypeStringVal})
 	case "to_f":
 		return NewMethod(name, nil, []*Type{TypeFloatVal})
-	case "times", "upto", "downto":
-		// These take a block and return nil
+	case "times":
+		// times takes no arguments, just a block
 		return NewMethod(name, nil, nil)
+	case "upto", "downto":
+		// upto/downto take 1 Int argument (the target)
+		return NewMethod(name, []*Symbol{NewParam("n", TypeIntVal)}, nil)
 	}
 	return nil
 }
@@ -2316,23 +2443,26 @@ func (a *Analyzer) arrayMethod(name string, elemType *Type) *Symbol {
 		return NewMethod(name, nil, []*Type{elemType})
 	case "min", "max":
 		return NewMethod(name, nil, []*Type{NewOptionalType(elemType)})
-	case "each", "each_with_index", "map", "select", "filter", "reject", "find", "detect", "reduce", "any?", "all?", "none?":
-		// Block methods - return type depends on method
+	case "each", "each_with_index":
+		return NewMethod(name, nil, nil)
+	case "map", "select", "filter", "reject", "find", "detect", "any?", "all?", "none?":
+		// These can take an optional symbol-to-proc argument (&:method)
+		method := NewMethod(name, nil, nil)
+		method.Variadic = true // Allow 0 or 1 argument for symbol-to-proc
 		switch name {
-		case "each", "each_with_index":
-			return NewMethod(name, nil, nil)
 		case "map":
-			// Returns Array[R] where R is block return - use unknown for now
-			return NewMethod(name, nil, []*Type{NewArrayType(TypeUnknownVal)})
+			method.ReturnTypes = []*Type{NewArrayType(TypeUnknownVal)}
 		case "select", "filter", "reject":
-			return NewMethod(name, nil, []*Type{NewArrayType(elemType)})
+			method.ReturnTypes = []*Type{NewArrayType(elemType)}
 		case "find", "detect":
-			return NewMethod(name, nil, []*Type{NewOptionalType(elemType)})
-		case "reduce":
-			return NewMethod(name, nil, []*Type{TypeUnknownVal})
+			method.ReturnTypes = []*Type{NewOptionalType(elemType)}
 		case "any?", "all?", "none?":
-			return NewMethod(name, nil, []*Type{TypeBoolVal})
+			method.ReturnTypes = []*Type{TypeBoolVal}
 		}
+		return method
+	case "reduce":
+		// reduce takes 1 argument (initial value)
+		return NewMethod(name, []*Symbol{NewParam("initial", TypeAnyVal)}, []*Type{TypeUnknownVal})
 	case "join":
 		return NewMethod(name, []*Symbol{NewParam("sep", TypeStringVal)}, []*Type{TypeStringVal})
 	case "push", "pop", "shift", "unshift":
