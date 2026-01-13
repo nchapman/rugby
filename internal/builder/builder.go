@@ -66,10 +66,7 @@ func (t *typeInfoAdapter) GetGoType(node ast.Node) string {
 }
 
 // Styles for pretty output
-var (
-	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
-)
+var successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 
 // Builder orchestrates the Rugby compilation process.
 type Builder struct {
@@ -672,21 +669,100 @@ func (b *Builder) GoBuild(genFiles []string, outputPath string) error {
 	return nil
 }
 
-// formatGoError attempts to make Go compiler errors more user-friendly.
+// formatGoError formats Go compiler errors to look like native Rugby errors.
 func (b *Builder) formatGoError(output string) error {
-	// The //line directives should already map errors to .rg files
-	// We just clean up the output a bit
+	formatter := errors.NewFormatter(b.colorMode)
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	var result []string
+	var formatted []string
+	sourceCache := make(map[string]*errors.Source)
+
 	for _, line := range lines {
-		// Skip internal Go paths
-		if strings.Contains(line, "/go/src/") {
+		// Skip internal Go paths and noise
+		if strings.Contains(line, "/go/src/") ||
+			strings.HasPrefix(line, "#") ||
+			strings.HasPrefix(line, "vet:") {
 			continue
 		}
-		result = append(result, line)
+
+		// Parse Go error format: file:line:col: message or file:line: message
+		file, lineNum, col, msg := parseGoError(line, b.project.GenDir)
+		if file == "" || !strings.HasSuffix(file, ".rg") {
+			// Not a Rugby file error, keep as-is
+			formatted = append(formatted, line)
+			continue
+		}
+
+		// Load source if not cached
+		src, ok := sourceCache[file]
+		if !ok {
+			content, err := os.ReadFile(file)
+			if err == nil {
+				src = errors.NewSource(file, string(content))
+				sourceCache[file] = src
+			} else {
+				// Can't load source - keep raw error line
+				formatted = append(formatted, line)
+				continue
+			}
+		}
+
+		// Format with source context
+		formatted = append(formatted, formatter.FormatSemanticError(msg, src, lineNum, col))
 	}
 
-	return fmt.Errorf("%s\n%s", errorStyle.Render("Build failed:"), strings.Join(result, "\n"))
+	if len(formatted) == 0 {
+		// No recognizable errors - return original output for debugging
+		return fmt.Errorf("build failed:\n%s", output)
+	}
+	return fmt.Errorf("%s", strings.TrimSpace(strings.Join(formatted, "")))
+}
+
+// parseGoError parses a Go compiler error line.
+// Returns file, line, column, message. Column may be 0 if not present.
+// genDir is used to resolve relative paths (Go errors are relative to the gen directory).
+func parseGoError(line string, genDir string) (file string, lineNum int, col int, msg string) {
+	// Format: file:line:col: message or file:line: message
+	// The file path may be relative (../../file.rg) or absolute
+
+	// Find the first colon after the file path
+	// Handle Windows paths (C:\...) by looking for .rg: pattern
+	idx := strings.Index(line, ".rg:")
+	if idx == -1 {
+		return "", 0, 0, line
+	}
+
+	file = line[:idx+3]  // include .rg
+	rest := line[idx+4:] // skip .rg:
+
+	// Resolve relative paths from the gen directory
+	if !filepath.IsAbs(file) {
+		file = filepath.Join(genDir, file)
+		file = filepath.Clean(file)
+	}
+
+	// Parse line number
+	colonIdx := strings.Index(rest, ":")
+	if colonIdx == -1 {
+		return file, 0, 0, rest
+	}
+
+	_, _ = fmt.Sscanf(rest[:colonIdx], "%d", &lineNum)
+	rest = rest[colonIdx+1:]
+
+	// Try to parse column number (format: col: message)
+	// Column appears before message and is a small positive integer
+	colonIdx = strings.Index(rest, ":")
+	if colonIdx > 0 {
+		var maybeCol int
+		n, _ := fmt.Sscanf(rest[:colonIdx], "%d", &maybeCol)
+		if n == 1 && maybeCol > 0 {
+			col = maybeCol
+			rest = rest[colonIdx+1:]
+		}
+	}
+
+	msg = strings.TrimSpace(rest)
+	return file, lineNum, col, msg
 }
 
 // execute runs the compiled binary.
