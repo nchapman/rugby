@@ -486,6 +486,10 @@ func (t *testTypeInfoAdapter) GetTupleTypes(node ast.Node) []string {
 	return nil
 }
 
+func (t *testTypeInfoAdapter) IsVariableUsedAt(node ast.Node, name string) bool {
+	return t.analyzer.IsVariableUsedAt(node, name)
+}
+
 func assertContains(t *testing.T, output, substr string) {
 	if !strings.Contains(output, substr) {
 		t.Errorf("expected output to contain %q, got:\n%s", substr, output)

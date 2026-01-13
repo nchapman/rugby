@@ -135,6 +135,11 @@ func (t *typeInfoAdapter) GetTupleTypes(node ast.Node) []string {
 	return nil
 }
 
+// IsVariableUsedAt checks if a variable declared at a node is actually used.
+func (t *typeInfoAdapter) IsVariableUsedAt(node ast.Node, name string) bool {
+	return t.analyzer.IsVariableUsedAt(node, name)
+}
+
 // Styles for pretty output
 var successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 

@@ -102,6 +102,10 @@ type TypeInfo interface {
 	// For a function returning (Int, error), returns ["Int", "error"].
 	// Returns nil if not a tuple type or unknown.
 	GetTupleTypes(node ast.Node) []string
+
+	// IsVariableUsedAt checks if a variable declared at a specific AST node is used.
+	// This is used to replace unused variables with _ in multi-value assignments.
+	IsVariableUsedAt(node ast.Node, name string) bool
 }
 
 type Generator struct {

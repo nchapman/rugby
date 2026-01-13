@@ -23,6 +23,12 @@ type Analyzer struct {
 	interfaces map[string]*Symbol
 	modules    map[string]*Symbol
 	functions  map[string]*Symbol
+
+	// Track which symbols are used (read) vs just declared
+	usedSymbols map[*Symbol]bool
+
+	// Track symbols declared at each AST node (for multi-assign unused var detection)
+	declaredAt map[ast.Node]map[string]*Symbol
 }
 
 // NewAnalyzer creates a new semantic analyzer.
@@ -37,6 +43,8 @@ func NewAnalyzer() *Analyzer {
 		interfaces:    make(map[string]*Symbol),
 		modules:       make(map[string]*Symbol),
 		functions:     make(map[string]*Symbol),
+		usedSymbols:   make(map[*Symbol]bool),
+		declaredAt:    make(map[ast.Node]map[string]*Symbol),
 	}
 	a.defineBuiltins()
 	return a
@@ -724,6 +732,9 @@ func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
 func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 	valueType := a.analyzeExpr(s.Value)
 
+	// Initialize tracking for symbols declared at this node
+	a.declaredAt[s] = make(map[string]*Symbol)
+
 	// For tuple unpacking, we need to match the number of names to tuple elements
 	if valueType.Kind == TypeTuple {
 		if len(s.Names) != len(valueType.Elements) {
@@ -743,6 +754,7 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 			if existing == nil {
 				v := NewVariable(name, elemType)
 				_ = a.scope.DefineOrShadow(v)
+				a.declaredAt[s][name] = v
 			}
 		}
 	} else if valueType.Kind == TypeOptional {
@@ -757,13 +769,17 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 			if valName != "_" {
 				existing := a.scope.LookupLocal(valName)
 				if existing == nil {
-					_ = a.scope.DefineOrShadow(NewVariable(valName, innerType))
+					v := NewVariable(valName, innerType)
+					_ = a.scope.DefineOrShadow(v)
+					a.declaredAt[s][valName] = v
 				}
 			}
 			if okName != "_" {
 				existing := a.scope.LookupLocal(okName)
 				if existing == nil {
-					_ = a.scope.DefineOrShadow(NewVariable(okName, TypeBoolVal))
+					v := NewVariable(okName, TypeBoolVal)
+					_ = a.scope.DefineOrShadow(v)
+					a.declaredAt[s][okName] = v
 				}
 			}
 		}
@@ -777,7 +793,9 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 			}
 			existing := a.scope.LookupLocal(name)
 			if existing == nil {
-				_ = a.scope.DefineOrShadow(NewVariable(name, TypeAnyVal))
+				v := NewVariable(name, TypeAnyVal)
+				_ = a.scope.DefineOrShadow(v)
+				a.declaredAt[s][name] = v
 			}
 		}
 	}
@@ -1355,6 +1373,10 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			}
 		} else {
 			typ = sym.Type
+			// Mark variable as used (read)
+			if sym.Kind == SymVariable || sym.Kind == SymParam {
+				a.usedSymbols[sym] = true
+			}
 		}
 
 	case *ast.InstanceVar:
@@ -2484,6 +2506,23 @@ func (a *Analyzer) GetSelectorKind(node ast.Node) ast.SelectorKind {
 func (a *Analyzer) setSelectorKind(sel *ast.SelectorExpr, kind ast.SelectorKind) {
 	a.selectorKinds[sel] = kind
 	sel.ResolvedKind = kind
+}
+
+// IsVariableUsedAt checks if a variable declared at a specific AST node is actually used.
+// This is used to detect unused variables in multi-value assignments.
+func (a *Analyzer) IsVariableUsedAt(node ast.Node, name string) bool {
+	if name == "_" {
+		return true // blank identifier is always "used"
+	}
+	declMap, ok := a.declaredAt[node]
+	if !ok {
+		return true // if not tracked, assume used to be safe
+	}
+	sym, ok := declMap[name]
+	if !ok {
+		return true // variable was not declared here, assume used
+	}
+	return a.usedSymbols[sym]
 }
 
 // GetSymbol looks up a symbol by name in the global scope.

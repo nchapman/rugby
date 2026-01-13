@@ -22,7 +22,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 08_modules.rg | ✅ PASS | Module methods now work as instance methods |
 | 09_blocks.rg | ✅ PASS | Block methods now work |
 | 10_optionals.rg | ✅ PASS | Optional handling now works (if let, safe nav, tuple unpacking, map/each) |
-| 11_errors.rg | ❌ FAIL | os.ReadFile multi-value return issues |
+| 11_errors.rg | ✅ PASS | Unused variables in multi-assign now auto-replaced with _ |
 | 12_strings.rg | ✅ PASS | String methods now work |
 | 13_ranges.rg | ✅ PASS | Range methods on variables now work |
 | 14_go_interop.rg | ✅ PASS | Multi-value Go function returns now work |
@@ -133,6 +133,9 @@ Go package type `.new` syntax like `sync.WaitGroup.new` now works, generating ze
 
 ### ~~BUG-034: Await returns any type, arithmetic fails~~ ✅ FIXED
 The `await` keyword now properly types its result as `any` when the task element type is unknown. The codegen uses `runtime.Add` for arithmetic on `any`-typed values from await, enabling patterns like `r1 + r2 + r3` in concurrently blocks.
+
+### ~~BUG-035: Unused variables in multi-value assignments~~ ✅ FIXED
+Variables declared in multi-value assignments that are never used are now automatically replaced with `_` in generated code. The semantic analyzer tracks variable usage, and codegen queries this to detect and replace unused variables, avoiding Go's "declared and not used" compile error.
 
 ---
 

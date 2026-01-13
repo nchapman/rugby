@@ -318,10 +318,23 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 		tupleTypes = g.typeInfo.GetTupleTypes(s.Value)
 	}
 
-	// Check if any names are new declarations
+	// Determine effective names (replace unused variables with _)
+	effectiveNames := make([]string, len(s.Names))
+	for i, name := range s.Names {
+		if name == "_" {
+			effectiveNames[i] = "_"
+		} else if g.typeInfo != nil && !g.typeInfo.IsVariableUsedAt(s, name) {
+			// Variable is declared but never used - replace with _
+			effectiveNames[i] = "_"
+		} else {
+			effectiveNames[i] = name
+		}
+	}
+
+	// Check if any effective names are new declarations
 	// Skip blank identifier (_) as it doesn't affect declaration status
 	allDeclared := true
-	for _, name := range s.Names {
+	for _, name := range effectiveNames {
 		if name == "_" {
 			continue
 		}
@@ -332,7 +345,7 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 	}
 
 	// Generate names
-	for i, name := range s.Names {
+	for i, name := range effectiveNames {
 		if i > 0 {
 			g.buf.WriteString(", ")
 		}
@@ -345,7 +358,7 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 	} else {
 		g.buf.WriteString(" := ")
 		// Mark new variables as declared with their types from semantic analysis
-		for i, name := range s.Names {
+		for i, name := range effectiveNames {
 			if name == "_" {
 				continue
 			}
