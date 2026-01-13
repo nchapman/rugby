@@ -72,31 +72,31 @@ Testing generated string output is fragile, and single-error stopping slows down
 
 Goal: Compiler errors should be helpful teachers, not cryptic complaints. Inspired by Rust and Elm's famously friendly error messages.
 
-### Error Rendering System
+### Error Rendering System ✅
 
-- [ ] **Source Context Display**
-    - [ ] Store source code reference in compiler context (pass through lexer → parser → semantic).
-    - [ ] Display 1-3 lines of source code with each error.
-    - [ ] Show line numbers in left gutter (dimmed).
-    - [ ] Handle edge cases: first/last lines, very long lines (truncate with `...`).
+- [x] **Source Context Display**
+    - [x] Store source code reference in compiler context (pass through lexer → parser → semantic).
+    - [x] Display 1-3 lines of source code with each error.
+    - [x] Show line numbers in left gutter (dimmed).
+    - [x] Handle edge cases: first/last lines, very long lines (truncate with `...`).
 
-- [ ] **Precise Error Spans**
-    - [ ] Audit AST nodes to ensure all have start position (Line, Column).
+- [x] **Precise Error Spans**
+    - [x] Audit AST nodes to ensure all have start position (Line, Column).
     - [ ] Add end position (EndLine, EndColumn) to AST nodes that span multiple tokens.
     - [ ] Update lexer to track token end positions.
-    - [ ] Render underlines (`^~~~`) or carets (`^`) pointing to exact error location.
+    - [x] Render underlines (`^~~~`) or carets (`^`) pointing to exact error location.
     - [ ] Support multi-line spans for things like unclosed blocks.
 
-- [ ] **Terminal Formatting**
-    - [ ] Create `errors/formatter.go` with `FormatError(err, source) string`.
-    - [ ] Add color support (detect TTY, respect `NO_COLOR` env var):
+- [x] **Terminal Formatting**
+    - [x] Create `errors/formatter.go` with `FormatError(err, source) string`.
+    - [x] Add color support (detect TTY, respect `NO_COLOR` env var):
         - Red: error header and primary underline.
         - Cyan: help suggestions.
         - Yellow: warnings.
         - Blue: notes and secondary locations.
         - Dim: line numbers, context lines.
-    - [ ] Bold for error message text.
-    - [ ] Support `--color=always|never|auto` flag.
+    - [x] Bold for error message text.
+    - [x] Support `--color=always|never|auto` flag.
 
 ### Rich Error Information
 
