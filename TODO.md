@@ -110,6 +110,8 @@ error: undefined: 'username' (did you mean 'user_name'?)
     - [x] Extended `TypeInfo` interface with `GetGoType()` method for Go type string generation.
     - [x] Added `GoType()` method to `semantic.Type` for centralized type-to-Go conversion.
     - [x] Type propagation: `inferTypeFromExpr()` now uses semantic type info for variables assigned from function calls.
+    - [x] Extended `TypeInfo` with `GetElementType()`, `GetKeyValueTypes()`, `GetTupleTypes()` for structured type queries.
+    - [x] Multi-value returns now properly type variables via `GetTupleTypes()` in `genMultiAssignStmt()`.
 
 - [x] **Zero-Value Fixes** ✅
     - [x] Added `interfaces` map to Generator to track declared interface types.

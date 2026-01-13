@@ -83,6 +83,15 @@ Underscore (`_`) is now recognized as a valid identifier, allowing patterns like
 ### ~~BUG-018: Missing return detection for string methods~~ ✅ FIXED
 The `to_s` and `message` methods now correctly generate implicit returns for the last expression when it's a string interpolation or other expression.
 
+### ~~BUG-027: Compound assignment to instance variable~~ ✅ FIXED
+Instance variable compound assignment (`@count += 1`) now works correctly, generating proper code like `c._count = c._count + 1`. The original example failure was due to field visibility issues, not the compound assignment pattern itself.
+
+### ~~BUG-028: to_s call resolves to wrong method name~~ ✅ FIXED
+Calling `to_s` on objects now correctly invokes the `String()` method. The semantic analyzer properly resolves `to_s` as a method call.
+
+### ~~BUG-030: Setter assignment~~ ✅ FIXED
+Property setter assignments like `person.email = "value"` now correctly generate setter method calls (e.g., `person.SetEmail("value")` for pub classes or `person.setEmail("value")` for private classes).
+
 ---
 
 ## Remaining Bugs
@@ -116,28 +125,6 @@ self.magnitude_squared == other.magnitude_squared
 
 ---
 
-### BUG-027: Compound assignment to instance variable broken
-**File:** 06_classes.rg
-**Code:**
-```ruby
-@count += 1
-```
-**Error:** `c.count (variable of type int) is not used` and `1 (untyped int constant) is not used`
-**Expected:** `@count += 1` should generate `c.count = c.count + 1`
-
----
-
-### BUG-028: to_s call resolves to wrong method name
-**File:** 06_classes.rg
-**Code:**
-```ruby
-puts "Point: #{p1.to_s}"
-```
-**Error:** `p1.toS undefined (type *Point has no field or method toS)`
-**Expected:** Calling `to_s` should invoke `String()` method
-
----
-
 ### BUG-029: Subclass constructors not generated
 **File:** 06_classes.rg
 **Code:**
@@ -146,17 +133,6 @@ cat = Cat.new("Whiskers")
 ```
 **Error:** `undefined: newCat`
 **Expected:** Subclasses should have constructors generated that call parent constructor
-
----
-
-### BUG-030: Setter assignment not generating correct code
-**File:** 06_classes.rg
-**Code:**
-```ruby
-person.email = "alice.new@example.com"
-```
-**Error:** `"alice.new@example.com" (untyped string constant) is not used`
-**Expected:** Property setter should be invoked
 
 ---
 
@@ -223,17 +199,14 @@ wg = sync.WaitGroup.new
 
 ### High Priority (06_classes.rg blockers)
 1. **BUG-026**: Method calls without parentheses - common pattern
-2. **BUG-027**: Compound assignment to instance variable
-3. **BUG-028**: to_s call resolves to wrong method name
-4. **BUG-029**: Subclass constructors not generated
-5. **BUG-030**: Setter assignment not generating correct code
+2. **BUG-029**: Subclass constructors not generated
 
 ### Medium Priority
-6. **BUG-017**: Predicate methods on arrays
-7. **BUG-020**: "if let" pattern
-8. **BUG-022**: String methods
-9. **BUG-023**: Range.size method
+3. **BUG-017**: Predicate methods on arrays
+4. **BUG-020**: "if let" pattern
+5. **BUG-022**: String methods
+6. **BUG-023**: Range.size method
 
 ### Lower Priority
-10. **BUG-019**: Pointer printing
-11. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
+7. **BUG-019**: Pointer printing
+8. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
