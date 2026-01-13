@@ -7,6 +7,60 @@ import (
 	"github.com/nchapman/rugby/ast"
 )
 
+// getStatementLine returns the source line number for a statement, or 0 if unknown.
+func getStatementLine(stmt ast.Statement) int {
+	switch s := stmt.(type) {
+	case *ast.FuncDecl:
+		return s.Line
+	case *ast.ClassDecl:
+		return s.Line
+	case *ast.InterfaceDecl:
+		return s.Line
+	case *ast.AssignStmt:
+		return s.Line
+	case *ast.ExprStmt:
+		return s.Line
+	case *ast.ReturnStmt:
+		return s.Line
+	case *ast.IfStmt:
+		return s.Line
+	case *ast.CaseStmt:
+		return s.Line
+	case *ast.CaseTypeStmt:
+		return s.Line
+	case *ast.WhileStmt:
+		return s.Line
+	case *ast.UntilStmt:
+		return s.Line
+	case *ast.ForStmt:
+		return s.Line
+	case *ast.PanicStmt:
+		return s.Line
+	case *ast.GoStmt:
+		return s.Line
+	case *ast.ChanSendStmt:
+		return s.Line
+	case *ast.SelectStmt:
+		return s.Line
+	case *ast.DescribeStmt:
+		return s.Line
+	case *ast.ItStmt:
+		return s.Line
+	case *ast.TestStmt:
+		return s.Line
+	case *ast.TableStmt:
+		return s.Line
+	case *ast.BeforeStmt:
+		return s.Line
+	case *ast.AfterStmt:
+		return s.Line
+	case *ast.ConcurrentlyStmt:
+		return s.Line
+	default:
+		return 0
+	}
+}
+
 // genStatement dispatches to the appropriate generator for each statement type.
 // Statement types are organized into logical groups:
 //   - Declarations: functions, classes, interfaces, modules
@@ -16,6 +70,11 @@ import (
 //   - Concurrency: go, select, channels, structured concurrency
 //   - Testing: describe, it, test, table
 func (g *Generator) genStatement(stmt ast.Statement) {
+	// Emit line directive to map errors back to Rugby source
+	if line := getStatementLine(stmt); line > 0 {
+		g.emitLineDirective(line)
+	}
+
 	switch s := stmt.(type) {
 	// Declarations
 	case *ast.FuncDecl:

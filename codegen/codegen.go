@@ -149,6 +149,14 @@ func WithSourceFile(path string) Option {
 	}
 }
 
+// emitLineDirective writes a //line directive for the given source line.
+// This maps Go errors/panics back to the original Rugby source location.
+func (g *Generator) emitLineDirective(line int) {
+	if g.emitLineDir && g.sourceFile != "" && line > 0 {
+		g.buf.WriteString(fmt.Sprintf("//line %s:%d\n", g.sourceFile, line))
+	}
+}
+
 // WithTypeInfo provides type information from semantic analysis for optimization.
 // When available, enables direct == comparisons for primitive types instead of
 // falling back to runtime.Equal.
@@ -446,11 +454,6 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 			out.WriteString(fmt.Sprintf("\ttest %q\n", testImport))
 		}
 		out.WriteString(")\n\n")
-	}
-
-	// Emit //line directive to map errors back to Rugby source
-	if g.emitLineDir && g.sourceFile != "" {
-		out.WriteString(fmt.Sprintf("//line %s:1\n", g.sourceFile))
 	}
 
 	out.WriteString(bodyCode)
