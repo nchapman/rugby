@@ -115,11 +115,24 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		}
 	}
 
-	// Collect all accessors including from modules
-	allAccessors := append([]*ast.AccessorDecl{}, cls.Accessors...)
+	// Track accessor and method origins for conflict detection
+	// Maps name -> source (class name or "ClassName (from ModuleName)")
+	accessorSources := make(map[string]string)
+	methodSources := make(map[string]string)
 
-	// Collect all methods including from modules
-	allMethods := append([]*ast.MethodDecl{}, cls.Methods...)
+	// Collect all accessors including from modules (with conflict detection)
+	allAccessors := make([]*ast.AccessorDecl, 0, len(cls.Accessors))
+	for _, acc := range cls.Accessors {
+		accessorSources[acc.Name] = className
+		allAccessors = append(allAccessors, acc)
+	}
+
+	// Collect all methods including from modules (with conflict detection)
+	allMethods := make([]*ast.MethodDecl, 0, len(cls.Methods))
+	for _, m := range cls.Methods {
+		methodSources[m.Name] = className
+		allMethods = append(allMethods, m)
+	}
 
 	// Include modules: add their fields, accessors, and methods
 	for _, modName := range cls.Includes {
@@ -141,10 +154,36 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 				fieldNames[acc.Name] = true
 			}
 		}
-		// Add module accessors
-		allAccessors = append(allAccessors, mod.Accessors...)
-		// Add module methods (these will be "specialized" by being generated with the class's receiver)
-		allMethods = append(allMethods, mod.Methods...)
+		// Add module accessors with conflict detection
+		for _, acc := range mod.Accessors {
+			if source, exists := accessorSources[acc.Name]; exists {
+				// Conflict: accessor already defined
+				// If class defined it, class wins (intentional override)
+				if source == className {
+					continue
+				}
+				g.addError(fmt.Errorf("accessor '%s' from module '%s' conflicts with %s", acc.Name, modName, source))
+			} else {
+				accessorSources[acc.Name] = fmt.Sprintf("module '%s'", modName)
+				allAccessors = append(allAccessors, acc)
+			}
+		}
+		// Add module methods with conflict detection
+		for _, m := range mod.Methods {
+			if source, exists := methodSources[m.Name]; exists {
+				// Conflict: method already defined
+				// If class defined it, class wins (intentional override)
+				// If another module defined it, that's a conflict
+				if source == className {
+					// Class intentionally overrides module method - skip module version
+					continue
+				}
+				g.addError(fmt.Errorf("method '%s' from module '%s' conflicts with %s", m.Name, modName, source))
+			} else {
+				methodSources[m.Name] = fmt.Sprintf("module '%s'", modName)
+				allMethods = append(allMethods, m)
+			}
+		}
 	}
 
 	// Emit struct definition

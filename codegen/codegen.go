@@ -110,6 +110,11 @@ func (g *Generator) addError(err error) {
 	g.errors = append(g.errors, err)
 }
 
+// Errors returns all errors collected during code generation
+func (g *Generator) Errors() []error {
+	return g.errors
+}
+
 // returnsError checks if the current function returns error as its last type
 func (g *Generator) returnsError() bool {
 	if len(g.currentReturnTypes) == 0 {

@@ -329,6 +329,24 @@ func compile(t *testing.T, input string) string {
 	return output
 }
 
+// compileWithErrors runs codegen and returns any collected errors (for testing error detection)
+func compileWithErrors(t *testing.T, input string) []error {
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) > 0 {
+		for _, err := range p.Errors() {
+			t.Errorf("parser error: %s", err)
+		}
+		t.FailNow()
+	}
+
+	gen := New()
+	_, _ = gen.Generate(program)
+	return gen.Errors()
+}
+
 // compileWithTypeInfo runs semantic analysis and passes type info to codegen.
 // This enables optimizations like direct == for primitive types.
 func compileWithTypeInfo(t *testing.T, input string) string {
@@ -4286,6 +4304,129 @@ end`
 	// Service should have both its own port field and module's log method
 	assertContains(t, output, "port int")
 	assertContains(t, output, "func (s *Service) log(msg string) {")
+}
+
+func TestModuleMethodConflictDetection(t *testing.T) {
+	input := `module A
+  def greet
+    puts "A"
+  end
+end
+
+module B
+  def greet
+    puts "B"
+  end
+end
+
+class Worker
+  include A
+  include B
+end
+
+def main
+end`
+
+	errs := compileWithErrors(t, input)
+
+	// Should detect conflict between module A and B
+	if len(errs) == 0 {
+		t.Fatal("expected conflict error for duplicate method 'greet'")
+	}
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "method 'greet' from module 'B' conflicts with module 'A'") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected conflict error mentioning 'greet' from modules A and B, got: %v", errs)
+	}
+}
+
+func TestModuleClassOverridesModuleMethod(t *testing.T) {
+	input := `module Greeter
+  def greet
+    puts "Hello from module"
+  end
+end
+
+class Worker
+  include Greeter
+
+  def greet
+    puts "Hello from class"
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Class should override module method without error
+	// Only the class version should be generated
+	assertContains(t, output, "func (w *Worker) greet() {")
+	assertContains(t, output, `runtime.Puts("Hello from class")`)
+	// Should NOT contain module version
+	assertNotContains(t, output, `runtime.Puts("Hello from module")`)
+}
+
+func TestModuleClassOverridesModuleAccessor(t *testing.T) {
+	input := `module Named
+  property name : String
+end
+
+class Worker
+  include Named
+  property name : String
+end
+
+def main
+end`
+
+	errs := compileWithErrors(t, input)
+
+	// Class should override module accessor without error
+	if len(errs) > 0 {
+		t.Errorf("expected no errors when class overrides module accessor, got: %v", errs)
+	}
+}
+
+func TestModuleAccessorConflictDetection(t *testing.T) {
+	input := `module A
+  property name : String
+end
+
+module B
+  property name : String
+end
+
+class Worker
+  include A
+  include B
+end
+
+def main
+end`
+
+	errs := compileWithErrors(t, input)
+
+	// Should detect conflict between module A and B accessors
+	if len(errs) == 0 {
+		t.Fatal("expected conflict error for duplicate accessor 'name'")
+	}
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "accessor 'name' from module 'B' conflicts with module 'A'") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected conflict error mentioning 'name' from modules A and B, got: %v", errs)
+	}
 }
 
 func TestSymbolKeyShorthandCodegen(t *testing.T) {
