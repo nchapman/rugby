@@ -876,7 +876,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 	case *ast.BinaryExpr:
 		leftType := a.analyzeExpr(e.Left)
 		rightType := a.analyzeExpr(e.Right)
-		typ = a.inferBinaryType(e.Op, leftType, rightType)
+		typ = a.checkBinaryExpr(e.Op, leftType, rightType)
 
 	case *ast.UnaryExpr:
 		operandType := a.analyzeExpr(e.Expr)
@@ -1103,6 +1103,65 @@ func (a *Analyzer) analyzeBlock(block *ast.BlockExpr) {
 	a.scope = prevScope
 }
 
+func (a *Analyzer) checkBinaryExpr(op string, left, right *Type) *Type {
+	// Skip checking if either type is unknown/any (can't validate)
+	if left.Kind == TypeUnknown || right.Kind == TypeUnknown {
+		return a.inferBinaryType(op, left, right)
+	}
+	if left.Kind == TypeAny || right.Kind == TypeAny {
+		return a.inferBinaryType(op, left, right)
+	}
+
+	switch op {
+	case "==", "!=":
+		// Equality: types should be comparable (same type or compatible)
+		if !a.areTypesComparable(left, right) {
+			a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
+		}
+		return TypeBoolVal
+
+	case "<", ">", "<=", ">=":
+		// Ordering: only numeric and string types
+		if !a.isOrdered(left) || !a.isOrdered(right) {
+			a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
+		} else if !a.areTypesComparable(left, right) {
+			a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
+		}
+		return TypeBoolVal
+
+	case "and", "or", "&&", "||":
+		// Logical: both should be Bool
+		if left.Kind != TypeBool {
+			a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
+		} else if right.Kind != TypeBool {
+			a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
+		}
+		return TypeBoolVal
+
+	case "+":
+		// String concatenation or numeric addition
+		if left.Kind == TypeString && right.Kind == TypeString {
+			return TypeStringVal
+		}
+		if a.isNumeric(left) && a.isNumeric(right) {
+			return a.inferBinaryType(op, left, right)
+		}
+		a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
+		return TypeUnknownVal
+
+	case "-", "*", "/", "%":
+		// Arithmetic: both must be numeric
+		if !a.isNumeric(left) || !a.isNumeric(right) {
+			a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
+			return TypeUnknownVal
+		}
+		return a.inferBinaryType(op, left, right)
+
+	default:
+		return TypeUnknownVal
+	}
+}
+
 func (a *Analyzer) inferBinaryType(op string, left, right *Type) *Type {
 	switch op {
 	case "==", "!=", "<", ">", "<=", ">=":
@@ -1131,6 +1190,36 @@ func (a *Analyzer) inferBinaryType(op string, left, right *Type) *Type {
 	default:
 		return TypeUnknownVal
 	}
+}
+
+// isNumeric returns true if the type is a numeric type (Int, Int64, Float).
+func (a *Analyzer) isNumeric(t *Type) bool {
+	return t.Kind == TypeInt || t.Kind == TypeInt64 || t.Kind == TypeFloat
+}
+
+// isOrdered returns true if the type supports ordering comparison (<, >, etc.).
+func (a *Analyzer) isOrdered(t *Type) bool {
+	return t.Kind == TypeInt || t.Kind == TypeInt64 || t.Kind == TypeFloat || t.Kind == TypeString
+}
+
+// areTypesComparable returns true if two types can be compared for equality.
+func (a *Analyzer) areTypesComparable(left, right *Type) bool {
+	// Same type is always comparable
+	if left.Equals(right) {
+		return true
+	}
+	// Numeric types are comparable to each other
+	if a.isNumeric(left) && a.isNumeric(right) {
+		return true
+	}
+	// nil can be compared to optional and error types
+	if left.Kind == TypeNil {
+		return right.Kind == TypeOptional || right.Kind == TypeError || right.Kind == TypeNil
+	}
+	if right.Kind == TypeNil {
+		return left.Kind == TypeOptional || left.Kind == TypeError || left.Kind == TypeNil
+	}
+	return false
 }
 
 func (a *Analyzer) inferUnaryType(op string, operand *Type) *Type {

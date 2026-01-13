@@ -24,7 +24,7 @@ Currently, codegen does too much: type inference, error checking, and generation
     - Moved logic from `codegen` to `semantic` for:
         - [x] Undefined variables/methods.
         - [x] Argument count mismatches (with variadic builtin support).
-        - [ ] Type mismatches (e.g., `Int + String`) - partial, assignment checking done.
+        - [x] Type mismatches (e.g., `Int + String`) - binary expression and comparison type checking.
     - Provides rich error messages with "Did you mean?" suggestions.
 
 ## Phase 1.5: Testing & Development UX (Critical for Refactoring)

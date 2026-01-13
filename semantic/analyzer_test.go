@@ -670,3 +670,120 @@ func TestAnalyzeBuiltinVariadic(t *testing.T) {
 		}
 	}
 }
+
+func TestAnalyzeOperatorTypeMismatch(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantOp  string
+		wantErr bool
+	}{
+		// Arithmetic errors
+		{"int plus string", `x = 1 + "hello"`, "+", true},
+		{"string minus int", `x = "hello" - 1`, "-", true},
+		{"bool times int", `x = true * 5`, "*", true},
+		{"string divide float", `x = "a" / 2.0`, "/", true},
+		{"bool modulo int", `x = false % 2`, "%", true},
+
+		// Comparison errors
+		{"string greater than int", `x = "hello" > 5`, ">", true},
+		{"bool less than float", `x = true < 1.0`, "<", true},
+		{"string less-equal int", `x = "a" <= 1`, "<=", true},
+		{"bool greater-equal int", `x = false >= 0`, ">=", true},
+
+		// Logical errors - parser converts 'and'/'or' to '&&'/'||' in AST
+		{"int and int", `x = 1 and 2`, "&&", true},
+		{"string or string", `x = "a" or "b"`, "||", true},
+		{"int and bool", `x = 1 and true`, "&&", true},
+		{"bool or int", `x = true or 1`, "||", true},
+
+		// Valid operations - should NOT error
+		{"int plus int", `x = 1 + 2`, "", false},
+		{"float plus float", `x = 1.0 + 2.0`, "", false},
+		{"int plus float", `x = 1 + 2.0`, "", false}, // mixed numeric allowed
+		{"string plus string", `x = "a" + "b"`, "", false},
+		{"int less than int", `x = 1 < 2`, "", false},
+		{"string less than string", `x = "a" < "b"`, "", false},
+		{"int equals int", `x = 1 == 2`, "", false},
+		{"string equals string", `x = "a" == "b"`, "", false},
+		{"bool and bool", `x = true and false`, "", false},
+		{"bool or bool", `x = true or false`, "", false},
+		{"int equals float", `x = 1 == 2.0`, "", false},   // numeric comparison allowed
+		{"float less than int", `x = 1.5 < 2`, "", false}, // numeric comparison allowed
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error for %q, got none", tt.input)
+					return
+				}
+				found := false
+				for _, err := range errs {
+					if opErr, ok := err.(*OperatorTypeMismatchError); ok {
+						if opErr.Op == tt.wantOp {
+							found = true
+							break
+						}
+					}
+				}
+				if !found {
+					t.Errorf("expected OperatorTypeMismatchError for '%s', got: %v", tt.wantOp, errs)
+				}
+			} else {
+				if len(errs) > 0 {
+					t.Errorf("expected no errors, got: %v", errs)
+				}
+			}
+		})
+	}
+}
+
+func TestAnalyzeEqualityComparison(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		// Valid equality comparisons
+		{"int equals int", `x = 1 == 2`, false},
+		{"string equals string", `x = "a" == "b"`, false},
+		{"bool equals bool", `x = true == false`, false},
+		{"int not-equals int", `x = 1 != 2`, false},
+		{"numeric mixed", `x = 1 == 2.0`, false}, // int and float are comparable
+
+		// Invalid equality comparisons
+		{"int equals string", `x = 1 == "hello"`, true},
+		{"bool equals int", `x = true == 1`, true},
+		{"string equals bool", `x = "true" == true`, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr && len(errs) == 0 {
+				t.Errorf("expected error for %q, got none", tt.input)
+			} else if !tt.wantErr && len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}

@@ -125,3 +125,20 @@ func (e *InstanceVarOutsideClassError) Error() string {
 	}
 	return msg
 }
+
+// OperatorTypeMismatchError is returned when operator operands have incompatible types.
+type OperatorTypeMismatchError struct {
+	Op        string
+	LeftType  *Type
+	RightType *Type
+	Line      int
+	Column    int
+}
+
+func (e *OperatorTypeMismatchError) Error() string {
+	msg := fmt.Sprintf("cannot use '%s' with types %s and %s", e.Op, e.LeftType, e.RightType)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
