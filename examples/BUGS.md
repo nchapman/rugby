@@ -137,24 +137,17 @@ The `await` keyword now properly types its result as `any` when the task element
 ### ~~BUG-035: Unused variables in multi-value assignments~~ ✅ FIXED
 Variables declared in multi-value assignments that are never used are now automatically replaced with `_` in generated code. The semantic analyzer tracks variable usage, and codegen queries this to detect and replace unused variables, avoiding Go's "declared and not used" compile error.
 
+### ~~BUG-033: String positive indexing returns byte instead of character~~ ✅ FIXED
+String indexing like `word[0]` now correctly returns characters instead of byte values. The codegen detects when the receiver is a string type and uses `runtime.AtIndex` for all string indexing, ensuring consistent behavior for both positive and negative indices.
+
 ---
 
 ## Remaining Bugs
 
-### BUG-033: String positive indexing returns byte value instead of character
-**File:** 12_strings.rg
-**Code:**
-```ruby
-word = "Rugby"
-puts "word[0]: #{word[0]}"
-```
-**Actual Output:** `word[0]: 82` (byte value)
-**Expected:** `word[0]: R` (character)
-**Note:** Negative indexing works correctly (`word[-1]` returns `y`). Positive indexing goes through Go's native string indexing which returns bytes.
+None! All example files pass.
 
 ---
 
-## Priority Order for Remaining Fixes
+## All Bugs Fixed
 
-### Medium Priority
-1. **BUG-033**: String positive indexing
+All 15 example files now compile and run successfully.
