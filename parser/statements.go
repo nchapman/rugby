@@ -68,6 +68,13 @@ func (p *Parser) parseStatement() ast.Statement {
 		if p.peekTokenIs(token.IDENT) && p.peekTokenAfterIs(token.ORASSIGN) {
 			return p.parseInstanceVarOrAssign()
 		}
+		// Check for compound assignment: @name += expr, @name -= expr, etc.
+		// Pattern: AT IDENT PLUSASSIGN/MINUSASSIGN/STARASSIGN/SLASHASSIGN
+		if p.peekTokenIs(token.IDENT) && (p.peekTokenAfterIs(token.PLUSASSIGN) ||
+			p.peekTokenAfterIs(token.MINUSASSIGN) || p.peekTokenAfterIs(token.STARASSIGN) ||
+			p.peekTokenAfterIs(token.SLASHASSIGN)) {
+			return p.parseInstanceVarCompoundAssign()
+		}
 		// Otherwise fall through to expression parsing
 	}
 
@@ -78,6 +85,27 @@ func (p *Parser) parseStatement() ast.Statement {
 		if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
 			expr = p.parseBlockCall(expr)
 		}
+
+		// Check for selector assignment: obj.field = value
+		// This must be handled before nextToken() since we need to see the ASSIGN
+		if selExpr, ok := expr.(*ast.SelectorExpr); ok && p.peekTokenIs(token.ASSIGN) {
+			p.nextToken() // move to '='
+			p.nextToken() // move past '=' to value
+			value := p.parseExpression(lowest)
+			if value == nil {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected expression after '='")
+				return nil
+			}
+			p.nextToken() // move past value
+			p.skipNewlines()
+			return &ast.SelectorAssignStmt{
+				Object: selExpr.X,
+				Field:  selExpr.Sel,
+				Value:  value,
+				Line:   line,
+			}
+		}
+
 		p.nextToken() // move past expression
 
 		// Check for loop modifier (e.g., "puts x while cond" or "puts x until done")
@@ -880,6 +908,47 @@ func (p *Parser) parseInstanceVarOrAssign() *ast.InstanceVarOrAssign {
 	p.skipNewlines()
 
 	return &ast.InstanceVarOrAssign{Name: name, Value: value}
+}
+
+// parseInstanceVarCompoundAssign parses: @name += expr, @name -= expr, etc.
+func (p *Parser) parseInstanceVarCompoundAssign() *ast.InstanceVarCompoundAssign {
+	line := p.curToken.Line
+	p.nextToken() // consume '@'
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@'")
+		return nil
+	}
+	name := p.curToken.Literal
+	p.nextToken() // consume identifier
+
+	// Determine the operator
+	var op string
+	switch p.curToken.Type {
+	case token.PLUSASSIGN:
+		op = "+"
+	case token.MINUSASSIGN:
+		op = "-"
+	case token.STARASSIGN:
+		op = "*"
+	case token.SLASHASSIGN:
+		op = "/"
+	default:
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected compound assignment operator")
+		return nil
+	}
+	p.nextToken() // consume operator
+
+	value := p.parseExpression(lowest)
+
+	// Check for block after expression
+	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
+		value = p.parseBlockCall(value)
+	}
+
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	return &ast.InstanceVarCompoundAssign{Name: name, Op: op, Value: value, Line: line}
 }
 
 // parseGoStmt parses: go func_call() or go do ... end

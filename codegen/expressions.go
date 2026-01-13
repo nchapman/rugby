@@ -92,11 +92,20 @@ func (g *Generator) genExpr(expr ast.Expression) {
 	case *ast.CallExpr:
 		g.genCallExpr(e)
 	case *ast.SelectorExpr:
-		// In Ruby, obj.method is always a method call (not field access).
-		// For interface methods, convert SelectorExpr to CallExpr with no args.
-		if g.isInterfaceMethod(e.Sel) {
+		// Use SelectorKind to determine if this is a field access or method call
+		selectorKind := g.getSelectorKind(e)
+		switch selectorKind {
+		case ast.SelectorMethod, ast.SelectorGetter:
+			// Method calls need () - convert to CallExpr
 			g.genCallExpr(&ast.CallExpr{Func: e, Args: nil})
-		} else {
+		case ast.SelectorGoMethod:
+			// Go method calls need () with PascalCase naming
+			g.genExpr(e.X)
+			g.buf.WriteString(".")
+			g.buf.WriteString(snakeToPascalWithAcronyms(e.Sel))
+			g.buf.WriteString("()")
+		default:
+			// Field access or unknown - use existing logic
 			g.genSelectorExpr(e)
 		}
 	case *ast.IndexExpr:
@@ -1631,9 +1640,21 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 	// If so, use PascalCase for Go interface compatibility
 	isInterfaceMethod := g.isInterfaceMethod(sel.Sel)
 
+	// Check if receiver is an instance of a pub class
+	// Pub class methods use PascalCase
+	receiverClassName := g.getReceiverClassName(sel.X)
+	isPubClass := g.pubClasses[receiverClassName]
+
 	g.genExpr(sel.X)
 	g.buf.WriteString(".")
-	if isInterfaceMethod {
+
+	// Special case: to_s maps to String (Go's Stringer interface convention)
+	if sel.Sel == "to_s" {
+		g.buf.WriteString("String")
+		return
+	}
+
+	if isInterfaceMethod || isPubClass {
 		g.buf.WriteString(snakeToPascalWithAcronyms(sel.Sel))
 	} else {
 		g.buf.WriteString(snakeToCamelWithAcronyms(sel.Sel))
@@ -1660,6 +1681,40 @@ func (g *Generator) isInterfaceMethod(methodName string) bool {
 		}
 	}
 	return false
+}
+
+// getReceiverClassName extracts the class name from a receiver expression.
+// For example, if expr is a variable of type *User, returns "User".
+// Returns empty string if the class name cannot be determined.
+func (g *Generator) getReceiverClassName(expr ast.Expression) string {
+	// Use type info if available
+	if g.typeInfo != nil {
+		if typ := g.typeInfo.GetRugbyType(expr); typ != "" {
+			// Strip pointer/optional prefixes if present
+			typ = strings.TrimPrefix(typ, "*")
+			typ = strings.TrimSuffix(typ, "?")
+			return typ
+		}
+	}
+
+	// Fall back to inferring from expression
+	switch e := expr.(type) {
+	case *ast.Ident:
+		// Look up variable type
+		if varType, ok := g.vars[e.Name]; ok {
+			varType = strings.TrimPrefix(varType, "*")
+			varType = strings.TrimSuffix(varType, "?")
+			return varType
+		}
+	case *ast.CallExpr:
+		// Constructor call like User.new() -> "User"
+		if sel, ok := e.Func.(*ast.SelectorExpr); ok && sel.Sel == "new" {
+			if ident, ok := sel.X.(*ast.Ident); ok {
+				return ident.Name
+			}
+		}
+	}
+	return ""
 }
 
 // genArrayPropertyMethod handles property-style array and map method calls

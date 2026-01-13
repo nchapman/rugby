@@ -15,6 +15,9 @@ type Analyzer struct {
 	// Type information attached to AST nodes
 	nodeTypes map[ast.Node]*Type
 
+	// Selector kind resolution (field vs method vs getter vs setter)
+	selectorKinds map[*ast.SelectorExpr]ast.SelectorKind
+
 	// Class and interface definitions
 	classes    map[string]*Symbol
 	interfaces map[string]*Symbol
@@ -26,13 +29,14 @@ type Analyzer struct {
 func NewAnalyzer() *Analyzer {
 	global := NewGlobalScope()
 	a := &Analyzer{
-		scope:       global,
-		globalScope: global,
-		nodeTypes:   make(map[ast.Node]*Type),
-		classes:     make(map[string]*Symbol),
-		interfaces:  make(map[string]*Symbol),
-		modules:     make(map[string]*Symbol),
-		functions:   make(map[string]*Symbol),
+		scope:         global,
+		globalScope:   global,
+		nodeTypes:     make(map[ast.Node]*Type),
+		selectorKinds: make(map[*ast.SelectorExpr]ast.SelectorKind),
+		classes:       make(map[string]*Symbol),
+		interfaces:    make(map[string]*Symbol),
+		modules:       make(map[string]*Symbol),
+		functions:     make(map[string]*Symbol),
 	}
 	a.defineBuiltins()
 	return a
@@ -375,6 +379,16 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 	}
 	for _, acc := range c.Accessors {
 		field := NewField(acc.Name, ParseType(acc.Type))
+		// Set accessor flags based on accessor kind
+		switch acc.Kind {
+		case "getter":
+			field.HasGetter = true
+		case "setter":
+			field.HasSetter = true
+		case "property":
+			field.HasGetter = true
+			field.HasSetter = true
+		}
 		cls.AddField(field)
 	}
 
@@ -500,6 +514,8 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 		a.analyzeCompoundAssign(s)
 	case *ast.OrAssignStmt:
 		a.analyzeOrAssign(s)
+	case *ast.SelectorAssignStmt:
+		a.analyzeSelectorAssign(s)
 	case *ast.ExprStmt:
 		a.analyzeExpr(s.Expr)
 		if s.Condition != nil {
@@ -525,6 +541,8 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 		a.analyzeCaseType(s)
 	case *ast.InstanceVarAssign:
 		a.analyzeInstanceVarAssign(s)
+	case *ast.InstanceVarCompoundAssign:
+		a.analyzeInstanceVarCompoundAssign(s)
 	case *ast.GoStmt:
 		a.analyzeGo(s)
 	case *ast.SelectStmt:
@@ -816,6 +834,43 @@ func (a *Analyzer) analyzeOrAssign(s *ast.OrAssignStmt) {
 	}
 }
 
+func (a *Analyzer) analyzeSelectorAssign(s *ast.SelectorAssignStmt) {
+	// Analyze the receiver object
+	receiverType := a.analyzeExpr(s.Object)
+
+	// Analyze the value being assigned
+	valueType := a.analyzeExpr(s.Value)
+
+	// Verify the receiver type has a setter for this field
+	if receiverType.Kind == TypeClass && receiverType.Name != "" {
+		if cls := a.classes[receiverType.Name]; cls != nil {
+			if field := cls.GetField(s.Field); field != nil {
+				// Check if the field has a setter
+				if !field.HasSetter {
+					a.addError(&Error{
+						Line:    s.Line,
+						Message: "cannot assign to field '" + s.Field + "' without setter",
+					})
+				}
+				// Check type compatibility
+				if !a.isAssignable(field.Type, valueType) {
+					a.addError(&TypeMismatchError{
+						Expected: field.Type,
+						Got:      valueType,
+						Line:     s.Line,
+						Context:  "setter assignment",
+					})
+				}
+			} else {
+				a.addError(&UndefinedError{
+					Name: s.Field,
+					Line: s.Line,
+				})
+			}
+		}
+	}
+}
+
 func (a *Analyzer) analyzeIf(s *ast.IfStmt) {
 	context := "if"
 	if s.IsUnless {
@@ -1067,6 +1122,57 @@ func (a *Analyzer) analyzeInstanceVarAssign(s *ast.InstanceVarAssign) {
 	}
 
 	a.analyzeExpr(s.Value)
+}
+
+func (a *Analyzer) analyzeInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAssign) {
+	if !a.scope.IsInsideClass() {
+		a.addError(&InstanceVarOutsideClassError{Name: s.Name})
+		return
+	}
+
+	// Look up the field in the current class
+	var fieldType *Type
+	if classScope := a.scope.ClassScope(); classScope != nil {
+		if cls := a.classes[classScope.ClassName]; cls != nil {
+			if field := cls.GetField(s.Name); field != nil {
+				fieldType = field.Type
+			}
+		}
+	}
+
+	valueType := a.analyzeExpr(s.Value)
+
+	// Skip type checking if field type is unknown or not found
+	// (field might be dynamically created in initialize)
+	if fieldType == nil || fieldType.Kind == TypeUnknown || fieldType.Kind == TypeAny ||
+		valueType.Kind == TypeUnknown || valueType.Kind == TypeAny {
+		return
+	}
+
+	// Validate types based on operator
+	switch s.Op {
+	case "+":
+		// += works for numeric types and string concatenation
+		if fieldType.Kind == TypeString && valueType.Kind == TypeString {
+			return // string concatenation OK
+		}
+		if !a.isNumeric(fieldType) || !a.isNumeric(valueType) {
+			a.addError(&OperatorTypeMismatchError{
+				Op:        "+=",
+				LeftType:  fieldType,
+				RightType: valueType,
+			})
+		}
+	case "-", "*", "/":
+		// These only work for numeric types
+		if !a.isNumeric(fieldType) || !a.isNumeric(valueType) {
+			a.addError(&OperatorTypeMismatchError{
+				Op:        s.Op + "=",
+				LeftType:  fieldType,
+				RightType: valueType,
+			})
+		}
+	}
 }
 
 func (a *Analyzer) analyzeGo(s *ast.GoStmt) {
@@ -1364,22 +1470,37 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 
 	case *ast.SelectorExpr:
 		receiverType := a.analyzeExpr(e.X)
+		var selectorKind ast.SelectorKind
+
+		// Check if receiver is a Go package (for Go interop)
+		isGoPackage := false
+		if ident, ok := e.X.(*ast.Ident); ok {
+			if sym := a.scope.Lookup(ident.Name); sym != nil && sym.Kind == SymGoPackage {
+				isGoPackage = true
+			}
+		}
 
 		// Special case: ClassName.new is a constructor (returns instance of class)
 		if e.Sel == "new" {
 			if classIdent, ok := e.X.(*ast.Ident); ok {
 				if _, isClass := a.classes[classIdent.Name]; isClass {
 					typ = NewClassType(classIdent.Name)
+					selectorKind = ast.SelectorMethod // Constructor is a method call
 				}
 			}
 		}
 
-		// Check for class field access
+		// Check for class field access (with getter)
 		if typ == nil && receiverType.Kind == TypeClass && receiverType.Name != "" {
 			if cls := a.classes[receiverType.Name]; cls != nil {
-				// Check for field (getter)
 				if field := cls.GetField(e.Sel); field != nil {
 					typ = field.Type
+					// Determine if this is a getter or raw field access
+					if field.HasGetter {
+						selectorKind = ast.SelectorGetter
+					} else {
+						selectorKind = ast.SelectorField
+					}
 				}
 			}
 		}
@@ -1400,16 +1521,32 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				} else if len(method.ReturnTypes) > 1 {
 					typ = NewTupleType(method.ReturnTypes...)
 				}
+				// Set selector kind based on whether it's Go interop or Rugby method
+				if isGoPackage {
+					selectorKind = ast.SelectorGoMethod
+				} else {
+					selectorKind = ast.SelectorMethod
+				}
 			}
 		}
 
-		// Fallback: predicate methods return Bool
+		// Fallback: predicate methods return Bool and are treated as method calls
 		if typ == nil {
 			if strings.HasSuffix(e.Sel, "?") {
 				typ = TypeBoolVal
+				selectorKind = ast.SelectorMethod
 			} else {
 				typ = TypeUnknownVal
+				// If we couldn't resolve, assume it's a method for Go interop
+				if isGoPackage {
+					selectorKind = ast.SelectorGoMethod
+				}
 			}
+		}
+
+		// Store the resolved selector kind
+		if selectorKind != ast.SelectorUnknown {
+			a.setSelectorKind(e, selectorKind)
 		}
 
 	case *ast.IndexExpr:
@@ -2305,6 +2442,28 @@ func (a *Analyzer) Errors() []error {
 // GetType returns the inferred type for an AST node.
 func (a *Analyzer) GetType(node ast.Node) *Type {
 	return a.getNodeType(node)
+}
+
+// GetSelectorKind returns the resolved selector kind for a SelectorExpr.
+// Returns SelectorUnknown if the node is not a SelectorExpr or was not resolved.
+func (a *Analyzer) GetSelectorKind(node ast.Node) ast.SelectorKind {
+	if sel, ok := node.(*ast.SelectorExpr); ok {
+		// First check the node's own resolved kind
+		if sel.ResolvedKind != ast.SelectorUnknown {
+			return sel.ResolvedKind
+		}
+		// Fall back to the map
+		if kind, ok := a.selectorKinds[sel]; ok {
+			return kind
+		}
+	}
+	return ast.SelectorUnknown
+}
+
+// setSelectorKind stores the selector kind for a SelectorExpr.
+func (a *Analyzer) setSelectorKind(sel *ast.SelectorExpr, kind ast.SelectorKind) {
+	a.selectorKinds[sel] = kind
+	sel.ResolvedKind = kind
 }
 
 // GetSymbol looks up a symbol by name in the global scope.

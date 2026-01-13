@@ -15,8 +15,8 @@ def main
   numbers = json.ParseArray(arr_text)!
   puts "Numbers: #{numbers}"
 
-  # Generate JSON from a map
-  user = {"name": "Bob", "score": 100}
+  # Generate JSON from a map (maps must have consistent value types)
+  user = {"name": "Bob", "role": "admin"}
   output = json.Generate(user)!
   puts "Generated: #{output}"
 

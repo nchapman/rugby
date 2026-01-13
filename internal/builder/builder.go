@@ -76,6 +76,63 @@ func (t *typeInfoAdapter) GetRugbyType(node ast.Node) string {
 	return typ.String()
 }
 
+// GetSelectorKind returns the kind of a selector expression.
+func (t *typeInfoAdapter) GetSelectorKind(node ast.Node) ast.SelectorKind {
+	// First check if the AST node has a resolved kind
+	if sel, ok := node.(*ast.SelectorExpr); ok && sel.ResolvedKind != ast.SelectorUnknown {
+		return sel.ResolvedKind
+	}
+	// Fall back to semantic analyzer lookup
+	return t.analyzer.GetSelectorKind(node)
+}
+
+// GetElementType returns the element type for composite types (arrays, optionals, etc.).
+func (t *typeInfoAdapter) GetElementType(node ast.Node) string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil || typ.Elem == nil {
+		return ""
+	}
+	return typ.Elem.String()
+}
+
+// GetKeyValueTypes returns the key and value types for map types.
+func (t *typeInfoAdapter) GetKeyValueTypes(node ast.Node) (string, string) {
+	typ := t.analyzer.GetType(node)
+	if typ == nil || typ.Kind != semantic.TypeMap {
+		return "", ""
+	}
+	keyType := ""
+	valueType := ""
+	if typ.KeyType != nil {
+		keyType = typ.KeyType.String()
+	}
+	if typ.ValueType != nil {
+		valueType = typ.ValueType.String()
+	}
+	return keyType, valueType
+}
+
+// GetTupleTypes returns element types for tuple/multi-value expressions.
+func (t *typeInfoAdapter) GetTupleTypes(node ast.Node) []string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return nil
+	}
+	// Handle tuple types (multi-value returns)
+	if typ.Kind == semantic.TypeTuple && len(typ.Elements) > 0 {
+		result := make([]string, len(typ.Elements))
+		for i, elem := range typ.Elements {
+			result[i] = elem.String()
+		}
+		return result
+	}
+	// For optional types unwrapped with , ok pattern
+	if typ.Kind == semantic.TypeOptional && typ.Elem != nil {
+		return []string{typ.Elem.String(), "Bool"}
+	}
+	return nil
+}
+
 // Styles for pretty output
 var successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 

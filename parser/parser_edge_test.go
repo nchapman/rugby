@@ -1785,6 +1785,70 @@ end`
 	}
 }
 
+func TestInstanceVarCompoundAssign(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		op     string
+		varNam string
+	}{
+		{"plus assign", `class Counter
+  def increment
+    @count += 1
+  end
+end`, "+", "count"},
+		{"minus assign", `class Counter
+  def decrement
+    @value -= 5
+  end
+end`, "-", "value"},
+		{"star assign", `class Counter
+  def double
+    @num *= 2
+  end
+end`, "*", "num"},
+		{"slash assign", `class Counter
+  def halve
+    @total /= 2
+  end
+end`, "/", "total"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := lexer.New(tt.input)
+			p := New(l)
+			program := p.ParseProgram()
+			checkParserErrors(t, p)
+
+			classDecl, ok := program.Declarations[0].(*ast.ClassDecl)
+			if !ok {
+				t.Fatalf("expected ClassDecl, got %T", program.Declarations[0])
+			}
+
+			if len(classDecl.Methods) != 1 {
+				t.Fatalf("expected 1 method, got %d", len(classDecl.Methods))
+			}
+
+			method := classDecl.Methods[0]
+			if len(method.Body) != 1 {
+				t.Fatalf("expected 1 statement, got %d", len(method.Body))
+			}
+
+			compound, ok := method.Body[0].(*ast.InstanceVarCompoundAssign)
+			if !ok {
+				t.Fatalf("expected InstanceVarCompoundAssign, got %T", method.Body[0])
+			}
+			if compound.Name != tt.varNam {
+				t.Errorf("expected name %q, got %q", tt.varNam, compound.Name)
+			}
+			if compound.Op != tt.op {
+				t.Errorf("expected op %q, got %q", tt.op, compound.Op)
+			}
+		})
+	}
+}
+
 // ====================
 // Type annotation edge cases
 // ====================

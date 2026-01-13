@@ -43,6 +43,10 @@ type Symbol struct {
 	Implements []string // implemented interfaces
 	Includes   []string // included modules
 
+	// For fields - accessor flags
+	HasGetter bool // field has a getter accessor (getter or property)
+	HasSetter bool // field has a setter accessor (setter or property)
+
 	// Visibility
 	Public bool
 

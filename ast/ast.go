@@ -123,10 +123,28 @@ type CallExpr struct {
 func (c *CallExpr) node()     {}
 func (c *CallExpr) exprNode() {}
 
+// SelectorKind indicates what a selector expression refers to.
+// This is resolved during semantic analysis and used by codegen
+// to determine whether to generate field access or method call.
+type SelectorKind int
+
+const (
+	SelectorUnknown  SelectorKind = iota // not yet resolved
+	SelectorField                        // class field access (no parens needed)
+	SelectorMethod                       // class method (needs () call)
+	SelectorGetter                       // accessor getter (generated method, needs ())
+	SelectorSetter                       // used in assignment context (generates setX() call)
+	SelectorGoField                      // Go struct field (no parens needed)
+	SelectorGoMethod                     // Go method (needs () call)
+)
+
 // SelectorExpr represents a selector expression like x.Y or a.b.c
 type SelectorExpr struct {
 	X   Expression // the expression before the dot
 	Sel string     // the selected identifier
+
+	// Resolved during semantic analysis (optional - zero value means unknown)
+	ResolvedKind SelectorKind // field, method, getter, setter, etc.
 }
 
 func (s *SelectorExpr) node()     {}
@@ -364,6 +382,18 @@ type AssignStmt struct {
 
 func (a *AssignStmt) node()     {}
 func (a *AssignStmt) stmtNode() {}
+
+// SelectorAssignStmt represents setter assignment: obj.field = value
+// This generates a setter method call: obj.setField(value)
+type SelectorAssignStmt struct {
+	Object Expression // the receiver object
+	Field  string     // the field/property name
+	Value  Expression // the value being assigned
+	Line   int        // source line number (1-indexed)
+}
+
+func (s *SelectorAssignStmt) node()     {}
+func (s *SelectorAssignStmt) stmtNode() {}
 
 // OrAssignStmt represents x ||= y (logical or assignment)
 type OrAssignStmt struct {
@@ -617,6 +647,17 @@ type InstanceVarOrAssign struct {
 
 func (i *InstanceVarOrAssign) node()     {}
 func (i *InstanceVarOrAssign) stmtNode() {}
+
+// InstanceVarCompoundAssign represents @name += value, @name -= value, etc.
+type InstanceVarCompoundAssign struct {
+	Name  string // variable name without @
+	Op    string // operator: "+", "-", "*", "/"
+	Value Expression
+	Line  int
+}
+
+func (i *InstanceVarCompoundAssign) node()     {}
+func (i *InstanceVarCompoundAssign) stmtNode() {}
 
 // InterfaceDecl represents an interface definition
 type InterfaceDecl struct {

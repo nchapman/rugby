@@ -35,6 +35,10 @@ func getStatementLine(stmt ast.Statement) int {
 		return s.Line
 	case *ast.MultiAssignStmt:
 		return s.Line
+	case *ast.SelectorAssignStmt:
+		return s.Line
+	case *ast.InstanceVarCompoundAssign:
+		return s.Line
 
 	// Expressions
 	case *ast.ExprStmt:
@@ -133,6 +137,10 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genInstanceVarAssign(s)
 	case *ast.InstanceVarOrAssign:
 		g.genInstanceVarOrAssign(s)
+	case *ast.InstanceVarCompoundAssign:
+		g.genInstanceVarCompoundAssign(s)
+	case *ast.SelectorAssignStmt:
+		g.genSelectorAssignStmt(s)
 
 	// Expression statements
 	case *ast.ExprStmt:
@@ -296,6 +304,12 @@ func (g *Generator) genCompoundAssignStmt(s *ast.CompoundAssignStmt) {
 func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 	g.writeIndent()
 
+	// Get tuple element types from type info
+	var tupleTypes []string
+	if g.typeInfo != nil {
+		tupleTypes = g.typeInfo.GetTupleTypes(s.Value)
+	}
+
 	// Check if any names are new declarations
 	// Skip blank identifier (_) as it doesn't affect declaration status
 	allDeclared := true
@@ -322,10 +336,17 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 		g.buf.WriteString(" = ")
 	} else {
 		g.buf.WriteString(" := ")
-		// Mark new variables as declared
-		for _, name := range s.Names {
+		// Mark new variables as declared with their types from semantic analysis
+		for i, name := range s.Names {
+			if name == "_" {
+				continue
+			}
 			if !g.isDeclared(name) {
-				g.vars[name] = ""
+				varType := ""
+				if i < len(tupleTypes) {
+					varType = tupleTypes[i]
+				}
+				g.vars[name] = varType
 			}
 		}
 	}
@@ -387,6 +408,65 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 	g.indent--
 	g.writeIndent()
 	g.buf.WriteString("}\n")
+}
+
+// genInstanceVarCompoundAssign generates code for @name += value, @name -= value, etc.
+// This expands to: recv.field = recv.field + value
+func (g *Generator) genInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAssign) {
+	if g.currentClass == "" {
+		g.writeIndent()
+		g.buf.WriteString(fmt.Sprintf("/* @%s %s= outside class */\n", s.Name, s.Op))
+		return
+	}
+
+	recv := receiverName(g.currentClass)
+	// Use underscore prefix for accessor fields to match struct definition
+	goFieldName := s.Name
+	if g.accessorFields[s.Name] {
+		goFieldName = "_" + s.Name
+	}
+	field := fmt.Sprintf("%s.%s", recv, goFieldName)
+
+	// Generate: field = field op value
+	g.writeIndent()
+	g.buf.WriteString(field)
+	g.buf.WriteString(" = ")
+	g.buf.WriteString(field)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(s.Op)
+	g.buf.WriteString(" ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+}
+
+// genSelectorAssignStmt generates code for setter assignment: obj.field = value
+// This generates a setter method call: obj.setField(value) or obj.SetField(value) for pub classes
+func (g *Generator) genSelectorAssignStmt(s *ast.SelectorAssignStmt) {
+	g.writeIndent()
+
+	// Check if receiver is an instance of a pub class
+	receiverClassName := g.getReceiverClassName(s.Object)
+	isPubClass := g.pubClasses[receiverClassName]
+
+	// Generate: obj.setField(value) or obj.SetField(value)
+	g.genExpr(s.Object)
+	g.buf.WriteString(".")
+
+	// Generate setter method name
+	fieldPascal := snakeToPascalWithAcronyms(s.Field)
+	var setterName string
+	if isPubClass {
+		// Pub class setters use PascalCase: SetField
+		setterName = "Set" + fieldPascal
+	} else {
+		// Private class setters use camelCase: setField
+		setterName = "set" + fieldPascal
+	}
+
+	g.buf.WriteString(setterName)
+	g.buf.WriteString("(")
+	g.genExpr(s.Value)
+	g.buf.WriteString(")\n")
 }
 
 func (g *Generator) genAssignStmt(s *ast.AssignStmt) {

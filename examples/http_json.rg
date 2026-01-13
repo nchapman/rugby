@@ -4,14 +4,10 @@
 import rugby/http
 
 # Fetch a user from JSONPlaceholder API
+# Uses error propagation (!) to handle HTTP errors
 def fetch_user(id : Int) -> (Map[String, any], error)
   url = "https://jsonplaceholder.typicode.com/users/#{id}"
   resp = http.Get(url)!
-
-  if !resp.Ok()
-    return nil, fmt.Errorf("HTTP error: %d", resp.Status)
-  end
-
   resp.JSON()
 end
 
@@ -19,11 +15,6 @@ end
 def fetch_posts(user_id : Int) -> (Array[any], error)
   url = "https://jsonplaceholder.typicode.com/users/#{user_id}/posts"
   resp = http.Get(url)!
-
-  if !resp.Ok()
-    return nil, fmt.Errorf("HTTP error: %d", resp.Status)
-  end
-
   resp.JSONArray()
 end
 

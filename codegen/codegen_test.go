@@ -412,6 +412,8 @@ func (t *testTypeInfoAdapter) GetTypeKind(node ast.Node) TypeKind {
 		return TypeMap
 	case semantic.TypeClass:
 		return TypeClass
+	case semantic.TypeOptional:
+		return TypeOptional
 	default:
 		return TypeUnknown
 	}
@@ -431,6 +433,57 @@ func (t *testTypeInfoAdapter) GetRugbyType(node ast.Node) string {
 		return ""
 	}
 	return typ.String()
+}
+
+func (t *testTypeInfoAdapter) GetSelectorKind(node ast.Node) ast.SelectorKind {
+	// First check if the AST node has a resolved kind
+	if sel, ok := node.(*ast.SelectorExpr); ok && sel.ResolvedKind != ast.SelectorUnknown {
+		return sel.ResolvedKind
+	}
+	// Fall back to semantic analyzer lookup
+	return t.analyzer.GetSelectorKind(node)
+}
+
+func (t *testTypeInfoAdapter) GetElementType(node ast.Node) string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil || typ.Elem == nil {
+		return ""
+	}
+	return typ.Elem.String()
+}
+
+func (t *testTypeInfoAdapter) GetKeyValueTypes(node ast.Node) (string, string) {
+	typ := t.analyzer.GetType(node)
+	if typ == nil || typ.Kind != semantic.TypeMap {
+		return "", ""
+	}
+	keyType := ""
+	valueType := ""
+	if typ.KeyType != nil {
+		keyType = typ.KeyType.String()
+	}
+	if typ.ValueType != nil {
+		valueType = typ.ValueType.String()
+	}
+	return keyType, valueType
+}
+
+func (t *testTypeInfoAdapter) GetTupleTypes(node ast.Node) []string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return nil
+	}
+	if typ.Kind == semantic.TypeTuple && len(typ.Elements) > 0 {
+		result := make([]string, len(typ.Elements))
+		for i, elem := range typ.Elements {
+			result[i] = elem.String()
+		}
+		return result
+	}
+	if typ.Kind == semantic.TypeOptional && typ.Elem != nil {
+		return []string{typ.Elem.String(), "Bool"}
+	}
+	return nil
 }
 
 func assertContains(t *testing.T, output, substr string) {
@@ -673,7 +726,7 @@ func TestGenerateArrayWithExpressions(t *testing.T) {
   x = [1 + 2, 3 * 4]
 end`
 
-	output := compile(t, input)
+	output := compileWithTypeInfo(t, input)
 
 	// Type inference correctly identifies []int from integer expressions
 	assertContains(t, output, `[]int{(1 + 2), (3 * 4)}`)
@@ -3251,7 +3304,8 @@ end
 c = Counter.new(5)
 puts(c.value)`
 
-	output := compile(t, input)
+	// Use compileWithTypeInfo to properly resolve c.value as a method call
+	output := compileWithTypeInfo(t, input)
 
 	// Should have the class definition
 	assertContains(t, output, "type Counter struct")
@@ -3259,6 +3313,8 @@ puts(c.value)`
 	// Should have implicit main
 	assertContains(t, output, "func main()")
 	assertContains(t, output, "c := newCounter(5)")
+	// c.value should be resolved as a method call with ()
+	assertContains(t, output, "c.value()")
 }
 
 func TestBareScriptMultipleStatements(t *testing.T) {
@@ -4147,6 +4203,26 @@ end`
 	assertContains(t, output, `_, err := strconv.Atoi("123")`)
 }
 
+func TestMultiAssignmentWithTypeInfo(t *testing.T) {
+	// Test that multi-value returns get proper types from semantic analysis
+	input := `def get_data() -> (Int, Bool)
+  return 42, true
+end
+
+def main
+  val, ok = get_data()
+  puts val
+  puts ok
+end`
+
+	output := compileWithTypeInfo(t, input)
+
+	// Should generate correct multi-assignment
+	assertContains(t, output, `val, ok := getData()`)
+	assertContains(t, output, `runtime.Puts(val)`)
+	assertContains(t, output, `runtime.Puts(ok)`)
+}
+
 func TestOptionalMethodOk(t *testing.T) {
 	input := `def check(opt : Int?) -> Bool
   return opt.ok?
@@ -4226,15 +4302,20 @@ func TestAccessorGetter(t *testing.T) {
 end
 
 def main
+  user = User.new("Alice")
+  puts user.name
 end`
 
-	output := compile(t, input)
+	// Use compileWithTypeInfo to properly resolve getter calls
+	output := compileWithTypeInfo(t, input)
 
 	// Should have the field in the struct (with underscore prefix for accessors)
 	assertContains(t, output, "_name string")
 	// Should have a getter method
 	assertContains(t, output, "func (u *User) Name() string {")
 	assertContains(t, output, "return u._name")
+	// Getter call should generate method call with ()
+	assertContains(t, output, "user.Name()")
 }
 
 func TestAccessorSetter(t *testing.T) {
@@ -4246,15 +4327,20 @@ func TestAccessorSetter(t *testing.T) {
 end
 
 def main
+  user = User.new("alice@example.com")
+  user.email = "bob@example.com"
 end`
 
-	output := compile(t, input)
+	// Use compileWithTypeInfo to properly resolve setter assignments
+	output := compileWithTypeInfo(t, input)
 
 	// Should have the field in the struct (with underscore prefix for accessors)
 	assertContains(t, output, "_email string")
 	// Should have a setter method
 	assertContains(t, output, "func (u *User) SetEmail(v string) {")
 	assertContains(t, output, "u._email = v")
+	// Setter assignment should generate method call
+	assertContains(t, output, `user.SetEmail("bob@example.com")`)
 }
 
 func TestAccessorProperty(t *testing.T) {
@@ -4266,9 +4352,14 @@ func TestAccessorProperty(t *testing.T) {
 end
 
 def main
+  counter = Counter.new(10)
+  puts counter.value
+  counter.value = 20
+  puts counter.value
 end`
 
-	output := compile(t, input)
+	// Use compileWithTypeInfo to properly resolve property access
+	output := compileWithTypeInfo(t, input)
 
 	// Should have the field in the struct (with underscore prefix for accessors)
 	assertContains(t, output, "_value int")
@@ -4277,6 +4368,10 @@ end`
 	assertContains(t, output, "return c._value")
 	assertContains(t, output, "func (c *Counter) SetValue(v int) {")
 	assertContains(t, output, "c._value = v")
+	// Property getter should generate method call
+	assertContains(t, output, "counter.Value()")
+	// Property setter should generate method call
+	assertContains(t, output, "counter.SetValue(20)")
 }
 
 func TestAccessorNonPubClass(t *testing.T) {
@@ -4822,4 +4917,116 @@ end`
 	// Heredocs with interpolation should use fmt.Sprintf
 	assertContains(t, output, `fmt.Sprintf`)
 	assertContains(t, output, `name`)
+}
+
+// ====================
+// Type system bug fixes
+// ====================
+
+// BUG-027: Compound assignment to instance variables should expand correctly
+func TestInstanceVarCompoundAssign(t *testing.T) {
+	input := `class Counter
+  getter count : Int
+  def initialize
+    @count = 0
+  end
+
+  def increment
+    @count += 1
+  end
+
+  def decrement
+    @count -= 1
+  end
+
+  def double
+    @count *= 2
+  end
+
+  def halve
+    @count /= 2
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should generate expanded compound assignments
+	assertContains(t, output, `c._count = c._count + 1`)
+	assertContains(t, output, `c._count = c._count - 1`)
+	assertContains(t, output, `c._count = c._count * 2`)
+	assertContains(t, output, `c._count = c._count / 2`)
+}
+
+// BUG-028: to_s method calls should map to String()
+func TestToSMethodMapping(t *testing.T) {
+	input := `class Point
+  getter x : Int
+  getter y : Int
+
+  def initialize(@x : Int, @y : Int)
+  end
+
+  def to_s -> String
+    "Point"
+  end
+end
+
+def main
+  point = Point.new(3, 4)
+  puts point.to_s
+end`
+
+	// Use compileWithTypeInfo to ensure semantic analysis runs
+	// and properly resolves to_s as a method call
+	output := compileWithTypeInfo(t, input)
+
+	// to_s method should be generated as String()
+	assertContains(t, output, `func (p *Point) String() string`)
+	// to_s call should be generated as .String() - the () comes from
+	// SelectorKind being resolved as SelectorMethod during semantic analysis
+	assertContains(t, output, `.String()`)
+}
+
+// BUG-030: Setter assignment via property accessor
+func TestSetterAssignment(t *testing.T) {
+	input := `class Person
+  property name : String
+  def initialize(@name : String)
+  end
+end
+
+def main
+  person = Person.new("Alice")
+  person.name = "Bob"
+end`
+
+	// Use compileWithTypeInfo to properly resolve setter assignment
+	output := compileWithTypeInfo(t, input)
+
+	// Should have setter method (parameter name is 'v')
+	assertContains(t, output, `func (p *Person) setName(v string)`)
+	// Should generate setter method call
+	assertContains(t, output, `person.setName("Bob")`)
+}
+
+// Test that accessor field types propagate correctly
+func TestAccessorFieldTypeInheritance(t *testing.T) {
+	input := `class Counter
+  getter count : Int
+  def initialize
+    @count = 0
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Field should be int, not any
+	assertContains(t, output, `_count int`)
+	assertNotContains(t, output, `_count any`)
 }

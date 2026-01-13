@@ -81,6 +81,26 @@ type TypeInfo interface {
 	// For example: "Int", "String", "String?", "Array[Int]".
 	// Returns empty string if no type info is available.
 	GetRugbyType(node ast.Node) string
+
+	// GetSelectorKind returns the kind of a selector expression (field, method, getter, etc.)
+	// This is used to determine whether to generate field access or method call syntax.
+	// Returns SelectorUnknown if not a SelectorExpr or not yet resolved.
+	GetSelectorKind(node ast.Node) ast.SelectorKind
+
+	// GetElementType returns the element type for arrays, channels, optionals, etc.
+	// For Array[Int], returns "Int". For String?, returns "String".
+	// Returns empty string if not a composite type or unknown.
+	GetElementType(node ast.Node) string
+
+	// GetKeyValueTypes returns the key and value types for maps.
+	// For Map[String, Int], returns ("String", "Int").
+	// Returns empty strings if not a map or unknown.
+	GetKeyValueTypes(node ast.Node) (keyType, valueType string)
+
+	// GetTupleTypes returns the element types for tuple/multi-value expressions.
+	// For a function returning (Int, error), returns ["Int", "error"].
+	// Returns nil if not a tuple type or unknown.
+	GetTupleTypes(node ast.Node) []string
 }
 
 type Generator struct {
@@ -274,34 +294,6 @@ func isValueTypeOptional(t string) bool {
 	return valueTypes[base]
 }
 
-// typeKindToRugby converts a TypeKind to a Rugby type string.
-// Returns empty string for TypeClass (class names vary) and TypeUnknown,
-// which signals the caller to fall back to AST-based inference.
-func typeKindToRugby(kind TypeKind) string {
-	switch kind {
-	case TypeInt:
-		return "Int"
-	case TypeInt64:
-		return "Int64"
-	case TypeFloat:
-		return "Float"
-	case TypeBool:
-		return "Bool"
-	case TypeString:
-		return "String"
-	case TypeNil:
-		return "Nil"
-	case TypeArray:
-		return "Array"
-	case TypeMap:
-		return "Map"
-	case TypeClass:
-		return "" // Class names are dynamic, fall back to AST inference
-	default:
-		return ""
-	}
-}
-
 // inferArrayElementGoType returns the Go element type for an array/slice expression.
 // For example, if expr evaluates to []int, this returns "int".
 // Returns "any" if the element type cannot be determined.
@@ -330,76 +322,56 @@ func (g *Generator) inferArrayElementGoType(expr ast.Expression) string {
 	return "any"
 }
 
-// inferTypeFromExpr attempts to infer the type from an expression
-// Returns the inferred type or empty string if unknown
-func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
-	// First try semantic type info if available
+// getSelectorKind returns the resolved selector kind for a SelectorExpr.
+// First checks the AST annotation, then falls back to TypeInfo, then to heuristics.
+func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {
+	// First check the AST annotation
+	if sel.ResolvedKind != ast.SelectorUnknown {
+		return sel.ResolvedKind
+	}
+
+	// Then check TypeInfo
 	if g.typeInfo != nil {
-		kind := g.typeInfo.GetTypeKind(expr)
-		if kind != TypeUnknown {
-			// For optional types, use GetRugbyType to get the full type (e.g., "String?")
-			if kind == TypeOptional {
-				if rugbyType := g.typeInfo.GetRugbyType(expr); rugbyType != "" {
-					return rugbyType
-				}
-			}
-			if rubyType := typeKindToRugby(kind); rubyType != "" {
-				return rubyType
-			}
+		kind := g.typeInfo.GetSelectorKind(sel)
+		if kind != ast.SelectorUnknown {
+			return kind
 		}
 	}
 
-	// Fall back to AST-based inference
+	// Fall back to heuristics:
+	// - Interface methods need method call syntax
+	if g.isInterfaceMethod(sel.Sel) {
+		return ast.SelectorMethod
+	}
+	// - to_s is always a method (maps to String())
+	if sel.Sel == "to_s" {
+		return ast.SelectorMethod
+	}
+
+	// Note: For Go interop, we don't assume method vs field here because
+	// we don't have Go type info. Go package members could be functions,
+	// variables, constants, or types. The genSelectorExpr handles this
+	// case by not adding parens (field-style access), which is correct
+	// for variables/constants. Function calls come through CallExpr.
+
+	return ast.SelectorUnknown
+}
+
+// inferTypeFromExpr returns the type of an expression.
+// Primary source is TypeInfo from semantic analysis; fallback only for literals
+// when no TypeInfo is available.
+func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
+	// Primary: use semantic type info
+	if g.typeInfo != nil {
+		// GetRugbyType returns the full type including generics (e.g., "Array[Int]", "String?")
+		if rugbyType := g.typeInfo.GetRugbyType(expr); rugbyType != "" && rugbyType != "unknown" && rugbyType != "any" {
+			return rugbyType
+		}
+	}
+
+	// Fallback: minimal AST-based inference for when TypeInfo is unavailable
+	// This supports tests that don't run semantic analysis
 	switch e := expr.(type) {
-	case *ast.CallExpr:
-		if sel, ok := e.Func.(*ast.SelectorExpr); ok {
-			// Check for predicate methods ending in ? (must return Bool)
-			if strings.HasSuffix(sel.Sel, "?") {
-				return "Bool"
-			}
-		}
-	case *ast.SelectorExpr:
-		// Infer return type from method calls for chaining
-		recvType := g.inferTypeFromExpr(e.X)
-		if recvType != "" {
-			if methods, ok := stdLib[recvType]; ok {
-				if def, ok := methods[e.Sel]; ok && def.ReturnType != "" {
-					return def.ReturnType
-				}
-			}
-		}
-		// Check for predicate methods ending in ?
-		if strings.HasSuffix(e.Sel, "?") {
-			return "Bool"
-		}
-	case *ast.BinaryExpr:
-		// Comparison operators return Bool
-		switch e.Op {
-		case "==", "!=", "<", ">", "<=", ">=":
-			return "Bool"
-		case "and", "or":
-			return "Bool"
-		case "+", "-", "*", "/", "%":
-			// Arithmetic operators return the type of operands
-			leftType := g.inferTypeFromExpr(e.Left)
-			if leftType == "Float" || g.inferTypeFromExpr(e.Right) == "Float" {
-				return "Float"
-			}
-			if leftType == "Int" {
-				return "Int"
-			}
-			if leftType == "String" && e.Op == "+" {
-				return "String"
-			}
-		}
-	case *ast.UnaryExpr:
-		if e.Op == "not" || e.Op == "!" {
-			return "Bool"
-		}
-		// Unary minus returns same type as operand
-		if e.Op == "-" {
-			return g.inferTypeFromExpr(e.Expr)
-		}
 	case *ast.IntLit:
 		return "Int"
 	case *ast.FloatLit:
@@ -410,22 +382,34 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		return "String"
 	case *ast.BoolLit:
 		return "Bool"
-	case *ast.Ident:
-		if t, ok := g.vars[e.Name]; ok {
-			return t
-		}
-	case *ast.InstanceVar:
-		if t, ok := g.classFields[e.Name]; ok {
-			return t
-		}
+	case *ast.NilLit:
+		return "nil"
 	case *ast.RangeLit:
 		return "Range"
 	case *ast.ArrayLit:
 		return "Array"
 	case *ast.MapLit:
 		return "Map"
-	case *ast.NilLit:
-		return "nil"
+	case *ast.Ident:
+		// Check local variable tracking
+		if t, ok := g.vars[e.Name]; ok && t != "" {
+			return t
+		}
+	case *ast.InstanceVar:
+		// Check class field tracking
+		if t, ok := g.classFields[e.Name]; ok && t != "" {
+			return t
+		}
+	case *ast.BinaryExpr:
+		// Comparison and logical operators always return Bool
+		switch e.Op {
+		case "==", "!=", "<", ">", "<=", ">=", "and", "or":
+			return "Bool"
+		}
+	case *ast.UnaryExpr:
+		if e.Op == "not" || e.Op == "!" {
+			return "Bool"
+		}
 	case *ast.TernaryExpr:
 		// Return the type of the then branch (or else branch if then is unknown)
 		if t := g.inferTypeFromExpr(e.Then); t != "" {

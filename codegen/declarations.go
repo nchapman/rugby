@@ -130,6 +130,14 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		if !fieldNames[acc.Name] {
 			allFields = append(allFields, &ast.FieldDecl{Name: acc.Name, Type: acc.Type})
 			fieldNames[acc.Name] = true
+		} else if acc.Type != "" {
+			// If field already exists but has no type, use the accessor's type
+			for _, f := range allFields {
+				if f.Name == acc.Name && f.Type == "" {
+					f.Type = acc.Type
+					break
+				}
+			}
 		}
 	}
 
