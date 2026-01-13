@@ -607,7 +607,7 @@ func (g *Generator) genBangErrorBodyWithVar(errVar string) {
 			if i > 0 {
 				g.buf.WriteString(", ")
 			}
-			g.buf.WriteString(zeroValue(g.currentReturnTypes[i]))
+			g.buf.WriteString(g.zeroValue(g.currentReturnTypes[i]))
 		}
 		if len(g.currentReturnTypes) > 1 {
 			g.buf.WriteString(", ")

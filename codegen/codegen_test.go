@@ -3690,6 +3690,34 @@ end`
 	assertContains(t, output, `return nil, _err0`)
 }
 
+// Regression test: custom interface types should use nil as zero value,
+// not Type{} which is invalid Go syntax for interfaces.
+func TestGenerateBangWithCustomInterfaceReturn(t *testing.T) {
+	input := `interface Reader
+  def read -> String
+end
+
+def open_reader(path : String) -> (Reader, error)
+  return nil, nil
+end
+
+def process(path : String) -> (Reader, error)
+  r = open_reader(path)!
+  return r, nil
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should use nil as zero value for custom interface types (not Reader{})
+	assertContains(t, output, `r, _err0 := openReader(path)`)
+	assertContains(t, output, `return nil, _err0`)
+	// Should NOT generate invalid Reader{} syntax
+	assertNotContains(t, output, `Reader{}`)
+}
+
 func TestGenerateRescueInline(t *testing.T) {
 	input := `def read_config(path : String) -> (String, error)
   return "config", nil

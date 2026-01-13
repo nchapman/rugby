@@ -240,6 +240,9 @@ func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, 
 }
 
 func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
+	// Track this interface for zero-value generation
+	g.interfaces[iface.Name] = true
+
 	// Generate: type InterfaceName interface { ... }
 	g.buf.WriteString(fmt.Sprintf("type %s interface {\n", iface.Name))
 

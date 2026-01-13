@@ -185,8 +185,9 @@ func snakeToCamelWithAcronyms(s string) string {
 	return result.String()
 }
 
-// zeroValue returns the Go zero value for a Rugby type
-func zeroValue(rubyType string) string {
+// zeroValue returns the Go zero value for a Rugby type.
+// It checks the generator's tracked interfaces to properly return nil for interface types.
+func (g *Generator) zeroValue(rubyType string) string {
 	goType := mapType(rubyType)
 	switch goType {
 	case "int", "int64", "float64":
@@ -204,9 +205,16 @@ func zeroValue(rubyType string) string {
 		if strings.HasPrefix(goType, "*") {
 			return "nil"
 		}
-		// For unknown types, assume struct. This will generate invalid Go code for
-		// custom interface types (e.g., "MyInterface{}" instead of "nil").
-		// TODO: Track interface declarations in Generator and return "nil" for interfaces.
+		// Check if this is a declared interface type
+		if g.interfaces[rubyType] || g.interfaces[goType] {
+			return "nil"
+		}
+		// Qualified Go types (e.g., io.Reader, http.Handler) are likely interfaces.
+		// Return nil as a safe default since interfaces can't use Type{} syntax.
+		if strings.Contains(goType, ".") {
+			return "nil"
+		}
+		// For unknown types, assume struct
 		return goType + "{}"
 	}
 }

@@ -94,6 +94,7 @@ type Generator struct {
 	pubClasses         map[string]bool            // track public classes for constructor naming
 	classFields        map[string]string          // track fields of the current class and their types
 	modules            map[string]*ast.ModuleDecl // track module definitions for include
+	interfaces         map[string]bool            // track declared interfaces for zero-value generation
 	sourceFile         string                     // original .rg filename for //line directives
 	emitLineDir        bool                       // whether to emit //line directives
 	currentReturnTypes []string                   // return types of the current function/method
@@ -173,6 +174,7 @@ func New(opts ...Option) *Generator {
 		pubClasses:  make(map[string]bool),
 		classFields: make(map[string]string),
 		modules:     make(map[string]*ast.ModuleDecl),
+		interfaces:  make(map[string]bool),
 	}
 	for _, opt := range opts {
 		opt(g)
