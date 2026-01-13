@@ -69,8 +69,9 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		if g.currentClass != "" {
 			recv := receiverName(g.currentClass)
 			// Use underscore prefix for accessor fields to match struct definition
+			// Check both current class and parent classes for accessor fields
 			goFieldName := e.Name
-			if g.accessorFields[e.Name] {
+			if g.isAccessorField(e.Name) {
 				goFieldName = "_" + e.Name
 			}
 			g.buf.WriteString(fmt.Sprintf("%s.%s", recv, goFieldName))

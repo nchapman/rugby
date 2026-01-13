@@ -7,6 +7,22 @@ import (
 	"github.com/nchapman/rugby/ast"
 )
 
+// mapParamType maps a Rugby type to a Go type, using pointers for class types.
+// In Rugby, class instances are always references, so parameters of class type
+// should be *ClassName in Go.
+func (g *Generator) mapParamType(rubyType string) string {
+	// Use mapType for the base mapping
+	goType := mapType(rubyType)
+
+	// If it's a known class type (not already a pointer), make it a pointer
+	// Note: mapType returns class names unchanged, so we check for them here
+	if g.classes[rubyType] && !strings.HasPrefix(goType, "*") && !strings.HasPrefix(goType, "[]") && !strings.HasPrefix(goType, "map[") {
+		return "*" + goType
+	}
+
+	return goType
+}
+
 func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	clear(g.vars) // reset vars for each function
 	g.currentReturnTypes = fn.ReturnTypes
@@ -41,7 +57,7 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 			g.buf.WriteString(", ")
 		}
 		if param.Type != "" {
-			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, mapType(param.Type)))
+			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, g.mapParamType(param.Type)))
 		} else {
 			g.buf.WriteString(fmt.Sprintf("%s any", param.Name))
 		}
@@ -96,6 +112,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	g.currentClass = className
 	g.currentClassEmbeds = cls.Embeds
 	g.pubClasses[className] = cls.Pub
+	g.classes[className] = true // Track all class names for pointer type mapping
 	clear(g.classFields)
 	clear(g.currentClassModuleMethods)    // Reset for new class
 	clear(g.currentClassInterfaceMethods) // Reset for new class
@@ -224,6 +241,12 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		}
 	}
 
+	// Store accessor fields globally for subclass access
+	g.classAccessorFields[className] = make(map[string]bool)
+	for name := range g.accessorFields {
+		g.classAccessorFields[className][name] = true
+	}
+
 	// Emit struct definition
 	// Class names are already PascalCase by convention; pub affects field/method visibility
 	// Accessor fields use underscore prefix (e.g., _name) to avoid Go field/method name conflict
@@ -254,11 +277,18 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	}
 
 	// Emit constructor if initialize exists
+	hasInitialize := false
 	for _, method := range cls.Methods {
 		if method.Name == "initialize" {
 			g.genConstructor(className, method, cls.Pub)
+			hasInitialize = true
 			break
 		}
+	}
+
+	// If no initialize but has parent class, generate delegating constructor
+	if !hasInitialize && len(cls.Embeds) > 0 {
+		g.genSubclassConstructor(className, cls.Embeds[0], cls.Pub)
 	}
 
 	// Emit accessor methods (including from modules)
@@ -388,6 +418,9 @@ func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
 func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub bool) {
 	clear(g.vars)
 
+	// Store constructor parameters for subclass delegation
+	g.classConstructorParams[className] = method.Params
+
 	// Separate promoted parameters (@field : Type) from regular parameters
 	var promotedParams []struct {
 		fieldName string
@@ -456,6 +489,76 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 		g.genStatement(stmt)
 	}
 	g.indent--
+
+	// Return instance
+	g.buf.WriteString(fmt.Sprintf("\treturn %s\n", recv))
+	g.buf.WriteString("}\n\n")
+}
+
+// genSubclassConstructor generates a constructor for a subclass that doesn't
+// define its own initialize method. It delegates to the parent class constructor.
+func (g *Generator) genSubclassConstructor(className, parentClass string, pub bool) {
+	recv := receiverName(className)
+
+	// Only generate delegating constructor if parent is a known Rugby class
+	// If parent is external (Go type), skip constructor generation - the struct embedding still works
+	if !g.classes[parentClass] {
+		return
+	}
+
+	// Look up parent constructor parameters (collected in pre-pass)
+	parentParams := g.classConstructorParams[parentClass]
+
+	// Constructor name: newClassName (private) or NewClassName (pub)
+	constructorName := "new" + className
+	if pub {
+		constructorName = "New" + className
+	}
+
+	// Parent constructor name
+	parentConstructorName := "new" + parentClass
+	if g.pubClasses[parentClass] {
+		parentConstructorName = "New" + parentClass
+	}
+
+	// Generate: func newSubclass(params...) *Subclass {
+	g.buf.WriteString(fmt.Sprintf("func %s(", constructorName))
+
+	// Use same parameters as parent constructor
+	for i, param := range parentParams {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		// Use field name (without @) for promoted parameters
+		paramName := param.Name
+		if len(paramName) > 0 && paramName[0] == '@' {
+			paramName = paramName[1:]
+		}
+		if param.Type != "" {
+			g.buf.WriteString(fmt.Sprintf("%s %s", paramName, mapType(param.Type)))
+		} else {
+			g.buf.WriteString(fmt.Sprintf("%s any", paramName))
+		}
+	}
+	g.buf.WriteString(fmt.Sprintf(") *%s {\n", className))
+
+	// Create instance
+	g.buf.WriteString(fmt.Sprintf("\t%s := &%s{}\n", recv, className))
+
+	// Initialize embedded parent using parent constructor
+	// Dereference the parent constructor result to embed by value
+	g.buf.WriteString(fmt.Sprintf("\t%s.%s = *%s(", recv, parentClass, parentConstructorName))
+	for i, param := range parentParams {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		paramName := param.Name
+		if len(paramName) > 0 && paramName[0] == '@' {
+			paramName = paramName[1:]
+		}
+		g.buf.WriteString(paramName)
+	}
+	g.buf.WriteString(")\n")
 
 	// Return instance
 	g.buf.WriteString(fmt.Sprintf("\treturn %s\n", recv))
@@ -603,7 +706,7 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 			g.buf.WriteString(", ")
 		}
 		if param.Type != "" {
-			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, mapType(param.Type)))
+			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, g.mapParamType(param.Type)))
 		} else {
 			g.buf.WriteString(fmt.Sprintf("%s any", param.Name))
 		}

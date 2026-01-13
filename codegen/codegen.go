@@ -119,12 +119,15 @@ type Generator struct {
 	currentClassEmbeds           []string                   // embedded types (parent classes) of current class
 	currentClassModuleMethods    map[string]bool            // methods from included modules (need self.method() call)
 	pubClasses                   map[string]bool            // track public classes for constructor naming
+	classes                      map[string]bool            // track all class names for pointer type mapping
 	classFields                  map[string]string          // track fields of the current class and their types
 	accessorFields               map[string]bool            // track which fields have accessor methods (need underscore prefix)
+	classAccessorFields          map[string]map[string]bool // class name -> accessor field names (for subclass access)
 	modules                      map[string]*ast.ModuleDecl // track module definitions for include
 	interfaces                   map[string]bool            // track declared interfaces for zero-value generation
 	interfaceMethods             map[string]map[string]bool // interface name -> method names (for interface implementation)
 	currentClassInterfaceMethods map[string]bool            // methods that must be exported for current class (to satisfy interfaces)
+	classConstructorParams       map[string][]*ast.Param    // track constructor parameters for each class (for subclass delegation)
 	sourceFile                   string                     // original .rg filename for //line directives
 	emitLineDir                  bool                       // whether to emit //line directives
 	currentReturnTypes           []string                   // return types of the current function/method
@@ -210,10 +213,13 @@ func New(opts ...Option) *Generator {
 		classFields:                  make(map[string]string),
 		accessorFields:               make(map[string]bool),
 		currentClassModuleMethods:    make(map[string]bool),
+		classes:                      make(map[string]bool),
+		classAccessorFields:          make(map[string]map[string]bool),
 		modules:                      make(map[string]*ast.ModuleDecl),
 		interfaces:                   make(map[string]bool),
 		interfaceMethods:             make(map[string]map[string]bool),
 		currentClassInterfaceMethods: make(map[string]bool),
+		classConstructorParams:       make(map[string][]*ast.Param),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -278,6 +284,25 @@ func (g *Generator) scopedVars(vars []struct{ name, varType string }, fn func())
 			g.vars[s.name] = s.prevType
 		}
 	}
+}
+
+// isAccessorField checks if a field name is an accessor field in the current class
+// or any parent class (through embedding). Accessor fields use underscore prefix
+// in Go to avoid conflict with getter/setter methods.
+func (g *Generator) isAccessorField(fieldName string) bool {
+	// Check current class's accessor fields
+	if g.accessorFields[fieldName] {
+		return true
+	}
+	// Check parent classes (through embedding)
+	for _, embed := range g.currentClassEmbeds {
+		if parentAccessors, ok := g.classAccessorFields[embed]; ok {
+			if parentAccessors[fieldName] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // isOptionalType checks if a type is an optional type (ends with ?)
@@ -473,6 +498,59 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 			}
 			for _, method := range iface.Methods {
 				g.interfaceMethods[iface.Name][method.Name] = true
+			}
+		}
+	}
+
+	// Pre-pass: collect class info before generating code
+	// This ensures subclasses can access parent constructor params and accessor fields,
+	// even if the parent class is declared after the subclass in source order
+	for _, def := range definitions {
+		if cls, ok := def.(*ast.ClassDecl); ok {
+			// Track class name
+			g.classes[cls.Name] = true
+			g.pubClasses[cls.Name] = cls.Pub
+
+			// Collect constructor parameters
+			for _, method := range cls.Methods {
+				if method.Name == "initialize" {
+					g.classConstructorParams[cls.Name] = method.Params
+					break
+				}
+			}
+
+			// Collect accessor fields
+			accessorFields := make(map[string]bool)
+			for _, acc := range cls.Accessors {
+				accessorFields[acc.Name] = true
+			}
+			// Also track fields that have methods with the same name
+			fieldNames := make(map[string]bool)
+			for _, f := range cls.Fields {
+				fieldNames[f.Name] = true
+			}
+			for _, acc := range cls.Accessors {
+				fieldNames[acc.Name] = true
+			}
+			for _, m := range cls.Methods {
+				if fieldNames[m.Name] {
+					accessorFields[m.Name] = true
+				}
+			}
+			g.classAccessorFields[cls.Name] = accessorFields
+		}
+	}
+
+	// Propagate accessor fields through inheritance chain
+	// This ensures multi-level inheritance works correctly
+	for _, def := range definitions {
+		if cls, ok := def.(*ast.ClassDecl); ok {
+			for _, embed := range cls.Embeds {
+				if parentAccessors, ok := g.classAccessorFields[embed]; ok {
+					for name := range parentAccessors {
+						g.classAccessorFields[cls.Name][name] = true
+					}
+				}
 			}
 		}
 	}

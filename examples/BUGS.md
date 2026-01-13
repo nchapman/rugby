@@ -17,7 +17,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 03_control_flow.rg | ✅ PASS | None |
 | 04_loops.rg | ❌ FAIL | Predicate methods on arrays (any?, empty?) |
 | 05_functions.rg | ✅ PASS | Optional return types now work |
-| 06_classes.rg | ❌ FAIL | Multiple class bugs (see below) |
+| 06_classes.rg | ✅ PASS | Subclass constructors, method calls without parens now work |
 | 07_interfaces.rg | ✅ PASS | Interface structural typing now works |
 | 08_modules.rg | ❌ FAIL | Pointer printing instead of values |
 | 09_blocks.rg | ✅ PASS | Block methods now work |
@@ -92,6 +92,18 @@ Calling `to_s` on objects now correctly invokes the `String()` method. The seman
 ### ~~BUG-030: Setter assignment~~ ✅ FIXED
 Property setter assignments like `person.email = "value"` now correctly generate setter method calls (e.g., `person.SetEmail("value")` for pub classes or `person.setEmail("value")` for private classes).
 
+### ~~BUG-026: Method calls without parentheses~~ ✅ FIXED
+Methods without parentheses are now correctly identified and called as methods (not treated as field access). The semantic analyzer properly resolves selector kinds for class methods.
+
+### ~~BUG-029: Subclass constructors~~ ✅ FIXED
+Subclasses that don't define their own `initialize` method now automatically get a constructor that delegates to the parent class constructor.
+
+### ~~BUG-031: Class method parameter types~~ ✅ FIXED
+Method parameters with class types are now correctly generated as pointer types (e.g., `other *Point` instead of `other Point`), matching Ruby/Rugby's reference semantics.
+
+### ~~BUG-032: Embedded struct field access~~ ✅ FIXED
+Instance variables accessed in subclasses now correctly use the underscore prefix from parent class accessor fields, fixing issues where `@name` would resolve to a method value instead of the actual field value.
+
 ---
 
 ## Remaining Bugs
@@ -111,28 +123,6 @@ puts items.shift while items.any?
 ### BUG-019: Pointer printing instead of values
 **File:** 08_modules.rg
 **Error:** Prints memory addresses instead of values when printing objects
-
----
-
-### BUG-026: Method calls without parentheses treated as field access
-**File:** 06_classes.rg
-**Code:**
-```ruby
-self.magnitude_squared == other.magnitude_squared
-```
-**Error:** `invalid operation: p.magnitudeSquared == other.magnitudeSquared (func can only be compared to nil)`
-**Expected:** Methods without parens should be called, not treated as field access
-
----
-
-### BUG-029: Subclass constructors not generated
-**File:** 06_classes.rg
-**Code:**
-```ruby
-cat = Cat.new("Whiskers")
-```
-**Error:** `undefined: newCat`
-**Expected:** Subclasses should have constructors generated that call parent constructor
 
 ---
 
@@ -197,16 +187,14 @@ wg = sync.WaitGroup.new
 
 ## Priority Order for Remaining Fixes
 
-### High Priority (06_classes.rg blockers)
-1. **BUG-026**: Method calls without parentheses - common pattern
-2. **BUG-029**: Subclass constructors not generated
+### High Priority
+1. **BUG-017**: Predicate methods on arrays
+2. **BUG-020**: "if let" pattern
 
 ### Medium Priority
-3. **BUG-017**: Predicate methods on arrays
-4. **BUG-020**: "if let" pattern
-5. **BUG-022**: String methods
-6. **BUG-023**: Range.size method
+3. **BUG-022**: String methods
+4. **BUG-023**: Range.size method
 
 ### Lower Priority
-7. **BUG-019**: Pointer printing
-8. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
+5. **BUG-019**: Pointer printing
+6. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
