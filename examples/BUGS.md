@@ -19,7 +19,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 05_functions.rg | ✅ PASS | Optional return types now work |
 | 06_classes.rg | ✅ PASS | Subclass constructors, method calls without parens now work |
 | 07_interfaces.rg | ✅ PASS | Interface structural typing now works |
-| 08_modules.rg | ❌ FAIL | Pointer printing instead of values |
+| 08_modules.rg | ✅ PASS | Module methods now work as instance methods |
 | 09_blocks.rg | ✅ PASS | Block methods now work |
 | 10_optionals.rg | ✅ PASS | Optional handling now works (if let, safe nav, tuple unpacking, map/each) |
 | 11_errors.rg | ❌ FAIL | os.ReadFile multi-value return issues |
@@ -122,15 +122,12 @@ String methods (`contains?`, `start_with?`, `end_with?`, `empty?`, `replace`, `l
 ### ~~BUG-023: Range methods on variables~~ ✅ FIXED
 Range methods (`size`, `length`, `include?`, `contains?`, `to_a`) now work on Range variables, not just literal ranges. The codegen now checks for Range type using type inference, not just AST node type.
 
+### ~~BUG-019: Module methods as instance methods~~ ✅ FIXED
+Methods from included modules are now properly recognized as class methods. The semantic analyzer adds module methods to `cls.Methods` so that `GetMethod` finds them and generates proper method calls instead of method value references.
+
 ---
 
 ## Remaining Bugs
-
-### BUG-019: Pointer printing instead of values
-**File:** 08_modules.rg
-**Error:** Prints memory addresses instead of values when printing objects
-
----
 
 ### BUG-024: Chan generic syntax not recognized
 **File:** 15_concurrency.rg
@@ -173,5 +170,4 @@ puts "word[0]: #{word[0]}"
 1. **BUG-033**: String positive indexing
 
 ### Lower Priority
-2. **BUG-019**: Pointer printing
-3. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
+2. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new

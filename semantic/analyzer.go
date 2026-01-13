@@ -622,12 +622,15 @@ func (a *Analyzer) analyzeClassDecl(c *ast.ClassDecl) {
 		mustDefine(classScope, NewVariable(name, field.Type))
 	}
 
-	// Add methods from included modules to scope
+	// Add methods from included modules to scope and to cls.Methods
 	// These become callable as bare functions within class methods
+	// AND as external method calls on class instances
 	for _, modName := range cls.Includes {
 		if mod := a.modules[modName]; mod != nil {
 			for _, method := range mod.Methods {
 				mustDefine(classScope, method)
+				// Also add to cls.Methods so GetMethod can find them
+				cls.AddMethod(method)
 			}
 		}
 	}
