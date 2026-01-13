@@ -2,6 +2,12 @@
 
 This document tracks bugs found when testing idiomatic Rugby code from the spec against the compiler.
 
+> **Important:** The example files are our **golden set** - they represent idiomatic Rugby code
+> as defined by the language specification. These files should **never be modified** just to make
+> them pass. If an example fails, that's a compiler bug that needs to be fixed, not an example
+> that needs to be simplified. The examples define what the language *should* do, and the
+> compiler must be fixed to match.
+
 ## Summary
 
 | Example | Status | Notes |
