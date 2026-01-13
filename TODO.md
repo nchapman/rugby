@@ -27,6 +27,11 @@ Currently, codegen does too much: type inference, error checking, and generation
         - [x] Type mismatches (e.g., `Int + String`) - binary expression and comparison type checking.
     - Provides rich error messages with "Did you mean?" suggestions.
 
+- [ ] **Extended Type Checking** (Future)
+    - [ ] Unary expression type checking (`not 5` should error, `not` requires Bool).
+    - [ ] Composite type equality (arrays/maps of same element type should be comparable).
+    - [ ] Class/interface instance equality validation.
+
 ## Phase 1.5: Testing & Development UX (Critical for Refactoring)
 
 Testing generated string output is fragile, and single-error stopping slows down development. We need behavioral tests and better error reporting to refactor `codegen` with confidence.
