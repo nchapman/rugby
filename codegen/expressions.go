@@ -1117,7 +1117,14 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			}
 		}
 
+		// Handle range method calls - check both literal ranges and variables of type Range
+		isRangeExpr := false
 		if _, ok := fn.X.(*ast.RangeLit); ok {
+			isRangeExpr = true
+		} else if recvType := g.inferTypeFromExpr(fn.X); recvType == "Range" {
+			isRangeExpr = true
+		}
+		if isRangeExpr {
 			if g.genRangeMethodCall(fn.X, fn.Sel, call.Args) {
 				return
 			}
@@ -1816,7 +1823,14 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 	}
 
 	// Check for range methods used without parentheses
+	// Handle both literal ranges and variables of type Range
+	isRangeExpr := false
 	if _, ok := sel.X.(*ast.RangeLit); ok {
+		isRangeExpr = true
+	} else if recvType := g.inferTypeFromExpr(sel.X); recvType == "Range" {
+		isRangeExpr = true
+	}
+	if isRangeExpr {
 		switch sel.Sel {
 		case "to_a":
 			g.needsRuntime = true

@@ -24,7 +24,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 10_optionals.rg | ✅ PASS | Optional handling now works (if let, safe nav, tuple unpacking, map/each) |
 | 11_errors.rg | ❌ FAIL | os.ReadFile multi-value return issues |
 | 12_strings.rg | ✅ PASS | String methods now work |
-| 13_ranges.rg | ❌ FAIL | Range.size method not implemented |
+| 13_ranges.rg | ✅ PASS | Range methods on variables now work |
 | 14_go_interop.rg | ✅ PASS | Multi-value Go function returns now work |
 | 15_concurrency.rg | ❌ FAIL | Chan generic syntax, sync.WaitGroup.new |
 
@@ -119,6 +119,9 @@ Full optional support now works:
 ### ~~BUG-022: String methods~~ ✅ FIXED
 String methods (`contains?`, `start_with?`, `end_with?`, `empty?`, `replace`, `lines`) now work correctly. Added runtime functions and stdLib table entries for all methods. Fixed type normalization in genCallExpr to properly match Go type names to Rugby type names.
 
+### ~~BUG-023: Range methods on variables~~ ✅ FIXED
+Range methods (`size`, `length`, `include?`, `contains?`, `to_a`) now work on Range variables, not just literal ranges. The codegen now checks for Range type using type inference, not just AST node type.
+
 ---
 
 ## Remaining Bugs
@@ -126,18 +129,6 @@ String methods (`contains?`, `start_with?`, `end_with?`, `empty?`, `replace`, `l
 ### BUG-019: Pointer printing instead of values
 **File:** 08_modules.rg
 **Error:** Prints memory addresses instead of values when printing objects
-
----
-
-### BUG-023: Range.size method
-**File:** 13_ranges.rg
-**Code:**
-```ruby
-r = 1..10
-puts r.size
-```
-**Error:** `invalid argument: r for built-in len`
-**Expected:** Range should have a `size` method
 
 ---
 
@@ -179,9 +170,8 @@ puts "word[0]: #{word[0]}"
 ## Priority Order for Remaining Fixes
 
 ### Medium Priority
-1. **BUG-023**: Range.size method
-2. **BUG-033**: String positive indexing
+1. **BUG-033**: String positive indexing
 
 ### Lower Priority
-3. **BUG-019**: Pointer printing
-4. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
+2. **BUG-019**: Pointer printing
+3. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
