@@ -34,7 +34,7 @@ Examples:
 			return err
 		}
 
-		b := builder.New(project, builder.WithVerbose(verbose))
+		b := builder.New(project, builder.WithVerbose(verbose), builder.WithColorMode(getColorMode()))
 		return b.Build(args, outputName)
 	},
 }

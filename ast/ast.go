@@ -151,7 +151,9 @@ func (i *InterpolatedString) exprNode() {}
 
 // Ident represents an identifier
 type Ident struct {
-	Name string
+	Name   string
+	Line   int // 1-indexed line number
+	Column int // 1-indexed column number
 }
 
 func (i *Ident) node()     {}
@@ -159,7 +161,9 @@ func (i *Ident) exprNode() {}
 
 // IntLit represents an integer literal
 type IntLit struct {
-	Value int64
+	Value  int64
+	Line   int // 1-indexed line number
+	Column int // 1-indexed column number
 }
 
 func (i *IntLit) node()     {}
@@ -167,7 +171,9 @@ func (i *IntLit) exprNode() {}
 
 // FloatLit represents a float literal
 type FloatLit struct {
-	Value float64
+	Value  float64
+	Line   int // 1-indexed line number
+	Column int // 1-indexed column number
 }
 
 func (f *FloatLit) node()     {}
@@ -175,14 +181,19 @@ func (f *FloatLit) exprNode() {}
 
 // BoolLit represents a boolean literal
 type BoolLit struct {
-	Value bool
+	Value  bool
+	Line   int // 1-indexed line number
+	Column int // 1-indexed column number
 }
 
 func (b *BoolLit) node()     {}
 func (b *BoolLit) exprNode() {}
 
 // NilLit represents the nil literal
-type NilLit struct{}
+type NilLit struct {
+	Line   int // 1-indexed line number
+	Column int // 1-indexed column number
+}
 
 func (n *NilLit) node()          {}
 func (n *NilLit) exprNode()      {}
@@ -190,7 +201,9 @@ func (n *NilLit) String() string { return "nil" }
 
 // SymbolLit represents a symbol literal (:foo, :status, etc.)
 type SymbolLit struct {
-	Value string // the symbol name without the colon
+	Value  string // the symbol name without the colon
+	Line   int    // 1-indexed line number
+	Column int    // 1-indexed column number
 }
 
 func (s *SymbolLit) node()     {}
@@ -199,6 +212,8 @@ func (s *SymbolLit) exprNode() {}
 // ArrayLit represents an array literal
 type ArrayLit struct {
 	Elements []Expression
+	Line     int // 1-indexed line number
+	Column   int // 1-indexed column number
 }
 
 func (a *ArrayLit) node()     {}

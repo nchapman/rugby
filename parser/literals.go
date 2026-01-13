@@ -13,22 +13,24 @@ import (
 
 // parseIntLiteral parses an integer literal.
 func (p *Parser) parseIntLiteral() ast.Expression {
+	line, col := p.curToken.Line, p.curToken.Column
 	val, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
 	if err != nil {
-		p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("invalid integer %s", p.curToken.Literal))
+		p.errorAt(line, col, fmt.Sprintf("invalid integer %s", p.curToken.Literal))
 		return nil
 	}
-	return &ast.IntLit{Value: val}
+	return &ast.IntLit{Value: val, Line: line, Column: col}
 }
 
 // parseFloatLiteral parses a floating point literal.
 func (p *Parser) parseFloatLiteral() ast.Expression {
+	line, col := p.curToken.Line, p.curToken.Column
 	val, err := strconv.ParseFloat(p.curToken.Literal, 64)
 	if err != nil {
-		p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("invalid float %s", p.curToken.Literal))
+		p.errorAt(line, col, fmt.Sprintf("invalid float %s", p.curToken.Literal))
 		return nil
 	}
-	return &ast.FloatLit{Value: val}
+	return &ast.FloatLit{Value: val, Line: line, Column: col}
 }
 
 // parseStringLiteral parses a string literal, handling interpolation.
@@ -119,24 +121,32 @@ func (p *Parser) parseInterpolatedString(value string) ast.Expression {
 
 // parseBoolLiteral parses a boolean literal (true or false).
 func (p *Parser) parseBoolLiteral() ast.Expression {
-	return &ast.BoolLit{Value: p.curTokenIs(token.TRUE)}
+	return &ast.BoolLit{
+		Value:  p.curTokenIs(token.TRUE),
+		Line:   p.curToken.Line,
+		Column: p.curToken.Column,
+	}
 }
 
 // parseNilLiteral parses a nil literal.
 func (p *Parser) parseNilLiteral() ast.Expression {
-	return &ast.NilLit{}
+	return &ast.NilLit{Line: p.curToken.Line, Column: p.curToken.Column}
 }
 
 // parseSymbolLiteral parses a symbol literal (:name).
 func (p *Parser) parseSymbolLiteral() ast.Expression {
-	return &ast.SymbolLit{Value: p.curToken.Literal}
+	return &ast.SymbolLit{
+		Value:  p.curToken.Literal,
+		Line:   p.curToken.Line,
+		Column: p.curToken.Column,
+	}
 }
 
 // parseWordArray parses a %w{...} or %W{...} word array literal.
 // The lexer stores words separated by \x00 in the token literal.
 // If isInterpolated is true, each word may contain #{} interpolation.
 func (p *Parser) parseWordArray(isInterpolated bool) ast.Expression {
-	arr := &ast.ArrayLit{}
+	arr := &ast.ArrayLit{Line: p.curToken.Line, Column: p.curToken.Column}
 	literal := p.curToken.Literal
 
 	// Empty word array
@@ -165,7 +175,7 @@ func (p *Parser) parseWordArray(isInterpolated bool) ast.Expression {
 // parseArrayLiteral parses an array literal [a, b, c].
 // Supports splat operator: [1, *rest, 3]
 func (p *Parser) parseArrayLiteral() ast.Expression {
-	arr := &ast.ArrayLit{}
+	arr := &ast.ArrayLit{Line: p.curToken.Line, Column: p.curToken.Column}
 
 	p.nextToken() // consume '['
 
@@ -296,13 +306,15 @@ func (p *Parser) parseMapEntry() (ast.MapEntry, bool) {
 	// e.g., {name: "Alice", age: 30} or {name:, age:} (implicit value)
 	if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.COLON) {
 		keyName := p.curToken.Literal
+		keyLine := p.curToken.Line
+		keyCol := p.curToken.Column
 		key := &ast.StringLit{Value: keyName}
 		p.nextToken() // move to ':'
 
 		// Check for implicit value shorthand: {x:, y:} or {x:}
 		// If peek is comma or rbrace, use identifier as value and stay on ':'
 		if p.peekTokenIs(token.COMMA) || p.peekTokenIs(token.RBRACE) {
-			value := &ast.Ident{Name: keyName}
+			value := &ast.Ident{Name: keyName, Line: keyLine, Column: keyCol}
 			return ast.MapEntry{Key: key, Value: value}, true
 		}
 

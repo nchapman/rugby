@@ -1099,7 +1099,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 	case *ast.Ident:
 		sym := a.scope.Lookup(e.Name)
 		if sym == nil {
-			a.addError(&UndefinedError{Name: e.Name, Candidates: a.findSimilar(e.Name)})
+			a.addError(&UndefinedError{Name: e.Name, Line: e.Line, Column: e.Column, Candidates: a.findSimilar(e.Name)})
 			typ = TypeUnknownVal
 		} else if sym.Kind == SymFunction {
 			// In Rugby, no-arg functions are called implicitly (like Ruby)

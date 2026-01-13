@@ -41,7 +41,7 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 	case token.AT:
 		left = p.parseInstanceVar()
 	case token.SELF:
-		left = &ast.Ident{Name: "self"}
+		left = &ast.Ident{Name: "self", Line: p.curToken.Line, Column: p.curToken.Column}
 	case token.SUPER:
 		left = p.parseSuperExpr()
 	case token.SPAWN:
@@ -126,7 +126,11 @@ infixLoop:
 
 // parseIdent parses an identifier.
 func (p *Parser) parseIdent() ast.Expression {
-	return &ast.Ident{Name: p.curToken.Literal}
+	return &ast.Ident{
+		Name:   p.curToken.Literal,
+		Line:   p.curToken.Line,
+		Column: p.curToken.Column,
+	}
 }
 
 // parseCallExprWithParens parses a function call with parentheses: f(a, b, c).

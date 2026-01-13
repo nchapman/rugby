@@ -13,6 +13,7 @@ import (
 
 	"github.com/nchapman/rugby/ast"
 	"github.com/nchapman/rugby/codegen"
+	"github.com/nchapman/rugby/errors"
 	"github.com/nchapman/rugby/lexer"
 	"github.com/nchapman/rugby/parser"
 	"github.com/nchapman/rugby/semantic"
@@ -68,14 +69,14 @@ func (t *typeInfoAdapter) GetGoType(node ast.Node) string {
 var (
 	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true)
-	fileStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("12"))
 )
 
 // Builder orchestrates the Rugby compilation process.
 type Builder struct {
-	project *Project
-	verbose bool
-	logger  *log.Logger
+	project   *Project
+	verbose   bool
+	logger    *log.Logger
+	colorMode errors.ColorMode
 }
 
 // BuilderOption configures a Builder.
@@ -85,6 +86,13 @@ type BuilderOption func(*Builder)
 func WithVerbose(v bool) BuilderOption {
 	return func(b *Builder) {
 		b.verbose = v
+	}
+}
+
+// WithColorMode sets the color mode for error output.
+func WithColorMode(mode errors.ColorMode) BuilderOption {
+	return func(b *Builder) {
+		b.colorMode = mode
 	}
 }
 
@@ -181,15 +189,17 @@ func (b *Builder) compileFile(inputPath string) (string, bool, error) {
 	p := parser.New(l)
 	program := p.ParseProgram()
 
-	if len(p.Errors()) > 0 {
-		return "", false, b.formatParseErrors(inputPath, p.Errors())
+	if len(p.ParseErrors()) > 0 {
+		src := errors.NewSource(inputPath, string(source))
+		return "", false, b.formatParseErrors(src, p.ParseErrors())
 	}
 
 	// Semantic analysis
 	analyzer := semantic.NewAnalyzer()
 	semanticErrors := analyzer.Analyze(program)
 	if len(semanticErrors) > 0 {
-		return "", false, b.formatSemanticErrors(inputPath, semanticErrors)
+		src := errors.NewSource(inputPath, string(source))
+		return "", false, b.formatSemanticErrors(src, semanticErrors)
 	}
 
 	// Check if this file has top-level statements
@@ -272,24 +282,89 @@ func hasTopLevelStatements(program *ast.Program) bool {
 	return false
 }
 
-// formatParseErrors formats parser errors for display.
-func (b *Builder) formatParseErrors(file string, errors []string) error {
+// formatParseErrors formats parser errors for display with source context.
+func (b *Builder) formatParseErrors(src *errors.Source, parseErrors []parser.ParseError) error {
+	formatter := errors.NewFormatter(b.colorMode)
 	var msg strings.Builder
-	msg.WriteString(errorStyle.Render("Parse errors") + " in " + fileStyle.Render(file) + ":\n")
-	for _, e := range errors {
-		msg.WriteString(fmt.Sprintf("  %s:%s\n", file, e))
+
+	for i, e := range parseErrors {
+		if i > 0 {
+			msg.WriteString("\n")
+		}
+		msg.WriteString(formatter.FormatParseError(e.Message, src, e.Line, e.Column, e.Hint))
 	}
+
 	return fmt.Errorf("%s", msg.String())
 }
 
-// formatSemanticErrors formats semantic analysis errors for display.
-func (b *Builder) formatSemanticErrors(file string, errors []error) error {
+// formatSemanticErrors formats semantic analysis errors for display with source context.
+func (b *Builder) formatSemanticErrors(src *errors.Source, semanticErrors []error) error {
+	formatter := errors.NewFormatter(b.colorMode)
 	var msg strings.Builder
-	msg.WriteString(errorStyle.Render("Semantic errors") + " in " + fileStyle.Render(file) + ":\n")
-	for _, e := range errors {
-		msg.WriteString(fmt.Sprintf("  %s: %s\n", file, e.Error()))
+
+	for i, e := range semanticErrors {
+		if i > 0 {
+			msg.WriteString("\n")
+		}
+		// Extract line/column from semantic errors
+		line, col := extractPosition(e)
+		// Extract core message (strip "line N:" prefix)
+		coreMsg := extractMessage(e)
+		msg.WriteString(formatter.FormatSemanticError(coreMsg, src, line, col))
 	}
+
 	return fmt.Errorf("%s", msg.String())
+}
+
+// extractPosition extracts line and column from a semantic error.
+func extractPosition(err error) (int, int) {
+	switch e := err.(type) {
+	case *semantic.Error:
+		return e.Line, e.Column
+	case *semantic.UndefinedError:
+		return e.Line, e.Column
+	case *semantic.TypeMismatchError:
+		return e.Line, e.Column
+	case *semantic.ArityMismatchError:
+		return e.Line, e.Column
+	case *semantic.ReturnOutsideFunctionError:
+		return e.Line, e.Column
+	case *semantic.BreakOutsideLoopError:
+		return e.Line, e.Column
+	case *semantic.SelfOutsideClassError:
+		return e.Line, e.Column
+	case *semantic.InstanceVarOutsideClassError:
+		return e.Line, e.Column
+	case *semantic.OperatorTypeMismatchError:
+		return e.Line, e.Column
+	case *semantic.UnaryTypeMismatchError:
+		return e.Line, e.Column
+	case *semantic.ReturnTypeMismatchError:
+		return e.Line, 0
+	case *semantic.ArgumentTypeMismatchError:
+		return e.Line, 0
+	case *semantic.ConditionTypeMismatchError:
+		return e.Line, 0
+	case *semantic.IndexTypeMismatchError:
+		return e.Line, 0
+	case *semantic.InterfaceNotImplementedError:
+		return e.Line, 0
+	case *semantic.MethodSignatureMismatchError:
+		return e.Line, 0
+	case *semantic.BangOnNonErrorError:
+		return e.Line, 0
+	case *semantic.BangOutsideErrorFunctionError:
+		return e.Line, 0
+	case *semantic.MethodRequiresArgumentsError:
+		return e.Line, 0
+	default:
+		return 0, 0
+	}
+}
+
+// extractMessage extracts the core message from an error, stripping "line N:" prefix.
+func extractMessage(err error) string {
+	return errors.ExtractMessage(err.Error())
 }
 
 // RuntimeModule is the Go module that contains the Rugby runtime.

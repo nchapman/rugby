@@ -8,12 +8,14 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
 
+	"github.com/nchapman/rugby/errors"
 	"github.com/nchapman/rugby/internal/builder"
 )
 
 var (
 	verbose     bool
 	showVersion bool
+	colorFlag   string // "auto", "always", "never"
 	logger      = log.NewWithOptions(os.Stderr, log.Options{
 		ReportTimestamp: false,
 	})
@@ -57,6 +59,7 @@ func init() {
 	cobra.OnInitialize(initLogger)
 
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "", false, "verbose output")
+	rootCmd.PersistentFlags().StringVar(&colorFlag, "color", "auto", "color output: auto, always, never")
 	rootCmd.Flags().BoolVarP(&showVersion, "version", "V", false, "print version")
 }
 
@@ -73,6 +76,18 @@ func runFile(file string, args []string) error {
 		return err
 	}
 
-	b := builder.New(project, builder.WithVerbose(verbose))
+	b := builder.New(project, builder.WithVerbose(verbose), builder.WithColorMode(getColorMode()))
 	return b.Run(file, args)
+}
+
+// getColorMode converts the colorFlag string to errors.ColorMode.
+func getColorMode() errors.ColorMode {
+	switch colorFlag {
+	case "always":
+		return errors.ColorAlways
+	case "never":
+		return errors.ColorNever
+	default:
+		return errors.ColorAuto
+	}
 }
