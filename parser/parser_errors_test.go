@@ -482,3 +482,35 @@ func TestDeeplyNestedIfWithError(t *testing.T) {
 end`
 	expectError(t, input, "expected")
 }
+
+// ====================
+// Multiple errors in one file
+// ====================
+
+func TestMultipleErrors(t *testing.T) {
+	input := `def foo(x : )
+end
+
+def bar(y : )
+end
+
+def baz
+  unknown_var
+end`
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	// Should report at least 2 "expected type" errors
+	errors := p.Errors()
+	typeErrors := 0
+	for _, err := range errors {
+		if strings.Contains(err, "expected type") {
+			typeErrors++
+		}
+	}
+
+	if typeErrors < 2 {
+		t.Errorf("expected at least 2 type errors, got %d errors total: %v", typeErrors, errors)
+	}
+}
