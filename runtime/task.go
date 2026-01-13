@@ -101,3 +101,25 @@ func TryReceive[T any](ch <-chan T) (T, bool) {
 		return zero, false
 	}
 }
+
+// Add adds two any values, handling int and float64 types.
+// Returns the sum as any.
+func Add(a, b any) any {
+	switch av := a.(type) {
+	case int:
+		switch bv := b.(type) {
+		case int:
+			return av + bv
+		case float64:
+			return float64(av) + bv
+		}
+	case float64:
+		switch bv := b.(type) {
+		case int:
+			return av + float64(bv)
+		case float64:
+			return av + bv
+		}
+	}
+	panic("Add: unsupported types")
+}

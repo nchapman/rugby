@@ -53,6 +53,8 @@ func (t *typeInfoAdapter) GetTypeKind(node ast.Node) codegen.TypeKind {
 		return codegen.TypeClass
 	case semantic.TypeOptional:
 		return codegen.TypeOptional
+	case semantic.TypeAny:
+		return codegen.TypeAny
 	default:
 		return codegen.TypeUnknown
 	}

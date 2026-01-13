@@ -1540,10 +1540,9 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				selectorKind = ast.SelectorMethod
 			} else {
 				typ = TypeUnknownVal
-				// If we couldn't resolve, assume it's a method for Go interop
-				if isGoPackage {
-					selectorKind = ast.SelectorGoMethod
-				}
+				// For Go packages, don't assume unknown selectors are methods -
+				// they could be constants like time.Millisecond
+				// Let codegen handle it based on context
 			}
 		}
 
@@ -1553,6 +1552,15 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		}
 
 	case *ast.IndexExpr:
+		// Special case: Chan[Type] is a channel type constructor, not an index expression
+		if ident, ok := e.Left.(*ast.Ident); ok && ident.Name == "Chan" {
+			// Parse the element type from the index
+			elemType := a.parseTypeFromExpr(e.Index)
+			typ = NewChanType(elemType)
+			a.setNodeType(expr, typ)
+			return typ
+		}
+
 		leftType := a.analyzeExpr(e.Left)
 		indexType := a.analyzeExpr(e.Index)
 
@@ -1772,10 +1780,11 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 
 	case *ast.AwaitExpr:
 		taskType := a.analyzeExpr(e.Task)
-		if taskType.Kind == TypeTask {
+		if taskType.Kind == TypeTask && taskType.Elem != nil && taskType.Elem.Kind != TypeUnknown {
 			typ = taskType.Elem
 		} else {
-			typ = TypeUnknownVal
+			// Await on Task[Unknown] returns any (interface{})
+			typ = TypeAnyVal
 		}
 
 	case *ast.ConcurrentlyExpr:
@@ -2179,6 +2188,10 @@ func (a *Analyzer) inferBinaryType(op string, left, right *Type) *Type {
 		if left.Kind == TypeInt {
 			return TypeIntVal
 		}
+		// When both operands are any, result is any (e.g., await results)
+		if left.Kind == TypeAny && right.Kind == TypeAny {
+			return TypeAnyVal
+		}
 		return TypeUnknownVal
 	case "-", "*", "/", "%":
 		if left.Kind == TypeFloat || right.Kind == TypeFloat {
@@ -2186,6 +2199,10 @@ func (a *Analyzer) inferBinaryType(op string, left, right *Type) *Type {
 		}
 		if left.Kind == TypeInt {
 			return TypeIntVal
+		}
+		// When both operands are any, result is any
+		if left.Kind == TypeAny && right.Kind == TypeAny {
+			return TypeAnyVal
 		}
 		return TypeUnknownVal
 	default:
@@ -2815,4 +2832,57 @@ func (a *Analyzer) optionalMethod(name string, innerType *Type) *Symbol {
 		return NewMethod(name, nil, nil) // Block methods
 	}
 	return nil
+}
+
+// parseTypeFromExpr converts an AST expression to a Type.
+// This is used for generic type parameters like Chan[Int] where Int is an identifier.
+func (a *Analyzer) parseTypeFromExpr(expr ast.Expression) *Type {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		// Map type name identifiers to their types
+		switch e.Name {
+		case "Int":
+			return TypeIntVal
+		case "Int64":
+			return TypeInt64Val
+		case "Float":
+			return TypeFloatVal
+		case "Bool":
+			return TypeBoolVal
+		case "String":
+			return TypeStringVal
+		case "Bytes":
+			return TypeBytesVal
+		case "any":
+			return TypeAnyVal
+		case "error":
+			return TypeErrorVal
+		default:
+			// Check if it's a class type
+			if cls := a.classes[e.Name]; cls != nil {
+				return NewClassType(e.Name)
+			}
+			// Check if it's an interface type
+			if iface := a.interfaces[e.Name]; iface != nil {
+				return NewInterfaceType(e.Name)
+			}
+			return TypeUnknownVal
+		}
+	case *ast.IndexExpr:
+		// Handle nested generics like Array[Int]
+		if ident, ok := e.Left.(*ast.Ident); ok {
+			elemType := a.parseTypeFromExpr(e.Index)
+			switch ident.Name {
+			case "Array":
+				return NewArrayType(elemType)
+			case "Chan":
+				return NewChanType(elemType)
+			case "Task":
+				return NewTaskType(elemType)
+			}
+		}
+		return TypeUnknownVal
+	default:
+		return TypeUnknownVal
+	}
 }

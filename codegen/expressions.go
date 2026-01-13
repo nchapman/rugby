@@ -251,6 +251,17 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 		return
 	}
 
+	// Handle arithmetic on any-typed values (e.g., from await)
+	if e.Op == "+" && g.hasAnyTypedOperand(e.Left, e.Right) {
+		g.needsRuntime = true
+		g.buf.WriteString("runtime.Add(")
+		g.genExpr(e.Left)
+		g.buf.WriteString(", ")
+		g.genExpr(e.Right)
+		g.buf.WriteString(")")
+		return
+	}
+
 	g.buf.WriteString("(")
 	g.genExpr(e.Left)
 	g.buf.WriteString(" ")
@@ -258,6 +269,18 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 	g.buf.WriteString(" ")
 	g.genExpr(e.Right)
 	g.buf.WriteString(")")
+}
+
+// hasAnyTypedOperand returns true if BOTH operands have type any (interface{})
+// We require both because if only one is any, it's likely due to generic typing
+// (like reduce's accumulator) where codegen infers concrete types.
+func (g *Generator) hasAnyTypedOperand(left, right ast.Expression) bool {
+	if g.typeInfo == nil {
+		return false
+	}
+	leftKind := g.typeInfo.GetTypeKind(left)
+	rightKind := g.typeInfo.GetTypeKind(right)
+	return leftKind == TypeAny && rightKind == TypeAny
 }
 
 // canUseDirectComparison returns true if we can use Go's == operator directly
@@ -862,6 +885,16 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				}
 				g.buf.WriteString(")")
 				return
+			}
+			// Handle Go package type .new calls like sync.WaitGroup.new
+			// Generate zero-value initialization: &pkg.Type{}
+			if sel, ok := fn.X.(*ast.SelectorExpr); ok {
+				if pkgIdent, ok := sel.X.(*ast.Ident); ok && g.imports[pkgIdent.Name] {
+					g.buf.WriteString("&")
+					g.genExpr(fn.X)
+					g.buf.WriteString("{}")
+					return
+				}
 			}
 		}
 
@@ -1817,6 +1850,18 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 				g.buf.WriteString("make(chan ")
 				g.buf.WriteString(goType)
 				g.buf.WriteString(")")
+				return
+			}
+		}
+		// Handle Go package type .new calls like sync.WaitGroup.new
+		// Generate zero-value initialization: &pkg.Type{}
+		if pkgSel, ok := sel.X.(*ast.SelectorExpr); ok {
+			if pkgIdent, ok := pkgSel.X.(*ast.Ident); ok && g.imports[pkgIdent.Name] {
+				g.buf.WriteString("&")
+				g.buf.WriteString(pkgIdent.Name)
+				g.buf.WriteString(".")
+				g.buf.WriteString(pkgSel.Sel)
+				g.buf.WriteString("{}")
 				return
 			}
 		}

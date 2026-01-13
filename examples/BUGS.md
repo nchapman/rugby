@@ -26,7 +26,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 12_strings.rg | ✅ PASS | String methods now work |
 | 13_ranges.rg | ✅ PASS | Range methods on variables now work |
 | 14_go_interop.rg | ✅ PASS | Multi-value Go function returns now work |
-| 15_concurrency.rg | ❌ FAIL | Chan generic syntax, sync.WaitGroup.new |
+| 15_concurrency.rg | ✅ PASS | Chan generic syntax, sync.WaitGroup.new, await any-type arithmetic now work |
 
 ---
 
@@ -125,31 +125,18 @@ Range methods (`size`, `length`, `include?`, `contains?`, `to_a`) now work on Ra
 ### ~~BUG-019: Module methods as instance methods~~ ✅ FIXED
 Methods from included modules are now properly recognized as class methods. The semantic analyzer adds module methods to `cls.Methods` so that `GetMethod` finds them and generates proper method calls instead of method value references.
 
+### ~~BUG-024: Chan generic syntax~~ ✅ FIXED
+Generic channel syntax `Chan[Int].new(3)` now works. The codegen handles `Chan[Type].new(capacity)` and generates `make(chan type, capacity)`.
+
+### ~~BUG-025: sync.WaitGroup.new syntax~~ ✅ FIXED
+Go package type `.new` syntax like `sync.WaitGroup.new` now works, generating zero-value initialization `&sync.WaitGroup{}`.
+
+### ~~BUG-034: Await returns any type, arithmetic fails~~ ✅ FIXED
+The `await` keyword now properly types its result as `any` when the task element type is unknown. The codegen uses `runtime.Add` for arithmetic on `any`-typed values from await, enabling patterns like `r1 + r2 + r3` in concurrently blocks.
+
 ---
 
 ## Remaining Bugs
-
-### BUG-024: Chan generic syntax not recognized
-**File:** 15_concurrency.rg
-**Code:**
-```ruby
-ch = Chan[Int].new(3)
-```
-**Error:** `undefined: 'Chan'`
-**Expected:** Generic channel syntax should work
-
----
-
-### BUG-025: sync.WaitGroup.new syntax
-**File:** 15_concurrency.rg
-**Code:**
-```ruby
-wg = sync.WaitGroup.new
-```
-**Error:** `sync.WaitGroup.New undefined`
-**Expected:** `.new` should map to Go's zero-value initialization or constructor
-
----
 
 ### BUG-033: String positive indexing returns byte value instead of character
 **File:** 12_strings.rg
@@ -168,6 +155,3 @@ puts "word[0]: #{word[0]}"
 
 ### Medium Priority
 1. **BUG-033**: String positive indexing
-
-### Lower Priority
-2. **BUG-024/025**: Generic Chan syntax and sync.WaitGroup.new
