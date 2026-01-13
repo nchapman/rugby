@@ -1,0 +1,1335 @@
+package codegen
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/nchapman/rugby/ast"
+)
+
+func (g *Generator) genStatement(stmt ast.Statement) {
+	switch s := stmt.(type) {
+	case *ast.FuncDecl:
+		g.genFuncDecl(s)
+	case *ast.ClassDecl:
+		g.genClassDecl(s)
+	case *ast.InterfaceDecl:
+		g.genInterfaceDecl(s)
+	case *ast.ModuleDecl:
+		g.genModuleDecl(s)
+	case *ast.ExprStmt:
+		g.genExprStmt(s)
+	case *ast.AssignStmt:
+		g.genAssignStmt(s)
+	case *ast.OrAssignStmt:
+		g.genOrAssignStmt(s)
+	case *ast.CompoundAssignStmt:
+		g.genCompoundAssignStmt(s)
+	case *ast.MultiAssignStmt:
+		g.genMultiAssignStmt(s)
+	case *ast.InstanceVarAssign:
+		g.genInstanceVarAssign(s)
+	case *ast.InstanceVarOrAssign:
+		g.genInstanceVarOrAssign(s)
+	case *ast.IfStmt:
+		g.genIfStmt(s)
+	case *ast.CaseStmt:
+		g.genCaseStmt(s)
+	case *ast.CaseTypeStmt:
+		g.genCaseTypeStmt(s)
+	case *ast.WhileStmt:
+		g.genWhileStmt(s)
+	case *ast.UntilStmt:
+		g.genUntilStmt(s)
+	case *ast.ForStmt:
+		g.genForStmt(s)
+	case *ast.BreakStmt:
+		g.genBreakStmt(s)
+	case *ast.NextStmt:
+		g.genNextStmt(s)
+	case *ast.ReturnStmt:
+		g.genReturnStmt(s)
+	case *ast.PanicStmt:
+		g.genPanicStmt(s)
+	case *ast.DeferStmt:
+		g.genDeferStmt(s)
+	// Concurrency constructs
+	case *ast.GoStmt:
+		g.genGoStmt(s)
+	case *ast.SelectStmt:
+		g.genSelectStmt(s)
+	case *ast.ChanSendStmt:
+		g.genChanSendStmt(s)
+	case *ast.ConcurrentlyStmt:
+		g.genConcurrentlyStmt(s)
+	// Testing constructs
+	case *ast.DescribeStmt:
+		g.genDescribeStmt(s)
+	case *ast.ItStmt:
+		g.genItStmt(s)
+	case *ast.TestStmt:
+		g.genTestStmt(s)
+	case *ast.TableStmt:
+		g.genTableStmt(s)
+	default:
+		g.addError(fmt.Errorf("unhandled statement type: %T", stmt))
+	}
+}
+
+func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
+	g.writeIndent()
+	if g.currentClass != "" {
+		recv := receiverName(g.currentClass)
+		g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, s.Name))
+
+		// Check for optional wrapping
+		fieldType := g.classFields[s.Name]
+		sourceType := g.inferTypeFromExpr(s.Value)
+		needsWrap := false
+
+		if isValueTypeOptional(fieldType) {
+			baseType := strings.TrimSuffix(fieldType, "?")
+			if sourceType == baseType {
+				needsWrap = true
+			}
+		}
+
+		if needsWrap {
+			baseType := strings.TrimSuffix(fieldType, "?")
+			g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+			g.genExpr(s.Value)
+			g.buf.WriteString(")")
+		} else {
+			g.genExpr(s.Value)
+		}
+	} else {
+		g.buf.WriteString(fmt.Sprintf("/* @%s outside class */ ", s.Name))
+		g.genExpr(s.Value)
+	}
+	g.buf.WriteString("\n")
+}
+
+func (g *Generator) genOrAssignStmt(s *ast.OrAssignStmt) {
+	if !g.isDeclared(s.Name) {
+		// First declaration: just use :=
+		g.writeIndent()
+		g.buf.WriteString(s.Name)
+		g.buf.WriteString(" := ")
+		g.genExpr(s.Value)
+		g.buf.WriteString("\n")
+		g.vars[s.Name] = "" // type unknown
+	} else {
+		// Variable exists: generate check
+		g.writeIndent()
+		g.buf.WriteString("if ")
+
+		declaredType := g.vars[s.Name]
+		// Check if nil
+		g.buf.WriteString(s.Name)
+		g.buf.WriteString(" == nil")
+
+		g.buf.WriteString(" {\n")
+		g.indent++
+		g.writeIndent()
+		g.buf.WriteString(s.Name)
+		g.buf.WriteString(" = ")
+
+		// Check for optional wrapping
+		sourceType := g.inferTypeFromExpr(s.Value)
+		needsWrap := false
+		if isValueTypeOptional(declaredType) {
+			baseType := strings.TrimSuffix(declaredType, "?")
+			if sourceType == baseType {
+				needsWrap = true
+			}
+		}
+
+		if needsWrap {
+			baseType := strings.TrimSuffix(declaredType, "?")
+			g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+			g.genExpr(s.Value)
+			g.buf.WriteString(")")
+		} else {
+			g.genExpr(s.Value)
+		}
+
+		g.buf.WriteString("\n")
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	}
+}
+
+func (g *Generator) genCompoundAssignStmt(s *ast.CompoundAssignStmt) {
+	g.writeIndent()
+	g.buf.WriteString(s.Name)
+	g.buf.WriteString(" = ")
+	g.buf.WriteString(s.Name)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(s.Op)
+	g.buf.WriteString(" ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+}
+
+// genMultiAssignStmt generates code for tuple unpacking: val, ok = expr
+func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
+	g.writeIndent()
+
+	// Check if any names are new declarations
+	allDeclared := true
+	for _, name := range s.Names {
+		if !g.isDeclared(name) {
+			allDeclared = false
+			break
+		}
+	}
+
+	// Generate names
+	for i, name := range s.Names {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.buf.WriteString(name)
+	}
+
+	// Use := if any variable is new, = if all are already declared
+	if allDeclared {
+		g.buf.WriteString(" = ")
+	} else {
+		g.buf.WriteString(" := ")
+		// Mark new variables as declared
+		for _, name := range s.Names {
+			if !g.isDeclared(name) {
+				g.vars[name] = ""
+			}
+		}
+	}
+
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+}
+
+func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
+	if g.currentClass == "" {
+		g.writeIndent()
+		g.buf.WriteString(fmt.Sprintf("/* @%s ||= outside class */\n", s.Name))
+		return
+	}
+
+	recv := receiverName(g.currentClass)
+	field := fmt.Sprintf("%s.%s", recv, s.Name)
+	fieldType := g.classFields[s.Name]
+
+	// Generate check
+	g.writeIndent()
+	g.buf.WriteString("if ")
+
+	// Check if nil
+	g.buf.WriteString(field)
+	g.buf.WriteString(" == nil")
+
+	g.buf.WriteString(" {\n")
+	g.indent++
+	g.writeIndent()
+	g.buf.WriteString(field)
+	g.buf.WriteString(" = ")
+
+	// Check for optional wrapping
+	sourceType := g.inferTypeFromExpr(s.Value)
+	needsWrap := false
+	if isValueTypeOptional(fieldType) {
+		baseType := strings.TrimSuffix(fieldType, "?")
+		if sourceType == baseType {
+			needsWrap = true
+		}
+	}
+
+	if needsWrap {
+		baseType := strings.TrimSuffix(fieldType, "?")
+		g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+		g.genExpr(s.Value)
+		g.buf.WriteString(")")
+	} else {
+		g.genExpr(s.Value)
+	}
+
+	g.buf.WriteString("\n")
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
+	// Handle BangExpr: x = call()! -> x, _err := call(); if _err != nil { ... }
+	if bangExpr, ok := s.Value.(*ast.BangExpr); ok {
+		g.genBangAssign(s.Name, s.Type, bangExpr)
+		return
+	}
+
+	// Handle RescueExpr: x = call() rescue default
+	if rescueExpr, ok := s.Value.(*ast.RescueExpr); ok {
+		g.genRescueAssign(s.Name, s.Type, rescueExpr)
+		return
+	}
+
+	g.writeIndent()
+
+	// Determine target type
+	var targetType string
+	if s.Type != "" {
+		targetType = s.Type
+	} else if declaredType, ok := g.vars[s.Name]; ok {
+		targetType = declaredType
+	}
+
+	// Check if we are assigning nil to a value type optional
+	isNilAssignment := false
+	if _, ok := s.Value.(*ast.NilLit); ok {
+		isNilAssignment = true
+	}
+
+	if isNilAssignment && isValueTypeOptional(targetType) {
+		baseType := strings.TrimSuffix(targetType, "?")
+
+		if s.Type != "" && !g.isDeclared(s.Name) {
+			// Typed declaration: var x Int? = nil
+			g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
+			g.vars[s.Name] = s.Type
+		} else if g.isDeclared(s.Name) {
+			// Reassignment: x = nil
+			g.buf.WriteString(s.Name)
+			g.buf.WriteString(" = ")
+		} else {
+			// Untyped declaration (x = nil)
+			g.buf.WriteString(s.Name)
+			g.buf.WriteString(" := ")
+			g.vars[s.Name] = ""
+		}
+
+		g.buf.WriteString(fmt.Sprintf("runtime.None%s()", baseType))
+		g.buf.WriteString("\n")
+		return
+	}
+
+	// Check if we need to wrap value type -> Optional (e.g. x : Int? = 5)
+	sourceType := g.inferTypeFromExpr(s.Value)
+	needsWrap := false
+	if isValueTypeOptional(targetType) {
+		baseType := strings.TrimSuffix(targetType, "?")
+		if sourceType == baseType {
+			needsWrap = true
+		}
+	}
+
+	if s.Type != "" && !g.isDeclared(s.Name) {
+		// Typed declaration: var x int = value
+		g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
+		g.vars[s.Name] = s.Type // store the declared type
+	} else if g.isDeclared(s.Name) {
+		// Reassignment: x = value
+		g.buf.WriteString(s.Name)
+		g.buf.WriteString(" = ")
+	} else {
+		// Untyped declaration: x := value
+		g.buf.WriteString(s.Name)
+		g.buf.WriteString(" := ")
+		g.vars[s.Name] = sourceType // infer type from value if variable is new
+	}
+
+	if needsWrap {
+		baseType := strings.TrimSuffix(targetType, "?")
+		g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+		g.genExpr(s.Value)
+		g.buf.WriteString(")")
+	} else {
+		g.genExpr(s.Value)
+	}
+	g.buf.WriteString("\n")
+}
+
+// genBangAssign generates code for: x = call()!
+// Produces: x, _err0 := call(); if _err0 != nil { return/Fatal }
+func (g *Generator) genBangAssign(name string, _ string, bang *ast.BangExpr) {
+	call, ok := bang.Expr.(*ast.CallExpr)
+	if !ok {
+		g.addError(fmt.Errorf("bang expression must be a call expression"))
+		return
+	}
+
+	// Use unique error variable name to avoid conflicts
+	errVar := fmt.Sprintf("_err%d", g.tempVarCounter)
+	g.tempVarCounter++
+
+	// Generate: name, _errN := call()
+	g.writeIndent()
+	if g.isDeclared(name) {
+		// Reassignment needs a temp for error
+		g.buf.WriteString(fmt.Sprintf("%s, %s = ", name, errVar))
+	} else {
+		g.buf.WriteString(fmt.Sprintf("%s, %s := ", name, errVar))
+		g.vars[name] = "" // mark as declared (type unknown for now)
+	}
+	g.genCallExpr(call)
+	g.buf.WriteString("\n")
+
+	// Generate error check
+	g.genBangErrorCheckWithVar(errVar)
+}
+
+// genBangStmt generates code for a standalone: call()!
+// Produces: if _err := call(); _err != nil { return/Fatal }
+func (g *Generator) genBangStmt(bang *ast.BangExpr) {
+	call, ok := bang.Expr.(*ast.CallExpr)
+	if !ok {
+		g.addError(fmt.Errorf("bang expression must be a call expression"))
+		return
+	}
+
+	// Generate: if _err := call(); _err != nil { ... }
+	// Using a scoped variable in the if statement, so no unique name needed
+	g.writeIndent()
+	g.buf.WriteString("if _err := ")
+	g.genCallExpr(call)
+	g.buf.WriteString("; _err != nil {\n")
+	g.indent++
+	g.genBangErrorBodyWithVar("_err")
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+// genRescueAssign generates code for: x = call() rescue default
+// Produces: x, _err0 := call(); if _err0 != nil { x = default }
+func (g *Generator) genRescueAssign(name string, _ string, rescue *ast.RescueExpr) {
+	call, ok := rescue.Expr.(*ast.CallExpr)
+	if !ok {
+		g.addError(fmt.Errorf("rescue expression must be a call expression"))
+		return
+	}
+
+	// Use unique error variable name to avoid conflicts
+	errVar := fmt.Sprintf("_err%d", g.tempVarCounter)
+	g.tempVarCounter++
+
+	// Generate: name, _errN := call()
+	g.writeIndent()
+	if g.isDeclared(name) {
+		g.buf.WriteString(fmt.Sprintf("%s, %s = ", name, errVar))
+	} else {
+		g.buf.WriteString(fmt.Sprintf("%s, %s := ", name, errVar))
+		g.vars[name] = "" // mark as declared
+	}
+	g.genCallExpr(call)
+	g.buf.WriteString("\n")
+
+	// Generate error handling
+	g.writeIndent()
+	g.buf.WriteString(fmt.Sprintf("if %s != nil {\n", errVar))
+	g.indent++
+
+	if rescue.Block != nil {
+		// Block form
+		if rescue.ErrName != "" {
+			// Bind error to variable
+			g.writeIndent()
+			g.buf.WriteString(fmt.Sprintf("%s := %s\n", rescue.ErrName, errVar))
+		}
+		// Generate block body
+		for i, stmt := range rescue.Block.Body {
+			isLast := i == len(rescue.Block.Body)-1
+			if isLast {
+				// Last expression becomes the value
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString(fmt.Sprintf("%s = ", name))
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+					continue
+				}
+			}
+			g.genStatement(stmt)
+		}
+	} else {
+		// Inline form: name = default
+		g.writeIndent()
+		g.buf.WriteString(fmt.Sprintf("%s = ", name))
+		g.genExpr(rescue.Default)
+		g.buf.WriteString("\n")
+	}
+
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+// genRescueStmt generates code for a standalone: call() rescue do ... end
+// Used when rescue appears in statement context
+func (g *Generator) genRescueStmt(rescue *ast.RescueExpr) {
+	call, ok := rescue.Expr.(*ast.CallExpr)
+	if !ok {
+		g.addError(fmt.Errorf("rescue expression must be a call expression"))
+		return
+	}
+
+	// For statement context, we just need to handle the error
+	// Using a scoped variable in the if statement, so no unique name needed
+	g.writeIndent()
+	g.buf.WriteString("if _err := ")
+	g.genCallExpr(call)
+	g.buf.WriteString("; _err != nil {\n")
+	g.indent++
+
+	if rescue.Block != nil {
+		if rescue.ErrName != "" {
+			g.writeIndent()
+			g.buf.WriteString(fmt.Sprintf("%s := _err\n", rescue.ErrName))
+		}
+		for _, stmt := range rescue.Block.Body {
+			g.genStatement(stmt)
+		}
+	} else if rescue.Default != nil {
+		// Inline default in statement context - just evaluate it
+		g.writeIndent()
+		g.genExpr(rescue.Default)
+		g.buf.WriteString("\n")
+	}
+
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+// genBangErrorCheckWithVar generates the if errVar != nil check after an assignment
+func (g *Generator) genBangErrorCheckWithVar(errVar string) {
+	g.writeIndent()
+	g.buf.WriteString(fmt.Sprintf("if %s != nil {\n", errVar))
+	g.indent++
+	g.genBangErrorBodyWithVar(errVar)
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+// genBangErrorBodyWithVar generates the body of the error check using the specified error variable
+func (g *Generator) genBangErrorBodyWithVar(errVar string) {
+	g.writeIndent()
+	if g.inMainFunc {
+		// In main: call runtime.Fatal
+		g.needsRuntime = true
+		g.buf.WriteString(fmt.Sprintf("runtime.Fatal(%s)\n", errVar))
+	} else if g.returnsError() {
+		// In error-returning function: propagate the error
+		g.buf.WriteString("return ")
+		// Generate zero values for all return types except error
+		for i := range len(g.currentReturnTypes) - 1 {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+			g.buf.WriteString(zeroValue(g.currentReturnTypes[i]))
+		}
+		if len(g.currentReturnTypes) > 1 {
+			g.buf.WriteString(", ")
+		}
+		g.buf.WriteString(errVar + "\n")
+	} else {
+		// Not in main and doesn't return error - this is an error
+		// For now, emit a comment indicating the problem
+		g.buf.WriteString("/* ERROR: ! used in function that doesn't return error */\n")
+		g.buf.WriteString(fmt.Sprintf("panic(%s)\n", errVar))
+	}
+}
+
+// genCondition generates a condition expression with strict Bool type checking.
+// Rugby requires conditions to be Bool type - no implicit truthiness.
+// Use 'if let x = expr' for optional unwrapping, or explicit checks like 'x != nil'.
+func (g *Generator) genCondition(cond ast.Expression) error {
+	condType := g.inferTypeFromExpr(cond)
+
+	// Allow Bool type explicitly
+	if condType == "Bool" {
+		g.genExpr(cond)
+		return nil
+	}
+
+	// Allow nil comparisons (err != nil, x == nil) - these return Bool
+	if binary, ok := cond.(*ast.BinaryExpr); ok {
+		if binary.Op == "==" || binary.Op == "!=" {
+			if _, isNil := binary.Right.(*ast.NilLit); isNil {
+				g.genExpr(cond)
+				return nil
+			}
+			if _, isNil := binary.Left.(*ast.NilLit); isNil {
+				g.genExpr(cond)
+				return nil
+			}
+		}
+	}
+
+	// If type is unknown, generate as-is (may be external function returning bool)
+	if condType == "" {
+		g.genExpr(cond)
+		return nil
+	}
+
+	// Optional types require explicit unwrapping
+	if isOptionalType(condType) {
+		return fmt.Errorf("condition must be Bool, got %s (use 'if let x = ...' or 'x != nil' for optionals)", condType)
+	}
+
+	// Non-Bool types are errors
+	return fmt.Errorf("condition must be Bool, got %s", condType)
+}
+
+func (g *Generator) genIfStmt(s *ast.IfStmt) {
+	g.writeIndent()
+	g.buf.WriteString("if ")
+
+	// Handle assignment-in-condition pattern: if (n = s.to_i?) or if let n = s.to_i?()
+	// Generates: if n, ok := runtime.StringToInt(s); ok {
+	if s.AssignName != "" {
+		g.buf.WriteString(s.AssignName)
+		g.buf.WriteString(", ok := ")
+		g.genExpr(s.AssignExpr)
+		g.buf.WriteString("; ok {\n")
+		// Track the variable with its inferred type
+		g.vars[s.AssignName] = g.inferTypeFromExpr(s.AssignExpr)
+	} else {
+		// For unless, negate the condition
+		if s.IsUnless {
+			g.buf.WriteString("!(")
+		}
+		if err := g.genCondition(s.Cond); err != nil {
+			g.addError(fmt.Errorf("line %d: %w", s.Line, err))
+			// Generate a placeholder to keep the output somewhat valid
+			g.buf.WriteString("false")
+		}
+		if s.IsUnless {
+			g.buf.WriteString(")")
+		}
+		g.buf.WriteString(" {\n")
+	}
+
+	g.indent++
+	for _, stmt := range s.Then {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	for _, elsif := range s.ElseIfs {
+		g.writeIndent()
+		g.buf.WriteString("} else if ")
+		if err := g.genCondition(elsif.Cond); err != nil {
+			g.addError(fmt.Errorf("line %d: %w", s.Line, err))
+			g.buf.WriteString("false")
+		}
+		g.buf.WriteString(" {\n")
+
+		g.indent++
+		for _, stmt := range elsif.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	if len(s.Else) > 0 {
+		g.writeIndent()
+		g.buf.WriteString("} else {\n")
+
+		g.indent++
+		for _, stmt := range s.Else {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genCaseStmt(s *ast.CaseStmt) {
+	g.writeIndent()
+
+	// Handle case with subject vs case without subject
+	if s.Subject != nil {
+		g.buf.WriteString("switch ")
+		g.genExpr(s.Subject)
+		g.buf.WriteString(" {\n")
+	} else {
+		// Case without subject - use switch true
+		g.buf.WriteString("switch {\n")
+	}
+
+	// Generate when clauses
+	for _, whenClause := range s.WhenClauses {
+		g.writeIndent()
+
+		if s.Subject != nil {
+			// With subject: case value1, value2:
+			g.buf.WriteString("case ")
+			for i, val := range whenClause.Values {
+				if i > 0 {
+					g.buf.WriteString(", ")
+				}
+				g.genExpr(val)
+			}
+			g.buf.WriteString(":\n")
+		} else {
+			// Without subject: case condition1 || condition2:
+			g.buf.WriteString("case ")
+			for i, val := range whenClause.Values {
+				if i > 0 {
+					g.buf.WriteString(" || ")
+				}
+				if err := g.genCondition(val); err != nil {
+					g.addError(err)
+					g.buf.WriteString("false")
+				}
+			}
+			g.buf.WriteString(":\n")
+		}
+
+		g.indent++
+		for _, stmt := range whenClause.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	// Generate default (else) clause
+	if len(s.Else) > 0 {
+		g.writeIndent()
+		g.buf.WriteString("default:\n")
+
+		g.indent++
+		for _, stmt := range s.Else {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genCaseTypeStmt(s *ast.CaseTypeStmt) {
+	g.writeIndent()
+
+	// Get the variable name from the subject
+	var varName string
+	switch subj := s.Subject.(type) {
+	case *ast.Ident:
+		varName = subj.Name
+	default:
+		// For complex expressions, generate a unique temp variable
+		varName = fmt.Sprintf("_ts%d", g.tempVarCounter)
+		g.tempVarCounter++
+		g.buf.WriteString(fmt.Sprintf("%s := ", varName))
+		g.genExpr(s.Subject)
+		g.buf.WriteString("\n")
+		g.writeIndent()
+	}
+
+	// Generate type switch with shadowing: switch varName := varName.(type) {
+	g.buf.WriteString(fmt.Sprintf("switch %s := %s.(type) {\n", varName, varName))
+
+	// Generate when clauses for each type
+	for _, whenClause := range s.WhenClauses {
+		g.writeIndent()
+		g.buf.WriteString("case ")
+		g.buf.WriteString(mapType(whenClause.Type))
+		g.buf.WriteString(":\n")
+
+		g.indent++
+		for _, stmt := range whenClause.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	// Generate default (else) clause
+	if len(s.Else) > 0 {
+		g.writeIndent()
+		g.buf.WriteString("default:\n")
+
+		g.indent++
+		for _, stmt := range s.Else {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genWhileStmt(s *ast.WhileStmt) {
+	g.writeIndent()
+	g.buf.WriteString("for ")
+	if err := g.genCondition(s.Cond); err != nil {
+		g.addError(fmt.Errorf("line %d: %w", s.Line, err))
+		g.buf.WriteString("false")
+	}
+	g.buf.WriteString(" {\n")
+
+	g.pushContext(ctxLoop)
+	g.indent++
+	for _, stmt := range s.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+	g.popContext()
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genUntilStmt(s *ast.UntilStmt) {
+	g.writeIndent()
+	g.buf.WriteString("for !")
+	// Wrap condition in parentheses unless it's a simple expression.
+	// Simple expressions that don't need parens: identifiers, booleans, calls, selectors.
+	// All other expressions (binary, nil-coalesce, etc.) need parens for correct precedence.
+	needsParens := true
+	switch s.Cond.(type) {
+	case *ast.Ident, *ast.BoolLit, *ast.CallExpr, *ast.SelectorExpr:
+		needsParens = false
+	}
+	if needsParens {
+		g.buf.WriteString("(")
+	}
+	if err := g.genCondition(s.Cond); err != nil {
+		g.addError(fmt.Errorf("line %d: %w", s.Line, err))
+		g.buf.WriteString("false")
+	}
+	if needsParens {
+		g.buf.WriteString(")")
+	}
+	g.buf.WriteString(" {\n")
+
+	g.pushContext(ctxLoop)
+	g.indent++
+	for _, stmt := range s.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+	g.popContext()
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genForStmt(s *ast.ForStmt) {
+	// Save variable state
+	prevType, wasDefinedBefore := g.vars[s.Var]
+
+	// Check if iterable is a range literal - optimize to C-style for loop
+	if rangeLit, ok := s.Iterable.(*ast.RangeLit); ok {
+		g.genForRangeLoop(s.Var, rangeLit, s.Body, wasDefinedBefore, prevType)
+		return
+	}
+
+	// Check if iterable is a variable of type Range
+	if ident, ok := s.Iterable.(*ast.Ident); ok {
+		if g.vars[ident.Name] == "Range" {
+			g.genForRangeVarLoop(s.Var, ident.Name, s.Body, wasDefinedBefore, prevType)
+			return
+		}
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("for _, ")
+	g.buf.WriteString(s.Var)
+	g.buf.WriteString(" := range ")
+	g.genExpr(s.Iterable)
+	g.buf.WriteString(" {\n")
+
+	g.vars[s.Var] = "" // loop variable, type unknown
+
+	g.pushContext(ctxLoop)
+	g.indent++
+	for _, stmt := range s.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+	g.popContext()
+
+	// Restore variable state
+	if !wasDefinedBefore {
+		delete(g.vars, s.Var)
+	} else {
+		g.vars[s.Var] = prevType
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genForRangeVarLoop(varName string, rangeVar string, body []ast.Statement, wasDefinedBefore bool, prevType string) {
+	g.writeIndent()
+	g.buf.WriteString("for ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.buf.WriteString(rangeVar)
+	g.buf.WriteString(".Start; ")
+
+	// Condition: (r.Exclusive && i < r.End) || (!r.Exclusive && i <= r.End)
+	g.buf.WriteString(fmt.Sprintf("(%s.Exclusive && %s < %s.End) || (!%s.Exclusive && %s <= %s.End)",
+		rangeVar, varName, rangeVar, rangeVar, varName, rangeVar))
+
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString("++ {\n")
+
+	g.vars[varName] = "Int"
+
+	g.pushContext(ctxLoop)
+	g.indent++
+	for _, stmt := range body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+	g.popContext()
+
+	if !wasDefinedBefore {
+		delete(g.vars, varName)
+	} else {
+		g.vars[varName] = prevType
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.Statement, wasDefinedBefore bool, prevType string) {
+	// Optimization: use Go 1.22 range-over-int for 0...n loops
+	// Check if start is 0
+	isStartZero := false
+	if intLit, ok := r.Start.(*ast.IntLit); ok && intLit.Value == 0 {
+		isStartZero = true
+	}
+
+	g.writeIndent()
+	if isStartZero && r.Exclusive {
+		// Generate: for i := range end { ... }
+		g.buf.WriteString("for ")
+		g.buf.WriteString(varName)
+		g.buf.WriteString(" := range ")
+		g.genExpr(r.End)
+		g.buf.WriteString(" {\n")
+	} else {
+		// Generate: for i := start; i <= end; i++ { ... }
+		// or:       for i := start; i < end; i++ { ... } (exclusive)
+		g.buf.WriteString("for ")
+		g.buf.WriteString(varName)
+		g.buf.WriteString(" := ")
+		g.genExpr(r.Start)
+		g.buf.WriteString("; ")
+		g.buf.WriteString(varName)
+		if r.Exclusive {
+			g.buf.WriteString(" < ")
+		} else {
+			g.buf.WriteString(" <= ")
+		}
+		g.genExpr(r.End)
+		g.buf.WriteString("; ")
+		g.buf.WriteString(varName)
+		g.buf.WriteString("++ {\n")
+	}
+
+	g.vars[varName] = "Int" // range loop variable is always Int
+
+	g.pushContext(ctxLoop)
+	g.indent++
+	for _, stmt := range body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+	g.popContext()
+
+	// Restore variable state
+	if !wasDefinedBefore {
+		delete(g.vars, varName)
+	} else {
+		g.vars[varName] = prevType
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genExprStmt(s *ast.ExprStmt) {
+	// Handle BangExpr: call()! as a statement
+	if bangExpr, ok := s.Expr.(*ast.BangExpr); ok {
+		g.genBangStmt(bangExpr)
+		return
+	}
+
+	// Handle RescueExpr: call() rescue do ... end as a statement
+	if rescueExpr, ok := s.Expr.(*ast.RescueExpr); ok {
+		g.genRescueStmt(rescueExpr)
+		return
+	}
+
+	// Convert SelectorExpr to CallExpr when used as statement (Ruby-style method call)
+	// e.g., "obj.foo" as statement becomes "obj.foo()"
+	expr := s.Expr
+	if sel, ok := expr.(*ast.SelectorExpr); ok {
+		expr = &ast.CallExpr{Func: sel, Args: nil}
+	}
+
+	if s.Condition != nil {
+		// Wrap in if/unless block
+		g.writeIndent()
+		g.buf.WriteString("if ")
+		if s.IsUnless {
+			g.buf.WriteString("!(")
+		}
+		if err := g.genCondition(s.Condition); err != nil {
+			g.addError(err)
+			g.buf.WriteString("false")
+		}
+		if s.IsUnless {
+			g.buf.WriteString(")")
+		}
+		g.buf.WriteString(" {\n")
+		g.indent++
+		g.writeIndent()
+		g.genExpr(expr)
+		g.buf.WriteString("\n")
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	} else {
+		g.writeIndent()
+		g.genExpr(expr)
+		g.buf.WriteString("\n")
+	}
+}
+
+func (g *Generator) genBreakStmt(s *ast.BreakStmt) {
+	if s.Condition != nil {
+		// Wrap in if/unless block
+		g.writeIndent()
+		g.buf.WriteString("if ")
+		if s.IsUnless {
+			g.buf.WriteString("!(")
+		}
+		if err := g.genCondition(s.Condition); err != nil {
+			g.addError(err)
+			g.buf.WriteString("false")
+		}
+		if s.IsUnless {
+			g.buf.WriteString(")")
+		}
+		g.buf.WriteString(" {\n")
+		g.indent++
+	}
+
+	g.writeIndent()
+	ctx, ok := g.currentContext()
+	if ok {
+		switch ctx.kind {
+		case ctxIterBlock:
+			g.buf.WriteString("return false\n")
+		case ctxTransformBlock:
+			// Transform blocks with three values (map): return (value, include, continue)
+			if ctx.usesIncludeFlag {
+				g.buf.WriteString("return nil, false, false\n")
+			} else {
+				// Transform blocks with two values (select, reject, find): return (value, continue)
+				if ctx.returnType == "bool" {
+					g.buf.WriteString("return false, false\n")
+				} else {
+					g.buf.WriteString("return nil, false\n")
+				}
+			}
+		default:
+			// Regular loop context
+			g.buf.WriteString("break\n")
+		}
+	} else {
+		// No context - regular loop
+		g.buf.WriteString("break\n")
+	}
+
+	if s.Condition != nil {
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	}
+}
+
+func (g *Generator) genNextStmt(s *ast.NextStmt) {
+	if s.Condition != nil {
+		// Wrap in if/unless block
+		g.writeIndent()
+		g.buf.WriteString("if ")
+		if s.IsUnless {
+			g.buf.WriteString("!(")
+		}
+		if err := g.genCondition(s.Condition); err != nil {
+			g.addError(err)
+			g.buf.WriteString("false")
+		}
+		if s.IsUnless {
+			g.buf.WriteString(")")
+		}
+		g.buf.WriteString(" {\n")
+		g.indent++
+	}
+
+	g.writeIndent()
+	ctx, ok := g.currentContext()
+	if ok {
+		switch ctx.kind {
+		case ctxIterBlock:
+			g.buf.WriteString("return true\n")
+		case ctxTransformBlock:
+			// next in transform blocks with three values (map): skip element, continue iteration
+			if ctx.usesIncludeFlag {
+				g.buf.WriteString("return nil, false, true\n")
+			} else {
+				// next in two-value transform blocks: return zero value and true to continue
+				if ctx.returnType == "bool" {
+					g.buf.WriteString("return false, true\n")
+				} else {
+					g.buf.WriteString("return nil, true\n")
+				}
+			}
+		default:
+			// Regular loop context
+			g.buf.WriteString("continue\n")
+		}
+	} else {
+		// No context - regular loop
+		g.buf.WriteString("continue\n")
+	}
+
+	if s.Condition != nil {
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	}
+}
+
+func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
+	if s.Condition != nil {
+		// Wrap in if/unless block
+		g.writeIndent()
+		g.buf.WriteString("if ")
+		if s.IsUnless {
+			g.buf.WriteString("!(")
+		}
+		if err := g.genCondition(s.Condition); err != nil {
+			g.addError(err)
+			g.buf.WriteString("false")
+		}
+		if s.IsUnless {
+			g.buf.WriteString(")")
+		}
+		g.buf.WriteString(" {\n")
+		g.indent++
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("return")
+	if len(s.Values) > 0 {
+		g.buf.WriteString(" ")
+		for i, val := range s.Values {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+
+			// Check if we need to wrap for Optional types
+			needsWrap := false
+			baseType := ""
+			handled := false
+
+			if i < len(g.currentReturnTypes) {
+				targetType := g.currentReturnTypes[i]
+				if isValueTypeOptional(targetType) {
+					baseType = strings.TrimSuffix(targetType, "?")
+
+					// If returning nil, use NoneT()
+					if _, isNil := val.(*ast.NilLit); isNil {
+						g.buf.WriteString(fmt.Sprintf("runtime.None%s()", baseType))
+						handled = true
+					} else {
+						// Infer type of val to see if it needs wrapping
+						inferred := g.inferTypeFromExpr(val)
+						if inferred == baseType {
+							needsWrap = true
+						}
+					}
+				}
+			}
+
+			if !handled {
+				if needsWrap {
+					g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+					g.genExpr(val)
+					g.buf.WriteString(")")
+				} else {
+					g.genExpr(val)
+				}
+			}
+		}
+	}
+	g.buf.WriteString("\n")
+
+	if s.Condition != nil {
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}\n")
+	}
+}
+
+func (g *Generator) genPanicStmt(s *ast.PanicStmt) {
+	g.writeIndent()
+	g.buf.WriteString("panic(")
+	g.genExpr(s.Message)
+	g.buf.WriteString(")\n")
+}
+
+func (g *Generator) genDeferStmt(s *ast.DeferStmt) {
+	g.writeIndent()
+	g.buf.WriteString("defer ")
+	g.genCallExpr(s.Call)
+	g.buf.WriteString("\n")
+}
+
+func (g *Generator) genGoStmt(s *ast.GoStmt) {
+	g.writeIndent()
+	// Check if it's a block (go do ... end) or a simple call (go func())
+	if s.Block != nil {
+		// go func() { ... }()
+		g.buf.WriteString("go func() {\n")
+		g.indent++
+		for _, stmt := range s.Block.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("}()\n")
+	} else if s.Call != nil {
+		// go func()
+		g.buf.WriteString("go ")
+		if call, ok := s.Call.(*ast.CallExpr); ok {
+			g.genCallExpr(call)
+		} else {
+			g.addError(fmt.Errorf("line %d: go statement must be a function call", s.Line))
+			g.buf.WriteString("func(){}()")
+		}
+		g.buf.WriteString("\n")
+	}
+}
+
+func (g *Generator) genSelectStmt(s *ast.SelectStmt) {
+	g.writeIndent()
+	g.buf.WriteString("select {\n")
+
+	for _, when := range s.Cases {
+		g.writeIndent()
+		g.buf.WriteString("case ")
+
+		if !when.IsSend {
+			// case val := <-ch:
+			if when.AssignName != "" {
+				g.buf.WriteString(when.AssignName)
+				g.buf.WriteString(" := ")
+				// Infer type of received value (not implemented fully without type info)
+				// For now assume "any" or rely on runtime
+				g.vars[when.AssignName] = "any"
+			}
+
+			// Unwrap .receive or .try_receive to get the underlying channel
+			expr := when.Chan
+			if sel, ok := expr.(*ast.SelectorExpr); ok {
+				if sel.Sel == "receive" || sel.Sel == "try_receive" {
+					expr = sel.X
+				}
+			}
+
+			g.buf.WriteString("<-")
+			g.genExpr(expr)
+		} else {
+			// case ch <- val:
+			g.genExpr(when.Chan)
+			g.buf.WriteString(" <- ")
+			g.genExpr(when.Value)
+		}
+
+		g.buf.WriteString(":\n")
+		g.indent++
+		for _, stmt := range when.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	if len(s.Else) > 0 {
+		g.writeIndent()
+		g.buf.WriteString("default:\n")
+		g.indent++
+		for _, stmt := range s.Else {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genChanSendStmt(s *ast.ChanSendStmt) {
+	g.writeIndent()
+	g.genExpr(s.Chan)
+	g.buf.WriteString(" <- ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+}
+
+func (g *Generator) genConcurrentlyStmt(s *ast.ConcurrentlyStmt) {
+	// Generate:
+	// func() (T, T, error) {
+	//   ctx, cancel := context.WithCancel(context.Background())
+	//   defer cancel()
+	//   var wg sync.WaitGroup
+	//   scope := &runtime.Scope{Ctx: ctx, Wg: &wg}
+	//   ...
+	//   wg.Wait()
+	//   return ...
+	// }()
+
+	g.needsRuntime = true
+	g.buf.WriteString("func() ")
+
+	// Return types are currently just "any" because we can't easily infer block return type
+	// This might need refinement for typed returns
+	g.buf.WriteString("any")
+
+	g.buf.WriteString(" {\n")
+	g.indent++
+
+	// Create scope variable
+	scopeVar := s.ScopeVar
+	g.vars[scopeVar] = "Scope"
+
+	// Create scope object
+	g.writeIndent()
+	g.buf.WriteString(fmt.Sprintf("%s := runtime.NewScope()\n", scopeVar))
+
+	// Generate: defer scope.Wait()
+	g.writeIndent()
+	g.buf.WriteString(fmt.Sprintf("defer %s.Wait()\n", scopeVar))
+
+	// Generate body
+	for _, stmt := range s.Body {
+		g.genStatement(stmt)
+	}
+
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}()\n") // Call the closure immediately
+}

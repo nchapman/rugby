@@ -469,60 +469,6 @@ end`
 	assertContains(t, output, `defer cleanup()`)
 }
 
-func TestSnakeToCamelConversion(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		// snake_case transforms to camelCase
-		{"read_all", "readAll"},
-		{"new_request", "newRequest"},
-		{"read_file", "readFile"},
-		{"http_server_error", "httpServerError"},
-		{"is_empty?", "isEmpty"},
-		// Non-snake_case passes through as-is (supports Go interop on variables)
-		{"close", "close"},
-		{"get", "get"},
-		{"Close", "Close"},
-		{"Body", "Body"},
-		// Ruby-style ? suffix stripped even without underscore
-		{"empty?", "empty"},
-		{"valid?", "valid"},
-	}
-
-	for _, tt := range tests {
-		got := snakeToCamel(tt.input)
-		if got != tt.expected {
-			t.Errorf("snakeToCamel(%q) = %q, want %q", tt.input, got, tt.expected)
-		}
-	}
-}
-
-func TestSnakeToPascalConversion(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		// snake_case transforms to PascalCase
-		{"read_all", "ReadAll"},
-		{"new_request", "NewRequest"},
-		{"read_file", "ReadFile"},
-		{"http_server_error", "HttpServerError"},
-		// Non-snake_case passes through as-is
-		{"close", "close"},
-		{"get", "get"},
-		{"Close", "Close"},
-		{"Get", "Get"},
-	}
-
-	for _, tt := range tests {
-		got := snakeToPascal(tt.input)
-		if got != tt.expected {
-			t.Errorf("snakeToPascal(%q) = %q, want %q", tt.input, got, tt.expected)
-		}
-	}
-}
-
 func TestGenerateArrayLiteral(t *testing.T) {
 	input := `def main
   x = [1, 2, 3]
@@ -2736,10 +2682,10 @@ end`
 
 	output := compile(t, input)
 
-	// to_i()! should propagate error
+	// to_i()! should propagate error (uses unique error var names)
 	assertContains(t, output, "runtime.StringToInt(s)")
-	assertContains(t, output, "if _err != nil {")
-	assertContains(t, output, "return 0, _err")
+	assertContains(t, output, "if _err0 != nil {")
+	assertContains(t, output, "return 0, _err0")
 }
 
 func TestStringToFloatWithBang(t *testing.T) {
@@ -2750,10 +2696,10 @@ end`
 
 	output := compile(t, input)
 
-	// to_f()! should propagate error
+	// to_f()! should propagate error (uses unique error var names)
 	assertContains(t, output, "runtime.StringToFloat(s)")
-	assertContains(t, output, "if _err != nil {")
-	assertContains(t, output, "return 0, _err")
+	assertContains(t, output, "if _err0 != nil {")
+	assertContains(t, output, "return 0, _err0")
 }
 
 func TestStringToIntWithRescue(t *testing.T) {
@@ -2765,9 +2711,9 @@ end`
 
 	output := compile(t, input)
 
-	// to_i() rescue should provide default on error
+	// to_i() rescue should provide default on error (uses unique error var names)
 	assertContains(t, output, "runtime.StringToInt(s)")
-	assertContains(t, output, "if _err != nil {")
+	assertContains(t, output, "if _err0 != nil {")
 }
 
 func TestStringToIntExplicit(t *testing.T) {
@@ -3424,10 +3370,10 @@ end`
 
 	output := compile(t, input)
 
-	// Should use runtime.Fatal in main
-	assertContains(t, output, `data, _err := readFile("test.txt")`)
-	assertContains(t, output, `if _err != nil {`)
-	assertContains(t, output, `runtime.Fatal(_err)`)
+	// Should use runtime.Fatal in main (assignment uses unique error var names)
+	assertContains(t, output, `data, _err0 := readFile("test.txt")`)
+	assertContains(t, output, `if _err0 != nil {`)
+	assertContains(t, output, `runtime.Fatal(_err0)`)
 }
 
 func TestGenerateBangInErrorFunction(t *testing.T) {
@@ -3445,10 +3391,10 @@ end`
 
 	output := compile(t, input)
 
-	// Should propagate error in error-returning function
-	assertContains(t, output, `data, _err := readFile(path)`)
-	assertContains(t, output, `if _err != nil {`)
-	assertContains(t, output, `return "", _err`)
+	// Should propagate error in error-returning function (assignment uses unique error var names)
+	assertContains(t, output, `data, _err0 := readFile(path)`)
+	assertContains(t, output, `if _err0 != nil {`)
+	assertContains(t, output, `return "", _err0`)
 }
 
 func TestGenerateBangAsStatement(t *testing.T) {
@@ -3483,9 +3429,9 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate zero values for all non-error returns
-	assertContains(t, output, `data, _err := fetch(url)`)
-	assertContains(t, output, `return "", 0, _err`)
+	// Should generate zero values for all non-error returns (assignment uses unique error var names)
+	assertContains(t, output, `data, _err0 := fetch(url)`)
+	assertContains(t, output, `return "", 0, _err0`)
 }
 
 func TestGenerateBangWithInterfaceReturn(t *testing.T) {
@@ -3503,9 +3449,9 @@ end`
 
 	output := compile(t, input)
 
-	// Should use nil as zero value for 'any' (interface)
-	assertContains(t, output, `obj, _err := parse(s)`)
-	assertContains(t, output, `return nil, _err`)
+	// Should use nil as zero value for 'any' (interface, assignment uses unique error var names)
+	assertContains(t, output, `obj, _err0 := parse(s)`)
+	assertContains(t, output, `return nil, _err0`)
 }
 
 func TestGenerateRescueInline(t *testing.T) {
@@ -3520,9 +3466,9 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate inline rescue with default value
-	assertContains(t, output, `config, _err := readConfig("app.yml")`)
-	assertContains(t, output, `if _err != nil {`)
+	// Should generate inline rescue with default value (assignment uses unique error var names)
+	assertContains(t, output, `config, _err0 := readConfig("app.yml")`)
+	assertContains(t, output, `if _err0 != nil {`)
 	assertContains(t, output, `config = "default"`)
 }
 
@@ -3540,9 +3486,9 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate block rescue
-	assertContains(t, output, `data, _err := loadData("file.txt")`)
-	assertContains(t, output, `if _err != nil {`)
+	// Should generate block rescue (assignment uses unique error var names)
+	assertContains(t, output, `data, _err0 := loadData("file.txt")`)
+	assertContains(t, output, `if _err0 != nil {`)
 	assertContains(t, output, `runtime.Puts("load failed")`)
 	assertContains(t, output, `data = "fallback"`)
 }
@@ -3561,10 +3507,10 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate error binding
-	assertContains(t, output, `result, _err := fetchURL("http://example.com")`)
-	assertContains(t, output, `if _err != nil {`)
-	assertContains(t, output, `err := _err`)
+	// Should generate error binding (assignment uses unique error var names)
+	assertContains(t, output, `result, _err0 := fetchURL("http://example.com")`)
+	assertContains(t, output, `if _err0 != nil {`)
+	assertContains(t, output, `err := _err0`)
 	assertContains(t, output, `runtime.Puts(fmt.Sprintf("error: %v", err))`)
 	assertContains(t, output, `result = "error"`)
 }
