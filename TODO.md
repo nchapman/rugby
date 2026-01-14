@@ -185,7 +185,10 @@ Currently `codegen/codegen.go` Generator struct has 35+ fields mixing:
 - [x] Extended TypeInfo interface with `IsDeclaration()` and `GetFieldType()`
 - [x] Added `shouldDeclare()` helper to use semantic analysis for `:=` vs `=` decisions
 - [x] Added `getFieldType()` helper to use semantic analysis for class field types
-- [ ] Move remaining symbol tables to semantic analyzer
+- [x] Added `IsClass()` and `IsInterface()` to TypeInfo interface
+- [x] Added `IsNoArgFunction()` to TypeInfo interface
+- [x] Helper methods (`isClass()`, `isInterface()`, `isNoArgFunction()`) query TypeInfo with fallback
+- [ ] Move remaining symbol tables to semantic analyzer (vars, goInteropVars, etc.)
 - [ ] Further expand `TypeInfo` interface to provide all resolution info
 - [ ] Codegen only transforms AST nodes to Go syntax
 
