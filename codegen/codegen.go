@@ -356,12 +356,12 @@ func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {
 	if sel.Sel == "to_s" {
 		return ast.SelectorMethod
 	}
-
-	// Note: For Go interop, we don't assume method vs field here because
-	// we don't have Go type info. Go package members could be functions,
-	// variables, constants, or types. The genSelectorExpr handles this
-	// case by not adding parens (field-style access), which is correct
-	// for variables/constants. Function calls come through CallExpr.
+	// - Go interop variables (like http.Response from http.get)
+	//   Property-style access like resp.json should become resp.JSON()
+	//   But NOT for direct package member access like io.EOF (which could be a variable)
+	if ident, ok := sel.X.(*ast.Ident); ok && g.goInteropVars[ident.Name] {
+		return ast.SelectorGoMethod
+	}
 
 	return ast.SelectorUnknown
 }
@@ -373,7 +373,8 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 	// Primary: use semantic type info
 	if g.typeInfo != nil {
 		// GetRugbyType returns the full type including generics (e.g., "Array[Int]", "String?")
-		if rugbyType := g.typeInfo.GetRugbyType(expr); rugbyType != "" && rugbyType != "unknown" && rugbyType != "any" {
+		// Note: "any" is a valid type that should be returned
+		if rugbyType := g.typeInfo.GetRugbyType(expr); rugbyType != "" && rugbyType != "unknown" {
 			return rugbyType
 		}
 	}

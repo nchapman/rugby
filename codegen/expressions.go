@@ -608,6 +608,18 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 	}
 
 	if _, isStringKey := idx.Index.(*ast.StringLit); isStringKey {
+		// For "any" type receivers, use runtime.GetKey to handle type assertion
+		leftType := g.inferTypeFromExpr(idx.Left)
+		if leftType == "any" {
+			g.needsRuntime = true
+			g.buf.WriteString("runtime.GetKey(")
+			g.genExpr(idx.Left)
+			g.buf.WriteString(", ")
+			g.genExpr(idx.Index)
+			g.buf.WriteString(")")
+			return
+		}
+
 		switch idx.Left.(type) {
 		case *ast.Ident, *ast.MapLit:
 			g.genExpr(idx.Left)
@@ -2010,6 +2022,31 @@ func (g *Generator) isGoInteropTypeConstructor(expr ast.Expression) bool {
 		return false
 	}
 	return g.imports[pkgIdent.Name]
+}
+
+// isGoInteropCall checks if an expression is a function call from a Go package.
+// Examples: http.get(url), json.parse(data), etc.
+// Also handles BangExpr (!) wrapping: http.get(url)!
+func (g *Generator) isGoInteropCall(expr ast.Expression) bool {
+	// Unwrap BangExpr (!)
+	if bang, ok := expr.(*ast.BangExpr); ok {
+		expr = bang.Expr
+	}
+
+	// Check for CallExpr
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+
+	// Check if function is pkg.func pattern
+	sel, ok := call.Func.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+
+	// Check if the receiver is a Go import
+	return g.isGoInterop(sel.X)
 }
 
 // isInterfaceMethod checks if a method name matches any interface method in the program.
