@@ -123,10 +123,67 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 }
 
 // genModuleDecl stores the module definition for later use when classes include it.
-// Modules don't generate code directly - their fields and methods are injected
-// into classes that include them.
+// It also generates a Go interface with the module's method signatures. This enables
+// interface compliance checks for classes that include the module, which suppresses
+// "unused method" lint warnings for module methods that aren't directly called.
 func (g *Generator) genModuleDecl(mod *ast.ModuleDecl) {
 	g.modules[mod.Name] = mod
+
+	// Generate an interface for the module if it has methods
+	if len(mod.Methods) == 0 {
+		return
+	}
+
+	// Track module interface methods for PascalCase conversion at call sites
+	if g.interfaceMethods[mod.Name] == nil {
+		g.interfaceMethods[mod.Name] = make(map[string]bool)
+	}
+	for _, method := range mod.Methods {
+		g.interfaceMethods[mod.Name][method.Name] = true
+	}
+
+	// Interface name is the module name (they're in separate namespaces in Rugby)
+	g.buf.WriteString(fmt.Sprintf("type %s interface {\n", mod.Name))
+
+	for _, method := range mod.Methods {
+		g.buf.WriteString("\t")
+		// Interface methods are always exported (PascalCase) per Go interface rules
+		methodName := snakeToPascalWithAcronyms(method.Name)
+		g.buf.WriteString(methodName)
+		g.buf.WriteString("(")
+
+		// Parameters (just types, no names in Go interface definitions)
+		for i, param := range method.Params {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+			if param.Type != "" {
+				g.buf.WriteString(mapType(param.Type))
+			} else {
+				g.buf.WriteString("any")
+			}
+		}
+		g.buf.WriteString(")")
+
+		// Return types
+		if len(method.ReturnTypes) == 1 {
+			g.buf.WriteString(" ")
+			g.buf.WriteString(g.mapParamType(method.ReturnTypes[0]))
+		} else if len(method.ReturnTypes) > 1 {
+			g.buf.WriteString(" (")
+			for i, rt := range method.ReturnTypes {
+				if i > 0 {
+					g.buf.WriteString(", ")
+				}
+				g.buf.WriteString(g.mapParamType(rt))
+			}
+			g.buf.WriteString(")")
+		}
+
+		g.buf.WriteString("\n")
+	}
+
+	g.buf.WriteString("}\n\n")
 }
 
 func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
@@ -251,6 +308,8 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 				allMethods = append(allMethods, m)
 				// Track as module method for bare identifier resolution in class methods
 				g.currentClassModuleMethods[m.Name] = true
+				// Mark as interface method so it's exported (PascalCase) to satisfy module interface
+				g.currentClassInterfaceMethods[m.Name] = true
 			}
 		}
 	}
@@ -331,6 +390,19 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		g.buf.WriteString(fmt.Sprintf("var _ %s = (*%s)(nil)\n", iface, className))
 	}
 	if len(cls.Implements) > 0 {
+		g.buf.WriteString("\n")
+	}
+
+	// Emit module interface conformance checks
+	// This suppresses "unused method" lint warnings for module methods
+	// by asserting that the class satisfies each included module's interface
+	for _, modName := range cls.Includes {
+		mod := g.modules[modName]
+		if mod != nil && len(mod.Methods) > 0 {
+			g.buf.WriteString(fmt.Sprintf("var _ %s = (*%s)(nil)\n", modName, className))
+		}
+	}
+	if len(cls.Includes) > 0 {
 		g.buf.WriteString("\n")
 	}
 

@@ -4534,9 +4534,16 @@ end`
 
 	output := compile(t, input)
 
-	// Worker should have the call method from Callable
+	// Module generates an interface
+	assertContains(t, output, "type Callable interface {")
+	assertContains(t, output, "Call()")
+
+	// Worker should have the call method from Callable (PascalCase to satisfy interface)
 	assertContains(t, output, "type Worker struct{}")
-	assertContains(t, output, "func (w *Worker) call() {")
+	assertContains(t, output, "func (w *Worker) Call() {")
+
+	// Interface compliance check
+	assertContains(t, output, "var _ Callable = (*Worker)(nil)")
 }
 
 func TestModuleWithProperty(t *testing.T) {
@@ -4583,9 +4590,13 @@ end`
 	output := compile(t, input)
 
 	// Worker should have both module's members
+	// Module methods are PascalCase to satisfy interfaces
 	assertContains(t, output, "name string")
-	assertContains(t, output, "func (w *Worker) call() {")
+	assertContains(t, output, "func (w *Worker) Call() {")
 	assertContains(t, output, "func (w *Worker) name() string {")
+
+	// Interface compliance checks for both modules
+	assertContains(t, output, "var _ Callable = (*Worker)(nil)")
 }
 
 func TestModuleWithClassFields(t *testing.T) {
@@ -4609,8 +4620,12 @@ end`
 	output := compile(t, input)
 
 	// Service should have both its own port field and module's log method
+	// Module methods are PascalCase to satisfy interfaces
 	assertContains(t, output, "port int")
-	assertContains(t, output, "func (s *Service) log(msg string) {")
+	assertContains(t, output, "func (s *Service) Log(msg string) {")
+
+	// Interface compliance check
+	assertContains(t, output, "var _ Loggable = (*Service)(nil)")
 }
 
 func TestModuleMethodConflictDetection(t *testing.T) {
@@ -4674,10 +4689,39 @@ end`
 
 	// Class should override module method without error
 	// Only the class version should be generated
-	assertContains(t, output, "func (w *Worker) greet() {")
+	// Method is PascalCase because it must satisfy the module interface
+	assertContains(t, output, "func (w *Worker) Greet() {")
 	assertContains(t, output, `runtime.Puts("Hello from class")`)
 	// Should NOT contain module version
 	assertNotContains(t, output, `runtime.Puts("Hello from module")`)
+
+	// Interface compliance check still required
+	assertContains(t, output, "var _ Greeter = (*Worker)(nil)")
+}
+
+func TestModuleMethodBareCall(t *testing.T) {
+	input := `module Greeter
+  def greet
+    puts "Hello"
+  end
+end
+
+class Worker
+  include Greeter
+
+  def work
+    greet
+  end
+end
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Bare module method call should be converted to self.Method() with PascalCase
+	assertContains(t, output, "func (w *Worker) work() {")
+	assertContains(t, output, "w.Greet()")
 }
 
 func TestModuleClassOverridesModuleAccessor(t *testing.T) {

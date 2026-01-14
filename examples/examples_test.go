@@ -27,7 +27,7 @@ func allExamples() []example {
 		{file: "05_functions.rg"},                // optional return types now work
 		{file: "06_classes.rg", hasBugs: true},   // self return, method chaining
 		{file: "07_interfaces.rg"},               // interface structural typing works
-		{file: "08_modules.rg", hasBugs: true},   // lint: unused module methods
+		{file: "08_modules.rg"},                  // modules now generate interfaces for lint compliance
 		{file: "09_blocks.rg", hasBugs: true},    // method chaining with newlines
 		{file: "10_optionals.rg", hasBugs: true}, // safe navigation on getters, unwrap
 		{file: "11_errors.rg"},                   // errors.new now works

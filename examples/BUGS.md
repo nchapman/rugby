@@ -19,7 +19,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 05_functions.rg | PASS | Optional return types now work |
 | 06_classes.rg | FAIL | Self return, method chaining |
 | 07_interfaces.rg | PASS | Interface structural typing now works |
-| 08_modules.rg | FAIL | Lint: unused module methods generated |
+| 08_modules.rg | PASS | Modules generate interfaces for lint compliance |
 | 09_blocks.rg | FAIL | Method chaining with newlines |
 | 10_optionals.rg | FAIL | Safe navigation on getters, unwrap |
 | 11_errors.rg | PASS | errors.new now works |
@@ -132,21 +132,12 @@ Cannot index values of interface type `any`:
 post["title"]  # cannot index post (variable of interface type any)
 ```
 
-### BUG-049: Unused module methods (lint)
-**File:** 08_modules.rg
-
-When a class includes a module but doesn't use all methods, lint warns about unused methods:
-```ruby
-class Service
-  include Greetable  # brings in greet, farewell
-  # but we only use greet in status
-end
-# lint: func (*Service).farewell is unused
-```
-
 ---
 
 ## Fixed Bugs
+
+### ~~BUG-049: Unused module methods (lint)~~ FIXED
+Modules now generate Go interfaces and classes that include them have interface compliance checks (`var _ ModuleName = (*ClassName)(nil)`). This suppresses "unused method" lint warnings while providing compile-time verification that included methods are implemented correctly.
 
 ### ~~BUG-001: Integer methods~~ FIXED
 Integer methods (`even?`, `odd?`, `abs`, `positive?`, `negative?`, `zero?`, `to_s`, `to_f`) now work via runtime calls.

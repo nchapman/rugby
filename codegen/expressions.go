@@ -59,9 +59,10 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			g.needsRuntime = true
 			g.buf.WriteString(runtimeCall)
 		} else if g.currentClass != "" && g.currentClassModuleMethods[e.Name] {
-			// Module method call within class - generate as self.method()
+			// Module method call within class - generate as self.Method() (PascalCase for interface)
 			recv := receiverName(g.currentClass)
-			g.buf.WriteString(fmt.Sprintf("%s.%s()", recv, e.Name))
+			methodName := snakeToPascalWithAcronyms(e.Name)
+			g.buf.WriteString(fmt.Sprintf("%s.%s()", recv, methodName))
 		} else if g.noArgFunctions[e.Name] {
 			// No-arg function - call it implicitly (Ruby-style)
 			goName := snakeToCamelWithAcronyms(e.Name)
