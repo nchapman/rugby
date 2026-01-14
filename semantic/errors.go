@@ -182,6 +182,21 @@ func (e *InstanceVarOutsideClassError) Error() string {
 	return msg
 }
 
+// InstanceStateInClassMethodError is returned when instance state (self, @var) is accessed in a class method.
+type InstanceStateInClassMethodError struct {
+	What   string // "self" or "@varname"
+	Line   int
+	Column int
+}
+
+func (e *InstanceStateInClassMethodError) Error() string {
+	msg := fmt.Sprintf("cannot access %s in class method (class methods have no instance)", e.What)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
 // OperatorTypeMismatchError is returned when operator operands have incompatible types.
 type OperatorTypeMismatchError struct {
 	Op        string

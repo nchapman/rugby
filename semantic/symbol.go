@@ -35,8 +35,9 @@ type Symbol struct {
 	Variadic    bool      // true if last param is variadic (accepts multiple args)
 
 	// For classes/interfaces
-	Fields  map[string]*Symbol // field symbols
-	Methods map[string]*Symbol // method symbols
+	Fields       map[string]*Symbol // field symbols
+	Methods      map[string]*Symbol // method symbols
+	ClassMethods map[string]*Symbol // class method symbols (def self.method)
 
 	// For classes
 	Parent     string   // parent class name (if any)
@@ -57,11 +58,12 @@ type Symbol struct {
 // NewSymbol creates a new symbol with the given name, kind, and type.
 func NewSymbol(name string, kind SymbolKind, typ *Type) *Symbol {
 	return &Symbol{
-		Name:    name,
-		Kind:    kind,
-		Type:    typ,
-		Fields:  make(map[string]*Symbol),
-		Methods: make(map[string]*Symbol),
+		Name:         name,
+		Kind:         kind,
+		Type:         typ,
+		Fields:       make(map[string]*Symbol),
+		Methods:      make(map[string]*Symbol),
+		ClassMethods: make(map[string]*Symbol),
 	}
 }
 
@@ -122,6 +124,19 @@ func (s *Symbol) AddField(field *Symbol) {
 // AddMethod adds a method to a class, interface, or module symbol.
 func (s *Symbol) AddMethod(method *Symbol) {
 	s.Methods[method.Name] = method
+}
+
+// AddClassMethod adds a class method (def self.method) to a class symbol.
+func (s *Symbol) AddClassMethod(method *Symbol) {
+	s.ClassMethods[method.Name] = method
+}
+
+// GetClassMethod returns a class method by name, or nil if not found.
+func (s *Symbol) GetClassMethod(name string) *Symbol {
+	if s.ClassMethods == nil {
+		return nil
+	}
+	return s.ClassMethods[name]
 }
 
 // GetField returns a field by name, or nil if not found.

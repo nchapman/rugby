@@ -97,41 +97,42 @@ type TypeInfo interface {
 type Generator struct {
 	buf                          strings.Builder
 	indent                       int
-	vars                         map[string]string          // track declared variables and their types (empty string = unknown type)
-	imports                      map[string]bool            // track import aliases for Go interop detection
-	needsRuntime                 bool                       // track if rugby/runtime import is needed
-	needsFmt                     bool                       // track if fmt import is needed (string interpolation)
-	needsErrors                  bool                       // track if errors import is needed (error_is?, error_as)
-	needsTestingImport           bool                       // track if testing import is needed
-	needsTestImport              bool                       // track if rugby/test import is needed
-	currentClass                 string                     // current class being generated (for instance vars)
-	currentMethod                string                     // current method name being generated (for super)
-	currentMethodPub             bool                       // whether current method is pub (for super)
-	currentClassEmbeds           []string                   // embedded types (parent classes) of current class
-	currentClassModuleMethods    map[string]bool            // methods from included modules (need self.method() call)
-	pubClasses                   map[string]bool            // track public classes for constructor naming
-	classes                      map[string]bool            // track all class names for pointer type mapping
-	classFields                  map[string]string          // track fields of the current class and their types
-	accessorFields               map[string]bool            // track which fields have accessor methods (need underscore prefix)
-	classAccessorFields          map[string]map[string]bool // class name -> accessor field names (for subclass access)
-	modules                      map[string]*ast.ModuleDecl // track module definitions for include
-	interfaces                   map[string]bool            // track declared interfaces for zero-value generation
-	interfaceMethods             map[string]map[string]bool // interface name -> method names (for interface implementation)
-	currentClassInterfaceMethods map[string]bool            // methods that must be exported for current class (to satisfy interfaces)
-	classConstructorParams       map[string][]*ast.Param    // track constructor parameters for each class (for subclass delegation)
-	noArgFunctions               map[string]bool            // track no-arg top-level functions (for implicit call)
-	goInteropVars                map[string]bool            // track variables holding Go interop types
-	sourceFile                   string                     // original .rg filename for //line directives
-	emitLineDir                  bool                       // whether to emit //line directives
-	currentReturnTypes           []string                   // return types of the current function/method
-	loopDepth                    int                        // nesting depth of loops (for break/next)
-	inMainFunc                   bool                       // true when generating code inside main() function
-	errors                       []error                    // collected errors during generation
-	tempVarCounter               int                        // counter for generating unique temp variable names
-	typeInfo                     TypeInfo                   // optional type info from semantic analysis
-	baseClasses                  map[string]bool            // track classes that are extended by other classes
-	baseClassMethods             map[string][]string        // base class name -> method names (for lint suppression)
-	baseClassAccessors           map[string][]string        // base class name -> accessor names (for lint suppression)
+	vars                         map[string]string            // track declared variables and their types (empty string = unknown type)
+	imports                      map[string]bool              // track import aliases for Go interop detection
+	needsRuntime                 bool                         // track if rugby/runtime import is needed
+	needsFmt                     bool                         // track if fmt import is needed (string interpolation)
+	needsErrors                  bool                         // track if errors import is needed (error_is?, error_as)
+	needsTestingImport           bool                         // track if testing import is needed
+	needsTestImport              bool                         // track if rugby/test import is needed
+	currentClass                 string                       // current class being generated (for instance vars)
+	currentMethod                string                       // current method name being generated (for super)
+	currentMethodPub             bool                         // whether current method is pub (for super)
+	currentClassEmbeds           []string                     // embedded types (parent classes) of current class
+	currentClassModuleMethods    map[string]bool              // methods from included modules (need self.method() call)
+	pubClasses                   map[string]bool              // track public classes for constructor naming
+	classes                      map[string]bool              // track all class names for pointer type mapping
+	classFields                  map[string]string            // track fields of the current class and their types
+	accessorFields               map[string]bool              // track which fields have accessor methods (need underscore prefix)
+	classAccessorFields          map[string]map[string]bool   // class name -> accessor field names (for subclass access)
+	modules                      map[string]*ast.ModuleDecl   // track module definitions for include
+	interfaces                   map[string]bool              // track declared interfaces for zero-value generation
+	interfaceMethods             map[string]map[string]bool   // interface name -> method names (for interface implementation)
+	currentClassInterfaceMethods map[string]bool              // methods that must be exported for current class (to satisfy interfaces)
+	classConstructorParams       map[string][]*ast.Param      // track constructor parameters for each class (for subclass delegation)
+	noArgFunctions               map[string]bool              // track no-arg top-level functions (for implicit call)
+	goInteropVars                map[string]bool              // track variables holding Go interop types
+	sourceFile                   string                       // original .rg filename for //line directives
+	emitLineDir                  bool                         // whether to emit //line directives
+	currentReturnTypes           []string                     // return types of the current function/method
+	loopDepth                    int                          // nesting depth of loops (for break/next)
+	inMainFunc                   bool                         // true when generating code inside main() function
+	errors                       []error                      // collected errors during generation
+	tempVarCounter               int                          // counter for generating unique temp variable names
+	typeInfo                     TypeInfo                     // optional type info from semantic analysis
+	baseClasses                  map[string]bool              // track classes that are extended by other classes
+	baseClassMethods             map[string][]string          // base class name -> method names (for lint suppression)
+	baseClassAccessors           map[string][]string          // base class name -> accessor names (for lint suppression)
+	classMethods                 map[string]map[string]string // class name -> method name -> generated function name
 }
 
 // addError records an error during code generation
@@ -210,6 +211,7 @@ func New(opts ...Option) *Generator {
 		baseClasses:                  make(map[string]bool),
 		baseClassMethods:             make(map[string][]string),
 		baseClassAccessors:           make(map[string][]string),
+		classMethods:                 make(map[string]map[string]string),
 	}
 	for _, opt := range opts {
 		opt(g)

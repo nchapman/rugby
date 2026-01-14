@@ -609,14 +609,15 @@ type FieldDecl struct {
 
 // MethodDecl represents a method definition within a class
 type MethodDecl struct {
-	Name        string        // method name (may end with ? for predicates)
-	Params      []*Param      // parameters
-	ReturnTypes []string      // return types
-	Body        []Statement   // method body
-	Pub         bool          // true if exported (pub def)
-	Line        int           // source line number (1-indexed)
-	Doc         *CommentGroup // leading comments
-	Comment     *CommentGroup // trailing comment on same line
+	Name          string        // method name (may end with ? for predicates)
+	Params        []*Param      // parameters
+	ReturnTypes   []string      // return types
+	Body          []Statement   // method body
+	Pub           bool          // true if exported (pub def)
+	IsClassMethod bool          // true if class method (def self.method)
+	Line          int           // source line number (1-indexed)
+	Doc           *CommentGroup // leading comments
+	Comment       *CommentGroup // trailing comment on same line
 }
 
 func (m *MethodDecl) node()     {}

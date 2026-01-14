@@ -29,7 +29,6 @@ Parser → AST → Semantic (types) → CodeGen (emit)
 
 | Feature | Value | Complexity | Notes |
 |---------|-------|------------|-------|
-| Class methods (`def self.method`) | High | Medium | Very common Ruby pattern |
 | Super calls with args | High | Medium | Partially works, needs args |
 | Symbol-to-proc (`&:method`) | Medium | Low-Medium | Nice ergonomic win |
 | Spawn closure capture | Medium | Medium | Currently broken |
@@ -93,10 +92,6 @@ All major bugs have been fixed. The remaining items are documented limitations.
   - `super()` in method body returns empty result
   - Workaround: Call parent methods directly if needed
 
-- [ ] **Class methods not implemented**
-  - `def self.method` syntax is not yet supported
-  - Workaround: Use regular functions or instance methods
-
 - [ ] **Spawn blocks can't capture outer variables**
   - `spawn { outer_var + 1 }` fails to compile
   - Workaround: Only use local computations within spawn blocks
@@ -107,12 +102,12 @@ All major bugs have been fixed. The remaining items are documented limitations.
 
 Goal: Every language feature has spec tests covering all syntactic variations.
 
-Current spec tests (50 total):
+Current spec tests (51 total):
 - `tests/spec/blocks/` - 7 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto)
-- `tests/spec/classes/` - 7 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors, method_chaining, visibility)
+- `tests/spec/classes/` - 8 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors, method_chaining, visibility, class_methods)
 - `tests/spec/concurrency/` - 3 tests (channels, goroutines, spawn_await)
 - `tests/spec/control_flow/` - 7 tests (if_else, case_when, case_type, while_until, statement_modifiers, loop_modifiers, break_next)
-- `tests/spec/errors/` - 3 tests (known limitations + runtime_panic)
+- `tests/spec/errors/` - 2 tests (known limitations + runtime_panic)
 - `tests/spec/error_handling/` - 1 test (rescue)
 - `tests/spec/functions/` - 1 test (basic)
 - `tests/spec/go_interop/` - 1 test (strings)
@@ -140,7 +135,7 @@ Current spec tests (50 total):
 - [x] Property declarations (`property`, `getter`, `setter`)
 - [x] Visibility (`pub` class and methods)
 - [x] Method chaining with `self` return
-- [ ] Class methods (`def self.method`) - not implemented
+- [x] Class methods (`def self.method`)
 - [ ] Super calls in methods - limited support
 
 ### Blocks (expand `tests/spec/blocks/`)
@@ -263,6 +258,6 @@ When fixing a bug:
 
 Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
-- Additional limitations discovered: 6 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, super calls, class methods, spawn closure capture)
-- Spec tests: 50 passing
+- Additional limitations discovered: 5 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, super calls, spawn closure capture)
+- Spec tests: 51 passing
 - All `make check` passes

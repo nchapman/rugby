@@ -520,7 +520,11 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 		method.Line = m.Line
 		method.Public = m.Pub
 		method.Node = m
-		cls.AddMethod(method)
+		if m.IsClassMethod {
+			cls.AddClassMethod(method)
+		} else {
+			cls.AddMethod(method)
+		}
 	}
 
 	if err := a.scope.Define(cls); err != nil {
@@ -754,6 +758,7 @@ func (a *Analyzer) analyzeMethodDecl(m *ast.MethodDecl) {
 	// Create method scope
 	methodScope := NewScope(ScopeMethod, a.scope)
 	methodScope.ClassName = a.scope.ClassName
+	methodScope.IsClassMethod = m.IsClassMethod
 	methodScope.ReturnTypes = make([]*Type, len(m.ReturnTypes))
 	for i, rt := range m.ReturnTypes {
 		methodScope.ReturnTypes[i] = ParseType(rt)
@@ -1261,6 +1266,10 @@ func (a *Analyzer) analyzeInstanceVarAssign(s *ast.InstanceVarAssign) {
 		a.addError(&InstanceVarOutsideClassError{Name: s.Name})
 		return
 	}
+	if a.scope.IsInsideClassMethod() {
+		a.addError(&InstanceStateInClassMethodError{What: "@" + s.Name})
+		return
+	}
 
 	a.analyzeExpr(s.Value)
 }
@@ -1268,6 +1277,10 @@ func (a *Analyzer) analyzeInstanceVarAssign(s *ast.InstanceVarAssign) {
 func (a *Analyzer) analyzeInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAssign) {
 	if !a.scope.IsInsideClass() {
 		a.addError(&InstanceVarOutsideClassError{Name: s.Name})
+		return
+	}
+	if a.scope.IsInsideClassMethod() {
+		a.addError(&InstanceStateInClassMethodError{What: "@" + s.Name, Line: s.Line})
 		return
 	}
 
@@ -1470,6 +1483,13 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		typ = TypeStringVal
 
 	case *ast.Ident:
+		// Check for 'self' access in class methods
+		if e.Name == "self" && a.scope.IsInsideClassMethod() {
+			a.addError(&InstanceStateInClassMethodError{What: "self", Line: e.Line})
+			typ = TypeUnknownVal
+			break
+		}
+
 		sym := a.scope.Lookup(e.Name)
 		// Check top-level functions as fallback (handles forward references)
 		if sym == nil {
@@ -1508,6 +1528,9 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 	case *ast.InstanceVar:
 		if !a.scope.IsInsideClass() {
 			a.addError(&InstanceVarOutsideClassError{Name: e.Name})
+			typ = TypeUnknownVal
+		} else if a.scope.IsInsideClassMethod() {
+			a.addError(&InstanceStateInClassMethodError{What: "@" + e.Name})
 			typ = TypeUnknownVal
 		} else {
 			// Look up field type from class
@@ -1633,6 +1656,31 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				if _, isClass := a.classes[classIdent.Name]; isClass {
 					typ = NewClassType(classIdent.Name)
 					selectorKind = ast.SelectorMethod // Constructor is a method call
+				}
+			}
+		}
+
+		// Check for class method: ClassName.method_name
+		if typ == nil {
+			if classIdent, ok := e.X.(*ast.Ident); ok {
+				if cls, isClass := a.classes[classIdent.Name]; isClass {
+					if classMethod := cls.GetClassMethod(e.Sel); classMethod != nil {
+						// Class method with no params can be called implicitly
+						if len(classMethod.Params) > 0 && !classMethod.Variadic {
+							a.addError(&MethodRequiresArgumentsError{
+								MethodName: e.Sel,
+								ParamCount: len(classMethod.Params),
+							})
+							typ = TypeUnknownVal
+						} else if len(classMethod.ReturnTypes) == 1 {
+							typ = classMethod.ReturnTypes[0]
+						} else if len(classMethod.ReturnTypes) > 1 {
+							typ = NewTupleType(classMethod.ReturnTypes...)
+						} else {
+							typ = TypeUnknownVal
+						}
+						selectorKind = ast.SelectorMethod
+					}
 				}
 			}
 		}
@@ -2023,6 +2071,26 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 			// Handle Chan[Type].new(size) constructor
 			if receiverType.Kind == TypeChan {
 				return receiverType
+			}
+		}
+
+		// Check for class method call: ClassName.method_name(args)
+		if classIdent, ok := sel.X.(*ast.Ident); ok {
+			if cls, isClass := a.classes[classIdent.Name]; isClass {
+				if classMethod := cls.GetClassMethod(sel.Sel); classMethod != nil {
+					// Check argument count and types
+					if !hasSplat {
+						a.checkArity(classIdent.Name+"."+sel.Sel, classMethod, call)
+						a.checkArgumentTypes(classIdent.Name+"."+sel.Sel, classMethod, argTypes)
+					}
+					// Return class method's return type
+					if len(classMethod.ReturnTypes) == 1 {
+						return classMethod.ReturnTypes[0]
+					} else if len(classMethod.ReturnTypes) > 1 {
+						return NewTupleType(classMethod.ReturnTypes...)
+					}
+					return TypeUnknownVal
+				}
 			}
 		}
 

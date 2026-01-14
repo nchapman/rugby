@@ -712,6 +712,12 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		g.vars[paramName] = param.Type
 	}
 
+	// Handle class methods (def self.method_name)
+	if method.IsClassMethod {
+		g.genClassMethod(className, method)
+		return
+	}
+
 	// Receiver name: first letter of class, lowercase
 	recv := receiverName(className)
 
@@ -886,6 +892,84 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		if isLast && (len(method.ReturnTypes) > 0 || returnsSelf) {
 			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
 				// Implicit return (either declared return type or self for chaining)
+				retStmt := &ast.ReturnStmt{Values: []ast.Expression{exprStmt.Expr}}
+				g.genReturnStmt(retStmt)
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	g.indent--
+	g.buf.WriteString("}\n\n")
+	g.currentReturnTypes = nil
+	g.currentMethod = ""
+	g.currentMethodPub = false
+}
+
+// genClassMethod generates a class method (def self.method_name)
+// Class methods are generated as package-level functions: func ClassName_MethodName(...)
+func (g *Generator) genClassMethod(className string, method *ast.MethodDecl) {
+	// Validate: methods ending in ? must return Bool
+	if strings.HasSuffix(method.Name, "?") {
+		if len(method.ReturnTypes) != 1 || method.ReturnTypes[0] != "Bool" {
+			g.addError(fmt.Errorf("line %d: method '%s' ending in '?' must return Bool", method.Line, method.Name))
+		}
+	}
+
+	// Method name: ClassName_methodName for unexported, ClassName_MethodName for exported
+	var methodName string
+	if method.Pub {
+		methodName = className + "_" + snakeToPascalWithAcronyms(method.Name)
+	} else {
+		methodName = className + "_" + snakeToCamelWithAcronyms(method.Name)
+	}
+
+	// Track this class method for call resolution
+	if g.classMethods == nil {
+		g.classMethods = make(map[string]map[string]string)
+	}
+	if g.classMethods[className] == nil {
+		g.classMethods[className] = make(map[string]string)
+	}
+	g.classMethods[className][method.Name] = methodName
+
+	// Generate function signature: func ClassName_MethodName(params) returns
+	g.buf.WriteString(fmt.Sprintf("func %s(", methodName))
+	for i, param := range method.Params {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		if param.Type != "" {
+			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, g.mapParamType(param.Type)))
+		} else {
+			g.buf.WriteString(fmt.Sprintf("%s any", param.Name))
+		}
+	}
+	g.buf.WriteString(")")
+
+	// Generate return type(s)
+	if len(method.ReturnTypes) == 1 {
+		g.buf.WriteString(" ")
+		g.buf.WriteString(g.mapParamType(method.ReturnTypes[0]))
+	} else if len(method.ReturnTypes) > 1 {
+		g.buf.WriteString(" (")
+		for i, rt := range method.ReturnTypes {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+			g.buf.WriteString(g.mapParamType(rt))
+		}
+		g.buf.WriteString(")")
+	}
+
+	g.buf.WriteString(" {\n")
+
+	g.indent++
+	for i, stmt := range method.Body {
+		isLast := i == len(method.Body)-1
+		if isLast && len(method.ReturnTypes) > 0 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				// Implicit return
 				retStmt := &ast.ReturnStmt{Values: []ast.Expression{exprStmt.Expr}}
 				g.genReturnStmt(retStmt)
 				continue

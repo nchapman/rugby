@@ -755,6 +755,18 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 	line := p.curToken.Line
 	p.nextToken() // consume 'def'
 
+	// Check for class method (def self.method_name)
+	isClassMethod := false
+	if p.curTokenIs(token.SELF) {
+		isClassMethod = true
+		p.nextToken() // consume 'self'
+		if !p.curTokenIs(token.DOT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '.' after self in class method")
+			return nil
+		}
+		p.nextToken() // consume '.'
+	}
+
 	// Accept regular identifiers or operator tokens (== for custom equality)
 	var methodName string
 	switch p.curToken.Type {
@@ -767,7 +779,7 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 		return nil
 	}
 
-	method := &ast.MethodDecl{Name: methodName, Line: line, Doc: doc}
+	method := &ast.MethodDecl{Name: methodName, Line: line, Doc: doc, IsClassMethod: isClassMethod}
 	p.nextToken()
 
 	// Parse optional parameter list

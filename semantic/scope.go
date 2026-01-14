@@ -21,7 +21,8 @@ type Scope struct {
 	symbols map[string]*Symbol
 
 	// For method/function scopes
-	ReturnTypes []*Type // expected return types
+	ReturnTypes   []*Type // expected return types
+	IsClassMethod bool    // true if this is a class method (def self.method)
 
 	// For class/module scopes
 	ClassName  string // name of enclosing class (if any)
@@ -132,6 +133,19 @@ func (s *Scope) Symbols() []*Symbol {
 // IsInsideClass returns true if this scope is inside a class.
 func (s *Scope) IsInsideClass() bool {
 	return s.ClassName != ""
+}
+
+// IsInsideClassMethod returns true if this scope is inside a class method (def self.method).
+func (s *Scope) IsInsideClassMethod() bool {
+	// Check this scope
+	if s.IsClassMethod {
+		return true
+	}
+	// Check parent scopes (for nested blocks inside class methods)
+	if s.Parent != nil && s.Kind != ScopeFunction && s.Kind != ScopeClass {
+		return s.Parent.IsInsideClassMethod()
+	}
+	return false
 }
 
 // IsInsideModule returns true if this scope is inside a module.
