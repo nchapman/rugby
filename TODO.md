@@ -179,10 +179,17 @@ Currently `codegen/codegen.go` Generator struct has 35+ fields mixing:
 
 **Goal:** Codegen should be a pure emitter that receives fully-analyzed AST.
 
+- [x] Tests run semantic analysis before codegen (via `compile()` helper)
+- [x] Simplified `inferTypeFromExpr()` to rely on semantic type info
+- [x] Removed redundant `compileWithTypeInfo()` test helper
 - [ ] Move symbol tables to semantic analyzer
 - [ ] Expand `TypeInfo` interface to provide all resolution info
-- [ ] Remove type inference from codegen
 - [ ] Codegen only transforms AST nodes to Go syntax
+
+**Note on g.vars/g.classFields:**
+The `g.vars` and `g.classFields` maps were kept because they're still needed for
+declaration tracking (`:=` vs `=`). Fully removing them would require passing this
+information from the semantic analyzer, which is a larger refactoring effort.
 
 ### Improve Semantic Analysis
 
