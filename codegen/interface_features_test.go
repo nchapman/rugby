@@ -162,6 +162,10 @@ func (t *testTypeInfo) GetModuleMethodNames(moduleName string) []string {
 	return t.analyzer.GetModuleMethodNames(moduleName)
 }
 
+func (t *testTypeInfo) IsModuleMethod(className, methodName string) bool {
+	return t.analyzer.IsModuleMethod(className, methodName)
+}
+
 func (t *testTypeInfo) GetConstructorParamCount(className string) int {
 	return t.analyzer.GetConstructorParamCount(className)
 }

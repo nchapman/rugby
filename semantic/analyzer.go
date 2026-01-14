@@ -582,6 +582,21 @@ func (a *Analyzer) collectModule(m *ast.ModuleDecl) {
 		mod.AddField(field)
 	}
 
+	// Collect accessors (like class accessors)
+	for _, acc := range m.Accessors {
+		field := NewField(acc.Name, ParseType(acc.Type))
+		switch acc.Kind {
+		case "getter":
+			field.HasGetter = true
+		case "setter":
+			field.HasSetter = true
+		case "property":
+			field.HasGetter = true
+			field.HasSetter = true
+		}
+		mod.AddField(field)
+	}
+
 	// Collect methods
 	for _, method := range m.Methods {
 		params := make([]*Symbol, len(method.Params))
@@ -736,15 +751,38 @@ func (a *Analyzer) analyzeClassDecl(c *ast.ClassDecl) {
 		mustDefine(classScope, NewVariable(name, field.Type))
 	}
 
-	// Add methods from included modules to scope and to cls.Methods
-	// These become callable as bare functions within class methods
+	// Add fields and methods from included modules
+	// Fields inherit accessor flags (HasGetter/HasSetter) from the module
+	// Methods become callable as bare functions within class methods
 	// AND as external method calls on class instances
 	for _, modName := range cls.Includes {
 		if mod := a.modules[modName]; mod != nil {
+			// Add module fields (with accessor flags) to class
+			for name, field := range mod.Fields {
+				// Only add if class doesn't already have a field with this name
+				if cls.Fields[name] == nil {
+					inheritedField := NewField(name, field.Type)
+					inheritedField.HasGetter = field.HasGetter
+					inheritedField.HasSetter = field.HasSetter
+					cls.AddField(inheritedField)
+				} else {
+					// If class has the field, inherit accessor flags from module
+					cls.Fields[name].HasGetter = cls.Fields[name].HasGetter || field.HasGetter
+					cls.Fields[name].HasSetter = cls.Fields[name].HasSetter || field.HasSetter
+				}
+			}
+			// Add module methods (with FromModule tracking)
+			// Only add if class doesn't already define the method (class methods take precedence)
 			for _, method := range mod.Methods {
-				mustDefine(classScope, method)
-				// Also add to cls.Methods so GetMethod can find them
-				cls.AddMethod(method)
+				if cls.Methods[method.Name] != nil {
+					// Class already defines this method - skip module version
+					continue
+				}
+				// Create a copy with FromModule set (don't modify original)
+				methodCopy := *method
+				methodCopy.FromModule = modName
+				mustDefine(classScope, &methodCopy)
+				cls.AddMethod(&methodCopy)
 			}
 		}
 	}
@@ -2908,6 +2946,22 @@ func (a *Analyzer) GetModuleMethodNames(moduleName string) []string {
 		names = append(names, name)
 	}
 	return names
+}
+
+// IsModuleMethod returns true if the method in the given class came from an included module.
+func (a *Analyzer) IsModuleMethod(className, methodName string) bool {
+	cls, ok := a.classes[className]
+	if !ok {
+		return false
+	}
+	if cls.Methods == nil {
+		return false
+	}
+	method, ok := cls.Methods[methodName]
+	if !ok {
+		return false
+	}
+	return method.FromModule != ""
 }
 
 // GetConstructorParamCount returns the number of constructor parameters for a class.

@@ -48,6 +48,9 @@ type Symbol struct {
 	HasGetter bool // field has a getter accessor (getter or property)
 	HasSetter bool // field has a setter accessor (setter or property)
 
+	// For methods - module origin
+	FromModule string // module name if method came from an included module
+
 	// Visibility
 	Public bool
 

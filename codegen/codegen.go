@@ -133,6 +133,10 @@ type TypeInfo interface {
 	// Returns nil if the module doesn't exist.
 	GetModuleMethodNames(moduleName string) []string
 
+	// IsModuleMethod returns true if the method in the given class came from an included module.
+	// This is used to determine whether to call self.method() vs method() in class bodies.
+	IsModuleMethod(className, methodName string) bool
+
 	// GetConstructorParamCount returns the number of constructor parameters for a class.
 	// Returns 0 if the class has no constructor or doesn't exist.
 	GetConstructorParamCount(className string) int
@@ -157,7 +161,6 @@ type Generator struct {
 	currentMethod                string                       // current method name being generated (for super)
 	currentMethodPub             bool                         // whether current method is pub (for super)
 	currentClassEmbeds           []string                     // embedded types (parent classes) of current class
-	currentClassModuleMethods    map[string]bool              // methods from included modules (need self.method() call)
 	accessorFields               map[string]bool              // track which fields have accessor methods (need underscore prefix)
 	modules                      map[string]*ast.ModuleDecl   // track module definitions for include
 	currentClassInterfaceMethods map[string]bool              // methods that must be exported for current class (to satisfy interfaces)
@@ -237,7 +240,6 @@ func New(opts ...Option) *Generator {
 		vars:                         make(map[string]string),
 		imports:                      make(map[string]bool),
 		accessorFields:               make(map[string]bool),
-		currentClassModuleMethods:    make(map[string]bool),
 		modules:                      make(map[string]*ast.ModuleDecl),
 		currentClassInterfaceMethods: make(map[string]bool),
 		goInteropVars:                make(map[string]bool),
@@ -418,6 +420,15 @@ func (g *Generator) getModuleMethodNames(moduleName string) []string {
 		panic("codegen: typeInfo is required - run semantic analysis before code generation")
 	}
 	return g.typeInfo.GetModuleMethodNames(moduleName)
+}
+
+// isModuleMethod checks if a method in the current class came from an included module.
+// Returns false if not in a class context or if typeInfo is not available.
+func (g *Generator) isModuleMethod(methodName string) bool {
+	if g.typeInfo == nil || g.currentClass == "" {
+		return false
+	}
+	return g.typeInfo.IsModuleMethod(g.currentClass, methodName)
 }
 
 // isOptionalType checks if a type is an optional type (ends with ?)

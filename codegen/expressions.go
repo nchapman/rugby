@@ -59,7 +59,7 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			// Check for kernel functions that can be used without parens
 			g.needsRuntime = true
 			g.buf.WriteString(runtimeCall)
-		} else if g.currentClass != "" && g.currentClassModuleMethods[e.Name] {
+		} else if g.currentClass != "" && g.isModuleMethod(e.Name) {
 			// Module method call within class - generate as self.Method() (PascalCase for interface)
 			recv := receiverName(g.currentClass)
 			methodName := snakeToPascalWithAcronyms(e.Name)

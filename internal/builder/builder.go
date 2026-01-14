@@ -195,6 +195,11 @@ func (t *typeInfoAdapter) GetModuleMethodNames(moduleName string) []string {
 	return t.analyzer.GetModuleMethodNames(moduleName)
 }
 
+// IsModuleMethod returns true if the method in the given class came from an included module.
+func (t *typeInfoAdapter) IsModuleMethod(className, methodName string) bool {
+	return t.analyzer.IsModuleMethod(className, methodName)
+}
+
 // GetConstructorParamCount returns the number of constructor parameters for a class.
 func (t *typeInfoAdapter) GetConstructorParamCount(className string) int {
 	return t.analyzer.GetConstructorParamCount(className)

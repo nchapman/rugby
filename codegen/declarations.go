@@ -182,7 +182,6 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	className := cls.Name
 	g.currentClass = className
 	g.currentClassEmbeds = cls.Embeds
-	clear(g.currentClassModuleMethods)    // Reset for new class
 	clear(g.currentClassInterfaceMethods) // Reset for new class
 
 	// For structural typing support: export methods that match ANY interface method
@@ -301,8 +300,6 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			} else {
 				methodSources[m.Name] = fmt.Sprintf("module '%s'", modName)
 				allMethods = append(allMethods, m)
-				// Track as module method for bare identifier resolution in class methods
-				g.currentClassModuleMethods[m.Name] = true
 				// Mark as interface method so it's exported (PascalCase) to satisfy module interface
 				g.currentClassInterfaceMethods[m.Name] = true
 			}
