@@ -2,6 +2,20 @@
 
 Roadmap to a bulletproof compiler.
 
+## Development Approach
+
+When writing spec tests and discovering limitations:
+
+1. **Document the limitation** in the "Known Limitations" section below
+2. **Write the test using a valid workaround** (e.g., explicit `return` instead of implicit)
+3. **Add a `# TODO:` comment** in the test file describing the ideal syntax
+4. **Later**: Fix the limitation, then add a new test variation with the ideal syntax
+
+This approach keeps momentum while building a complete picture of what needs fixing.
+To find all limitation workarounds: `grep -r "# TODO:" tests/spec/`
+
+---
+
 ## Phase 1: Fix Active Bugs ✅ COMPLETE
 
 All major bugs have been fixed. The remaining items are documented limitations.
@@ -27,21 +41,36 @@ All major bugs have been fixed. The remaining items are documented limitations.
   - `[] : Array[String]` inline annotation not yet supported
   - Workaround: Use variable annotation `arr : Array[String] = []`
 
+- [ ] **Case/when implicit returns**
+  - `case x when 1 then "one" end` doesn't implicitly return the value
+  - In Ruby, `case/when` is an expression that returns the last value of the matched branch
+  - Workaround: Use explicit `return` statements in each branch
+
+- [ ] **Compound assignment in loop modifier expressions**
+  - `puts counter += 1 while counter < 3` fails to parse
+  - The parser doesn't support compound assignment as part of an expression
+  - Workaround: Use regular while loop with compound assignment in body
+
+- [ ] **Range slice returns any**
+  - `arr[1..-1]` returns `any` type, can't reassign to typed variable
+  - Workaround: Use explicit loop or different approach for slicing
+
 ---
 
 ## Phase 2: Expand Spec Test Coverage
 
 Goal: Every language feature has spec tests covering all syntactic variations.
 
-Current spec tests (27 total):
-- `tests/spec/blocks/` - 5 tests (each, map_select, reduce, block_arithmetic, method_chaining)
-- `tests/spec/classes/` - 4 tests (basic, inheritance, inherited_getter, multilevel_inheritance)
-- `tests/spec/control_flow/` - 1 test (if_else)
+Current spec tests (39 total):
+- `tests/spec/blocks/` - 7 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto)
+- `tests/spec/classes/` - 5 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors)
+- `tests/spec/concurrency/` - 2 tests (channels, goroutines)
+- `tests/spec/control_flow/` - 7 tests (if_else, case_when, case_type, while_until, statement_modifiers, loop_modifiers, break_next)
 - `tests/spec/errors/` - 3 tests (known limitations + runtime_panic)
 - `tests/spec/functions/` - 1 test (basic)
 - `tests/spec/go_interop/` - 1 test (strings)
 - `tests/spec/interfaces/` - 2 tests (basic, any_indexing)
-- `tests/spec/literals/` - 6 tests (arrays, integers, strings, ranges, range_include, empty_typed_array, map_symbol_shorthand)
+- `tests/spec/literals/` - 7 tests (arrays, integers, strings, ranges, range_include, empty_typed_array, map_symbol_shorthand)
 - `tests/spec/optionals/` - 3 tests (basic, if_let, nil_coalescing)
 
 ### Literals (expand `tests/spec/literals/`)
@@ -52,22 +81,22 @@ Current spec tests (27 total):
 - [ ] Regex literals (`/pattern/`)
 
 ### Control Flow (expand `tests/spec/control_flow/`)
-- [ ] Case/when statements
-- [ ] Statement modifiers (`puts x if condition`)
-- [ ] While/until loops
-- [ ] Loop control (`break`, `next`, `redo`)
+- [x] Case/when statements
+- [x] Statement modifiers (`puts x if condition`)
+- [x] While/until loops
+- [x] Loop control (`break`, `next`)
 - [ ] Begin/rescue/ensure
 
 ### Classes (expand `tests/spec/classes/`)
-- [ ] Property declarations (`property`, `getter`, `setter`)
+- [x] Property declarations (`property`, `getter`, `setter`)
 - [ ] Class methods (`def self.method`)
 - [ ] Visibility (`pub`, `private`)
 - [ ] Method chaining with `self` return
 - [ ] Super calls in methods
 
 ### Blocks (expand `tests/spec/blocks/`)
-- [ ] All iterator methods (`find`, `any?`, `all?`, `none?`, `count`)
-- [ ] `times`, `upto`, `downto`
+- [x] Iterator methods (`find`, `any?`, `all?`, `none?`)
+- [x] `times`, `upto`, `downto`
 - [ ] Block with multiple parameters
 - [ ] Symbol-to-proc (`&:method`)
 
@@ -77,7 +106,8 @@ Current spec tests (27 total):
 - [ ] Multiple module includes
 
 ### Concurrency (create `tests/spec/concurrency/`)
-- [ ] Channel operations (`Chan[T].new`, send, receive)
+- [x] Channel operations (`Chan[T].new`, send, receive)
+- [x] Goroutines (`go do ... end`)
 - [ ] `spawn` blocks
 - [ ] `concurrently` blocks with `await`
 - [ ] WaitGroup usage
@@ -182,6 +212,7 @@ When fixing a bug:
 5. Run `make check` to verify
 
 Current status:
-- Bugs fixed: 8/10 (2 are documented limitations)
-- Spec tests: 27 passing
+- Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
+- Additional limitations discovered: 3 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any)
+- Spec tests: 39 passing
 - All `make check` passes
