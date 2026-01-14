@@ -106,8 +106,8 @@ All major bugs have been fixed. The remaining items are documented limitations.
 
 Goal: Every language feature has spec tests covering all syntactic variations.
 
-Current spec tests (55 total):
-- `tests/spec/blocks/` - 8 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto, symbol_to_proc)
+Current spec tests (56 total):
+- `tests/spec/blocks/` - 9 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto, symbol_to_proc, multiple_params)
 - `tests/spec/classes/` - 9 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors, method_chaining, visibility, class_methods, super_calls)
 - `tests/spec/concurrency/` - 4 tests (channels, goroutines, spawn_await, spawn_closure)
 - `tests/spec/control_flow/` - 7 tests (if_else, case_when, case_type, while_until, statement_modifiers, loop_modifiers, break_next)
@@ -145,7 +145,7 @@ Current spec tests (55 total):
 ### Blocks (expand `tests/spec/blocks/`)
 - [x] Iterator methods (`find`, `any?`, `all?`, `none?`)
 - [x] `times`, `upto`, `downto`
-- [ ] Block with multiple parameters
+- [x] Block with multiple parameters
 - [x] Symbol-to-proc (`&:method`)
 
 ### Modules
@@ -263,5 +263,5 @@ Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
 - Additional limitations discovered: 4 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, array mutation in closures)
 - Features implemented: class methods, super calls, symbol-to-proc, spawn closure capture
-- Spec tests: 55 passing
+- Spec tests: 56 passing
 - All `make check` passes
