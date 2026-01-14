@@ -1,6 +1,9 @@
 package runtime
 
-import "maps"
+import (
+	"maps"
+	"reflect"
+)
 
 // MapEach iterates over a map, calling the function for each key-value pair.
 // Ruby: hash.each { |k, v| ... }
@@ -107,16 +110,45 @@ func MapInvert[K, V comparable](m map[K]V) map[V]K {
 }
 
 // GetKey retrieves a value from a map-like value using a string key.
-// This handles dynamic access patterns common when working with JSON data.
-// Supports: map[string]any, map[any]any, and any type that can be type-asserted to these.
+// This handles dynamic access patterns common when working with JSON data
+// and supports any map type with string keys via reflection.
 func GetKey(m any, key string) any {
+	if m == nil {
+		return nil
+	}
+
+	// Fast path for common types
 	switch v := m.(type) {
 	case map[string]any:
 		return v[key]
+	case map[string]string:
+		return v[key]
+	case map[string]int:
+		return v[key]
+	case map[string]bool:
+		return v[key]
+	case map[string]float64:
+		return v[key]
 	case map[any]any:
 		return v[key]
-	default:
-		// Return nil for unsupported types
+	}
+
+	// Slow path: use reflection for other map types
+	rv := reflect.ValueOf(m)
+	if rv.Kind() != reflect.Map {
 		return nil
 	}
+
+	// Check if map has string keys
+	if rv.Type().Key().Kind() != reflect.String {
+		return nil
+	}
+
+	// Look up the value
+	keyVal := reflect.ValueOf(key)
+	result := rv.MapIndex(keyVal)
+	if !result.IsValid() {
+		return nil
+	}
+	return result.Interface()
 }
