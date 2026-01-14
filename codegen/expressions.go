@@ -150,6 +150,26 @@ func (g *Generator) genSuperExpr(e *ast.SuperExpr) {
 	parentClass := g.currentClassEmbeds[0]
 	recv := receiverName(g.currentClass)
 
+	// Handle super in constructor (initialize) specially:
+	// Generate: recv.ParentClass = *newParentClass(args...)
+	if g.currentMethod == "initialize" {
+		// Determine parent constructor name based on visibility
+		// For now, assume parent constructor has same visibility as parent class
+		constructorName := "new" + parentClass
+		if g.pubClasses[parentClass] {
+			constructorName = "New" + parentClass
+		}
+		g.buf.WriteString(fmt.Sprintf("%s.%s = *%s(", recv, parentClass, constructorName))
+		for i, arg := range e.Args {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+			g.genExpr(arg)
+		}
+		g.buf.WriteString(")")
+		return
+	}
+
 	// Convert the current method name to Go's naming convention
 	var methodName string
 	if g.currentMethodPub {

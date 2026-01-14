@@ -2787,12 +2787,19 @@ func (a *Analyzer) lookupMethod(receiverType *Type, methodName string) *Symbol {
 		return nil
 	}
 
-	// Check for class methods
+	// Check for class methods, including inherited methods
 	if receiverType.Kind == TypeClass && receiverType.Name != "" {
-		if cls := a.classes[receiverType.Name]; cls != nil {
+		// Walk up the class hierarchy looking for the method
+		className := receiverType.Name
+		for className != "" {
+			cls := a.classes[className]
+			if cls == nil {
+				break
+			}
 			if method := cls.GetMethod(methodName); method != nil {
 				return method
 			}
+			className = cls.Parent
 		}
 	}
 

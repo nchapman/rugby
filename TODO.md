@@ -29,7 +29,7 @@ Parser → AST → Semantic (types) → CodeGen (emit)
 
 | Feature | Value | Complexity | Notes |
 |---------|-------|------------|-------|
-| Super calls with args | High | Medium | Partially works, needs args |
+| ~~Super calls with args~~ | ~~High~~ | ~~Medium~~ | ✅ Done |
 | Symbol-to-proc (`&:method`) | Medium | Low-Medium | Nice ergonomic win |
 | Spawn closure capture | Medium | Medium | Currently broken |
 | Begin/rescue/ensure | Medium | Medium | Inline rescue works |
@@ -87,10 +87,10 @@ All major bugs have been fixed. The remaining items are documented limitations.
   - `arr[1..-1]` returns `any` type, can't reassign to typed variable
   - Workaround: Use explicit loop or different approach for slicing
 
-- [ ] **Super calls don't pass arguments**
-  - `super(args)` doesn't properly pass arguments to parent constructor
-  - `super()` in method body returns empty result
-  - Workaround: Call parent methods directly if needed
+- [x] **Super calls with arguments** ✅
+  - `super(args)` now passes arguments to parent constructor
+  - `super(args)` in method body calls parent method correctly
+  - Inherited methods can be called without parentheses
 
 - [ ] **Spawn blocks can't capture outer variables**
   - `spawn { outer_var + 1 }` fails to compile
@@ -102,9 +102,9 @@ All major bugs have been fixed. The remaining items are documented limitations.
 
 Goal: Every language feature has spec tests covering all syntactic variations.
 
-Current spec tests (51 total):
+Current spec tests (52 total):
 - `tests/spec/blocks/` - 7 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto)
-- `tests/spec/classes/` - 8 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors, method_chaining, visibility, class_methods)
+- `tests/spec/classes/` - 9 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors, method_chaining, visibility, class_methods, super_calls)
 - `tests/spec/concurrency/` - 3 tests (channels, goroutines, spawn_await)
 - `tests/spec/control_flow/` - 7 tests (if_else, case_when, case_type, while_until, statement_modifiers, loop_modifiers, break_next)
 - `tests/spec/errors/` - 2 tests (known limitations + runtime_panic)
@@ -136,7 +136,7 @@ Current spec tests (51 total):
 - [x] Visibility (`pub` class and methods)
 - [x] Method chaining with `self` return
 - [x] Class methods (`def self.method`)
-- [ ] Super calls in methods - limited support
+- [x] Super calls in methods
 
 ### Blocks (expand `tests/spec/blocks/`)
 - [x] Iterator methods (`find`, `any?`, `all?`, `none?`)
@@ -258,6 +258,7 @@ When fixing a bug:
 
 Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
-- Additional limitations discovered: 5 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, super calls, spawn closure capture)
-- Spec tests: 51 passing
+- Additional limitations discovered: 4 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, spawn closure capture)
+- Features implemented: class methods (def self.method), super calls with arguments
+- Spec tests: 52 passing
 - All `make check` passes

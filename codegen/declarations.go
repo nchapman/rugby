@@ -541,6 +541,11 @@ func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
 func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub bool) {
 	clear(g.vars)
 
+	// Set currentMethod so super calls are recognized as being inside a method
+	previousMethod := g.currentMethod
+	g.currentMethod = "initialize"
+	defer func() { g.currentMethod = previousMethod }()
+
 	// Store constructor parameters for subclass delegation
 	g.classConstructorParams[className] = method.Params
 
