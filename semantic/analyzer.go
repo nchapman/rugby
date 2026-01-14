@@ -418,6 +418,34 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 			returnTypes[i] = ParseType(rt)
 		}
 
+		// Check if method implicitly returns self (for method chaining)
+		// Handles both bare `self` as last statement and explicit `return self`
+		if len(m.ReturnTypes) == 0 && len(m.Body) > 0 {
+			lastStmt := m.Body[len(m.Body)-1]
+			returnsSelf := false
+
+			// Check for bare `self` as last expression
+			if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
+				if ident, ok := exprStmt.Expr.(*ast.Ident); ok && ident.Name == "self" {
+					returnsSelf = true
+				}
+			}
+			// Check for explicit `return self`
+			if returnStmt, ok := lastStmt.(*ast.ReturnStmt); ok {
+				if len(returnStmt.Values) == 1 {
+					if ident, ok := returnStmt.Values[0].(*ast.Ident); ok && ident.Name == "self" {
+						returnsSelf = true
+					}
+				}
+			}
+
+			if returnsSelf {
+				// Method returns self for chaining - add ClassName as return type
+				classType := NewClassType(c.Name)
+				returnTypes = []*Type{classType}
+			}
+		}
+
 		method := NewMethod(m.Name, params, returnTypes)
 		method.Line = m.Line
 		method.Public = m.Pub

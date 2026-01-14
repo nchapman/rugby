@@ -1938,8 +1938,9 @@ end`
 
 	output := compile(t, input)
 
-	// 'self' should compile to receiver variable 'b' (first letter of Builder)
-	assertContains(t, output, `func (b *Builder) withName(n any)`)
+	// Methods returning self should have *Builder return type
+	assertContains(t, output, `func (b *Builder) withName(n any) *Builder`)
+	assertContains(t, output, `func (b *Builder) build() *Builder`)
 	// Implicit return of self
 	assertContains(t, output, "return b\n}")
 	// Explicit return of self
@@ -1965,7 +1966,8 @@ end`
 
 	output := compile(t, input)
 
-	// Method should return self (receiver 'c')
+	// Method should have *Config return type and return self (receiver 'c')
+	assertContains(t, output, `func (c *Config) setValue(v any) *Config`)
 	assertContains(t, output, "return c\n}")
 	// Method chaining should work
 	assertContains(t, output, `c.setValue(1).setValue(2)`)

@@ -722,6 +722,28 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		methodName = snakeToCamelWithAcronyms(method.Name)
 	}
 
+	// Check if method implicitly returns self (for method chaining)
+	// Handles both bare `self` as last statement and explicit `return self`
+	returnsSelf := false
+	if len(method.ReturnTypes) == 0 && len(method.Body) > 0 {
+		lastStmt := method.Body[len(method.Body)-1]
+
+		// Check for bare `self` as last expression
+		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
+			if ident, ok := exprStmt.Expr.(*ast.Ident); ok && ident.Name == "self" {
+				returnsSelf = true
+			}
+		}
+		// Check for explicit `return self`
+		if returnStmt, ok := lastStmt.(*ast.ReturnStmt); ok {
+			if len(returnStmt.Values) == 1 {
+				if ident, ok := returnStmt.Values[0].(*ast.Ident); ok && ident.Name == "self" {
+					returnsSelf = true
+				}
+			}
+		}
+	}
+
 	// Generate method signature with pointer receiver: func (r *ClassName) MethodName(params) returns
 	g.buf.WriteString(fmt.Sprintf("func (%s *%s) %s(", recv, className, methodName))
 	for i, param := range method.Params {
@@ -738,7 +760,10 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 
 	// Generate return type(s) if specified
 	// Use mapParamType to properly convert class types to pointers
-	if len(method.ReturnTypes) == 1 {
+	if returnsSelf {
+		// Method returns self for chaining - add *ClassName return type
+		g.buf.WriteString(fmt.Sprintf(" *%s", className))
+	} else if len(method.ReturnTypes) == 1 {
 		g.buf.WriteString(" ")
 		g.buf.WriteString(g.mapParamType(method.ReturnTypes[0]))
 	} else if len(method.ReturnTypes) > 1 {
@@ -757,9 +782,9 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	g.indent++
 	for i, stmt := range method.Body {
 		isLast := i == len(method.Body)-1
-		if isLast && len(method.ReturnTypes) > 0 {
+		if isLast && (len(method.ReturnTypes) > 0 || returnsSelf) {
 			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
-				// Implicit return
+				// Implicit return (either declared return type or self for chaining)
 				retStmt := &ast.ReturnStmt{Values: []ast.Expression{exprStmt.Expr}}
 				g.genReturnStmt(retStmt)
 				continue
