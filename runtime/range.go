@@ -7,18 +7,14 @@ type Range struct {
 }
 
 // RangeEach iterates over each value in the range
-func RangeEach(r Range, fn func(int) bool) {
+func RangeEach(r Range, fn func(int)) {
 	if r.Exclusive {
 		for i := r.Start; i < r.End; i++ {
-			if !fn(i) {
-				break
-			}
+			fn(i)
 		}
 	} else {
 		for i := r.Start; i <= r.End; i++ {
-			if !fn(i) {
-				break
-			}
+			fn(i)
 		}
 	}
 }

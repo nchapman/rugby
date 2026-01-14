@@ -3,32 +3,23 @@ package runtime
 import "fmt"
 
 // Times iterates n times, calling the function with the current index (0 to n-1).
-// The callback returns false to break, true to continue.
-func Times(n int, fn func(int) bool) {
+func Times(n int, fn func(int)) {
 	for i := range n {
-		if !fn(i) {
-			break
-		}
+		fn(i)
 	}
 }
 
 // Upto iterates from start to end (inclusive), calling the function with each value.
-// The callback returns false to break, true to continue.
-func Upto(start, end int, fn func(int) bool) {
+func Upto(start, end int, fn func(int)) {
 	for i := start; i <= end; i++ {
-		if !fn(i) {
-			break
-		}
+		fn(i)
 	}
 }
 
 // Downto iterates from start down to end (inclusive), calling the function with each value.
-// The callback returns false to break, true to continue.
-func Downto(start, end int, fn func(int) bool) {
+func Downto(start, end int, fn func(int)) {
 	for i := start; i >= end; i-- {
-		if !fn(i) {
-			break
-		}
+		fn(i)
 	}
 }
 

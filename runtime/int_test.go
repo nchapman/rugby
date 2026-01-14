@@ -56,9 +56,8 @@ func TestClampInt64(t *testing.T) {
 
 func TestTimes(t *testing.T) {
 	var collected []int
-	Times(5, func(i int) bool {
+	Times(5, func(i int) {
 		collected = append(collected, i)
-		return true
 	})
 	expected := []int{0, 1, 2, 3, 4}
 	if len(collected) != 5 {
@@ -72,30 +71,18 @@ func TestTimes(t *testing.T) {
 
 	// Times(0) should not iterate
 	var count int
-	Times(0, func(i int) bool {
+	Times(0, func(i int) {
 		count++
-		return true
 	})
 	if count != 0 {
 		t.Errorf("Times(0): got %d iterations, want 0", count)
-	}
-
-	// Times with early break
-	var partial []int
-	Times(10, func(i int) bool {
-		partial = append(partial, i)
-		return i < 2
-	})
-	if len(partial) != 3 {
-		t.Errorf("Times with break: got %v, want [0 1 2]", partial)
 	}
 }
 
 func TestUpto(t *testing.T) {
 	var collected []int
-	Upto(1, 5, func(i int) bool {
+	Upto(1, 5, func(i int) {
 		collected = append(collected, i)
-		return true
 	})
 	expected := []int{1, 2, 3, 4, 5}
 	if len(collected) != 5 {
@@ -104,30 +91,18 @@ func TestUpto(t *testing.T) {
 
 	// Empty range
 	var count int
-	Upto(5, 1, func(i int) bool {
+	Upto(5, 1, func(i int) {
 		count++
-		return true
 	})
 	if count != 0 {
 		t.Errorf("Upto empty: got %d iterations, want 0", count)
-	}
-
-	// With break
-	var partial []int
-	Upto(1, 10, func(i int) bool {
-		partial = append(partial, i)
-		return i < 3
-	})
-	if len(partial) != 3 {
-		t.Errorf("Upto with break: got %v, want [1 2 3]", partial)
 	}
 }
 
 func TestDownto(t *testing.T) {
 	var collected []int
-	Downto(5, 1, func(i int) bool {
+	Downto(5, 1, func(i int) {
 		collected = append(collected, i)
-		return true
 	})
 	expected := []int{5, 4, 3, 2, 1}
 	if len(collected) != 5 {
@@ -136,22 +111,11 @@ func TestDownto(t *testing.T) {
 
 	// Empty range
 	var count int
-	Downto(1, 5, func(i int) bool {
+	Downto(1, 5, func(i int) {
 		count++
-		return true
 	})
 	if count != 0 {
 		t.Errorf("Downto empty: got %d iterations, want 0", count)
-	}
-
-	// With break
-	var partial []int
-	Downto(10, 1, func(i int) bool {
-		partial = append(partial, i)
-		return i > 8
-	})
-	if len(partial) != 3 {
-		t.Errorf("Downto with break: got %v, want [10 9 8]", partial)
 	}
 }
 

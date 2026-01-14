@@ -36,15 +36,14 @@ var noParenKernelFuncs = map[string]string{
 
 // blockMethod describes a block method mapping
 type blockMethod struct {
-	runtimeFunc     string
-	returnType      string // "any" or "bool"
-	hasAccumulator  bool   // for reduce - takes 2 params (acc, elem) instead of 1
-	usesIncludeFlag bool   // for map - uses (value, include, continue) instead of (value, continue)
+	runtimeFunc    string
+	returnType     string // "any" or "bool"
+	hasAccumulator bool   // for reduce - takes 2 params (acc, elem) instead of 1
 }
 
 // Block method mappings - single source of truth
 var blockMethods = map[string]blockMethod{
-	"map":    {runtimeFunc: "runtime.Map", returnType: "any", usesIncludeFlag: true},
+	"map":    {runtimeFunc: "runtime.Map", returnType: "any"},
 	"select": {runtimeFunc: "runtime.Select", returnType: "bool"},
 	"filter": {runtimeFunc: "runtime.Select", returnType: "bool"},
 	"reject": {runtimeFunc: "runtime.Reject", returnType: "bool"},

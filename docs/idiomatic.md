@@ -75,34 +75,32 @@ users.select(&:active?)       # same as: users.select { |u| u.active? }
 values.reject(&:empty?)
 ```
 
-### Blocks Are Not Ruby Blocks
+### Blocks Are Functional
 
-Rugby blocks look like Ruby blocks but behave differently:
+Rugby blocks are purely functional - `return`, `break`, and `next` are all banned inside blocks. This enforces a clear separation: blocks are for data transformation, loops are for control flow.
 
 ```ruby
-# In Rugby, return exits the BLOCK, not the enclosing function
-def find_first_admin(users : Array[User]) -> User?
-  users.each do |u|
-    return u if u.admin?    # returns from the block, continues iteration
-  end
-  nil
+# DON'T: control flow statements are compile errors in blocks
+users.each do |u|
+  return u if u.admin?    # Error: return not allowed inside block
+  next if u.guest?        # Error: next not allowed inside block
+  break if u.banned?      # Error: break not allowed inside block
 end
 
-# Use find instead - it's what you actually want
+# DO: use the right tool for the job
 def find_first_admin(users : Array[User]) -> User?
   users.find { |u| u.admin? }
 end
-```
 
-In Ruby, `return` inside a block returns from the enclosing method. In Rugby, it returns from the block itself. This makes blocks behave like Go closures - predictable and explicit.
+# DO: use select/reject for filtering
+active = users.select { |u| u.active? }
+guests = users.reject { |u| u.admin? }
 
-Use `break` to exit iteration early, `next` to skip to the next iteration:
-
-```ruby
-users.each do |u|
-  next if u.guest?          # skip guests
-  break if u.banned?        # stop iterating
-  process(u)
+# DO: use for loops when you need break/next
+for user in users
+  next if user.guest?     # OK in loops
+  break if user.banned?   # OK in loops
+  process(user)
 end
 ```
 

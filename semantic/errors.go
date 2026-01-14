@@ -83,6 +83,20 @@ func (e *ReturnOutsideFunctionError) Error() string {
 	return msg
 }
 
+// ReturnInsideBlockError is returned for return statements inside iterator blocks.
+type ReturnInsideBlockError struct {
+	Line   int
+	Column int
+}
+
+func (e *ReturnInsideBlockError) Error() string {
+	msg := "return statement not allowed inside block (blocks are functional - use find or select instead)"
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
 // BreakOutsideLoopError is returned for break statements outside loops.
 type BreakOutsideLoopError struct {
 	Line   int
@@ -91,6 +105,48 @@ type BreakOutsideLoopError struct {
 
 func (e *BreakOutsideLoopError) Error() string {
 	msg := "break statement outside loop"
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// BreakInsideBlockError is returned for break statements inside iterator blocks.
+type BreakInsideBlockError struct {
+	Line   int
+	Column int
+}
+
+func (e *BreakInsideBlockError) Error() string {
+	msg := "break statement not allowed inside block (use find or take_while for early exit)"
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// NextInsideBlockError is returned for next statements inside iterator blocks.
+type NextInsideBlockError struct {
+	Line   int
+	Column int
+}
+
+func (e *NextInsideBlockError) Error() string {
+	msg := "next statement not allowed inside block (use select or reject for filtering)"
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// NextOutsideLoopError is returned for next statements outside loops.
+type NextOutsideLoopError struct {
+	Line   int
+	Column int
+}
+
+func (e *NextOutsideLoopError) Error() string {
+	msg := "next statement outside loop"
 	if e.Line > 0 {
 		return fmt.Sprintf("line %d: %s", e.Line, msg)
 	}

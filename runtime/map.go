@@ -3,13 +3,10 @@ package runtime
 import "maps"
 
 // MapEach iterates over a map, calling the function for each key-value pair.
-// The callback returns false to break, true to continue.
 // Ruby: hash.each { |k, v| ... }
-func MapEach[K comparable, V any](m map[K]V, fn func(K, V) bool) {
+func MapEach[K comparable, V any](m map[K]V, fn func(K, V)) {
 	for k, v := range m {
-		if !fn(k, v) {
-			break
-		}
+		fn(k, v)
 	}
 }
 
@@ -44,38 +41,24 @@ func Merge[K comparable, V any](m1, m2 map[K]V) map[K]V {
 }
 
 // MapSelect returns a new map with entries for which the predicate returns true.
-// The predicate returns (match, continue).
-//
-// WARNING: If the predicate returns continue=false (break), results are nondeterministic
-// due to Go's random map iteration order. Avoid using break in map predicates.
-func MapSelect[K comparable, V any](m map[K]V, predicate func(K, V) (bool, bool)) map[K]V {
+// Ruby: hash.select { |k, v| ... }
+func MapSelect[K comparable, V any](m map[K]V, predicate func(K, V) bool) map[K]V {
 	result := make(map[K]V)
 	for k, v := range m {
-		match, cont := predicate(k, v)
-		if match {
+		if predicate(k, v) {
 			result[k] = v
-		}
-		if !cont {
-			break
 		}
 	}
 	return result
 }
 
 // MapReject returns a new map with entries for which the predicate returns false.
-// The predicate returns (match, continue).
-//
-// WARNING: If the predicate returns continue=false (break), results are nondeterministic
-// due to Go's random map iteration order. Avoid using break in map predicates.
-func MapReject[K comparable, V any](m map[K]V, predicate func(K, V) (bool, bool)) map[K]V {
+// Ruby: hash.reject { |k, v| ... }
+func MapReject[K comparable, V any](m map[K]V, predicate func(K, V) bool) map[K]V {
 	result := make(map[K]V)
 	for k, v := range m {
-		match, cont := predicate(k, v)
-		if !match {
+		if !predicate(k, v) {
 			result[k] = v
-		}
-		if !cont {
-			break
 		}
 	}
 	return result

@@ -119,18 +119,6 @@ func (p *Parser) parseBlock(terminator token.TokenType) *ast.BlockExpr {
 	}
 	p.nextToken() // consume terminator
 
-	// Validate pure blocks: no break/next allowed (Phase 17 strictness)
-	for _, stmt := range block.Body {
-		switch stmt.(type) {
-		case *ast.BreakStmt:
-			p.errorWithHint("'break' not allowed in blocks",
-				"use 'find' or 'take_while' for early exit")
-		case *ast.NextStmt:
-			p.errorWithHint("'next' not allowed in blocks",
-				"use 'select' or 'reject' for filtering")
-		}
-	}
-
 	return block
 }
 

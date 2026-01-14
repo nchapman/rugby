@@ -1263,7 +1263,6 @@ func (g *Generator) genOptionalMapBlock(receiver ast.Expression, block *ast.Bloc
 	g.buf.WriteString(") string {\n")
 
 	g.indent++
-	g.pushContext(ctxTransformBlock)
 
 	// Generate all but last statement normally
 	for i, stmt := range block.Body {
@@ -1282,7 +1281,6 @@ func (g *Generator) genOptionalMapBlock(receiver ast.Expression, block *ast.Bloc
 		}
 	}
 
-	g.popContext()
 	g.indent--
 
 	g.writeIndent()
@@ -1362,18 +1360,14 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	g.genExpr(iterable)
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" any) bool {\n")
+	g.buf.WriteString(" any) {\n")
 
 	g.scopedVar(varName, "", func() {
-		g.pushContext(ctxIterBlock)
 		g.indent++
 		for _, stmt := range block.Body {
 			g.genStatement(stmt)
 		}
-		g.writeIndent()
-		g.buf.WriteString("return true\n")
 		g.indent--
-		g.popContext()
 	})
 
 	g.writeIndent()
@@ -1397,22 +1391,18 @@ func (g *Generator) genMapEachBlock(iterable ast.Expression, block *ast.BlockExp
 	g.buf.WriteString(valueName)
 	g.buf.WriteString(" ")
 	g.buf.WriteString(valueType)
-	g.buf.WriteString(") bool {\n")
+	g.buf.WriteString(") {\n")
 
 	prevKeyType, keyWasDefinedBefore := g.vars[keyName]
 	prevValueType, valueWasDefinedBefore := g.vars[valueName]
 	g.vars[keyName] = keyType
 	g.vars[valueName] = valueType
 
-	g.pushContext(ctxIterBlock)
 	g.indent++
 	for _, stmt := range block.Body {
 		g.genStatement(stmt)
 	}
-	g.writeIndent()
-	g.buf.WriteString("return true\n")
 	g.indent--
-	g.popContext()
 
 	if keyWasDefinedBefore {
 		g.vars[keyName] = prevKeyType
@@ -1469,18 +1459,14 @@ func (g *Generator) genRangeEachBlock(rangeExpr ast.Expression, block *ast.Block
 	g.genExpr(rangeExpr)
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" int) bool {\n")
+	g.buf.WriteString(" int) {\n")
 
 	g.scopedVar(varName, "Int", func() {
-		g.pushContext(ctxIterBlock)
 		g.indent++
 		for _, stmt := range block.Body {
 			g.genStatement(stmt)
 		}
-		g.writeIndent()
-		g.buf.WriteString("return true\n")
 		g.indent--
-		g.popContext()
 	})
 
 	g.writeIndent()
@@ -1506,21 +1492,17 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 	g.buf.WriteString(varName)
 	g.buf.WriteString(" any, ")
 	g.buf.WriteString(indexName)
-	g.buf.WriteString(" int) bool {\n")
+	g.buf.WriteString(" int) {\n")
 
 	g.scopedVars([]struct{ name, varType string }{
 		{varName, ""},
 		{indexName, "Int"},
 	}, func() {
-		g.pushContext(ctxIterBlock)
 		g.indent++
 		for _, stmt := range block.Body {
 			g.genStatement(stmt)
 		}
-		g.writeIndent()
-		g.buf.WriteString("return true\n")
 		g.indent--
-		g.popContext()
 	})
 
 	g.writeIndent()
@@ -1539,18 +1521,14 @@ func (g *Generator) genTimesBlock(times ast.Expression, block *ast.BlockExpr) {
 	g.genExpr(times)
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" int) bool {\n")
+	g.buf.WriteString(" int) {\n")
 
 	g.scopedVar(varName, "Int", func() {
-		g.pushContext(ctxIterBlock)
 		g.indent++
 		for _, stmt := range block.Body {
 			g.genStatement(stmt)
 		}
-		g.writeIndent()
-		g.buf.WriteString("return true\n")
 		g.indent--
-		g.popContext()
 	})
 
 	g.writeIndent()
@@ -1575,18 +1553,14 @@ func (g *Generator) genUptoBlock(start ast.Expression, block *ast.BlockExpr, arg
 	}
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" int) bool {\n")
+	g.buf.WriteString(" int) {\n")
 
 	g.scopedVar(varName, "Int", func() {
-		g.pushContext(ctxIterBlock)
 		g.indent++
 		for _, stmt := range block.Body {
 			g.genStatement(stmt)
 		}
-		g.writeIndent()
-		g.buf.WriteString("return true\n")
 		g.indent--
-		g.popContext()
 	})
 
 	g.writeIndent()
@@ -1611,18 +1585,14 @@ func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, a
 	}
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
-	g.buf.WriteString(" int) bool {\n")
+	g.buf.WriteString(" int) {\n")
 
 	g.scopedVar(varName, "Int", func() {
-		g.pushContext(ctxIterBlock)
 		g.indent++
 		for _, stmt := range block.Body {
 			g.genStatement(stmt)
 		}
-		g.writeIndent()
-		g.buf.WriteString("return true\n")
 		g.indent--
-		g.popContext()
 	})
 
 	g.writeIndent()
@@ -1740,13 +1710,9 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 		g.buf.WriteString(" ")
 		g.buf.WriteString(elemType)
 	}
-	g.buf.WriteString(") (")
+	g.buf.WriteString(") ")
 	g.buf.WriteString(returnType)
-	if method.usesIncludeFlag {
-		g.buf.WriteString(", bool, bool) {\n")
-	} else {
-		g.buf.WriteString(", bool) {\n")
-	}
+	g.buf.WriteString(" {\n")
 
 	if param1Name != "_" {
 		g.vars[param1Name] = ""
@@ -1755,7 +1721,6 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 		g.vars[param2Name] = ""
 	}
 
-	g.pushContextWithInclude(ctxTransformBlock, returnType, method.usesIncludeFlag)
 	g.indent++
 
 	if len(block.Body) > 0 {
@@ -1767,39 +1732,26 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 			g.writeIndent()
 			g.buf.WriteString("return ")
 			g.genExpr(exprStmt.Expr)
-			if method.usesIncludeFlag {
-				g.buf.WriteString(", true, true\n")
-			} else {
-				g.buf.WriteString(", true\n")
-			}
+			g.buf.WriteString("\n")
 		} else {
 			g.genStatement(lastStmt)
 			g.writeIndent()
-			if method.usesIncludeFlag {
-				g.buf.WriteString("return nil, false, true\n")
+			if method.returnType == "bool" {
+				g.buf.WriteString("return false\n")
 			} else {
-				if method.returnType == "bool" {
-					g.buf.WriteString("return false, true\n")
-				} else {
-					g.buf.WriteString("return nil, true\n")
-				}
+				g.buf.WriteString("return nil\n")
 			}
 		}
 	} else {
 		g.writeIndent()
-		if method.usesIncludeFlag {
-			g.buf.WriteString("return nil, false, true\n")
+		if method.returnType == "bool" {
+			g.buf.WriteString("return false\n")
 		} else {
-			if method.returnType == "bool" {
-				g.buf.WriteString("return false, true\n")
-			} else {
-				g.buf.WriteString("return nil, true\n")
-			}
+			g.buf.WriteString("return nil\n")
 		}
 	}
 
 	g.indent--
-	g.popContext()
 
 	if param1Name != "_" {
 		if !param1WasDefinedBefore {

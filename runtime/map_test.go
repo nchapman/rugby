@@ -61,8 +61,8 @@ func TestMerge(t *testing.T) {
 func TestMapSelect(t *testing.T) {
 	m := map[string]int{"a": 1, "b": 2, "c": 3, "d": 4}
 
-	selected := MapSelect(m, func(k string, v int) (bool, bool) {
-		return v > 2, true
+	selected := MapSelect(m, func(k string, v int) bool {
+		return v > 2
 	})
 
 	if len(selected) != 2 {
@@ -77,8 +77,8 @@ func TestMapSelect(t *testing.T) {
 func TestMapReject(t *testing.T) {
 	m := map[string]int{"a": 1, "b": 2, "c": 3, "d": 4}
 
-	rejected := MapReject(m, func(k string, v int) (bool, bool) {
-		return v > 2, true
+	rejected := MapReject(m, func(k string, v int) bool {
+		return v > 2
 	})
 
 	if len(rejected) != 2 {

@@ -150,6 +150,20 @@ func (s *Scope) IsInsideLoop() bool {
 	return false
 }
 
+// IsInsideIterator returns true if there's an iterator block (each/map/etc.) in the scope chain
+// without an intervening loop. A loop inside an iterator block creates a new context that allows
+// break/next, so we stop traversal at loop scopes.
+func (s *Scope) IsInsideIterator() bool {
+	if s.Kind == ScopeIterator {
+		return true
+	}
+	// Stop at function/method/loop boundaries - loops inside iterator blocks allow break/next
+	if s.Parent != nil && s.Kind != ScopeFunction && s.Kind != ScopeMethod && s.Kind != ScopeLoop {
+		return s.Parent.IsInsideIterator()
+	}
+	return false
+}
+
 // FunctionScope returns the nearest enclosing function/method scope, or nil.
 func (s *Scope) FunctionScope() *Scope {
 	if s.Kind == ScopeFunction || s.Kind == ScopeMethod {

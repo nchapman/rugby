@@ -28,20 +28,6 @@ func transformImportPath(path string) string {
 	return path
 }
 
-type contextType int
-
-const (
-	ctxLoop contextType = iota
-	ctxIterBlock
-	ctxTransformBlock
-)
-
-type loopContext struct {
-	kind            contextType
-	returnType      string // "any", "bool", or empty for iterative
-	usesIncludeFlag bool   // for map - uses three-value returns
-}
-
 // TypeKind represents the kind of a type for codegen optimization decisions.
 // This is intentionally a subset of semantic.TypeKind - only types that affect
 // code generation optimizations are included. Unmapped types use TypeUnknown,
@@ -136,7 +122,7 @@ type Generator struct {
 	sourceFile                   string                     // original .rg filename for //line directives
 	emitLineDir                  bool                       // whether to emit //line directives
 	currentReturnTypes           []string                   // return types of the current function/method
-	contexts                     []loopContext              // stack of loop/block contexts
+	loopDepth                    int                        // nesting depth of loops (for break/next)
 	inMainFunc                   bool                       // true when generating code inside main() function
 	errors                       []error                    // collected errors during generation
 	tempVarCounter               int                        // counter for generating unique temp variable names
@@ -161,25 +147,14 @@ func (g *Generator) returnsError() bool {
 	return g.currentReturnTypes[len(g.currentReturnTypes)-1] == "error"
 }
 
-func (g *Generator) pushContext(kind contextType) {
-	g.contexts = append(g.contexts, loopContext{kind: kind, returnType: "", usesIncludeFlag: false})
+func (g *Generator) enterLoop() {
+	g.loopDepth++
 }
 
-func (g *Generator) pushContextWithInclude(kind contextType, returnType string, usesInclude bool) {
-	g.contexts = append(g.contexts, loopContext{kind: kind, returnType: returnType, usesIncludeFlag: usesInclude})
-}
-
-func (g *Generator) popContext() {
-	if len(g.contexts) > 0 {
-		g.contexts = g.contexts[:len(g.contexts)-1]
+func (g *Generator) exitLoop() {
+	if g.loopDepth > 0 {
+		g.loopDepth--
 	}
-}
-
-func (g *Generator) currentContext() (loopContext, bool) {
-	if len(g.contexts) == 0 {
-		return loopContext{}, false
-	}
-	return g.contexts[len(g.contexts)-1], true
 }
 
 // Option configures a Generator.

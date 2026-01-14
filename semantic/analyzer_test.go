@@ -226,6 +226,209 @@ func TestAnalyzeBreakOutsideLoop(t *testing.T) {
 	}
 }
 
+func TestAnalyzeReturnInsideBlock(t *testing.T) {
+	input := `
+def main
+  [1, 2, 3].each do |x|
+    return x
+  end
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+	if len(errs) == 0 {
+		t.Fatal("expected error for return inside block")
+	}
+
+	found := false
+	for _, err := range errs {
+		if _, ok := err.(*ReturnInsideBlockError); ok {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected ReturnInsideBlockError, got: %v", errs)
+	}
+}
+
+func TestAnalyzeReturnInsideMapBlock(t *testing.T) {
+	input := `
+def main
+  [1, 2, 3].map do |x|
+    return x * 2 if x > 1
+    x
+  end
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+	if len(errs) == 0 {
+		t.Fatal("expected error for return inside block")
+	}
+
+	found := false
+	for _, err := range errs {
+		if _, ok := err.(*ReturnInsideBlockError); ok {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected ReturnInsideBlockError, got: %v", errs)
+	}
+}
+
+func TestAnalyzeReturnOutsideBlockIsAllowed(t *testing.T) {
+	// return in a regular loop should still be allowed
+	input := `
+def main -> Int
+  for i in [1, 2, 3]
+    return i if i > 1
+  end
+  0
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+	if len(errs) > 0 {
+		t.Errorf("unexpected errors: %v", errs)
+	}
+}
+
+func TestAnalyzeBreakInsideBlock(t *testing.T) {
+	input := `
+def main
+  [1, 2, 3].each do |x|
+    if x == 2
+      break
+    end
+  end
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+	if len(errs) == 0 {
+		t.Fatal("expected error for break inside block")
+	}
+
+	found := false
+	for _, err := range errs {
+		if _, ok := err.(*BreakInsideBlockError); ok {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected BreakInsideBlockError, got: %v", errs)
+	}
+}
+
+func TestAnalyzeNextInsideBlock(t *testing.T) {
+	input := `
+def main
+  [1, 2, 3].each do |x|
+    next if x == 2
+  end
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+	if len(errs) == 0 {
+		t.Fatal("expected error for next inside block")
+	}
+
+	found := false
+	for _, err := range errs {
+		if _, ok := err.(*NextInsideBlockError); ok {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected NextInsideBlockError, got: %v", errs)
+	}
+}
+
+func TestAnalyzeBreakNextInLoopAllowed(t *testing.T) {
+	// break and next in regular loops should still be allowed
+	input := `
+def main
+  for i in [1, 2, 3]
+    next if i == 1
+    break if i == 2
+  end
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+	if len(errs) > 0 {
+		t.Errorf("unexpected errors: %v", errs)
+	}
+}
+
+func TestAnalyzeLoopInsideBlockAllowsBreakNext(t *testing.T) {
+	// A for loop inside a block should still allow break/next
+	// The loop creates a new scope that allows control flow
+	input := `
+def main
+  [1, 2, 3].each do |x|
+    for i in [1, 2]
+      next if i == 1
+      break if i == 2
+    end
+  end
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+	if len(errs) > 0 {
+		t.Errorf("break/next in loop inside block should be allowed, got errors: %v", errs)
+	}
+}
+
 func TestAnalyzeIfLet(t *testing.T) {
 	input := `
 def find_user(id : Int) -> User?

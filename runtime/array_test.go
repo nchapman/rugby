@@ -8,14 +8,14 @@ import (
 
 func TestSelect(t *testing.T) {
 	nums := []int{1, 2, 3, 4, 5, 6}
-	evens := Select(nums, func(n int) (bool, bool) { return n%2 == 0, true })
+	evens := Select(nums, func(n int) bool { return n%2 == 0 })
 	expected := []int{2, 4, 6}
 	if !reflect.DeepEqual(evens, expected) {
 		t.Errorf("Select evens: got %v, want %v", evens, expected)
 	}
 
 	// Empty result
-	none := Select(nums, func(n int) (bool, bool) { return n > 10, true })
+	none := Select(nums, func(n int) bool { return n > 10 })
 	if len(none) != 0 {
 		t.Errorf("Select none: got %v, want empty", none)
 	}
@@ -23,7 +23,7 @@ func TestSelect(t *testing.T) {
 
 func TestReject(t *testing.T) {
 	nums := []int{1, 2, 3, 4, 5, 6}
-	odds := Reject(nums, func(n int) (bool, bool) { return n%2 == 0, true })
+	odds := Reject(nums, func(n int) bool { return n%2 == 0 })
 	expected := []int{1, 3, 5}
 	if !reflect.DeepEqual(odds, expected) {
 		t.Errorf("Reject evens: got %v, want %v", odds, expected)
@@ -32,15 +32,15 @@ func TestReject(t *testing.T) {
 
 func TestMap(t *testing.T) {
 	nums := []int{1, 2, 3}
-	doubled := Map(nums, func(n int) (int, bool, bool) { return n * 2, true, true })
+	doubled := Map(nums, func(n int) int { return n * 2 })
 	expected := []int{2, 4, 6}
 	if !reflect.DeepEqual(doubled, expected) {
 		t.Errorf("Map double: got %v, want %v", doubled, expected)
 	}
 
 	// Type conversion
-	strs := Map(nums, func(n int) (string, bool, bool) {
-		return string(rune('a' + n - 1)), true, true
+	strs := Map(nums, func(n int) string {
+		return string(rune('a' + n - 1))
 	})
 	expectedStrs := []string{"a", "b", "c"}
 	if !reflect.DeepEqual(strs, expectedStrs) {
@@ -50,19 +50,19 @@ func TestMap(t *testing.T) {
 
 func TestReduce(t *testing.T) {
 	nums := []int{1, 2, 3, 4, 5}
-	sum := Reduce(nums, 0, func(acc, n int) (int, bool) { return acc + n, true })
+	sum := Reduce(nums, 0, func(acc, n int) int { return acc + n })
 	if sum != 15 {
 		t.Errorf("Reduce sum: got %d, want 15", sum)
 	}
 
 	// With initial value
-	product := Reduce(nums, 1, func(acc, n int) (int, bool) { return acc * n, true })
+	product := Reduce(nums, 1, func(acc, n int) int { return acc * n })
 	if product != 120 {
 		t.Errorf("Reduce product: got %d, want 120", product)
 	}
 
 	// Empty slice
-	emptySum := Reduce([]int{}, 0, func(acc, n int) (int, bool) { return acc + n, true })
+	emptySum := Reduce([]int{}, 0, func(acc, n int) int { return acc + n })
 	if emptySum != 0 {
 		t.Errorf("Reduce empty: got %d, want 0", emptySum)
 	}
@@ -72,13 +72,13 @@ func TestFind(t *testing.T) {
 	nums := []int{1, 2, 3, 4, 5}
 
 	// Found
-	val, ok := Find(nums, func(n int) (bool, bool) { return n > 3, true })
+	val, ok := Find(nums, func(n int) bool { return n > 3 })
 	if !ok || val != 4 {
 		t.Errorf("Find >3: got (%d, %v), want (4, true)", val, ok)
 	}
 
 	// Not found
-	val, ok = Find(nums, func(n int) (bool, bool) { return n > 10, true })
+	val, ok = Find(nums, func(n int) bool { return n > 10 })
 	if ok {
 		t.Errorf("Find >10: got (%d, %v), want (0, false)", val, ok)
 	}
@@ -87,11 +87,11 @@ func TestFind(t *testing.T) {
 func TestAny(t *testing.T) {
 	nums := []int{1, 2, 3, 4, 5}
 
-	if !Any(nums, func(n int) (bool, bool) { return n > 3, true }) {
+	if !Any(nums, func(n int) bool { return n > 3 }) {
 		t.Error("Any >3: got false, want true")
 	}
 
-	if Any(nums, func(n int) (bool, bool) { return n > 10, true }) {
+	if Any(nums, func(n int) bool { return n > 10 }) {
 		t.Error("Any >10: got true, want false")
 	}
 }
@@ -99,16 +99,16 @@ func TestAny(t *testing.T) {
 func TestAll(t *testing.T) {
 	nums := []int{2, 4, 6, 8}
 
-	if !All(nums, func(n int) (bool, bool) { return n%2 == 0, true }) {
+	if !All(nums, func(n int) bool { return n%2 == 0 }) {
 		t.Error("All even: got false, want true")
 	}
 
-	if All(nums, func(n int) (bool, bool) { return n > 5, true }) {
+	if All(nums, func(n int) bool { return n > 5 }) {
 		t.Error("All >5: got true, want false")
 	}
 
 	// Empty slice returns true (vacuous truth)
-	if !All([]int{}, func(n int) (bool, bool) { return false, true }) {
+	if !All([]int{}, func(n int) bool { return false }) {
 		t.Error("All empty: got false, want true")
 	}
 }
@@ -116,11 +116,11 @@ func TestAll(t *testing.T) {
 func TestNone(t *testing.T) {
 	nums := []int{1, 2, 3, 4, 5}
 
-	if !None(nums, func(n int) (bool, bool) { return n > 10, true }) {
+	if !None(nums, func(n int) bool { return n > 10 }) {
 		t.Error("None >10: got false, want true")
 	}
 
-	if None(nums, func(n int) (bool, bool) { return n > 3, true }) {
+	if None(nums, func(n int) bool { return n > 3 }) {
 		t.Error("None >3: got true, want false")
 	}
 }
@@ -256,9 +256,8 @@ func TestMinMaxFloat(t *testing.T) {
 func TestEach(t *testing.T) {
 	// Test with []int
 	var collected []int
-	Each([]int{1, 2, 3}, func(v any) bool {
+	Each([]int{1, 2, 3}, func(v any) {
 		collected = append(collected, v.(int))
-		return true
 	})
 	if !reflect.DeepEqual(collected, []int{1, 2, 3}) {
 		t.Errorf("Each []int: got %v, want [1 2 3]", collected)
@@ -266,30 +265,18 @@ func TestEach(t *testing.T) {
 
 	// Test with []string
 	var strs []string
-	Each([]string{"a", "b", "c"}, func(v any) bool {
+	Each([]string{"a", "b", "c"}, func(v any) {
 		strs = append(strs, v.(string))
-		return true
 	})
 	if !reflect.DeepEqual(strs, []string{"a", "b", "c"}) {
 		t.Errorf("Each []string: got %v, want [a b c]", strs)
-	}
-
-	// Test early break
-	var partial []int
-	Each([]int{1, 2, 3, 4, 5}, func(v any) bool {
-		partial = append(partial, v.(int))
-		return v.(int) < 3
-	})
-	if !reflect.DeepEqual(partial, []int{1, 2, 3}) {
-		t.Errorf("Each with break: got %v, want [1 2 3]", partial)
 	}
 }
 
 func TestEachWithIndex(t *testing.T) {
 	var pairs [][2]int
-	EachWithIndex([]int{10, 20, 30}, func(v any, i int) bool {
+	EachWithIndex([]int{10, 20, 30}, func(v any, i int) {
 		pairs = append(pairs, [2]int{v.(int), i})
-		return true
 	})
 	expected := [][2]int{{10, 0}, {20, 1}, {30, 2}}
 	if !reflect.DeepEqual(pairs, expected) {
@@ -514,54 +501,6 @@ func TestRotate(t *testing.T) {
 	result = Rotate([]int{}, 2)
 	if len(result) != 0 {
 		t.Errorf("Rotate empty: got %v, want empty", result)
-	}
-}
-
-func TestSelectWithBreak(t *testing.T) {
-	nums := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-
-	// Select with early break
-	result := Select(nums, func(n int) (bool, bool) {
-		if n > 5 {
-			return false, false // stop
-		}
-		return n%2 == 0, true // continue
-	})
-	expected := []int{2, 4}
-	if !reflect.DeepEqual(result, expected) {
-		t.Errorf("Select with break: got %v, want %v", result, expected)
-	}
-}
-
-func TestMapWithSkip(t *testing.T) {
-	nums := []int{1, 2, 3, 4, 5}
-
-	// Map with skip (include=false)
-	result := Map(nums, func(n int) (int, bool, bool) {
-		if n%2 == 0 {
-			return 0, false, true // skip evens
-		}
-		return n * 10, true, true
-	})
-	expected := []int{10, 30, 50}
-	if !reflect.DeepEqual(result, expected) {
-		t.Errorf("Map with skip: got %v, want %v", result, expected)
-	}
-}
-
-func TestReduceWithBreak(t *testing.T) {
-	nums := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-
-	// Sum until we exceed 10
-	result := Reduce(nums, 0, func(acc, n int) (int, bool) {
-		newAcc := acc + n
-		if newAcc > 10 {
-			return acc, false // stop, keep old acc
-		}
-		return newAcc, true
-	})
-	if result != 10 { // 1+2+3+4 = 10
-		t.Errorf("Reduce with break: got %d, want 10", result)
 	}
 }
 
@@ -947,8 +886,8 @@ func TestCallMethodWithMapIntegration(t *testing.T) {
 		testStringer{value: "bob"},
 	}
 
-	result := Map(names, func(x any) (any, bool, bool) {
-		return CallMethod(x, "upcase"), true, true
+	result := Map(names, func(x any) any {
+		return CallMethod(x, "upcase")
 	})
 
 	if result[0] != "ALICE" || result[1] != "BOB" {
@@ -959,9 +898,8 @@ func TestCallMethodWithMapIntegration(t *testing.T) {
 func TestEach_AllTypes(t *testing.T) {
 	// Test []any
 	var anyResults []any
-	Each([]any{1, "two", 3.0}, func(v any) bool {
+	Each([]any{1, "two", 3.0}, func(v any) {
 		anyResults = append(anyResults, v)
-		return true
 	})
 	if len(anyResults) != 3 {
 		t.Errorf("Each []any: got %d elements, want 3", len(anyResults))
@@ -969,9 +907,8 @@ func TestEach_AllTypes(t *testing.T) {
 
 	// Test []float64
 	var floatResults []float64
-	Each([]float64{1.1, 2.2, 3.3}, func(v any) bool {
+	Each([]float64{1.1, 2.2, 3.3}, func(v any) {
 		floatResults = append(floatResults, v.(float64))
-		return true
 	})
 	if !reflect.DeepEqual(floatResults, []float64{1.1, 2.2, 3.3}) {
 		t.Errorf("Each []float64: got %v", floatResults)
@@ -979,51 +916,19 @@ func TestEach_AllTypes(t *testing.T) {
 
 	// Test []bool
 	var boolResults []bool
-	Each([]bool{true, false, true}, func(v any) bool {
+	Each([]bool{true, false, true}, func(v any) {
 		boolResults = append(boolResults, v.(bool))
-		return true
 	})
 	if !reflect.DeepEqual(boolResults, []bool{true, false, true}) {
 		t.Errorf("Each []bool: got %v", boolResults)
-	}
-
-	// Test early break with []float64
-	var partialFloats []float64
-	Each([]float64{1.0, 2.0, 3.0, 4.0}, func(v any) bool {
-		partialFloats = append(partialFloats, v.(float64))
-		return v.(float64) < 2.5
-	})
-	if len(partialFloats) != 3 {
-		t.Errorf("Each []float64 with break: got %d elements, want 3", len(partialFloats))
-	}
-
-	// Test early break with []bool
-	var partialBools []bool
-	Each([]bool{true, true, false, true}, func(v any) bool {
-		partialBools = append(partialBools, v.(bool))
-		return v.(bool)
-	})
-	if len(partialBools) != 3 {
-		t.Errorf("Each []bool with break: got %d elements, want 3", len(partialBools))
-	}
-
-	// Test early break with []any
-	var partialAny []any
-	Each([]any{1, 2, 3, 4}, func(v any) bool {
-		partialAny = append(partialAny, v)
-		return v.(int) < 3
-	})
-	if len(partialAny) != 3 {
-		t.Errorf("Each []any with break: got %d elements, want 3", len(partialAny))
 	}
 
 	// Test reflection fallback with custom slice type
 	type customInt int
 	customSlice := []customInt{1, 2, 3}
 	var customResults []customInt
-	Each(customSlice, func(v any) bool {
+	Each(customSlice, func(v any) {
 		customResults = append(customResults, v.(customInt))
-		return true
 	})
 	if len(customResults) != 3 {
 		t.Errorf("Each custom slice: got %d elements, want 3", len(customResults))
@@ -1036,12 +941,11 @@ func TestEachWithIndex_AllTypes(t *testing.T) {
 		val string
 		idx int
 	}
-	EachWithIndex([]string{"a", "b", "c"}, func(v any, i int) bool {
+	EachWithIndex([]string{"a", "b", "c"}, func(v any, i int) {
 		strPairs = append(strPairs, struct {
 			val string
 			idx int
 		}{v.(string), i})
-		return true
 	})
 	if len(strPairs) != 3 || strPairs[2].val != "c" || strPairs[2].idx != 2 {
 		t.Errorf("EachWithIndex []string: got %v", strPairs)
@@ -1052,12 +956,11 @@ func TestEachWithIndex_AllTypes(t *testing.T) {
 		val float64
 		idx int
 	}
-	EachWithIndex([]float64{1.1, 2.2}, func(v any, i int) bool {
+	EachWithIndex([]float64{1.1, 2.2}, func(v any, i int) {
 		floatPairs = append(floatPairs, struct {
 			val float64
 			idx int
 		}{v.(float64), i})
-		return true
 	})
 	if len(floatPairs) != 2 {
 		t.Errorf("EachWithIndex []float64: got %d elements", len(floatPairs))
@@ -1068,12 +971,11 @@ func TestEachWithIndex_AllTypes(t *testing.T) {
 		val bool
 		idx int
 	}
-	EachWithIndex([]bool{true, false}, func(v any, i int) bool {
+	EachWithIndex([]bool{true, false}, func(v any, i int) {
 		boolPairs = append(boolPairs, struct {
 			val bool
 			idx int
 		}{v.(bool), i})
-		return true
 	})
 	if len(boolPairs) != 2 {
 		t.Errorf("EachWithIndex []bool: got %d elements", len(boolPairs))
@@ -1084,25 +986,14 @@ func TestEachWithIndex_AllTypes(t *testing.T) {
 		val any
 		idx int
 	}
-	EachWithIndex([]any{"x", "y"}, func(v any, i int) bool {
+	EachWithIndex([]any{"x", "y"}, func(v any, i int) {
 		anyPairs = append(anyPairs, struct {
 			val any
 			idx int
 		}{v, i})
-		return true
 	})
 	if len(anyPairs) != 2 {
 		t.Errorf("EachWithIndex []any: got %d elements", len(anyPairs))
-	}
-
-	// Test early break
-	var partial []int
-	EachWithIndex([]int{1, 2, 3, 4}, func(v any, i int) bool {
-		partial = append(partial, v.(int))
-		return i < 2
-	})
-	if len(partial) != 3 {
-		t.Errorf("EachWithIndex with break: got %d elements, want 3", len(partial))
 	}
 
 	// Test reflection fallback
@@ -1112,12 +1003,11 @@ func TestEachWithIndex_AllTypes(t *testing.T) {
 		val customStr
 		idx int
 	}
-	EachWithIndex(customSlice, func(v any, i int) bool {
+	EachWithIndex(customSlice, func(v any, i int) {
 		customPairs = append(customPairs, struct {
 			val customStr
 			idx int
 		}{v.(customStr), i})
-		return true
 	})
 	if len(customPairs) != 2 {
 		t.Errorf("EachWithIndex custom slice: got %d elements", len(customPairs))
@@ -1387,7 +1277,7 @@ func TestShift(t *testing.T) {
 
 	// Empty slice
 	empty := []int{}
-	val, ok = Shift(&empty)
+	_, ok = Shift(&empty)
 	if ok {
 		t.Errorf("Shift empty: ok=%v, want false", ok)
 	}
@@ -1471,7 +1361,7 @@ func TestPop(t *testing.T) {
 
 	// Empty slice
 	empty := []int{}
-	val, ok = Pop(&empty)
+	_, ok = Pop(&empty)
 	if ok {
 		t.Errorf("Pop empty: ok=%v, want false", ok)
 	}

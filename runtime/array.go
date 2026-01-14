@@ -12,39 +12,28 @@ import (
 )
 
 // Each iterates over a slice, calling the function for each element.
-// The callback returns false to break, true to continue.
 // Uses any with type switches to support both typed and untyped slices.
-func Each(slice any, fn func(any) bool) {
+func Each(slice any, fn func(any)) {
 	switch s := slice.(type) {
 	case []any:
 		for _, v := range s {
-			if !fn(v) {
-				break
-			}
+			fn(v)
 		}
 	case []int:
 		for _, v := range s {
-			if !fn(v) {
-				break
-			}
+			fn(v)
 		}
 	case []string:
 		for _, v := range s {
-			if !fn(v) {
-				break
-			}
+			fn(v)
 		}
 	case []float64:
 		for _, v := range s {
-			if !fn(v) {
-				break
-			}
+			fn(v)
 		}
 	case []bool:
 		for _, v := range s {
-			if !fn(v) {
-				break
-			}
+			fn(v)
 		}
 	default:
 		// Use reflection as fallback for other slice types
@@ -53,47 +42,34 @@ func Each(slice any, fn func(any) bool) {
 			panic(fmt.Sprintf("Each: expected slice, got %T", slice))
 		}
 		for i := range val.Len() {
-			if !fn(val.Index(i).Interface()) {
-				break
-			}
+			fn(val.Index(i).Interface())
 		}
 	}
 }
 
 // EachWithIndex iterates over a slice with index, calling the function for each element.
-// The callback returns false to break, true to continue.
 // Uses any with type switches to support both typed and untyped slices.
-func EachWithIndex(slice any, fn func(any, int) bool) {
+func EachWithIndex(slice any, fn func(any, int)) {
 	switch s := slice.(type) {
 	case []any:
 		for i, v := range s {
-			if !fn(v, i) {
-				break
-			}
+			fn(v, i)
 		}
 	case []int:
 		for i, v := range s {
-			if !fn(v, i) {
-				break
-			}
+			fn(v, i)
 		}
 	case []string:
 		for i, v := range s {
-			if !fn(v, i) {
-				break
-			}
+			fn(v, i)
 		}
 	case []float64:
 		for i, v := range s {
-			if !fn(v, i) {
-				break
-			}
+			fn(v, i)
 		}
 	case []bool:
 		for i, v := range s {
-			if !fn(v, i) {
-				break
-			}
+			fn(v, i)
 		}
 	default:
 		// Use reflection as fallback for other slice types
@@ -102,86 +78,56 @@ func EachWithIndex(slice any, fn func(any, int) bool) {
 			panic(fmt.Sprintf("EachWithIndex: expected slice, got %T", slice))
 		}
 		for i := range val.Len() {
-			if !fn(val.Index(i).Interface(), i) {
-				break
-			}
+			fn(val.Index(i).Interface(), i)
 		}
 	}
 }
 
 // Select returns elements for which the predicate returns true.
-// The predicate returns (match, continue).
-func Select[T any](slice []T, predicate func(T) (bool, bool)) []T {
+func Select[T any](slice []T, predicate func(T) bool) []T {
 	result := make([]T, 0)
 	for _, v := range slice {
-		match, cont := predicate(v)
-		if match {
+		if predicate(v) {
 			result = append(result, v)
-		}
-		if !cont {
-			break
 		}
 	}
 	return result
 }
 
 // Reject returns elements for which the predicate returns false.
-// The predicate returns (match, continue).
-func Reject[T any](slice []T, predicate func(T) (bool, bool)) []T {
+func Reject[T any](slice []T, predicate func(T) bool) []T {
 	result := make([]T, 0)
 	for _, v := range slice {
-		match, cont := predicate(v)
-		if !match {
+		if !predicate(v) {
 			result = append(result, v)
-		}
-		if !cont {
-			break
 		}
 	}
 	return result
 }
 
 // Map transforms each element using the mapper function.
-// The mapper returns (result, include, continue).
-// include=false means skip this element (next), continue=false means stop (break).
-func Map[T, R any](slice []T, mapper func(T) (R, bool, bool)) []R {
+func Map[T, R any](slice []T, mapper func(T) R) []R {
 	result := make([]R, 0, len(slice))
 	for _, v := range slice {
-		val, include, cont := mapper(v)
-		if include {
-			result = append(result, val)
-		}
-		if !cont {
-			break
-		}
+		result = append(result, mapper(v))
 	}
 	return result
 }
 
 // Reduce folds the slice into a single value using the reducer function.
-// The reducer returns (accumulator, continue).
-func Reduce[T, R any](slice []T, initial R, reducer func(R, T) (R, bool)) R {
+func Reduce[T, R any](slice []T, initial R, reducer func(R, T) R) R {
 	acc := initial
 	for _, v := range slice {
-		newAcc, cont := reducer(acc, v)
-		acc = newAcc
-		if !cont {
-			break
-		}
+		acc = reducer(acc, v)
 	}
 	return acc
 }
 
 // Find returns the first element matching the predicate.
-// The predicate returns (match, continue).
-func Find[T any](slice []T, predicate func(T) (bool, bool)) (T, bool) {
+func Find[T any](slice []T, predicate func(T) bool) (T, bool) {
 	for _, v := range slice {
-		match, cont := predicate(v)
-		if match {
+		if predicate(v) {
 			return v, true
-		}
-		if !cont {
-			break
 		}
 	}
 	var zero T
@@ -190,59 +136,33 @@ func Find[T any](slice []T, predicate func(T) (bool, bool)) (T, bool) {
 
 // FindPtr returns a pointer to the first element matching the predicate, or nil.
 // Used for optional coalescing in Rugby.
-func FindPtr[T any](slice []T, predicate func(T) (bool, bool)) *T {
+func FindPtr[T any](slice []T, predicate func(T) bool) *T {
 	for i, v := range slice {
-		match, cont := predicate(v)
-		if match {
+		if predicate(v) {
 			return &slice[i]
-		}
-		if !cont {
-			break
 		}
 	}
 	return nil
 }
 
 // Any returns true if any element matches the predicate.
-func Any[T any](slice []T, predicate func(T) (bool, bool)) bool {
-	for _, v := range slice {
-		match, cont := predicate(v)
-		if match {
-			return true
-		}
-		if !cont {
-			break
-		}
-	}
-	return false
+func Any[T any](slice []T, predicate func(T) bool) bool {
+	return slices.ContainsFunc(slice, predicate)
 }
 
 // All returns true if all elements match the predicate.
-func All[T any](slice []T, predicate func(T) (bool, bool)) bool {
+func All[T any](slice []T, predicate func(T) bool) bool {
 	for _, v := range slice {
-		match, cont := predicate(v)
-		if !match {
+		if !predicate(v) {
 			return false
-		}
-		if !cont {
-			break
 		}
 	}
 	return true
 }
 
 // None returns true if no elements match the predicate.
-func None[T any](slice []T, predicate func(T) (bool, bool)) bool {
-	for _, v := range slice {
-		match, cont := predicate(v)
-		if match {
-			return false
-		}
-		if !cont {
-			break
-		}
-	}
-	return true
+func None[T any](slice []T, predicate func(T) bool) bool {
+	return !slices.ContainsFunc(slice, predicate)
 }
 
 // Contains returns true if the slice contains the value.

@@ -1127,13 +1127,13 @@ func (g *Generator) genWhileStmt(s *ast.WhileStmt) {
 	}
 	g.buf.WriteString(" {\n")
 
-	g.pushContext(ctxLoop)
+	g.enterLoop()
 	g.indent++
 	for _, stmt := range s.Body {
 		g.genStatement(stmt)
 	}
 	g.indent--
-	g.popContext()
+	g.exitLoop()
 
 	g.writeIndent()
 	g.buf.WriteString("}\n")
@@ -1162,13 +1162,13 @@ func (g *Generator) genUntilStmt(s *ast.UntilStmt) {
 	}
 	g.buf.WriteString(" {\n")
 
-	g.pushContext(ctxLoop)
+	g.enterLoop()
 	g.indent++
 	for _, stmt := range s.Body {
 		g.genStatement(stmt)
 	}
 	g.indent--
-	g.popContext()
+	g.exitLoop()
 
 	g.writeIndent()
 	g.buf.WriteString("}\n")
@@ -1201,13 +1201,13 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 
 	g.vars[s.Var] = "" // loop variable, type unknown
 
-	g.pushContext(ctxLoop)
+	g.enterLoop()
 	g.indent++
 	for _, stmt := range s.Body {
 		g.genStatement(stmt)
 	}
 	g.indent--
-	g.popContext()
+	g.exitLoop()
 
 	// Restore variable state
 	if !wasDefinedBefore {
@@ -1238,13 +1238,13 @@ func (g *Generator) genForRangeVarLoop(varName string, rangeVar string, body []a
 
 	g.vars[varName] = "Int"
 
-	g.pushContext(ctxLoop)
+	g.enterLoop()
 	g.indent++
 	for _, stmt := range body {
 		g.genStatement(stmt)
 	}
 	g.indent--
-	g.popContext()
+	g.exitLoop()
 
 	if !wasDefinedBefore {
 		delete(g.vars, varName)
@@ -1294,13 +1294,13 @@ func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.
 
 	g.vars[varName] = "Int" // range loop variable is always Int
 
-	g.pushContext(ctxLoop)
+	g.enterLoop()
 	g.indent++
 	for _, stmt := range body {
 		g.genStatement(stmt)
 	}
 	g.indent--
-	g.popContext()
+	g.exitLoop()
 
 	// Restore variable state
 	if !wasDefinedBefore {
@@ -1382,31 +1382,7 @@ func (g *Generator) genBreakStmt(s *ast.BreakStmt) {
 	}
 
 	g.writeIndent()
-	ctx, ok := g.currentContext()
-	if ok {
-		switch ctx.kind {
-		case ctxIterBlock:
-			g.buf.WriteString("return false\n")
-		case ctxTransformBlock:
-			// Transform blocks with three values (map): return (value, include, continue)
-			if ctx.usesIncludeFlag {
-				g.buf.WriteString("return nil, false, false\n")
-			} else {
-				// Transform blocks with two values (select, reject, find): return (value, continue)
-				if ctx.returnType == "bool" {
-					g.buf.WriteString("return false, false\n")
-				} else {
-					g.buf.WriteString("return nil, false\n")
-				}
-			}
-		default:
-			// Regular loop context
-			g.buf.WriteString("break\n")
-		}
-	} else {
-		// No context - regular loop
-		g.buf.WriteString("break\n")
-	}
+	g.buf.WriteString("break\n")
 
 	if s.Condition != nil {
 		g.indent--
@@ -1435,31 +1411,7 @@ func (g *Generator) genNextStmt(s *ast.NextStmt) {
 	}
 
 	g.writeIndent()
-	ctx, ok := g.currentContext()
-	if ok {
-		switch ctx.kind {
-		case ctxIterBlock:
-			g.buf.WriteString("return true\n")
-		case ctxTransformBlock:
-			// next in transform blocks with three values (map): skip element, continue iteration
-			if ctx.usesIncludeFlag {
-				g.buf.WriteString("return nil, false, true\n")
-			} else {
-				// next in two-value transform blocks: return zero value and true to continue
-				if ctx.returnType == "bool" {
-					g.buf.WriteString("return false, true\n")
-				} else {
-					g.buf.WriteString("return nil, true\n")
-				}
-			}
-		default:
-			// Regular loop context
-			g.buf.WriteString("continue\n")
-		}
-	} else {
-		// No context - regular loop
-		g.buf.WriteString("continue\n")
-	}
+	g.buf.WriteString("continue\n")
 
 	if s.Condition != nil {
 		g.indent--

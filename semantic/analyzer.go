@@ -1016,6 +1016,13 @@ func (a *Analyzer) analyzeReturn(s *ast.ReturnStmt) {
 		return
 	}
 
+	// Disallow return inside iterator blocks (each, map, select, etc.)
+	// Use next or break instead - return is a false friend from Ruby
+	if a.scope.IsInsideIterator() {
+		a.addError(&ReturnInsideBlockError{Line: s.Line})
+		return
+	}
+
 	// Analyze return values and collect their types
 	var returnTypes []*Type
 	for _, val := range s.Values {
@@ -1049,7 +1056,10 @@ func (a *Analyzer) analyzeReturn(s *ast.ReturnStmt) {
 }
 
 func (a *Analyzer) analyzeBreak(s *ast.BreakStmt) {
-	if !a.scope.IsInsideLoop() {
+	// break is not allowed inside iterator blocks (each, map, etc.)
+	if a.scope.IsInsideIterator() {
+		a.addError(&BreakInsideBlockError{Line: s.Line})
+	} else if !a.scope.IsInsideLoop() {
 		a.addError(&BreakOutsideLoopError{})
 	}
 
@@ -1059,8 +1069,11 @@ func (a *Analyzer) analyzeBreak(s *ast.BreakStmt) {
 }
 
 func (a *Analyzer) analyzeNext(s *ast.NextStmt) {
-	if !a.scope.IsInsideLoop() {
-		a.addError(&Error{Message: "next statement outside loop"})
+	// next is not allowed inside iterator blocks (each, map, etc.)
+	if a.scope.IsInsideIterator() {
+		a.addError(&NextInsideBlockError{Line: s.Line})
+	} else if !a.scope.IsInsideLoop() {
+		a.addError(&NextOutsideLoopError{Line: s.Line})
 	}
 
 	if s.Condition != nil {

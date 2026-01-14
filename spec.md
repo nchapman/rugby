@@ -426,7 +426,7 @@ users.select(&:active?)
 
 - `do...end` for multi-line, `{...}` for single-line
 - Last expression is the block's return value
-- `return value` in a block returns `value` from the block (not the enclosing function - differs from Ruby)
+- `return`, `break`, and `next` are not allowed inside blocks (blocks are functional, loops are imperative)
 
 ### 5.5 Statement Modifiers
 

@@ -8,9 +8,8 @@ import (
 func TestRangeEachInclusive(t *testing.T) {
 	r := Range{Start: 1, End: 5, Exclusive: false}
 	var collected []int
-	RangeEach(r, func(i int) bool {
+	RangeEach(r, func(i int) {
 		collected = append(collected, i)
-		return true
 	})
 	expected := []int{1, 2, 3, 4, 5}
 	if !reflect.DeepEqual(collected, expected) {
@@ -21,9 +20,8 @@ func TestRangeEachInclusive(t *testing.T) {
 func TestRangeEachExclusive(t *testing.T) {
 	r := Range{Start: 1, End: 5, Exclusive: true}
 	var collected []int
-	RangeEach(r, func(i int) bool {
+	RangeEach(r, func(i int) {
 		collected = append(collected, i)
-		return true
 	})
 	expected := []int{1, 2, 3, 4}
 	if !reflect.DeepEqual(collected, expected) {
@@ -31,25 +29,11 @@ func TestRangeEachExclusive(t *testing.T) {
 	}
 }
 
-func TestRangeEachWithBreak(t *testing.T) {
-	r := Range{Start: 1, End: 10, Exclusive: false}
-	var collected []int
-	RangeEach(r, func(i int) bool {
-		collected = append(collected, i)
-		return i < 3
-	})
-	expected := []int{1, 2, 3}
-	if !reflect.DeepEqual(collected, expected) {
-		t.Errorf("RangeEach with break: got %v, want %v", collected, expected)
-	}
-}
-
 func TestRangeEachEmpty(t *testing.T) {
 	r := Range{Start: 5, End: 1, Exclusive: false}
 	var count int
-	RangeEach(r, func(i int) bool {
+	RangeEach(r, func(i int) {
 		count++
-		return true
 	})
 	if count != 0 {
 		t.Errorf("RangeEach empty: got %d iterations, want 0", count)
