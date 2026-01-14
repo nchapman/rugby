@@ -2835,6 +2835,121 @@ func (a *Analyzer) IsNoArgFunction(name string) bool {
 	return len(fn.Params) == 0
 }
 
+// IsPublicClass returns true if the given class name is declared as public.
+func (a *Analyzer) IsPublicClass(className string) bool {
+	cls, ok := a.classes[className]
+	if !ok {
+		return false
+	}
+	return cls.Public
+}
+
+// HasAccessor returns true if the given class field has a getter or setter accessor.
+func (a *Analyzer) HasAccessor(className, fieldName string) bool {
+	cls, ok := a.classes[className]
+	if !ok {
+		return false
+	}
+	if cls.Fields == nil {
+		return false
+	}
+	field, ok := cls.Fields[fieldName]
+	if !ok {
+		return false
+	}
+	return field.HasGetter || field.HasSetter
+}
+
+// GetInterfaceMethodNames returns the method names declared in an interface.
+func (a *Analyzer) GetInterfaceMethodNames(interfaceName string) []string {
+	iface, ok := a.interfaces[interfaceName]
+	if !ok {
+		return nil
+	}
+	if iface.Methods == nil {
+		return nil
+	}
+	names := make([]string, 0, len(iface.Methods))
+	for name := range iface.Methods {
+		names = append(names, name)
+	}
+	return names
+}
+
+// GetAllInterfaceNames returns the names of all declared interfaces.
+func (a *Analyzer) GetAllInterfaceNames() []string {
+	names := make([]string, 0, len(a.interfaces))
+	for name := range a.interfaces {
+		names = append(names, name)
+	}
+	return names
+}
+
+// GetAllModuleNames returns the names of all declared modules.
+func (a *Analyzer) GetAllModuleNames() []string {
+	names := make([]string, 0, len(a.modules))
+	for name := range a.modules {
+		names = append(names, name)
+	}
+	return names
+}
+
+// GetModuleMethodNames returns the method names declared in a module.
+func (a *Analyzer) GetModuleMethodNames(moduleName string) []string {
+	mod, ok := a.modules[moduleName]
+	if !ok {
+		return nil
+	}
+	if mod.Methods == nil {
+		return nil
+	}
+	names := make([]string, 0, len(mod.Methods))
+	for name := range mod.Methods {
+		names = append(names, name)
+	}
+	return names
+}
+
+// GetConstructorParamCount returns the number of constructor parameters for a class.
+func (a *Analyzer) GetConstructorParamCount(className string) int {
+	cls, ok := a.classes[className]
+	if !ok {
+		return 0
+	}
+	if cls.Methods == nil {
+		return 0
+	}
+	init, ok := cls.Methods["initialize"]
+	if !ok {
+		return 0
+	}
+	return len(init.Params)
+}
+
+// GetConstructorParams returns the constructor parameter names and types for a class.
+func (a *Analyzer) GetConstructorParams(className string) [][2]string {
+	cls, ok := a.classes[className]
+	if !ok {
+		return nil
+	}
+	if cls.Methods == nil {
+		return nil
+	}
+	init, ok := cls.Methods["initialize"]
+	if !ok {
+		return nil
+	}
+	result := make([][2]string, len(init.Params))
+	for i, param := range init.Params {
+		typeName := ""
+		if param.Type != nil {
+			typeName = param.Type.String()
+		}
+		result[i] = [2]string{param.Name, typeName}
+	}
+	return result
+}
+
 // GetSymbol looks up a symbol by name in the global scope.
 func (a *Analyzer) GetSymbol(name string) *Symbol {
 	return a.globalScope.Lookup(name)

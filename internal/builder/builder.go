@@ -165,6 +165,46 @@ func (t *typeInfoAdapter) IsNoArgFunction(name string) bool {
 	return t.analyzer.IsNoArgFunction(name)
 }
 
+// IsPublicClass returns true if the given class name is declared as public.
+func (t *typeInfoAdapter) IsPublicClass(className string) bool {
+	return t.analyzer.IsPublicClass(className)
+}
+
+// HasAccessor returns true if the given class field has a getter or setter accessor.
+func (t *typeInfoAdapter) HasAccessor(className, fieldName string) bool {
+	return t.analyzer.HasAccessor(className, fieldName)
+}
+
+// GetInterfaceMethodNames returns the method names declared in an interface.
+func (t *typeInfoAdapter) GetInterfaceMethodNames(interfaceName string) []string {
+	return t.analyzer.GetInterfaceMethodNames(interfaceName)
+}
+
+// GetAllInterfaceNames returns the names of all declared interfaces.
+func (t *typeInfoAdapter) GetAllInterfaceNames() []string {
+	return t.analyzer.GetAllInterfaceNames()
+}
+
+// GetAllModuleNames returns the names of all declared modules.
+func (t *typeInfoAdapter) GetAllModuleNames() []string {
+	return t.analyzer.GetAllModuleNames()
+}
+
+// GetModuleMethodNames returns the method names declared in a module.
+func (t *typeInfoAdapter) GetModuleMethodNames(moduleName string) []string {
+	return t.analyzer.GetModuleMethodNames(moduleName)
+}
+
+// GetConstructorParamCount returns the number of constructor parameters for a class.
+func (t *typeInfoAdapter) GetConstructorParamCount(className string) int {
+	return t.analyzer.GetConstructorParamCount(className)
+}
+
+// GetConstructorParams returns the constructor parameter names and types for a class.
+func (t *typeInfoAdapter) GetConstructorParams(className string) [][2]string {
+	return t.analyzer.GetConstructorParams(className)
+}
+
 // Styles for pretty output
 var successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 

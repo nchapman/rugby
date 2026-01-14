@@ -111,6 +111,36 @@ type TypeInfo interface {
 	// IsNoArgFunction returns true if the given name is a declared function with no parameters.
 	// This is used for implicit function calls (calling functions without parentheses).
 	IsNoArgFunction(name string) bool
+
+	// IsPublicClass returns true if the given class name is declared as public (pub class).
+	IsPublicClass(className string) bool
+
+	// HasAccessor returns true if the given class field has a getter or setter accessor.
+	// This is used to determine if a field needs underscore prefix in the struct.
+	HasAccessor(className, fieldName string) bool
+
+	// GetInterfaceMethodNames returns the method names declared in an interface.
+	// Returns nil if the interface doesn't exist.
+	GetInterfaceMethodNames(interfaceName string) []string
+
+	// GetAllInterfaceNames returns the names of all declared interfaces.
+	GetAllInterfaceNames() []string
+
+	// GetAllModuleNames returns the names of all declared modules.
+	GetAllModuleNames() []string
+
+	// GetModuleMethodNames returns the method names declared in a module.
+	// Returns nil if the module doesn't exist.
+	GetModuleMethodNames(moduleName string) []string
+
+	// GetConstructorParamCount returns the number of constructor parameters for a class.
+	// Returns 0 if the class has no constructor or doesn't exist.
+	GetConstructorParamCount(className string) int
+
+	// GetConstructorParams returns the constructor parameter names and types for a class.
+	// Returns nil if the class has no constructor or doesn't exist.
+	// Each element is a [2]string{name, type}.
+	GetConstructorParams(className string) [][2]string
 }
 
 type Generator struct {
@@ -128,16 +158,9 @@ type Generator struct {
 	currentMethodPub             bool                         // whether current method is pub (for super)
 	currentClassEmbeds           []string                     // embedded types (parent classes) of current class
 	currentClassModuleMethods    map[string]bool              // methods from included modules (need self.method() call)
-	pubClasses                   map[string]bool              // track public classes for constructor naming
-	classes                      map[string]bool              // track all class names for pointer type mapping
 	accessorFields               map[string]bool              // track which fields have accessor methods (need underscore prefix)
-	classAccessorFields          map[string]map[string]bool   // class name -> accessor field names (for subclass access)
 	modules                      map[string]*ast.ModuleDecl   // track module definitions for include
-	interfaces                   map[string]bool              // track declared interfaces for zero-value generation
-	interfaceMethods             map[string]map[string]bool   // interface name -> method names (for interface implementation)
 	currentClassInterfaceMethods map[string]bool              // methods that must be exported for current class (to satisfy interfaces)
-	classConstructorParams       map[string][]*ast.Param      // track constructor parameters for each class (for subclass delegation)
-	noArgFunctions               map[string]bool              // track no-arg top-level functions (for implicit call)
 	goInteropVars                map[string]bool              // track variables holding Go interop types
 	sourceFile                   string                       // original .rg filename for //line directives
 	emitLineDir                  bool                         // whether to emit //line directives
@@ -146,7 +169,7 @@ type Generator struct {
 	inMainFunc                   bool                         // true when generating code inside main() function
 	errors                       []error                      // collected errors during generation
 	tempVarCounter               int                          // counter for generating unique temp variable names
-	typeInfo                     TypeInfo                     // optional type info from semantic analysis
+	typeInfo                     TypeInfo                     // type info from semantic analysis (required)
 	baseClasses                  map[string]bool              // track classes that are extended by other classes
 	baseClassMethods             map[string][]string          // base class name -> method names (for lint suppression)
 	baseClassAccessors           map[string][]string          // base class name -> accessor names (for lint suppression)
@@ -213,17 +236,10 @@ func New(opts ...Option) *Generator {
 	g := &Generator{
 		vars:                         make(map[string]string),
 		imports:                      make(map[string]bool),
-		pubClasses:                   make(map[string]bool),
 		accessorFields:               make(map[string]bool),
 		currentClassModuleMethods:    make(map[string]bool),
-		classes:                      make(map[string]bool),
-		classAccessorFields:          make(map[string]map[string]bool),
 		modules:                      make(map[string]*ast.ModuleDecl),
-		interfaces:                   make(map[string]bool),
-		interfaceMethods:             make(map[string]map[string]bool),
 		currentClassInterfaceMethods: make(map[string]bool),
-		classConstructorParams:       make(map[string][]*ast.Param),
-		noArgFunctions:               make(map[string]bool),
 		goInteropVars:                make(map[string]bool),
 		baseClasses:                  make(map[string]bool),
 		baseClassMethods:             make(map[string][]string),
@@ -240,8 +256,7 @@ func New(opts ...Option) *Generator {
 // and false if it should use = (assignment). Requires typeInfo from semantic analysis.
 func (g *Generator) shouldDeclare(node ast.Node) bool {
 	if g.typeInfo == nil {
-		// Default to declaration if no type info - Go will error on redeclaration
-		return true
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
 	}
 	return g.typeInfo.IsDeclaration(node)
 }
@@ -301,18 +316,19 @@ func (g *Generator) scopedVars(vars []struct{ name, varType string }, fn func())
 
 // isAccessorField checks if a field name is an accessor field in the current class
 // or any parent class (through embedding). Accessor fields use underscore prefix
-// in Go to avoid conflict with getter/setter methods.
+// in Go to avoid conflict with getter/setter methods. Requires typeInfo from semantic analysis.
 func (g *Generator) isAccessorField(fieldName string) bool {
-	// Check current class's accessor fields
-	if g.accessorFields[fieldName] {
+	if g.typeInfo == nil {
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
+	}
+	// Check current class
+	if g.typeInfo.HasAccessor(g.currentClass, fieldName) {
 		return true
 	}
 	// Check parent classes (through embedding)
 	for _, embed := range g.currentClassEmbeds {
-		if parentAccessors, ok := g.classAccessorFields[embed]; ok {
-			if parentAccessors[fieldName] {
-				return true
-			}
+		if g.typeInfo.HasAccessor(embed, fieldName) {
+			return true
 		}
 	}
 	return false
@@ -321,36 +337,87 @@ func (g *Generator) isAccessorField(fieldName string) bool {
 // getFieldType returns the Rugby type of a class field. Requires typeInfo from semantic analysis.
 func (g *Generator) getFieldType(fieldName string) string {
 	if g.typeInfo == nil {
-		return ""
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
 	}
 	return g.typeInfo.GetFieldType(g.currentClass, fieldName)
 }
 
-// isClass checks if a type name is a declared class.
-// Uses TypeInfo when available, falls back to local classes map.
+// isClass checks if a type name is a declared class. Requires typeInfo from semantic analysis.
 func (g *Generator) isClass(typeName string) bool {
-	if g.typeInfo != nil {
-		return g.typeInfo.IsClass(typeName)
+	if g.typeInfo == nil {
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
 	}
-	return g.classes[typeName]
+	return g.typeInfo.IsClass(typeName)
 }
 
-// isInterface checks if a type name is a declared interface.
-// Uses TypeInfo when available, falls back to local interfaces map.
+// isInterface checks if a type name is a declared interface. Requires typeInfo from semantic analysis.
 func (g *Generator) isInterface(typeName string) bool {
-	if g.typeInfo != nil {
-		return g.typeInfo.IsInterface(typeName)
+	if g.typeInfo == nil {
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
 	}
-	return g.interfaces[typeName]
+	return g.typeInfo.IsInterface(typeName)
 }
 
 // isNoArgFunction checks if a name is a declared function with no parameters.
-// Uses TypeInfo when available, falls back to local noArgFunctions map.
+// Requires typeInfo from semantic analysis.
 func (g *Generator) isNoArgFunction(name string) bool {
-	if g.typeInfo != nil {
-		return g.typeInfo.IsNoArgFunction(name)
+	if g.typeInfo == nil {
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
 	}
-	return g.noArgFunctions[name]
+	return g.typeInfo.IsNoArgFunction(name)
+}
+
+// isPublicClass checks if a class name is declared as public. Requires typeInfo from semantic analysis.
+func (g *Generator) isPublicClass(className string) bool {
+	if g.typeInfo == nil {
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
+	}
+	return g.typeInfo.IsPublicClass(className)
+}
+
+// getInterfaceMethodNames returns the method names declared in an interface.
+// Requires typeInfo from semantic analysis.
+func (g *Generator) getInterfaceMethodNames(interfaceName string) []string {
+	if g.typeInfo == nil {
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
+	}
+	return g.typeInfo.GetInterfaceMethodNames(interfaceName)
+}
+
+// getConstructorParams returns the constructor parameter names and types for a class.
+// Requires typeInfo from semantic analysis.
+func (g *Generator) getConstructorParams(className string) [][2]string {
+	if g.typeInfo == nil {
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
+	}
+	return g.typeInfo.GetConstructorParams(className)
+}
+
+// getAllInterfaceNames returns the names of all declared interfaces.
+// Requires typeInfo from semantic analysis.
+func (g *Generator) getAllInterfaceNames() []string {
+	if g.typeInfo == nil {
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
+	}
+	return g.typeInfo.GetAllInterfaceNames()
+}
+
+// getAllModuleNames returns the names of all declared modules.
+// Requires typeInfo from semantic analysis.
+func (g *Generator) getAllModuleNames() []string {
+	if g.typeInfo == nil {
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
+	}
+	return g.typeInfo.GetAllModuleNames()
+}
+
+// getModuleMethodNames returns the method names declared in a module.
+// Requires typeInfo from semantic analysis.
+func (g *Generator) getModuleMethodNames(moduleName string) []string {
+	if g.typeInfo == nil {
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
+	}
+	return g.typeInfo.GetModuleMethodNames(moduleName)
 }
 
 // isOptionalType checks if a type is an optional type (ends with ?)
@@ -509,86 +576,6 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	// Check for conflict: both def main and top-level statements
 	if hasMainFunc && len(topLevelStmts) > 0 {
 		return "", fmt.Errorf("cannot mix top-level statements with 'def main'; use one or the other")
-	}
-
-	// Pre-pass: collect interface methods before generating code
-	// This ensures classes know which methods need to be exported to satisfy interfaces,
-	// even if interfaces are declared after classes in source order
-	for _, def := range definitions {
-		if iface, ok := def.(*ast.InterfaceDecl); ok {
-			if g.interfaceMethods[iface.Name] == nil {
-				g.interfaceMethods[iface.Name] = make(map[string]bool)
-			}
-			for _, method := range iface.Methods {
-				g.interfaceMethods[iface.Name][method.Name] = true
-			}
-		}
-	}
-
-	// Pre-pass: collect no-arg functions for implicit call syntax
-	// In Rugby, calling a no-arg function without parentheses is allowed (like Ruby)
-	// Only needed when semantic analysis type info is not available (fallback)
-	if g.typeInfo == nil {
-		for _, def := range definitions {
-			if fn, ok := def.(*ast.FuncDecl); ok {
-				if len(fn.Params) == 0 {
-					g.noArgFunctions[fn.Name] = true
-				}
-			}
-		}
-	}
-
-	// Pre-pass: collect class info before generating code
-	// This ensures subclasses can access parent constructor params and accessor fields,
-	// even if the parent class is declared after the subclass in source order
-	for _, def := range definitions {
-		if cls, ok := def.(*ast.ClassDecl); ok {
-			// Track class name
-			g.classes[cls.Name] = true
-			g.pubClasses[cls.Name] = cls.Pub
-
-			// Collect constructor parameters
-			for _, method := range cls.Methods {
-				if method.Name == "initialize" {
-					g.classConstructorParams[cls.Name] = method.Params
-					break
-				}
-			}
-
-			// Collect accessor fields
-			accessorFields := make(map[string]bool)
-			for _, acc := range cls.Accessors {
-				accessorFields[acc.Name] = true
-			}
-			// Also track fields that have methods with the same name
-			fieldNames := make(map[string]bool)
-			for _, f := range cls.Fields {
-				fieldNames[f.Name] = true
-			}
-			for _, acc := range cls.Accessors {
-				fieldNames[acc.Name] = true
-			}
-			for _, m := range cls.Methods {
-				if fieldNames[m.Name] {
-					accessorFields[m.Name] = true
-				}
-			}
-			g.classAccessorFields[cls.Name] = accessorFields
-		}
-	}
-
-	// Propagate accessor fields through inheritance chain
-	// This ensures multi-level inheritance works correctly
-	for _, def := range definitions {
-		if cls, ok := def.(*ast.ClassDecl); ok {
-			for _, embed := range cls.Embeds {
-				if parentAccessors, ok := g.classAccessorFields[embed]; ok {
-					for name := range parentAccessors {
-						g.classAccessorFields[cls.Name][name] = true
-					}
-				}
-			}
-		}
 	}
 
 	// Pre-pass: track base classes (classes that are extended by others)

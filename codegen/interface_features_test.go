@@ -138,6 +138,38 @@ func (t *testTypeInfo) IsNoArgFunction(name string) bool {
 	return t.analyzer.IsNoArgFunction(name)
 }
 
+func (t *testTypeInfo) IsPublicClass(className string) bool {
+	return t.analyzer.IsPublicClass(className)
+}
+
+func (t *testTypeInfo) HasAccessor(className, fieldName string) bool {
+	return t.analyzer.HasAccessor(className, fieldName)
+}
+
+func (t *testTypeInfo) GetInterfaceMethodNames(interfaceName string) []string {
+	return t.analyzer.GetInterfaceMethodNames(interfaceName)
+}
+
+func (t *testTypeInfo) GetAllInterfaceNames() []string {
+	return t.analyzer.GetAllInterfaceNames()
+}
+
+func (t *testTypeInfo) GetAllModuleNames() []string {
+	return t.analyzer.GetAllModuleNames()
+}
+
+func (t *testTypeInfo) GetModuleMethodNames(moduleName string) []string {
+	return t.analyzer.GetModuleMethodNames(moduleName)
+}
+
+func (t *testTypeInfo) GetConstructorParamCount(className string) int {
+	return t.analyzer.GetConstructorParamCount(className)
+}
+
+func (t *testTypeInfo) GetConstructorParams(className string) [][2]string {
+	return t.analyzer.GetConstructorParams(className)
+}
+
 // compileWithTypeInfo runs the full compilation pipeline.
 // It ignores semantic errors since some tests use constructs not known to semantic analyzer.
 func compileWithTypeInfo(t *testing.T, input string) string {

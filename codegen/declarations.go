@@ -134,14 +134,6 @@ func (g *Generator) genModuleDecl(mod *ast.ModuleDecl) {
 		return
 	}
 
-	// Track module interface methods for PascalCase conversion at call sites
-	if g.interfaceMethods[mod.Name] == nil {
-		g.interfaceMethods[mod.Name] = make(map[string]bool)
-	}
-	for _, method := range mod.Methods {
-		g.interfaceMethods[mod.Name][method.Name] = true
-	}
-
 	// Interface name is the module name (they're in separate namespaces in Rugby)
 	g.buf.WriteString(fmt.Sprintf("type %s interface {\n", mod.Name))
 
@@ -190,8 +182,6 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	className := cls.Name
 	g.currentClass = className
 	g.currentClassEmbeds = cls.Embeds
-	g.pubClasses[className] = cls.Pub
-	g.classes[className] = true           // Track all class names for pointer type mapping
 	clear(g.currentClassModuleMethods)    // Reset for new class
 	clear(g.currentClassInterfaceMethods) // Reset for new class
 
@@ -200,8 +190,14 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	// so any class method that could satisfy an interface must also be exported.
 	// This enables Go-style duck typing where classes can satisfy interfaces
 	// without explicit 'implements' declarations.
-	for _, methods := range g.interfaceMethods {
-		for methodName := range methods {
+	for _, ifaceName := range g.getAllInterfaceNames() {
+		for _, methodName := range g.getInterfaceMethodNames(ifaceName) {
+			g.currentClassInterfaceMethods[methodName] = true
+		}
+	}
+	// Also include module methods (modules generate Go interfaces)
+	for _, modName := range g.getAllModuleNames() {
+		for _, methodName := range g.getModuleMethodNames(modName) {
 			g.currentClassInterfaceMethods[methodName] = true
 		}
 	}
@@ -321,12 +317,6 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		}
 	}
 
-	// Store accessor fields globally for subclass access
-	g.classAccessorFields[className] = make(map[string]bool)
-	for name := range g.accessorFields {
-		g.classAccessorFields[className][name] = true
-	}
-
 	// Emit struct definition
 	// Class names are already PascalCase by convention; pub affects field/method visibility
 	// Accessor fields use underscore prefix (e.g., _name) to avoid Go field/method name conflict
@@ -341,7 +331,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		for _, field := range allFields {
 			// Use underscore prefix for accessor fields to avoid conflict with getter/setter methods
 			goFieldName := field.Name
-			if g.accessorFields[field.Name] {
+			if g.isAccessorField(field.Name) {
 				goFieldName = "_" + field.Name
 			}
 			if field.Type != "" {
@@ -475,17 +465,6 @@ func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, 
 }
 
 func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
-	// Track this interface for zero-value generation
-	g.interfaces[iface.Name] = true
-
-	// Track interface methods for structural typing
-	if g.interfaceMethods[iface.Name] == nil {
-		g.interfaceMethods[iface.Name] = make(map[string]bool)
-	}
-	for _, method := range iface.Methods {
-		g.interfaceMethods[iface.Name][method.Name] = true
-	}
-
 	// Generate: type InterfaceName interface { ... }
 	g.buf.WriteString(fmt.Sprintf("type %s interface {\n", iface.Name))
 
@@ -543,9 +522,6 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 	g.currentMethod = "initialize"
 	defer func() { g.currentMethod = previousMethod }()
 
-	// Store constructor parameters for subclass delegation
-	g.classConstructorParams[className] = method.Params
-
 	// Separate promoted parameters (@field : Type) from regular parameters
 	var promotedParams []struct {
 		fieldName string
@@ -602,7 +578,7 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 	for _, promoted := range promotedParams {
 		// Use underscore prefix for accessor fields
 		goFieldName := promoted.fieldName
-		if g.accessorFields[promoted.fieldName] {
+		if g.isAccessorField(promoted.fieldName) {
 			goFieldName = "_" + promoted.fieldName
 		}
 		g.buf.WriteString(fmt.Sprintf("\t%s.%s = %s\n", recv, goFieldName, promoted.paramName))
@@ -631,8 +607,8 @@ func (g *Generator) genSubclassConstructor(className, parentClass string, pub bo
 		return
 	}
 
-	// Look up parent constructor parameters (collected in pre-pass)
-	parentParams := g.classConstructorParams[parentClass]
+	// Look up parent constructor parameters via TypeInfo
+	parentParams := g.getConstructorParams(parentClass)
 
 	// Constructor name: newClassName (private) or NewClassName (pub)
 	constructorName := "new" + className
@@ -642,7 +618,7 @@ func (g *Generator) genSubclassConstructor(className, parentClass string, pub bo
 
 	// Parent constructor name
 	parentConstructorName := "new" + parentClass
-	if g.pubClasses[parentClass] {
+	if g.isPublicClass(parentClass) {
 		parentConstructorName = "New" + parentClass
 	}
 
@@ -655,12 +631,13 @@ func (g *Generator) genSubclassConstructor(className, parentClass string, pub bo
 			g.buf.WriteString(", ")
 		}
 		// Use field name (without @) for promoted parameters
-		paramName := param.Name
+		paramName := param[0]
 		if len(paramName) > 0 && paramName[0] == '@' {
 			paramName = paramName[1:]
 		}
-		if param.Type != "" {
-			g.buf.WriteString(fmt.Sprintf("%s %s", paramName, mapType(param.Type)))
+		paramType := param[1]
+		if paramType != "" {
+			g.buf.WriteString(fmt.Sprintf("%s %s", paramName, mapType(paramType)))
 		} else {
 			g.buf.WriteString(fmt.Sprintf("%s any", paramName))
 		}
@@ -677,7 +654,7 @@ func (g *Generator) genSubclassConstructor(className, parentClass string, pub bo
 		if i > 0 {
 			g.buf.WriteString(", ")
 		}
-		paramName := param.Name
+		paramName := param[0]
 		if len(paramName) > 0 && paramName[0] == '@' {
 			paramName = paramName[1:]
 		}

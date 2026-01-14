@@ -205,7 +205,7 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 		recv := receiverName(g.currentClass)
 		// Use underscore prefix for accessor fields to match struct definition
 		goFieldName := s.Name
-		if g.accessorFields[s.Name] {
+		if g.isAccessorField(s.Name) {
 			goFieldName = "_" + s.Name
 		}
 		g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, goFieldName))
@@ -420,7 +420,7 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 	recv := receiverName(g.currentClass)
 	// Use underscore prefix for accessor fields to match struct definition
 	goFieldName := s.Name
-	if g.accessorFields[s.Name] {
+	if g.isAccessorField(s.Name) {
 		goFieldName = "_" + s.Name
 	}
 	field := fmt.Sprintf("%s.%s", recv, goFieldName)
@@ -477,7 +477,7 @@ func (g *Generator) genInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAssig
 	recv := receiverName(g.currentClass)
 	// Use underscore prefix for accessor fields to match struct definition
 	goFieldName := s.Name
-	if g.accessorFields[s.Name] {
+	if g.isAccessorField(s.Name) {
 		goFieldName = "_" + s.Name
 	}
 	field := fmt.Sprintf("%s.%s", recv, goFieldName)
@@ -501,7 +501,7 @@ func (g *Generator) genSelectorAssignStmt(s *ast.SelectorAssignStmt) {
 
 	// Check if receiver is an instance of a pub class
 	receiverClassName := g.getReceiverClassName(s.Object)
-	isPubClass := g.pubClasses[receiverClassName]
+	isPubClass := g.isPublicClass(receiverClassName)
 
 	// Generate: obj.setField(value) or obj.SetField(value)
 	g.genExpr(s.Object)

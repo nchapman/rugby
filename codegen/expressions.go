@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/nchapman/rugby/ast"
@@ -156,7 +157,7 @@ func (g *Generator) genSuperExpr(e *ast.SuperExpr) {
 		// Determine parent constructor name based on visibility
 		// For now, assume parent constructor has same visibility as parent class
 		constructorName := "new" + parentClass
-		if g.pubClasses[parentClass] {
+		if g.isPublicClass(parentClass) {
 			constructorName = "New" + parentClass
 		}
 		g.buf.WriteString(fmt.Sprintf("%s.%s = *%s(", recv, parentClass, constructorName))
@@ -927,7 +928,7 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			// (errors.new should become errors.New, not newerrors)
 			if ident, ok := fn.X.(*ast.Ident); ok && !g.imports[ident.Name] {
 				var ctorName string
-				if g.pubClasses[ident.Name] {
+				if g.isPublicClass(ident.Name) {
 					ctorName = fmt.Sprintf("New%s", ident.Name)
 				} else {
 					ctorName = fmt.Sprintf("new%s", ident.Name)
@@ -2025,7 +2026,7 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 	// Check if receiver is an instance of a pub class
 	// Pub class methods use PascalCase
 	receiverClassName := g.getReceiverClassName(sel.X)
-	isPubClass := g.pubClasses[receiverClassName]
+	isPubClass := g.isPublicClass(receiverClassName)
 
 	g.genExpr(sel.X)
 	g.buf.WriteString(".")
@@ -2113,8 +2114,15 @@ func (g *Generator) isGoInteropCall(expr ast.Expression) bool {
 // isInterfaceMethod checks if a method name matches any interface method in the program.
 // This is used to determine whether to use PascalCase (for interface methods) or camelCase.
 func (g *Generator) isInterfaceMethod(methodName string) bool {
-	for _, methods := range g.interfaceMethods {
-		if methods[methodName] {
+	// Check explicit interfaces
+	for _, ifaceName := range g.getAllInterfaceNames() {
+		if slices.Contains(g.getInterfaceMethodNames(ifaceName), methodName) {
+			return true
+		}
+	}
+	// Check module-generated interfaces
+	for _, modName := range g.getAllModuleNames() {
+		if slices.Contains(g.getModuleMethodNames(modName), methodName) {
 			return true
 		}
 	}

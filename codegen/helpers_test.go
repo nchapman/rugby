@@ -303,3 +303,35 @@ func (t *testTypeInfoAdapter) IsInterface(typeName string) bool {
 func (t *testTypeInfoAdapter) IsNoArgFunction(name string) bool {
 	return t.analyzer.IsNoArgFunction(name)
 }
+
+func (t *testTypeInfoAdapter) IsPublicClass(className string) bool {
+	return t.analyzer.IsPublicClass(className)
+}
+
+func (t *testTypeInfoAdapter) HasAccessor(className, fieldName string) bool {
+	return t.analyzer.HasAccessor(className, fieldName)
+}
+
+func (t *testTypeInfoAdapter) GetInterfaceMethodNames(interfaceName string) []string {
+	return t.analyzer.GetInterfaceMethodNames(interfaceName)
+}
+
+func (t *testTypeInfoAdapter) GetAllInterfaceNames() []string {
+	return t.analyzer.GetAllInterfaceNames()
+}
+
+func (t *testTypeInfoAdapter) GetAllModuleNames() []string {
+	return t.analyzer.GetAllModuleNames()
+}
+
+func (t *testTypeInfoAdapter) GetModuleMethodNames(moduleName string) []string {
+	return t.analyzer.GetModuleMethodNames(moduleName)
+}
+
+func (t *testTypeInfoAdapter) GetConstructorParamCount(className string) int {
+	return t.analyzer.GetConstructorParamCount(className)
+}
+
+func (t *testTypeInfoAdapter) GetConstructorParams(className string) [][2]string {
+	return t.analyzer.GetConstructorParams(className)
+}
