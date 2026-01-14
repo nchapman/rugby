@@ -336,6 +336,7 @@ func (r *RescueExpr) exprNode() {}
 type NilCoalesceExpr struct {
 	Left  Expression // optional expression (T?)
 	Right Expression // default value (T)
+	Line  int        // source line number (1-indexed)
 }
 
 func (n *NilCoalesceExpr) node()     {}

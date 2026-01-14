@@ -346,12 +346,12 @@ func (p *Parser) parseTernaryExpr(condition ast.Expression) ast.Expression {
 // parseNilCoalesceExpr parses the nil coalescing operator: expr ?? default
 // Returns the value if present, otherwise the default
 func (p *Parser) parseNilCoalesceExpr(left ast.Expression) ast.Expression {
-	// curToken is '??'
+	line := p.curToken.Line
 	precedence := p.curPrecedence()
 	p.nextToken()
 	right := p.parseExpression(precedence)
 
-	return &ast.NilCoalesceExpr{Left: left, Right: right}
+	return &ast.NilCoalesceExpr{Left: left, Right: right, Line: line}
 }
 
 // parseSafeNavExpr parses the safe navigation operator: expr&.method

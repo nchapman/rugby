@@ -1922,6 +1922,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				Expected: &Type{Kind: TypeOptional},
 				Got:      leftType,
 				Context:  "nil coalesce left side",
+				Line:     e.Line,
 			})
 		}
 
@@ -1936,6 +1937,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 						Expected: unwrappedType,
 						Got:      rightType,
 						Context:  "nil coalesce default value",
+						Line:     e.Line,
 					})
 				}
 			}
@@ -2077,8 +2079,12 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 	case *ast.SpawnExpr:
 		if e.Block != nil {
 			a.analyzeBlock(e.Block)
+			// Infer the Task element type from the block's return type
+			blockReturnType := a.inferBlockReturnType(e.Block)
+			typ = NewTaskType(blockReturnType)
+		} else {
+			typ = NewTaskType(TypeUnknownVal)
 		}
-		typ = NewTaskType(TypeUnknownVal) // TODO: infer from block return type
 
 	case *ast.AwaitExpr:
 		taskType := a.analyzeExpr(e.Task)
@@ -2220,6 +2226,12 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 			if receiverType.Kind == TypeOptional && sel.Sel == "map" && call.Block != nil {
 				blockReturnType := a.inferBlockReturnType(call.Block)
 				return NewOptionalType(blockReturnType)
+			}
+
+			// Special handling for array.map { } - return type is Array[BlockReturnType]
+			if receiverType.Kind == TypeArray && sel.Sel == "map" && call.Block != nil {
+				blockReturnType := a.inferBlockReturnType(call.Block)
+				return NewArrayType(blockReturnType)
 			}
 
 			// Return method's return type
@@ -2762,25 +2774,58 @@ func (a *Analyzer) findSimilar(name string) []string {
 }
 
 // isSimilar checks if two names are similar (for suggestions).
+// Uses Levenshtein distance with a threshold based on name length.
 func isSimilar(a, b string) bool {
 	if a == b {
 		return false
 	}
-	// Simple heuristic: same length and differ by 1-2 characters
-	if len(a) == len(b) {
-		diff := 0
-		for i := range a {
-			if a[i] != b[i] {
-				diff++
+
+	// Calculate Levenshtein distance
+	dist := levenshtein(a, b)
+
+	// Threshold: allow up to ~30% of the longer name to be different
+	// But at least 1 edit for short names, at most 3 for long names
+	maxLen := max(len(a), len(b))
+	threshold := min(max(maxLen/3, 1), 3)
+
+	return dist <= threshold
+}
+
+// levenshtein calculates the Levenshtein distance between two strings.
+func levenshtein(a, b string) int {
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+
+	// Create matrix
+	matrix := make([][]int, len(a)+1)
+	for i := range matrix {
+		matrix[i] = make([]int, len(b)+1)
+		matrix[i][0] = i
+	}
+	for j := 0; j <= len(b); j++ {
+		matrix[0][j] = j
+	}
+
+	// Fill in the matrix
+	for i := 1; i <= len(a); i++ {
+		for j := 1; j <= len(b); j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
 			}
+			matrix[i][j] = min(
+				matrix[i-1][j]+1,      // deletion
+				matrix[i][j-1]+1,      // insertion
+				matrix[i-1][j-1]+cost, // substitution
+			)
 		}
-		return diff <= 2
 	}
-	// Or one is a prefix of the other
-	if strings.HasPrefix(a, b) || strings.HasPrefix(b, a) {
-		return true
-	}
-	return false
+
+	return matrix[len(a)][len(b)]
 }
 
 // Helper methods
