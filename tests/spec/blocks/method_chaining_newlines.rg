@@ -1,8 +1,15 @@
-#@ compile-fail
+#@ run-pass
+#@ check-output
 #
-# BUG-038: Method chaining with newlines
-# Method chaining that spans multiple lines should work but fails to parse
+# Test that method chaining works with newlines
 
 result = [1, 2, 3, 4, 5, 6]
-  .select { |n| n.even? }  #~ expected 'end'
+  .select { |n| n.even? }
   .map { |n| n * 10 }
+
+result.each { |n| puts n }
+
+#@ expect:
+# 20
+# 40
+# 60
