@@ -19,10 +19,16 @@ puts words[1]
 # Array methods
 puts nums.length
 
+# First and last
+puts nums.first
+puts nums.last
+
 #@ expect:
 # 1
 # 2
 # 3
 # 3
 # two
+# 3
+# 1
 # 3

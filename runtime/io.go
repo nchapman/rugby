@@ -6,30 +6,51 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
+	"reflect"
 	"time"
 )
 
 // stdinScanner is reused across Gets() calls to avoid losing buffered input.
 var stdinScanner = bufio.NewScanner(os.Stdin)
 
+// deref dereferences a pointer value for printing.
+// Returns the dereferenced value, or nil if the pointer is nil.
+// Non-pointer values are returned unchanged.
+func deref(v any) any {
+	if v == nil {
+		return nil
+	}
+	rv := reflect.ValueOf(v)
+	if rv.Kind() == reflect.Ptr {
+		if rv.IsNil() {
+			return nil
+		}
+		return rv.Elem().Interface()
+	}
+	return v
+}
+
 // Puts prints values to stdout, each followed by a newline.
+// Automatically dereferences pointers (from first/last/etc) for clean output.
 // Ruby: puts
 func Puts(args ...any) {
 	for _, arg := range args {
-		fmt.Println(arg)
+		fmt.Println(deref(arg))
 	}
 }
 
 // Print prints values to stdout without a trailing newline.
+// Automatically dereferences pointers for clean output.
 // Ruby: print
 func Print(args ...any) {
 	for _, arg := range args {
-		fmt.Print(arg)
+		fmt.Print(deref(arg))
 	}
 }
 
 // P prints values with debug formatting (like Ruby's p).
 // Shows type information and quotes strings.
+// Unlike Puts/Print, does NOT dereference pointers - showing the type is useful for debugging.
 // Ruby: p value
 func P(args ...any) {
 	for i, arg := range args {
