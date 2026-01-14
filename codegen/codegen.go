@@ -129,6 +129,9 @@ type Generator struct {
 	errors                       []error                    // collected errors during generation
 	tempVarCounter               int                        // counter for generating unique temp variable names
 	typeInfo                     TypeInfo                   // optional type info from semantic analysis
+	baseClasses                  map[string]bool            // track classes that are extended by other classes
+	baseClassMethods             map[string][]string        // base class name -> method names (for lint suppression)
+	baseClassAccessors           map[string][]string        // base class name -> accessor names (for lint suppression)
 }
 
 // addError records an error during code generation
@@ -204,6 +207,9 @@ func New(opts ...Option) *Generator {
 		classConstructorParams:       make(map[string][]*ast.Param),
 		noArgFunctions:               make(map[string]bool),
 		goInteropVars:                make(map[string]bool),
+		baseClasses:                  make(map[string]bool),
+		baseClassMethods:             make(map[string][]string),
+		baseClassAccessors:           make(map[string][]string),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -544,6 +550,39 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 				if parentAccessors, ok := g.classAccessorFields[embed]; ok {
 					for name := range parentAccessors {
 						g.classAccessorFields[cls.Name][name] = true
+					}
+				}
+			}
+		}
+	}
+
+	// Pre-pass: track base classes (classes that are extended by others)
+	// This is used to generate method reference assertions that suppress
+	// "unused method" lint warnings for methods in base classes that are
+	// shadowed by subclasses.
+	for _, def := range definitions {
+		if cls, ok := def.(*ast.ClassDecl); ok {
+			for _, embed := range cls.Embeds {
+				g.baseClasses[embed] = true
+			}
+		}
+	}
+
+	// Pre-pass: collect methods and accessors for base classes
+	// These are used to generate var _ = (*BaseClass).methodName assertions
+	for _, def := range definitions {
+		if cls, ok := def.(*ast.ClassDecl); ok {
+			if g.baseClasses[cls.Name] {
+				// Collect method names (skip initialize - it's the constructor)
+				for _, m := range cls.Methods {
+					if m.Name != "initialize" {
+						g.baseClassMethods[cls.Name] = append(g.baseClassMethods[cls.Name], m.Name)
+					}
+				}
+				// Collect accessor names (getters generate methods that may be shadowed)
+				for _, acc := range cls.Accessors {
+					if acc.Kind == "getter" || acc.Kind == "property" {
+						g.baseClassAccessors[cls.Name] = append(g.baseClassAccessors[cls.Name], acc.Name)
 					}
 				}
 			}

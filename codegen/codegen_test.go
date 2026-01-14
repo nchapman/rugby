@@ -4780,6 +4780,67 @@ end`
 	}
 }
 
+func TestBaseClassMethodReferenceAssertions(t *testing.T) {
+	// Tests that base classes (classes that are extended) generate method reference
+	// assertions to suppress "unused method" lint warnings for shadowed methods
+	input := `
+class Animal
+  getter name : String
+  def initialize(@name : String)
+  end
+  def speak -> String
+    "..."
+  end
+end
+
+class Cat < Animal
+  def speak -> String
+    "Meow!"
+  end
+end
+
+def main
+  cat = Cat.new("Whiskers")
+end
+`
+
+	output := compile(t, input)
+
+	// Should have method reference assertions for Animal's methods
+	assertContains(t, output, "var _ = (*Animal).speak")
+	assertContains(t, output, "var _ = (*Animal).name")
+}
+
+func TestBaseClassWithPubMethods(t *testing.T) {
+	// Tests that pub base classes generate PascalCase method references
+	input := `
+pub class Animal
+  getter name : String
+  def initialize(@name : String)
+  end
+  pub def speak -> String
+    "..."
+  end
+end
+
+pub class Cat < Animal
+  pub def speak -> String
+    "Meow!"
+  end
+end
+
+def main
+  cat = Cat.new("Whiskers")
+end
+`
+
+	output := compile(t, input)
+
+	// Should have PascalCase method reference assertions for pub class
+	assertContains(t, output, "var _ = (*Animal).Speak")
+	assertContains(t, output, "var _ = (*Animal).Name")
+}
+
 func TestSymbolKeyShorthandCodegen(t *testing.T) {
 	input := `def main
   m = {name: "Alice", age: 30}

@@ -23,25 +23,25 @@ func allExamples() []example {
 		{file: "01_hello.rg", expectedOutput: "Hello, Rugby!\nHello, World!\n2 + 3 = 5\nUppercase: HELLO\n"},
 		{file: "02_types.rg", hasBugs: true}, // inline type annotation, empty typed arrays
 		{file: "03_control_flow.rg", expectedOutput: "Grade: B\nNot empty!\nPositive\nNot zero\nMax: 5\nOK\nWeekend\nNice\nIt's a string: hello\nIt's an int: 42\nIt's a float: 3.14\n"},
-		{file: "04_loops.rg"},                    // predicate methods now work
-		{file: "05_functions.rg"},                // optional return types now work
-		{file: "06_classes.rg", hasBugs: true},   // lint: unused base class methods
-		{file: "07_interfaces.rg"},               // interface structural typing works
-		{file: "08_modules.rg"},                  // modules now generate interfaces for lint compliance
-		{file: "09_blocks.rg", hasBugs: true},    // method chaining with newlines
-		{file: "10_optionals.rg"},                // safe navigation and unwrap fixed
-		{file: "11_errors.rg"},                   // errors.new now works
-		{file: "12_strings.rg"},                  // string methods work
-		{file: "13_ranges.rg"},                   // range methods work
+		{file: "04_loops.rg"},                 // predicate methods now work
+		{file: "05_functions.rg"},             // optional return types now work
+		{file: "06_classes.rg"},               // base class lint suppression now works
+		{file: "07_interfaces.rg"},            // interface structural typing works
+		{file: "08_modules.rg"},               // modules now generate interfaces for lint compliance
+		{file: "09_blocks.rg", hasBugs: true}, // method chaining with newlines
+		{file: "10_optionals.rg"},             // safe navigation and unwrap fixed
+		{file: "11_errors.rg"},                // errors.new now works
+		{file: "12_strings.rg"},               // string methods work
+		{file: "13_ranges.rg"},                // range methods work
 		{file: "14_go_interop.rg", expectedOutput: "Upper: HELLO WORLD\nContains 'world': true\nSplit: [hello world]\nJoined: one-two-three\nReplaced: hello Rugby\nInt to string: 42\nString to int: 123\nName: Alice, Age: 30\nStarting cleanup demo\nMiddle of function\nEnd of function body\nDeferred: runs last\n"},
 		{file: "15_concurrency.rg", skipRun: true}, // output is non-deterministic due to goroutines
 
 		// Additional examples
 		{file: "fizzbuzz.rg", expectedOutput: "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n"},
 		{file: "field_inference.rg", expectedOutput: "I'm Alice, email: alice@example.com, role: admin\nI'm Alice, email: alice.new@example.com, role: admin\n"},
-		{file: "json_simple.rg"},                // rugby/json stdlib works
-		{file: "worker_pool.rg"},                 // channel receive type tracking fixed
-		{file: "todo_app.rg", hasBugs: true},    // map literal parsing in method body
+		{file: "json_simple.rg"},             // rugby/json stdlib works
+		{file: "worker_pool.rg"},             // channel receive type tracking fixed
+		{file: "todo_app.rg", hasBugs: true}, // map literal parsing in method body
 
 		// HTTP + JSON (needs network, has bugs too)
 		{file: "http_json.rg", skipRun: true}, // needs network, resp.json and interface indexing fixed

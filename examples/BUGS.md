@@ -17,11 +17,11 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 03_control_flow.rg | PASS | None |
 | 04_loops.rg | PASS | Predicate methods on arrays now work |
 | 05_functions.rg | PASS | Optional return types now work |
-| 06_classes.rg | FAIL | Self return, method chaining |
+| 06_classes.rg | PASS | Self return, method chaining, base class lint all fixed |
 | 07_interfaces.rg | PASS | Interface structural typing now works |
 | 08_modules.rg | PASS | Modules generate interfaces for lint compliance |
 | 09_blocks.rg | FAIL | Method chaining with newlines |
-| 10_optionals.rg | FAIL | Safe navigation on getters, unwrap |
+| 10_optionals.rg | PASS | Safe navigation, unwrap, and all optional features work |
 | 11_errors.rg | PASS | errors.new now works |
 | 12_strings.rg | PASS | String methods now work |
 | 13_ranges.rg | PASS | Range methods on variables now work |
@@ -47,19 +47,6 @@ empty_nums : Array[Int] = []        # type mismatch: expected Array[Int], got Ar
 empty_strs = [] : Array[String]     # undefined: 'Array'
 ```
 
-### BUG-037: Self return and method chaining
-**File:** 06_classes.rg
-
-Methods that return `self` for chaining don't work correctly:
-```ruby
-def inc
-  @count += 1
-  self  # return self for chaining
-end
-
-counter.inc.inc.inc  # counter.Inc() (no value) used as value
-```
-
 ### BUG-038: Method chaining with newlines
 **File:** 09_blocks.rg
 
@@ -71,24 +58,6 @@ result = [1, 2, 3, 4, 5, 6]
 ```
 
 The parser sees `.select` and thinks it's a `select` statement.
-
-### BUG-039: Safe navigation on getter methods
-**File:** 10_optionals.rg
-
-Safe navigation (`&.`) on properties defined with `getter` fails:
-```ruby
-city1 = user_with_addr.address&.city ?? "Unknown"
-# invalid operation: cannot call user_with_addr.address() (value of type *Address)
-```
-
-### BUG-040: unwrap on optionals
-**File:** 10_optionals.rg
-
-The `unwrap` method on optionals doesn't work correctly:
-```ruby
-known = find_user(1).unwrap
-# invalid operation: _nc5 != nil (mismatched types OptionalResult and untyped nil)
-```
 
 ### BUG-046: Map literal in method body
 **File:** todo_app.rg
@@ -124,6 +93,18 @@ post["title"]  # cannot index post (variable of interface type any)
 ---
 
 ## Fixed Bugs
+
+### ~~BUG-051: Unused base class methods (lint)~~ FIXED
+Base classes now generate method reference assertions (`var _ = (*ClassName).methodName`) for all their methods. This suppresses "unused method" lint warnings for methods that are shadowed (overridden) by subclasses, while still allowing the methods to be called when needed.
+
+### ~~BUG-040: unwrap on optionals~~ FIXED
+The `unwrap` method on optionals now works correctly. The codegen generates proper type-specific unwrap calls that handle the optional's internal representation correctly.
+
+### ~~BUG-039: Safe navigation on getter methods~~ FIXED
+Safe navigation (`&.`) on properties defined with `getter` now works correctly. The semantic analyzer properly tracks getter return types, and the codegen correctly generates method calls instead of field access.
+
+### ~~BUG-037: Self return and method chaining~~ FIXED
+Methods that return `self` for chaining now work correctly. The codegen detects when a method's last expression is `self` and generates the appropriate return type and return statement.
 
 ### ~~BUG-050: Getter access on channel receive results~~ FIXED
 The semantic analyzer now properly tracks the return type of `Chan[T].new(size)` constructors. When receiving from a channel, the element type is correctly propagated to the receiving variable, enabling getter methods to be recognized and called correctly.
@@ -258,8 +239,8 @@ Calling `errors.new(...)` now correctly generates `errors.New(...)`. The codegen
 
 ## Statistics
 
-- **Passing:** 13 examples
-- **Failing:** 8 examples
-- **Active bugs:** 11
-- **Fixed bugs:** 40
+- **Passing:** 17 examples
+- **Failing:** 4 examples
+- **Active bugs:** 5
+- **Fixed bugs:** 45
 - **Total examples:** 21

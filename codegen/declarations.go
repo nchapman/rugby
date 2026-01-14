@@ -406,6 +406,35 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		g.buf.WriteString("\n")
 	}
 
+	// Emit method reference assertions for base classes
+	// This suppresses "unused method" lint warnings for base class methods
+	// that are shadowed (overridden) by subclasses. Format: var _ = (*ClassName).methodName
+	if g.baseClasses[className] {
+		// Reference methods
+		for _, methodName := range g.baseClassMethods[className] {
+			var goMethodName string
+			if cls.Pub {
+				goMethodName = snakeToPascalWithAcronyms(methodName)
+			} else {
+				goMethodName = snakeToCamelWithAcronyms(methodName)
+			}
+			g.buf.WriteString(fmt.Sprintf("var _ = (*%s).%s\n", className, goMethodName))
+		}
+		// Reference accessor methods (getters)
+		for _, accName := range g.baseClassAccessors[className] {
+			var goMethodName string
+			if cls.Pub {
+				goMethodName = snakeToPascalWithAcronyms(accName)
+			} else {
+				goMethodName = snakeToCamelWithAcronyms(accName)
+			}
+			g.buf.WriteString(fmt.Sprintf("var _ = (*%s).%s\n", className, goMethodName))
+		}
+		if len(g.baseClassMethods[className]) > 0 || len(g.baseClassAccessors[className]) > 0 {
+			g.buf.WriteString("\n")
+		}
+	}
+
 	g.currentClass = ""
 	g.currentClassEmbeds = nil
 	clear(g.classFields)
