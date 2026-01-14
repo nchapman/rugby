@@ -199,8 +199,8 @@ Currently `codegen/codegen.go` Generator struct has 35+ fields mixing:
 
 | Issue | Description | Priority |
 |-------|-------------|----------|
-| Module accessor inheritance | `HasAccessor()` doesn't return true for fields from included modules. Semantic analyzer should propagate module accessors to classes. | High |
-| Module method origin | Add `IsModuleMethod(className, methodName)` to TypeInfo. Currently tracked in `g.currentClassModuleMethods`. | Medium |
+| ~~Module accessor inheritance~~ | ~~`HasAccessor()` doesn't return true for fields from included modules.~~ | ✅ Done |
+| ~~Module method origin~~ | ~~Add `IsModuleMethod(className, methodName)` to TypeInfo.~~ | ✅ Done |
 | Variable type queries | `g.vars` used for type lookups in 50+ places. Many could use `TypeInfo.GetGoType()` instead. | Low |
 | Go interop tracking | `g.goInteropVars` tracks variables assigned from Go calls. Complex to move - runtime dependent. | Low |
 
@@ -208,7 +208,7 @@ Currently `codegen/codegen.go` Generator struct has 35+ fields mixing:
 - `g.vars` for scoped variable tracking via `scopedVar()`/`scopedVars()`
 - `g.classMethods` for generated Go function name mapping
 - `g.modules` for module AST access during include processing
-- `g.accessorFields` for current class (but should use TypeInfo once module inheritance fixed)
+- `g.accessorFields` for current class field tracking
 
 **Test infrastructure:**
 Consolidated test helpers into `codegen/helpers_test.go`:
@@ -224,8 +224,8 @@ Consolidated test helpers into `codegen/helpers_test.go`:
 - [x] Field inheritance propagation (getters/setters)
 - [x] Track variable usage for unused variable detection
 - [x] Resolve selector kinds (field/method/getter)
-- [ ] Module accessor inheritance (propagate module accessors to including classes)
-- [ ] Track module method origin (which methods come from included modules)
+- [x] Module accessor inheritance (propagate module accessors to including classes)
+- [x] Track module method origin (which methods come from included modules)
 - [ ] Complete type inference for all expressions
 - [ ] Validate interface satisfaction at analysis time
 - [ ] Better error messages with source context
