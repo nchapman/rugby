@@ -58,7 +58,33 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 
 	// Infix parsing
 infixLoop:
-	for !p.peekTokenIs(token.NEWLINE) && !p.peekTokenIs(token.EOF) && precedence < p.peekPrecedence() {
+	for {
+		// Check for newline-continued method chaining: expr\n.method()
+		// This allows multi-line method chains like:
+		//   array
+		//     .select { |n| n.even? }
+		//     .map { |n| n * 2 }
+		if p.peekTokenIs(token.NEWLINE) {
+			if p.peekAheadIsDotAfterNewlines() {
+				// Advance past the newline(s) to reach the DOT
+				p.nextToken() // curToken is now NEWLINE
+				p.skipNewlines()
+				// curToken is now DOT or AMPDOT, parse it
+				if p.curTokenIs(token.DOT) {
+					left = p.parseSelectorExpr(left)
+					continue
+				}
+				if p.curTokenIs(token.AMPDOT) {
+					left = p.parseSafeNavExpr(left)
+					continue
+				}
+			}
+			break infixLoop
+		}
+		if p.peekTokenIs(token.EOF) || precedence >= p.peekPrecedence() {
+			break infixLoop
+		}
+
 		// Check for command syntax before processing infix operators
 		// This handles cases like `foo -1` (command) vs `foo - 1` (binary)
 		if p.isCallableExpr(left) && p.looksLikeCommandArg() {

@@ -97,6 +97,11 @@ func (p *Parser) parseInterpolatedString(value string) ast.Expression {
 		exprParser := New(exprLexer)
 		expr := exprParser.parseExpression(lowest)
 
+		// Check for block after expression (e.g., nums.map { |n| n * 2 })
+		if expr != nil && (exprParser.peekTokenIs(token.DO) || exprParser.peekTokenIs(token.LBRACE)) {
+			expr = exprParser.parseBlockCall(expr)
+		}
+
 		if len(exprParser.errors) > 0 {
 			p.errors = append(p.errors, exprParser.errors...)
 			return &ast.StringLit{Value: value}

@@ -2053,3 +2053,91 @@ end`
 		t.Error("expected at least 1 part")
 	}
 }
+
+func TestMultilineMethodChaining(t *testing.T) {
+	input := `def main
+  result = [1, 2, 3]
+    .select { |n| n > 1 }
+    .map { |n| n * 2 }
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assign, ok := decl.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", decl.Body[0])
+	}
+	// The final expression should be a CallExpr (map with block)
+	call, ok := assign.Value.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", assign.Value)
+	}
+	if call.Block == nil {
+		t.Error("expected CallExpr to have a block")
+	}
+	// The function should be a SelectorExpr (.map)
+	sel, ok := call.Func.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected SelectorExpr for call function, got %T", call.Func)
+	}
+	if sel.Sel != "map" {
+		t.Errorf("expected selector 'map', got %q", sel.Sel)
+	}
+	// The receiver should be another CallExpr (.select with block)
+	innerCall, ok := sel.X.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected inner CallExpr, got %T", sel.X)
+	}
+	if innerCall.Block == nil {
+		t.Error("expected inner CallExpr to have a block")
+	}
+}
+
+func TestStringInterpolationWithBlock(t *testing.T) {
+	input := `def main
+  nums = [1, 2, 3]
+  puts "Doubled: #{nums.map { |n| n * 2 }}"
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	// Second statement is the puts call
+	exprStmt, ok := decl.Body[1].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt for puts, got %T", decl.Body[1])
+	}
+	call, ok := exprStmt.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr for puts, got %T", exprStmt.Expr)
+	}
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 argument, got %d", len(call.Args))
+	}
+	interp, ok := call.Args[0].(*ast.InterpolatedString)
+	if !ok {
+		t.Fatalf("expected InterpolatedString, got %T", call.Args[0])
+	}
+	// Check that the interpolation contains a CallExpr with a block
+	found := false
+	for _, part := range interp.Parts {
+		if callExpr, ok := part.(*ast.CallExpr); ok && callExpr.Block != nil {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected interpolation to contain a CallExpr with a block")
+	}
+}

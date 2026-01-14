@@ -87,6 +87,78 @@ func (p *Parser) skipNewlines() {
 	}
 }
 
+// peekAheadIsDotAfterNewlines checks if there's a DOT or AMPDOT token after skipping newlines.
+// This is used for multi-line method chaining: expr\n.method()
+func (p *Parser) peekAheadIsDotAfterNewlines() bool {
+	// Save lexer state and parser tokens
+	lexerState := p.l.SaveState()
+	savedCur := p.curToken
+	savedPeek := p.peekToken
+
+	// Advance past the current peek (which should be NEWLINE)
+	p.nextToken()
+
+	// Skip all newlines
+	for p.curTokenIs(token.NEWLINE) {
+		p.nextToken()
+	}
+
+	// Check if we're now at a DOT or AMPDOT
+	result := p.curTokenIs(token.DOT) || p.curTokenIs(token.AMPDOT)
+
+	// Restore lexer state and parser tokens
+	p.l.RestoreState(lexerState)
+	p.curToken = savedCur
+	p.peekToken = savedPeek
+
+	return result
+}
+
+// parseBlocksAndChaining handles blocks and method chaining after an expression.
+// This enables:
+//   - arr.select { |x| }.map { |x| } (inline chaining)
+//   - Multi-line method chains with newlines before DOT/AMPDOT
+//
+// Returns the (possibly modified) expression with blocks and chained methods attached.
+func (p *Parser) parseBlocksAndChaining(expr ast.Expression) ast.Expression {
+	for {
+		// Check for block: expr do |params| ... end  OR  expr {|params| ... }
+		if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
+			expr = p.parseBlockCall(expr)
+			continue
+		}
+		// Check for newline-continued method chain after a block
+		if p.peekTokenIs(token.NEWLINE) && p.peekAheadIsDotAfterNewlines() {
+			p.nextToken() // curToken is now NEWLINE
+			p.skipNewlines()
+			// curToken should now be DOT or AMPDOT
+			if p.curTokenIs(token.DOT) {
+				expr = p.parseSelectorExpr(expr)
+				continue
+			}
+			if p.curTokenIs(token.AMPDOT) {
+				expr = p.parseSafeNavExpr(expr)
+				continue
+			}
+			// Defensive: if we get here, something unexpected happened
+			break
+		}
+		// Check for same-line method chain after a block
+		if p.peekTokenIs(token.DOT) {
+			p.nextToken()
+			expr = p.parseSelectorExpr(expr)
+			continue
+		}
+		if p.peekTokenIs(token.AMPDOT) {
+			p.nextToken()
+			expr = p.parseSafeNavExpr(expr)
+			continue
+		}
+		break
+	}
+	return expr
+}
+
 // leadingComments returns a group of consecutive comments that end immediately
 // before the given line. Multi-line doc comments are collected as a group.
 // Returns nil if no leading comments.

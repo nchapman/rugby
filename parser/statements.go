@@ -81,10 +81,8 @@ func (p *Parser) parseStatement() ast.Statement {
 	// Default: expression statement
 	expr := p.parseExpression(lowest)
 	if expr != nil {
-		// Check for block: expr do |params| ... end  OR  expr {|params| ... }
-		if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
-			expr = p.parseBlockCall(expr)
-		}
+		// Handle blocks and method chaining (inline and multi-line)
+		expr = p.parseBlocksAndChaining(expr)
 
 		// Check for selector assignment: obj.field = value
 		// This must be handled before nextToken() since we need to see the ASSIGN
@@ -145,10 +143,8 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 
 	value := p.parseExpression(lowest)
 
-	// Check for block: expr.method do |x| ... end  OR  expr.method {|x| ... }
-	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
-		value = p.parseBlockCall(value)
-	}
+	// Handle blocks and method chaining (inline and multi-line)
+	value = p.parseBlocksAndChaining(value)
 
 	// Check for inline type annotation: x = value : Type
 	// This is an alternative to: x : Type = value
@@ -817,10 +813,8 @@ func (p *Parser) parseInstanceVarAssign() *ast.InstanceVarAssign {
 
 	value := p.parseExpression(lowest)
 
-	// Check for block after expression
-	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
-		value = p.parseBlockCall(value)
-	}
+	// Handle blocks and method chaining (inline and multi-line)
+	value = p.parseBlocksAndChaining(value)
 
 	p.nextToken() // move past expression
 	p.skipNewlines()
@@ -841,10 +835,8 @@ func (p *Parser) parseOrAssignStmt() *ast.OrAssignStmt {
 
 	value := p.parseExpression(lowest)
 
-	// Check for block after expression
-	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
-		value = p.parseBlockCall(value)
-	}
+	// Handle blocks and method chaining (inline and multi-line)
+	value = p.parseBlocksAndChaining(value)
 
 	p.nextToken() // move past expression
 	p.skipNewlines()
@@ -876,10 +868,8 @@ func (p *Parser) parseCompoundAssignStmt() ast.Statement {
 
 	value := p.parseExpression(lowest)
 
-	// Check for block after expression
-	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
-		value = p.parseBlockCall(value)
-	}
+	// Handle blocks and method chaining (inline and multi-line)
+	value = p.parseBlocksAndChaining(value)
 
 	p.nextToken() // move past expression
 
@@ -911,10 +901,8 @@ func (p *Parser) parseInstanceVarOrAssign() *ast.InstanceVarOrAssign {
 
 	value := p.parseExpression(lowest)
 
-	// Check for block after expression
-	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
-		value = p.parseBlockCall(value)
-	}
+	// Handle blocks and method chaining (inline and multi-line)
+	value = p.parseBlocksAndChaining(value)
 
 	p.nextToken() // move past expression
 	p.skipNewlines()
@@ -952,10 +940,8 @@ func (p *Parser) parseInstanceVarCompoundAssign() *ast.InstanceVarCompoundAssign
 
 	value := p.parseExpression(lowest)
 
-	// Check for block after expression
-	if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
-		value = p.parseBlockCall(value)
-	}
+	// Handle blocks and method chaining (inline and multi-line)
+	value = p.parseBlocksAndChaining(value)
 
 	p.nextToken() // move past expression
 	p.skipNewlines()
