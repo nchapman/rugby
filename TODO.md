@@ -55,29 +55,44 @@ All major bugs have been fixed. The remaining items are documented limitations.
   - `arr[1..-1]` returns `any` type, can't reassign to typed variable
   - Workaround: Use explicit loop or different approach for slicing
 
+- [ ] **Super calls don't pass arguments**
+  - `super(args)` doesn't properly pass arguments to parent constructor
+  - `super()` in method body returns empty result
+  - Workaround: Call parent methods directly if needed
+
+- [ ] **Class methods not implemented**
+  - `def self.method` syntax is not yet supported
+  - Workaround: Use regular functions or instance methods
+
+- [ ] **Spawn blocks can't capture outer variables**
+  - `spawn { outer_var + 1 }` fails to compile
+  - Workaround: Only use local computations within spawn blocks
+
 ---
 
 ## Phase 2: Expand Spec Test Coverage
 
 Goal: Every language feature has spec tests covering all syntactic variations.
 
-Current spec tests (39 total):
+Current spec tests (46 total):
 - `tests/spec/blocks/` - 7 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto)
 - `tests/spec/classes/` - 5 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors)
-- `tests/spec/concurrency/` - 2 tests (channels, goroutines)
+- `tests/spec/concurrency/` - 3 tests (channels, goroutines, spawn_await)
 - `tests/spec/control_flow/` - 7 tests (if_else, case_when, case_type, while_until, statement_modifiers, loop_modifiers, break_next)
 - `tests/spec/errors/` - 3 tests (known limitations + runtime_panic)
+- `tests/spec/error_handling/` - 1 test (rescue)
 - `tests/spec/functions/` - 1 test (basic)
 - `tests/spec/go_interop/` - 1 test (strings)
 - `tests/spec/interfaces/` - 2 tests (basic, any_indexing)
-- `tests/spec/literals/` - 7 tests (arrays, integers, strings, ranges, range_include, empty_typed_array, map_symbol_shorthand)
+- `tests/spec/literals/` - 11 tests (arrays, integers, strings, ranges, range_include, empty_typed_array, map_symbol_shorthand, floats, heredocs, symbols, word_arrays)
+- `tests/spec/modules/` - 1 test (basic)
 - `tests/spec/optionals/` - 3 tests (basic, if_let, nil_coalescing)
 
 ### Literals (expand `tests/spec/literals/`)
-- [ ] Floats (scientific notation, edge cases)
-- [ ] Heredocs (`<<EOF`, `<<-EOF`, `<<~EOF`)
-- [ ] Word arrays (`%w[a b c]`)
-- [ ] Symbol literals (`:foo`, `:"foo bar"`)
+- [x] Floats (basic operations, predicates, rounding)
+- [x] Heredocs (`<<DELIM`)
+- [x] Word arrays (`%w[a b c]`, `%w(...)`)
+- [x] Symbol literals (`:foo`, symbol in maps)
 - [ ] Regex literals (`/pattern/`)
 
 ### Control Flow (expand `tests/spec/control_flow/`)
@@ -101,20 +116,21 @@ Current spec tests (39 total):
 - [ ] Symbol-to-proc (`&:method`)
 
 ### Modules
-- [ ] Module definition and include
+- [x] Module definition and include
 - [ ] Module method resolution
 - [ ] Multiple module includes
 
-### Concurrency (create `tests/spec/concurrency/`)
+### Concurrency (expand `tests/spec/concurrency/`)
 - [x] Channel operations (`Chan[T].new`, send, receive)
 - [x] Goroutines (`go do ... end`)
-- [ ] `spawn` blocks
-- [ ] `concurrently` blocks with `await`
+- [x] `spawn`/`await` blocks
+- [ ] `concurrently` blocks with scoped spawn
 - [ ] WaitGroup usage
 
 ### Error Handling
-- [ ] Begin/rescue/ensure
-- [ ] Typed rescue (`rescue TypeError => e`)
+- [x] Inline rescue (`value = expr rescue default`)
+- [x] Block rescue with error binding
+- [ ] Begin/rescue/ensure blocks
 - [ ] Raise/throw
 - [ ] Custom error classes
 
@@ -213,6 +229,6 @@ When fixing a bug:
 
 Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
-- Additional limitations discovered: 3 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any)
-- Spec tests: 39 passing
+- Additional limitations discovered: 6 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, super calls, class methods, spawn closure capture)
+- Spec tests: 46 passing
 - All `make check` passes
