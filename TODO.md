@@ -31,7 +31,7 @@ Parser → AST → Semantic (types) → CodeGen (emit)
 |---------|-------|------------|-------|
 | ~~Super calls with args~~ | ~~High~~ | ~~Medium~~ | ✅ Done |
 | ~~Symbol-to-proc (`&:method`)~~ | ~~Medium~~ | ~~Low-Medium~~ | ✅ Done |
-| Spawn closure capture | Medium | Medium | Currently broken |
+| ~~Spawn closure capture~~ | ~~Medium~~ | ~~Medium~~ | ✅ Works |
 | Begin/rescue/ensure | Medium | Medium | Inline rescue works |
 
 ### Documenting Limitations (for workarounds)
@@ -92,9 +92,14 @@ All major bugs have been fixed. The remaining items are documented limitations.
   - `super(args)` in method body calls parent method correctly
   - Inherited methods can be called without parentheses
 
-- [ ] **Spawn blocks can't capture outer variables**
-  - `spawn { outer_var + 1 }` fails to compile
-  - Workaround: Only use local computations within spawn blocks
+- [x] **Spawn blocks capture outer variables** ✅
+  - `spawn { outer_var + 1 }` works correctly
+  - Variables from enclosing scope are captured in spawn blocks
+
+- [ ] **Array mutation in closures doesn't persist**
+  - `arr << value` inside blocks doesn't modify the outer array
+  - The `<<` operator generates `runtime.ShiftLeft` instead of append
+  - Workaround: Use return values instead of mutation
 
 ---
 
@@ -102,10 +107,10 @@ All major bugs have been fixed. The remaining items are documented limitations.
 
 Goal: Every language feature has spec tests covering all syntactic variations.
 
-Current spec tests (53 total):
+Current spec tests (54 total):
 - `tests/spec/blocks/` - 8 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto, symbol_to_proc)
 - `tests/spec/classes/` - 9 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors, method_chaining, visibility, class_methods, super_calls)
-- `tests/spec/concurrency/` - 3 tests (channels, goroutines, spawn_await)
+- `tests/spec/concurrency/` - 4 tests (channels, goroutines, spawn_await, spawn_closure)
 - `tests/spec/control_flow/` - 7 tests (if_else, case_when, case_type, while_until, statement_modifiers, loop_modifiers, break_next)
 - `tests/spec/errors/` - 2 tests (known limitations + runtime_panic)
 - `tests/spec/error_handling/` - 1 test (rescue)
@@ -258,7 +263,7 @@ When fixing a bug:
 
 Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
-- Additional limitations discovered: 4 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, spawn closure capture)
-- Features implemented: class methods (def self.method), super calls with arguments, symbol-to-proc (&:method)
-- Spec tests: 53 passing
+- Additional limitations discovered: 4 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, array mutation in closures)
+- Features implemented: class methods, super calls, symbol-to-proc, spawn closure capture
+- Spec tests: 54 passing
 - All `make check` passes
