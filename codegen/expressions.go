@@ -53,7 +53,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			if g.currentClass != "" {
 				g.buf.WriteString(receiverName(g.currentClass))
 			} else {
-				g.buf.WriteString("/* self outside class */")
+				g.addError(fmt.Errorf("line %d: 'self' used outside of class context", e.Line))
+				g.buf.WriteString("nil")
 			}
 		} else if runtimeCall, ok := noParenKernelFuncs[e.Name]; ok {
 			// Check for kernel functions that can be used without parens
@@ -82,7 +83,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			}
 			g.buf.WriteString(fmt.Sprintf("%s.%s", recv, goFieldName))
 		} else {
-			g.buf.WriteString(fmt.Sprintf("/* @%s outside class */", e.Name))
+			g.addError(fmt.Errorf("instance variable '@%s' used outside of class context", e.Name))
+			g.buf.WriteString("nil")
 		}
 
 	// Operators
@@ -1169,7 +1171,8 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 
 		if fn.Sel == "is_a?" {
 			if len(call.Args) != 1 {
-				g.buf.WriteString("false /* ERROR: is_a? requires exactly one type argument */")
+				g.addError(fmt.Errorf("is_a? requires exactly one type argument, got %d", len(call.Args)))
+				g.buf.WriteString("false")
 				return
 			}
 			// Cast to any first to allow type assertion on concrete types
@@ -1183,7 +1186,8 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 
 		if fn.Sel == "as" {
 			if len(call.Args) != 1 {
-				g.buf.WriteString("func() (any, bool) { return nil, false }() /* ERROR: as requires exactly one type argument */")
+				g.addError(fmt.Errorf("as requires exactly one type argument, got %d", len(call.Args)))
+				g.buf.WriteString("func() (any, bool) { return nil, false }()")
 				return
 			}
 			// Cast to any first to allow type assertion on concrete types

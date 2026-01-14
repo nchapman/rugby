@@ -350,6 +350,21 @@ func (a *Analyzer) getClassMethod(className, methodName string) *Symbol {
 	return nil
 }
 
+// getClassField finds a field on a class, including inherited fields from parent classes.
+func (a *Analyzer) getClassField(className, fieldName string) *Symbol {
+	for className != "" {
+		cls := a.classes[className]
+		if cls == nil {
+			return nil
+		}
+		if field := cls.GetField(fieldName); field != nil {
+			return field
+		}
+		className = cls.Parent
+	}
+	return nil
+}
+
 // formatMethodSignature returns a human-readable method signature.
 func (a *Analyzer) formatMethodSignature(method *Symbol) string {
 	var params []string
@@ -1643,13 +1658,11 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			a.addError(&InstanceStateInClassMethodError{What: "@" + e.Name})
 			typ = TypeUnknownVal
 		} else {
-			// Look up field type from class
+			// Look up field type from class, including inherited fields
 			classScope := a.scope.ClassScope()
 			if classScope != nil {
-				if cls := a.classes[classScope.ClassName]; cls != nil {
-					if field := cls.GetField(e.Name); field != nil {
-						typ = field.Type
-					}
+				if field := a.getClassField(classScope.ClassName, e.Name); field != nil {
+					typ = field.Type
 				}
 			}
 			if typ == nil {
@@ -2169,6 +2182,10 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 		// Analyze block with inferred parameter types
 		if call.Block != nil {
 			blockParamTypes := a.inferBlockParamTypes(receiverType, sel.Sel)
+			// Special case: reduce with initial value - accumulator type is initial value's type
+			if sel.Sel == "reduce" && len(argTypes) > 0 && argTypes[0] != nil && len(blockParamTypes) >= 2 {
+				blockParamTypes = []*Type{argTypes[0], blockParamTypes[1]}
+			}
 			a.analyzeBlockWithTypes(call.Block, blockParamTypes)
 		}
 
@@ -2466,9 +2483,54 @@ func (a *Analyzer) inferBlockReturnType(block *ast.BlockExpr) *Type {
 
 	// The return value is the last expression in the block
 	lastStmt := block.Body[len(block.Body)-1]
-	if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
-		if typ := a.getNodeType(exprStmt.Expr); typ != nil && typ.Kind != TypeUnknown {
+	return a.inferStmtReturnType(lastStmt)
+}
+
+// inferStmtReturnType infers the return type of a statement when used as an expression.
+// This handles control flow statements that may return values from branches.
+func (a *Analyzer) inferStmtReturnType(stmt ast.Statement) *Type {
+	switch s := stmt.(type) {
+	case *ast.ExprStmt:
+		if typ := a.getNodeType(s.Expr); typ != nil && typ.Kind != TypeUnknown {
 			return typ
+		}
+
+	case *ast.IfStmt:
+		// Get types from both branches and find common type
+		var thenType, elseType *Type
+
+		if len(s.Then) > 0 {
+			thenType = a.inferStmtReturnType(s.Then[len(s.Then)-1])
+		}
+
+		if len(s.Else) > 0 {
+			elseType = a.inferStmtReturnType(s.Else[len(s.Else)-1])
+		} else if len(s.ElseIfs) > 0 {
+			// Check last elsif's body
+			lastElsif := s.ElseIfs[len(s.ElseIfs)-1]
+			if len(lastElsif.Body) > 0 {
+				elseType = a.inferStmtReturnType(lastElsif.Body[len(lastElsif.Body)-1])
+			}
+		}
+
+		// If both branches have the same type, return it
+		if thenType != nil && elseType != nil && thenType.Equals(elseType) {
+			return thenType
+		}
+		// If only one branch has a type, return that (the other is likely nil/void)
+		if thenType != nil && thenType.Kind != TypeAny {
+			return thenType
+		}
+		if elseType != nil && elseType.Kind != TypeAny {
+			return elseType
+		}
+
+	case *ast.ReturnStmt:
+		// Explicit return - use its type
+		if len(s.Values) == 1 {
+			if typ := a.getNodeType(s.Values[0]); typ != nil {
+				return typ
+			}
 		}
 	}
 

@@ -217,13 +217,15 @@ Consolidated test helpers into `codegen/helpers_test.go`:
 - [x] SpawnExpr infers Task element type from block return type
 - [x] Array.map infers return type as Array[BlockReturnType]
 - [x] Improved "Did you mean?" suggestions using Levenshtein distance
-- [ ] Complete type inference for remaining edge cases
+- [x] Reduce accumulator type inferred from initial value
+- [x] Block return type inferred from control flow branches (if/else, return)
+- [x] Inherited field types resolved via `getClassField()` helper
 
 ### Error Recovery
 
 - [x] Parser: Continue after syntax errors to report multiple issues
 - [x] Semantic: Collect all type errors before failing
-- [ ] Codegen: Generate placeholder code for unresolved symbols
+- [x] Codegen: Collect errors via `addError()` instead of placeholder comments
 
 ---
 
@@ -288,8 +290,9 @@ Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
 - Additional limitations discovered: 4 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, array mutation in closures)
 - Features implemented: class methods, super calls, symbol-to-proc, spawn closure capture, module method overriding
-- Semantic analysis: circular inheritance detection, inherited method interface validation, improved error positions, better type inference for spawn/map blocks, Levenshtein-based typo suggestions
-- Error recovery: both parser and semantic analyzer collect and report multiple errors with source snippets
+- Semantic analysis: circular inheritance detection, inherited method interface validation, improved error positions, better type inference for spawn/map blocks, Levenshtein-based typo suggestions, reduce accumulator type inference, block return type inference from control flow, inherited field type resolution
+- Error recovery: parser, semantic analyzer, and codegen all collect and report multiple errors
 - Phase 2 complete: All spec test categories covered
+- Phase 3 complete: TypeInfo migration, error collection
 - Spec tests: 58 passing
 - All `make check` passes

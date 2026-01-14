@@ -231,7 +231,8 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 			g.genExpr(s.Value)
 		}
 	} else {
-		g.buf.WriteString(fmt.Sprintf("/* @%s outside class */ ", s.Name))
+		g.addError(fmt.Errorf("instance variable '@%s' assigned outside of class context", s.Name))
+		// Emit value expression to keep output somewhat valid
 		g.genExpr(s.Value)
 	}
 	g.buf.WriteString("\n")
@@ -412,8 +413,7 @@ func (g *Generator) genMultiAssignFromOptional(s *ast.MultiAssignStmt, optType s
 
 func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 	if g.currentClass == "" {
-		g.writeIndent()
-		g.buf.WriteString(fmt.Sprintf("/* @%s ||= outside class */\n", s.Name))
+		g.addError(fmt.Errorf("instance variable '@%s' ||= used outside of class context", s.Name))
 		return
 	}
 
@@ -469,8 +469,7 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 // This expands to: recv.field = recv.field + value
 func (g *Generator) genInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAssign) {
 	if g.currentClass == "" {
-		g.writeIndent()
-		g.buf.WriteString(fmt.Sprintf("/* @%s %s= outside class */\n", s.Name, s.Op))
+		g.addError(fmt.Errorf("instance variable '@%s' %s= used outside of class context", s.Name, s.Op))
 		return
 	}
 
@@ -841,9 +840,8 @@ func (g *Generator) genBangErrorBodyWithVar(errVar string) {
 		}
 		g.buf.WriteString(errVar + "\n")
 	} else {
-		// Not in main and doesn't return error - this is an error
-		// For now, emit a comment indicating the problem
-		g.buf.WriteString("/* ERROR: ! used in function that doesn't return error */\n")
+		// Not in main and doesn't return error - emit panic as fallback
+		g.addError(fmt.Errorf("'!' operator used in function that doesn't return error"))
 		g.buf.WriteString(fmt.Sprintf("panic(%s)\n", errVar))
 	}
 }
