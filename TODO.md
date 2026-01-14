@@ -187,15 +187,20 @@ Currently `codegen/codegen.go` Generator struct has 35+ fields mixing:
 - [x] Added `getFieldType()` helper to use semantic analysis for class field types
 - [x] Added `IsClass()` and `IsInterface()` to TypeInfo interface
 - [x] Added `IsNoArgFunction()` to TypeInfo interface
-- [x] Helper methods (`isClass()`, `isInterface()`, `isNoArgFunction()`) query TypeInfo with fallback
-- [ ] Move remaining symbol tables to semantic analyzer (vars, goInteropVars, etc.)
-- [ ] Further expand `TypeInfo` interface to provide all resolution info
+- [x] Added `IsPublicClass()`, `HasAccessor()` to TypeInfo interface
+- [x] Added `GetInterfaceMethodNames()`, `GetAllInterfaceNames()` to TypeInfo interface
+- [x] Added `GetAllModuleNames()`, `GetModuleMethodNames()` to TypeInfo interface
+- [x] Added `GetConstructorParams()`, `GetConstructorParamCount()` to TypeInfo interface
+- [x] Removed fallback maps from codegen - helpers now panic if TypeInfo is nil
+- [x] Removed pre-pass loops that populated fallback maps
+- [x] Removed unused Generator fields: pubClasses, classes, classAccessorFields, interfaces, interfaceMethods, classConstructorParams, noArgFunctions
+- [ ] Move remaining symbol tables to semantic analyzer (vars, goInteropVars, modules)
 - [ ] Codegen only transforms AST nodes to Go syntax
 
-**Progress on g.vars/g.classFields:**
-Declaration tracking now uses semantic analysis via `TypeInfo.IsDeclaration()`. Field type
-lookup uses `TypeInfo.GetFieldType()`. Both helpers have nil safety checks (defaulting to
-declaration=true, fieldType="") but all tests now use semantic analysis via shared helpers.
+**Progress on TypeInfo consolidation:**
+All type/symbol queries now go through TypeInfo interface. Helper methods panic if typeInfo
+is nil, enforcing that semantic analysis must run before code generation. Removed 7 fallback
+maps from Generator struct. Remaining work: move vars, goInteropVars, and modules tracking.
 
 **Test infrastructure:**
 Consolidated test helpers into `codegen/helpers_test.go`:
