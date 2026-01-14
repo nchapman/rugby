@@ -409,42 +409,6 @@ func compileWithErrors(t *testing.T, input string) []error {
 	return gen.Errors()
 }
 
-// compileWithTypeInfo runs semantic analysis and passes type info to codegen.
-// This enables optimizations like direct == for primitive types.
-func compileWithTypeInfo(t *testing.T, input string) string {
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) > 0 {
-		for _, err := range p.Errors() {
-			t.Errorf("parser error: %s", err)
-		}
-		t.FailNow()
-	}
-
-	// Run semantic analysis
-	analyzer := semantic.NewAnalyzer()
-	errs := analyzer.Analyze(program)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			t.Errorf("semantic error: %s", err)
-		}
-		t.FailNow()
-	}
-
-	// Create type info adapter
-	typeInfo := &testTypeInfoAdapter{analyzer: analyzer}
-
-	gen := New(WithTypeInfo(typeInfo))
-	output, err := gen.Generate(program)
-	if err != nil {
-		t.Fatalf("codegen error: %v", err)
-	}
-
-	return output
-}
-
 // testTypeInfoAdapter adapts semantic.Analyzer to implement TypeInfo for tests.
 type testTypeInfoAdapter struct {
 	analyzer *semantic.Analyzer
@@ -807,7 +771,7 @@ func TestGenerateArrayWithExpressions(t *testing.T) {
   x = [1 + 2, 3 * 4]
 end`
 
-	output := compileWithTypeInfo(t, input)
+	output := compile(t, input)
 
 	// Type inference correctly identifies []int from integer expressions
 	assertContains(t, output, `[]int{(1 + 2), (3 * 4)}`)
@@ -2416,7 +2380,7 @@ func TestEqualityOptimizationWithTypeInfo(t *testing.T) {
   result = x == y
 end`
 
-	output := compileWithTypeInfo(t, input)
+	output := compile(t, input)
 
 	// With type info, Int == Int should use direct comparison
 	assertContains(t, output, `result := (x == y)`)
@@ -2430,7 +2394,7 @@ func TestEqualityOptimizationStringVariables(t *testing.T) {
   same = a == b
 end`
 
-	output := compileWithTypeInfo(t, input)
+	output := compile(t, input)
 
 	// String == String with type info should use direct comparison
 	assertContains(t, output, `same := (a == b)`)
@@ -2444,7 +2408,7 @@ func TestEqualityOptimizationBoolVariables(t *testing.T) {
   same = a == b
 end`
 
-	output := compileWithTypeInfo(t, input)
+	output := compile(t, input)
 
 	// Bool == Bool with type info should use direct comparison
 	assertContains(t, output, `same := (a == b)`)
@@ -2458,7 +2422,7 @@ func TestEqualityOptimizationFloatVariables(t *testing.T) {
   same = a == b
 end`
 
-	output := compileWithTypeInfo(t, input)
+	output := compile(t, input)
 
 	// Float == Float with type info should use direct comparison
 	assertContains(t, output, `same := (a == b)`)
@@ -2477,7 +2441,7 @@ def main
   same = a == b
 end`
 
-	output := compileWithTypeInfo(t, input)
+	output := compile(t, input)
 
 	// Class instances should still use runtime.Equal for custom equality support
 	assertContains(t, output, `runtime.Equal(a, b)`)
@@ -2490,7 +2454,7 @@ func TestNotEqualOptimizationWithTypeInfo(t *testing.T) {
   different = x != y
 end`
 
-	output := compileWithTypeInfo(t, input)
+	output := compile(t, input)
 
 	// With type info, Int != Int should use direct comparison
 	assertContains(t, output, `different := (x != y)`)
@@ -2505,7 +2469,7 @@ func TestMonomorphizedArrayWithTypeInfo(t *testing.T) {
   strings = ["a", "b"]
 end`
 
-	output := compileWithTypeInfo(t, input)
+	output := compile(t, input)
 
 	// With type info, arrays should generate typed slices
 	assertContains(t, output, `[]int{1, 2, 3}`)
@@ -2519,7 +2483,7 @@ func TestMonomorphizedMapWithTypeInfo(t *testing.T) {
   names = {1 => "one", 2 => "two"}
 end`
 
-	output := compileWithTypeInfo(t, input)
+	output := compile(t, input)
 
 	// With type info, maps should generate typed maps
 	assertContains(t, output, `map[string]int{"a": 1, "b": 2}`)
@@ -3479,8 +3443,8 @@ end
 c = Counter.new(5)
 puts(c.value)`
 
-	// Use compileWithTypeInfo to properly resolve c.value as a method call
-	output := compileWithTypeInfo(t, input)
+	// Semantic analysis resolves c.value as a method call
+	output := compile(t, input)
 
 	// Should have the class definition
 	assertContains(t, output, "type Counter struct")
@@ -4402,7 +4366,7 @@ def main
   puts ok
 end`
 
-	output := compileWithTypeInfo(t, input)
+	output := compile(t, input)
 
 	// Should generate correct multi-assignment
 	assertContains(t, output, `val, ok := getData()`)
@@ -4493,8 +4457,8 @@ def main
   puts user.name
 end`
 
-	// Use compileWithTypeInfo to properly resolve getter calls
-	output := compileWithTypeInfo(t, input)
+	// Semantic analysis resolves getter calls
+	output := compile(t, input)
 
 	// Should have the field in the struct (with underscore prefix for accessors)
 	assertContains(t, output, "_name string")
@@ -4518,8 +4482,8 @@ def main
   user.email = "bob@example.com"
 end`
 
-	// Use compileWithTypeInfo to properly resolve setter assignments
-	output := compileWithTypeInfo(t, input)
+	// Semantic analysis resolves setter assignments
+	output := compile(t, input)
 
 	// Should have the field in the struct (with underscore prefix for accessors)
 	assertContains(t, output, "_email string")
@@ -4545,8 +4509,8 @@ def main
   puts counter.value
 end`
 
-	// Use compileWithTypeInfo to properly resolve property access
-	output := compileWithTypeInfo(t, input)
+	// Semantic analysis resolves property access
+	output := compile(t, input)
 
 	// Should have the field in the struct (with underscore prefix for accessors)
 	assertContains(t, output, "_value int")
@@ -5271,9 +5235,9 @@ def main
   puts point.to_s
 end`
 
-	// Use compileWithTypeInfo to ensure semantic analysis runs
+	// Semantic analysis is required for this test
 	// and properly resolves to_s as a method call
-	output := compileWithTypeInfo(t, input)
+	output := compile(t, input)
 
 	// to_s method should be generated as String()
 	assertContains(t, output, `func (p *Point) String() string`)
@@ -5295,8 +5259,8 @@ def main
   person.name = "Bob"
 end`
 
-	// Use compileWithTypeInfo to properly resolve setter assignment
-	output := compileWithTypeInfo(t, input)
+	// Semantic analysis resolves setter assignment
+	output := compile(t, input)
 
 	// Should have setter method (parameter name is 'v')
 	assertContains(t, output, `func (p *Person) setName(v string)`)
