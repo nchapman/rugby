@@ -1950,6 +1950,10 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 					return NewClassType(classIdent.Name)
 				}
 			}
+			// Handle Chan[Type].new(size) constructor
+			if receiverType.Kind == TypeChan {
+				return receiverType
+			}
 		}
 
 		// Look up method on receiver type

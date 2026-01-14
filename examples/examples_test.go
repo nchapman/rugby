@@ -40,7 +40,7 @@ func allExamples() []example {
 		{file: "fizzbuzz.rg", expectedOutput: "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n"},
 		{file: "field_inference.rg", expectedOutput: "I'm Alice, email: alice@example.com, role: admin\nI'm Alice, email: alice.new@example.com, role: admin\n"},
 		{file: "json_simple.rg"},                // rugby/json stdlib works
-		{file: "worker_pool.rg", hasBugs: true}, // getter access on channel receive results
+		{file: "worker_pool.rg"},                 // channel receive type tracking fixed
 		{file: "todo_app.rg", hasBugs: true},    // map literal parsing in method body
 
 		// HTTP + JSON (needs network, has bugs too)

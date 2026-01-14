@@ -30,7 +30,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | fizzbuzz.rg | PASS | None |
 | field_inference.rg | PASS | None |
 | json_simple.rg | PASS | None |
-| worker_pool.rg | FAIL | Getter access on channel receive results |
+| worker_pool.rg | PASS | Channel receive type tracking fixed |
 | todo_app.rg | FAIL | Map literal parsing in method body |
 | http_json.rg | FAIL | resp.json method, interface indexing |
 
@@ -90,17 +90,6 @@ known = find_user(1).unwrap
 # invalid operation: _nc5 != nil (mismatched types OptionalResult and untyped nil)
 ```
 
-### BUG-050: Getter access on channel receive results
-**File:** worker_pool.rg
-
-When receiving from a channel, the result type is not tracked by the semantic analyzer, so getter access fails:
-```ruby
-results = Chan[Result].new(10)
-result = results.receive
-puts "#{result.job_id}"  # job_id is printed as method value, not called
-```
-The generated code is `result.jobID` instead of `result.jobID()`.
-
 ### BUG-046: Map literal in method body
 **File:** todo_app.rg
 
@@ -135,6 +124,9 @@ post["title"]  # cannot index post (variable of interface type any)
 ---
 
 ## Fixed Bugs
+
+### ~~BUG-050: Getter access on channel receive results~~ FIXED
+The semantic analyzer now properly tracks the return type of `Chan[T].new(size)` constructors. When receiving from a channel, the element type is correctly propagated to the receiving variable, enabling getter methods to be recognized and called correctly.
 
 ### ~~BUG-049: Unused module methods (lint)~~ FIXED
 Modules now generate Go interfaces and classes that include them have interface compliance checks (`var _ ModuleName = (*ClassName)(nil)`). This suppresses "unused method" lint warnings while providing compile-time verification that included methods are implemented correctly.
