@@ -2826,6 +2826,15 @@ func (a *Analyzer) IsInterface(typeName string) bool {
 	return ok
 }
 
+// IsNoArgFunction returns true if the given name is a declared function with no parameters.
+func (a *Analyzer) IsNoArgFunction(name string) bool {
+	fn, ok := a.functions[name]
+	if !ok {
+		return false
+	}
+	return len(fn.Params) == 0
+}
+
 // GetSymbol looks up a symbol by name in the global scope.
 func (a *Analyzer) GetSymbol(name string) *Symbol {
 	return a.globalScope.Lookup(name)

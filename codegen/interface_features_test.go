@@ -134,6 +134,10 @@ func (t *testTypeInfo) IsInterface(typeName string) bool {
 	return t.analyzer.IsInterface(typeName)
 }
 
+func (t *testTypeInfo) IsNoArgFunction(name string) bool {
+	return t.analyzer.IsNoArgFunction(name)
+}
+
 // compileWithTypeInfo runs the full compilation pipeline.
 // It ignores semantic errors since some tests use constructs not known to semantic analyzer.
 func compileWithTypeInfo(t *testing.T, input string) string {

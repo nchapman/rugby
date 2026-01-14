@@ -1336,7 +1336,7 @@ func (g *Generator) genExprStmt(s *ast.ExprStmt) {
 	// Convert Ident to CallExpr when it's a no-arg function (Ruby-style method call)
 	// e.g., "helper" as statement becomes "helper()"
 	if ident, ok := expr.(*ast.Ident); ok {
-		if g.noArgFunctions[ident.Name] {
+		if g.isNoArgFunction(ident.Name) {
 			expr = &ast.CallExpr{Func: ident, Args: nil}
 		}
 	}

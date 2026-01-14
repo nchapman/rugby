@@ -160,6 +160,11 @@ func (t *typeInfoAdapter) IsInterface(typeName string) bool {
 	return t.analyzer.IsInterface(typeName)
 }
 
+// IsNoArgFunction returns true if the given name is a declared function with no parameters.
+func (t *typeInfoAdapter) IsNoArgFunction(name string) bool {
+	return t.analyzer.IsNoArgFunction(name)
+}
+
 // Styles for pretty output
 var successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 

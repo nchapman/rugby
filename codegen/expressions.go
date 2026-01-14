@@ -63,7 +63,7 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			recv := receiverName(g.currentClass)
 			methodName := snakeToPascalWithAcronyms(e.Name)
 			g.buf.WriteString(fmt.Sprintf("%s.%s()", recv, methodName))
-		} else if g.noArgFunctions[e.Name] {
+		} else if g.isNoArgFunction(e.Name) {
 			// No-arg function - call it implicitly (Ruby-style)
 			goName := snakeToCamelWithAcronyms(e.Name)
 			g.buf.WriteString(fmt.Sprintf("%s()", goName))

@@ -107,6 +107,10 @@ type TypeInfo interface {
 
 	// IsInterface returns true if the given type name is a declared interface.
 	IsInterface(typeName string) bool
+
+	// IsNoArgFunction returns true if the given name is a declared function with no parameters.
+	// This is used for implicit function calls (calling functions without parentheses).
+	IsNoArgFunction(name string) bool
 }
 
 type Generator struct {
@@ -340,6 +344,15 @@ func (g *Generator) isInterface(typeName string) bool {
 	return g.interfaces[typeName]
 }
 
+// isNoArgFunction checks if a name is a declared function with no parameters.
+// Uses TypeInfo when available, falls back to local noArgFunctions map.
+func (g *Generator) isNoArgFunction(name string) bool {
+	if g.typeInfo != nil {
+		return g.typeInfo.IsNoArgFunction(name)
+	}
+	return g.noArgFunctions[name]
+}
+
 // isOptionalType checks if a type is an optional type (ends with ?)
 func isOptionalType(t string) bool {
 	return strings.HasSuffix(t, "?")
@@ -514,10 +527,13 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 
 	// Pre-pass: collect no-arg functions for implicit call syntax
 	// In Rugby, calling a no-arg function without parentheses is allowed (like Ruby)
-	for _, def := range definitions {
-		if fn, ok := def.(*ast.FuncDecl); ok {
-			if len(fn.Params) == 0 {
-				g.noArgFunctions[fn.Name] = true
+	// Only needed when semantic analysis type info is not available (fallback)
+	if g.typeInfo == nil {
+		for _, def := range definitions {
+			if fn, ok := def.(*ast.FuncDecl); ok {
+				if len(fn.Params) == 0 {
+					g.noArgFunctions[fn.Name] = true
+				}
 			}
 		}
 	}

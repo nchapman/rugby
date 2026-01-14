@@ -299,3 +299,7 @@ func (t *testTypeInfoAdapter) IsClass(typeName string) bool {
 func (t *testTypeInfoAdapter) IsInterface(typeName string) bool {
 	return t.analyzer.IsInterface(typeName)
 }
+
+func (t *testTypeInfoAdapter) IsNoArgFunction(name string) bool {
+	return t.analyzer.IsNoArgFunction(name)
+}
