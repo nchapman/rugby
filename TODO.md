@@ -30,7 +30,7 @@ Parser → AST → Semantic (types) → CodeGen (emit)
 | Feature | Value | Complexity | Notes |
 |---------|-------|------------|-------|
 | ~~Super calls with args~~ | ~~High~~ | ~~Medium~~ | ✅ Done |
-| Symbol-to-proc (`&:method`) | Medium | Low-Medium | Nice ergonomic win |
+| ~~Symbol-to-proc (`&:method`)~~ | ~~Medium~~ | ~~Low-Medium~~ | ✅ Done |
 | Spawn closure capture | Medium | Medium | Currently broken |
 | Begin/rescue/ensure | Medium | Medium | Inline rescue works |
 
@@ -102,8 +102,8 @@ All major bugs have been fixed. The remaining items are documented limitations.
 
 Goal: Every language feature has spec tests covering all syntactic variations.
 
-Current spec tests (52 total):
-- `tests/spec/blocks/` - 7 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto)
+Current spec tests (53 total):
+- `tests/spec/blocks/` - 8 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto, symbol_to_proc)
 - `tests/spec/classes/` - 9 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors, method_chaining, visibility, class_methods, super_calls)
 - `tests/spec/concurrency/` - 3 tests (channels, goroutines, spawn_await)
 - `tests/spec/control_flow/` - 7 tests (if_else, case_when, case_type, while_until, statement_modifiers, loop_modifiers, break_next)
@@ -142,7 +142,7 @@ Current spec tests (52 total):
 - [x] Iterator methods (`find`, `any?`, `all?`, `none?`)
 - [x] `times`, `upto`, `downto`
 - [ ] Block with multiple parameters
-- [ ] Symbol-to-proc (`&:method`)
+- [x] Symbol-to-proc (`&:method`)
 
 ### Modules
 - [x] Module definition and include
@@ -259,6 +259,6 @@ When fixing a bug:
 Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
 - Additional limitations discovered: 4 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, spawn closure capture)
-- Features implemented: class methods (def self.method), super calls with arguments
-- Spec tests: 52 passing
+- Features implemented: class methods (def self.method), super calls with arguments, symbol-to-proc (&:method)
+- Spec tests: 53 passing
 - All `make check` passes

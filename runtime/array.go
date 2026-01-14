@@ -859,6 +859,8 @@ func CallMethod(obj any, methodName string) any {
 			return CharLength(s)
 		case "empty?":
 			return len(s) == 0
+		case "present?":
+			return len(s) > 0
 		}
 	}
 

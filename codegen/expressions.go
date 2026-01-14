@@ -1722,13 +1722,18 @@ func (g *Generator) genSymbolToProcBlockCall(iterable ast.Expression, stp *ast.S
 	g.genExpr(iterable)
 	g.buf.WriteString(", func(x ")
 	g.buf.WriteString(elemType)
-	g.buf.WriteString(") (")
+	g.buf.WriteString(") ")
 	g.buf.WriteString(method.returnType)
-	g.buf.WriteString(", bool, bool) { return runtime.CallMethod(x, \"")
+	g.buf.WriteString(" { return runtime.CallMethod(x, \"")
 	g.buf.WriteString(stp.Method)
-	g.buf.WriteString("\").(")
-	g.buf.WriteString(method.returnType)
-	g.buf.WriteString("), true, true })")
+	g.buf.WriteString("\")")
+	// Add type assertion for non-any return types
+	if method.returnType != "any" {
+		g.buf.WriteString(".(")
+		g.buf.WriteString(method.returnType)
+		g.buf.WriteString(")")
+	}
+	g.buf.WriteString(" })")
 }
 
 func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExpr, args []ast.Expression, method blockMethod) {
