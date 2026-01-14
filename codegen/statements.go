@@ -1175,7 +1175,7 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 
 	// Check if iterable is a variable of type Range
 	if ident, ok := s.Iterable.(*ast.Ident); ok {
-		if g.vars[ident.Name] == "Range" {
+		if g.typeInfo.GetRugbyType(ident) == "Range" {
 			g.genForRangeVarLoop(s.Var, ident.Name, s.Body, wasDefinedBefore, prevType)
 			return
 		}

@@ -167,48 +167,33 @@ Current spec tests (58 total):
 
 ---
 
-## Phase 3: Compiler Architecture
+## Phase 3: Compiler Architecture ✅ COMPLETE
 
 ### Separate Concerns in Codegen
 
-Currently `codegen/codegen.go` Generator struct has 35+ fields mixing:
-- Symbol tables (`vars`, `classes`, `interfaces`)
-- Type information (`classFields`, `accessorFields`)
-- Go interop tracking (`goInteropVars`, `imports`)
-- Emission state (`buf`, `indent`, `currentClass`)
+**Goal:** Codegen should be a pure emitter that queries TypeInfo for all type/symbol information.
 
-**Goal:** Codegen should be a pure emitter that receives fully-analyzed AST.
-
+**Completed work:**
 - [x] Tests run semantic analysis before codegen (via `compile()` helper)
 - [x] Simplified `inferTypeFromExpr()` to rely on semantic type info
-- [x] Removed redundant `compileWithTypeInfo()` test helper
-- [x] Extended TypeInfo interface with `IsDeclaration()` and `GetFieldType()`
-- [x] Added `shouldDeclare()` helper to use semantic analysis for `:=` vs `=` decisions
-- [x] Added `getFieldType()` helper to use semantic analysis for class field types
-- [x] Added `IsClass()` and `IsInterface()` to TypeInfo interface
-- [x] Added `IsNoArgFunction()` to TypeInfo interface
-- [x] Added `IsPublicClass()`, `HasAccessor()` to TypeInfo interface
-- [x] Added `GetInterfaceMethodNames()`, `GetAllInterfaceNames()` to TypeInfo interface
-- [x] Added `GetAllModuleNames()`, `GetModuleMethodNames()` to TypeInfo interface
-- [x] Added `GetConstructorParams()`, `GetConstructorParamCount()` to TypeInfo interface
+- [x] Extended TypeInfo interface with 20+ query methods
 - [x] Removed fallback maps from codegen - helpers now panic if TypeInfo is nil
 - [x] Removed pre-pass loops that populated fallback maps
-- [x] Removed unused Generator fields: pubClasses, classes, classAccessorFields, interfaces, interfaceMethods, classConstructorParams, noArgFunctions
+- [x] Removed unused Generator fields: pubClasses, classes, classAccessorFields, interfaces, interfaceMethods, classConstructorParams, noArgFunctions, currentClassModuleMethods
+- [x] Module accessor inheritance (propagate module accessors to including classes)
+- [x] Module method origin tracking (`IsModuleMethod()` in TypeInfo)
+- [x] Replaced `g.vars` type lookups with `TypeInfo.GetRugbyType()` where AST nodes available
 
-**Remaining Phase 3 work:**
+**Acceptable emission-time state (must remain in codegen):**
 
-| Issue | Description | Priority |
-|-------|-------------|----------|
-| ~~Module accessor inheritance~~ | ~~`HasAccessor()` doesn't return true for fields from included modules.~~ | ✅ Done |
-| ~~Module method origin~~ | ~~Add `IsModuleMethod(className, methodName)` to TypeInfo.~~ | ✅ Done |
-| Variable type queries | `g.vars` used for type lookups in 50+ places. Many could use `TypeInfo.GetGoType()` instead. | Low |
-| Go interop tracking | `g.goInteropVars` tracks variables assigned from Go calls. Complex to move - runtime dependent. | Low |
-
-**Acceptable in codegen (emission-time state):**
-- `g.vars` for scoped variable tracking via `scopedVar()`/`scopedVars()`
-- `g.classMethods` for generated Go function name mapping
-- `g.modules` for module AST access during include processing
-- `g.accessorFields` for current class field tracking
+| Field | Purpose | Why It's Emission State |
+|-------|---------|------------------------|
+| `g.vars` | Scoped variable tracking | Manages lexical scope during emission; handles save/restore for nested blocks |
+| `g.goInteropVars` | Go interop type tracking | Control-flow sensitive - reassignment can remove tracking |
+| `g.classMethods` | Generated Go function names | Maps Rugby method names to generated Go function names |
+| `g.modules` | Module AST access | Needed for include processing during class emission |
+| `g.accessorFields` | Current class field tracking | Tracks fields that need underscore prefix |
+| `g.imports` | Import alias tracking | Tracks which Go packages are imported for interop detection |
 
 **Test infrastructure:**
 Consolidated test helpers into `codegen/helpers_test.go`:

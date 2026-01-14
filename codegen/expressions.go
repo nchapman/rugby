@@ -2146,8 +2146,8 @@ func (g *Generator) getReceiverClassName(expr ast.Expression) string {
 	// Fall back to inferring from expression
 	switch e := expr.(type) {
 	case *ast.Ident:
-		// Look up variable type
-		if varType, ok := g.vars[e.Name]; ok {
+		// Look up variable type from semantic analysis
+		if varType := g.typeInfo.GetRugbyType(e); varType != "" {
 			varType = strings.TrimPrefix(varType, "*")
 			varType = strings.TrimSuffix(varType, "?")
 			return varType
