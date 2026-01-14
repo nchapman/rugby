@@ -79,19 +79,14 @@ func TestGeneratedCodeLints(t *testing.T) {
 		t.Skip("golangci-lint not installed, skipping generated code lint test")
 	}
 
-	input := `def process(items : any)
-  result = []
-  items.each do |item|
-    result = result + [item * 2]
-  end
-  return result
+	input := `def double(x : Int) -> Int
+  return x * 2
 end
 
 def main
   nums = [1, 2, 3, 4, 5]
-  doubled = process(nums)
-  doubled.each do |n|
-    puts(n)
+  nums.each do |n|
+    puts double(n)
   end
 end`
 

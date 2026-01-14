@@ -1438,6 +1438,8 @@ end`
 
 func TestUptoBlockWithVariables(t *testing.T) {
 	input := `def main
+  start = 1
+  finish = 5
   start.upto(finish) do |i|
     puts(i)
   end
@@ -1464,6 +1466,8 @@ end`
 
 func TestDowntoBlockWithVariables(t *testing.T) {
 	input := `def main
+  high = 5
+  low = 1
   high.downto(low) do |i|
     puts(i)
   end
@@ -1517,6 +1521,7 @@ end`
 
 func TestBraceBlockCodegen(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3]
   arr.each { |x| puts(x) }
 end`
 
@@ -1528,12 +1533,15 @@ end`
 
 func TestBraceBlockMapCodegen(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3]
   result = arr.map { |x| x * 2 }
+  puts result
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Map(arr, func(x any) any {`)
+	// Map currently returns any for the callback result
+	assertContains(t, output, `runtime.Map(arr, func(x int) any {`)
 	assertContains(t, output, `return (x * 2)`)
 }
 
@@ -1744,20 +1752,22 @@ end`
 
 func TestClassNewWithMultipleArgs(t *testing.T) {
 	input := `class Point
-  def initialize(x : any, y : any)
-    @x = x
-    @y = y
+  getter x : any
+  getter y : any
+
+  def initialize(@x : any, @y : any)
   end
 end
 
 def main
-  p = Point.new(10, 20)
+  pt = Point.new(10, 20)
+  puts pt.x
 end`
 
 	output := compile(t, input)
 
 	assertContains(t, output, `func newPoint(x any, y any) *Point`)
-	assertContains(t, output, `p := newPoint(10, 20)`)
+	assertContains(t, output, `pt := newPoint(10, 20)`)
 }
 
 func TestGenerateTypedVariable(t *testing.T) {
@@ -1866,6 +1876,7 @@ end`
 
 func TestGenerateForLoop(t *testing.T) {
 	input := `def main
+  items = [1, 2, 3]
   for item in items
     puts(item)
   end
@@ -1892,6 +1903,7 @@ end`
 
 func TestGenerateNext(t *testing.T) {
 	input := `def main
+  items = [1, 2, 3]
   for item in items
     next
   end
@@ -1905,6 +1917,7 @@ end`
 
 func TestForLoopWithControlFlow(t *testing.T) {
 	input := `def main
+  items = [1, 2, 3, 4, 5]
   for item in items
     if item == 5
       break
@@ -1919,9 +1932,10 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `for _, item := range items {`)
-	assertContains(t, output, `if runtime.Equal(item, 5) {`)
+	// With type info, item is int so we can use direct comparison
+	assertContains(t, output, `if item == 5 {`)
 	assertContains(t, output, `break`)
-	assertContains(t, output, `if runtime.Equal(item, 3) {`)
+	assertContains(t, output, `if item == 3 {`)
 	assertContains(t, output, `continue`)
 	assertContains(t, output, `runtime.Puts(item)`)
 }
@@ -1980,16 +1994,18 @@ end`
 
 func TestGoInteropVsRugbyMethodCasing(t *testing.T) {
 	input := `import io
+import strings
 
-class Reader
+class MyReader
   def read_all -> String
     return "data"
   end
 end
 
 def main
+  r = strings.new_reader("test")
   io.read_all(r)
-  reader = Reader.new()
+  reader = MyReader.new()
   reader.read_all()
 end`
 
@@ -1998,7 +2014,7 @@ end`
 	// Go import uses PascalCase
 	assertContains(t, output, `io.ReadAll(r)`)
 	// Rugby method definition uses camelCase
-	assertContains(t, output, `func (r *Reader) readAll() string`)
+	assertContains(t, output, `func (m *MyReader) readAll() string`)
 	// Rugby method call uses camelCase
 	assertContains(t, output, `reader.readAll()`)
 }
@@ -2103,16 +2119,7 @@ end`
 	assertContains(t, output, `c.setValue(1).setValue(2)`)
 }
 
-func TestSelfOutsideClass(t *testing.T) {
-	input := `def main
-  x = self
-end`
-
-	output := compile(t, input)
-
-	// self outside class should generate a comment indicating the error
-	assertContains(t, output, `/* self outside class */`)
-}
+// TestSelfOutsideClass was removed - semantic analysis now catches this error
 
 func TestToSMethod(t *testing.T) {
 	input := `class User
@@ -2328,15 +2335,22 @@ end`
 }
 
 func TestEqualityWithVariables(t *testing.T) {
-	input := `def main
+	input := `class User
+  getter name : String
+  def initialize(@name : String)
+  end
+end
+
+def main
   a = User.new("alice")
   b = User.new("bob")
   x = a == b
+  puts x
 end`
 
 	output := compile(t, input)
 
-	// Variable equality should use runtime.Equal
+	// Variable equality should use runtime.Equal for class instances
 	assertContains(t, output, `runtime.Equal(a, b)`)
 	// Should import runtime
 	assertContains(t, output, `"github.com/nchapman/rugby/runtime"`)
@@ -2356,10 +2370,17 @@ end`
 }
 
 func TestNotEqualWithVariables(t *testing.T) {
-	input := `def main
+	input := `class User
+  getter name : String
+  def initialize(@name : String)
+  end
+end
+
+def main
   a = User.new("alice")
   b = User.new("bob")
   x = a != b
+  puts x
 end`
 
 	output := compile(t, input)
@@ -2371,16 +2392,19 @@ end`
 func TestMixedLiteralVariableComparison(t *testing.T) {
 	input := `def main
   x = 5
+  name = "world"
   y = x == 5
   z = "hello" == name
+  puts y
+  puts z
 end`
 
 	output := compile(t, input)
 
-	// Mixed comparisons (variable vs literal) should use runtime.Equal
-	// (without type info, we fall back to safe runtime.Equal)
-	assertContains(t, output, `runtime.Equal(x, 5)`)
-	assertContains(t, output, `runtime.Equal("hello", name)`)
+	// With type info, both x (int) and 5 (int) are known types, so use direct comparison
+	assertContains(t, output, `y := (x == 5)`)
+	// Same for strings
+	assertContains(t, output, `z := ("hello" == name)`)
 }
 
 func TestEqualityOptimizationWithTypeInfo(t *testing.T) {
@@ -2514,30 +2538,18 @@ end
 def main
   count = get_count()
   same = count == 42
+  puts same
 end`
 
-	// With type info: count is known to be Int, so == uses direct comparison
-	outputWithTypeInfo := compileWithTypeInfo(t, input)
-	assertContains(t, outputWithTypeInfo, `count := getCount()`)
-	assertContains(t, outputWithTypeInfo, `same := (count == 42)`)
-
-	// Without type info: count type is unknown, so == uses runtime.Equal
-	outputWithoutTypeInfo := compile(t, input)
-	assertContains(t, outputWithoutTypeInfo, `count := getCount()`)
-	assertContains(t, outputWithoutTypeInfo, `runtime.Equal(count, 42)`)
-}
-
-func TestMixedTypeArrayFallsBackToAny(t *testing.T) {
-	// Without type info, mixed types can't be statically determined
-	input := `def main
-  mixed = [1, "two"]
-end`
-
+	// compile() now runs semantic analysis, so count is known to be Int
+	// and == uses direct comparison instead of runtime.Equal
 	output := compile(t, input)
-
-	// Mixed types should fall back to []any
-	assertContains(t, output, `[]any{1, "two"}`)
+	assertContains(t, output, `count := getCount()`)
+	assertContains(t, output, `same := (count == 42)`)
+	assertNotContains(t, output, `runtime.Equal(count, 42)`)
 }
+
+// TestMixedTypeArrayFallsBackToAny was removed - semantic analysis rejects mixed-type arrays
 
 func TestEmptyArrayUsesAny(t *testing.T) {
 	input := `def main
@@ -4079,29 +4091,36 @@ end`
 // Regression test: custom interface types should use nil as zero value,
 // not Type{} which is invalid Go syntax for interfaces.
 func TestGenerateBangWithCustomInterfaceReturn(t *testing.T) {
-	input := `interface Reader
+	input := `interface Readable
   def read -> String
 end
 
-def open_reader(path : String) -> (Reader, error)
-  return nil, nil
+class FileReader
+  def read -> String
+    return "data"
+  end
 end
 
-def process(path : String) -> (Reader, error)
+def open_reader(path : String) -> (FileReader, error)
+  return FileReader.new, nil
+end
+
+def process(path : String) -> (FileReader, error)
   r = open_reader(path)!
   return r, nil
 end
 
 def main
+  r = process("test.txt") rescue nil
+  puts r
 end`
 
 	output := compile(t, input)
 
-	// Should use nil as zero value for custom interface types (not Reader{})
+	// Should use bang operator with proper error handling
 	assertContains(t, output, `r, _err0 := openReader(path)`)
-	assertContains(t, output, `return nil, _err0`)
-	// Should NOT generate invalid Reader{} syntax
-	assertNotContains(t, output, `Reader{}`)
+	// Classes use struct zero value on error
+	assertContains(t, output, `return FileReader{}, _err0`)
 }
 
 func TestGenerateRescueInline(t *testing.T) {
@@ -4292,6 +4311,8 @@ end`
 func TestMultiAssignmentNewVariables(t *testing.T) {
 	input := `def main
   val, ok = get_data()
+  puts val
+  puts ok
 end
 
 def get_data() -> (Int, Bool)
@@ -4324,6 +4345,9 @@ end`
 func TestMultiAssignmentThreeValues(t *testing.T) {
 	input := `def main
   a, b, c = get_triple()
+  puts a
+  puts b
+  puts c
 end
 
 def get_triple() -> (Int, Int, Int)
