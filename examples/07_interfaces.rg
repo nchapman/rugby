@@ -1,7 +1,7 @@
 # Rugby Interfaces
-# Demonstrates: interface, implements, is_a?, as (spec 7.6, 9)
+# Demonstrates: interface, implements, structural typing, is_a?, as
 
-# Define interfaces (spec 9)
+# Define interfaces
 interface Speaker
   def speak -> String
 end
@@ -10,14 +10,12 @@ interface Mover
   def move
 end
 
-# Interface composition (spec 9)
+# Interface composition
 interface Actor < Speaker, Mover
 end
 
-# Class explicitly implementing an interface (spec 7.6)
+# Explicit interface implementation (optional, but enables compile-time check)
 class Dog implements Speaker
-  @name : String
-
   def initialize(@name : String)
   end
 
@@ -30,10 +28,8 @@ class Dog implements Speaker
   end
 end
 
-# Class satisfying interface structurally (spec 7.6)
+# Structural typing - satisfies Speaker without explicit implements
 class Robot
-  @model : String
-
   def initialize(@model : String)
   end
 
@@ -59,18 +55,18 @@ def main
   puts dog.speak
   puts robot.speak
 
-  # Pass to function expecting interface (structural typing)
+  # Both satisfy Speaker - structural typing
   greet(dog)
   greet(robot)
 
-  # Type checking with is_a? (spec 9.2)
+  # Type checking with is_a?
   if dog.is_a?(Speaker)
     puts "Dog is a Speaker"
   end
 
-  # Type assertion with as (spec 9.2)
+  # Type assertion with as (returns optional)
   if let speaker = dog.as(Speaker)
-    puts "Cast successful: #{speaker.speak}"
+    puts "Cast succeeded: #{speaker.speak}"
   end
 
   # Movement

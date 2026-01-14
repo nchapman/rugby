@@ -1,5 +1,5 @@
 # Rugby Modules (Mixins)
-# Demonstrates: module, include (spec 8)
+# Demonstrates: module, include
 
 # Module with reusable methods
 module Greetable
@@ -22,8 +22,6 @@ end
 class Greeter
   include Greetable
 
-  @name : String
-
   def initialize(@name : String)
   end
 
@@ -37,13 +35,11 @@ class Service
   include Greetable
   include Debuggable
 
-  @service_name : String
-
-  def initialize(@service_name : String)
+  def initialize(@name : String)
   end
 
   def status -> String
-    "#{@service_name}: #{greet} #{debug}"
+    "#{@name}: #{greet} #{debug}"
   end
 end
 

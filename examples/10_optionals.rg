@@ -1,7 +1,8 @@
 # Rugby Optionals
-# Demonstrates: T?, nil, ??, &., if let, ok?, nil?, unwrap (spec 4.4)
+# Demonstrates: T?, nil, ??, &., if let, ok?, unwrap
+#
+# Prefer optional operators over manual nil checks for cleaner code.
 
-# Function returning optional
 def find_user(id : Int) -> String?
   return "Alice" if id == 1
   return "Bob" if id == 2
@@ -9,65 +10,28 @@ def find_user(id : Int) -> String?
 end
 
 class Address
-  @city : String
-  @zip : String
+  getter city : String
 
   def initialize(@city : String, @zip : String)
-  end
-
-  def city -> String
-    @city
   end
 end
 
 class User
-  @name : String
-  @address : Address?
+  getter address : Address?
 
   def initialize(@name : String, @address : Address?)
-  end
-
-  def address -> Address?
-    @address
   end
 end
 
 def main
-  # Basic optional usage (spec 4.4.2)
-  result = find_user(1)
-  if result.ok?
-    puts "Found: #{result.unwrap}"
-  end
+  # Nil coalescing with ?? - the idiomatic way
+  name = find_user(1) ?? "Anonymous"
+  puts "User 1: #{name}"
 
-  result2 = find_user(99)
-  if result2.nil?
-    puts "User 99 not found"
-  end
+  missing = find_user(99) ?? "Anonymous"
+  puts "User 99: #{missing}"
 
-  # Nil coalescing with ?? (spec 4.4.1)
-  name1 = find_user(1) ?? "Anonymous"
-  name2 = find_user(99) ?? "Anonymous"
-  puts "User 1: #{name1}"
-  puts "User 99: #{name2}"
-
-  # if let - scoped binding (spec 4.4.3)
-  if let user = find_user(2)
-    puts "if let found: #{user}"
-  end
-
-  if let missing = find_user(100)
-    puts "This won't print"
-  else
-    puts "if let else: not found"
-  end
-
-  # Tuple unpacking - Go's comma-ok idiom (spec 4.4.3)
-  val, ok = find_user(1)
-  if ok
-    puts "Tuple ok: #{val}"
-  end
-
-  # Safe navigation with &. (spec 4.4.1)
+  # Safe navigation with &.
   addr = Address.new("NYC", "10001")
   user_with_addr = User.new("Charlie", addr)
   user_no_addr = User.new("Dave", nil)
@@ -77,19 +41,33 @@ def main
   puts "Charlie's city: #{city1}"
   puts "Dave's city: #{city2}"
 
-  # Optional methods (spec 4.4.2)
-  opt = find_user(1)
-  puts "present? #{opt.present?}"
-  puts "absent? #{opt.absent?}"
+  # if let - scoped binding (preferred for conditional use)
+  if let user = find_user(2)
+    puts "Found: #{user}"
+  end
 
-  # map on optional
+  if let missing = find_user(100)
+    puts "This won't print"
+  else
+    puts "User 100 not found"
+  end
+
+  # Tuple unpacking - when you need the bool separately
+  val, ok = find_user(1)
+  if ok
+    puts "Tuple: found #{val}"
+  end
+
+  # Optional methods (present?/absent? are synonyms for ok?/nil?)
+  result = find_user(1)
+  puts "ok? #{result.ok?}, nil? #{result.nil?}"
+  puts "present? #{result.present?}, absent? #{result.absent?}"
+
+  # map on optional - transform if present
   upper = find_user(1).map { |s| s.upcase }
-  if upper.ok?
-    puts "Mapped: #{upper.unwrap}"
-  end
+  puts "Mapped: #{upper ?? "none"}"
 
-  # each on optional (execute if present)
-  find_user(2).each do |name|
-    puts "each: found #{name}"
-  end
+  # unwrap - only when absence is a bug (panics if nil)
+  known = find_user(1).unwrap
+  puts "Unwrapped: #{known}"
 end

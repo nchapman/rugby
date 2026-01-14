@@ -1,38 +1,31 @@
 # Rugby Error Handling
-# Demonstrates: error type, !, rescue, panic, error utilities (spec 15)
+# Demonstrates: error type, !, rescue, panic
+#
+# Rugby follows Go's philosophy: errors are values, handled explicitly.
 
 import errors
 import os
 
-# Function that can fail (spec 15.1)
+# Function that can fail - returns (T, error)
 def divide(a : Int, b : Int) -> (Int, error)
-  if b == 0
-    return 0, errors.New("division by zero")
-  end
+  return 0, errors.new("division by zero") if b == 0
   return a / b, nil
 end
 
-# Function that propagates errors with ! (spec 15.2)
+# Propagate errors with ! (like Rust's ?)
 def safe_calc(x : Int, y : Int) -> (Int, error)
   result = divide(x, y)!
   return result * 2, nil
 end
 
-# Function returning just error (spec 15.1)
+# Function returning just error
 def validate(n : Int) -> error
-  if n < 0
-    return errors.New("negative not allowed")
-  end
+  return errors.new("negative not allowed") if n < 0
   nil
 end
 
-# panic for unrecoverable errors (spec 15.6)
-def must_be_positive(n : Int)
-  panic "value must be positive, got #{n}" if n <= 0
-end
-
 def main
-  # Explicit error handling (spec 15.5)
+  # Explicit error handling (Go-style)
   result, err = divide(10, 2)
   if err == nil
     puts "10 / 2 = #{result}"
@@ -40,57 +33,49 @@ def main
 
   result2, err2 = divide(10, 0)
   if err2 != nil
-    puts "Error: division by zero"
+    puts "Division error caught"
   end
 
-  # Bang operator in main - exits on error (spec 15.4)
+  # Bang operator in main - exits on error
   good = divide(20, 4)!
   puts "20 / 4 = #{good}"
 
-  # rescue with default value (spec 15.3)
+  # rescue with inline default
   safe = divide(10, 0) rescue -1
   puts "10 / 0 with rescue: #{safe}"
 
-  # rescue block form
+  # rescue with block form
   value = divide(5, 0) rescue do
     puts "  Caught error, using fallback"
     0
   end
-  puts "Value with block rescue: #{value}"
+  puts "Block rescue: #{value}"
 
-  # rescue with error binding (spec 15.3)
+  # rescue with error binding
   data = divide(5, 0) rescue => err do
-    puts "  Error occurred: #{err}"
+    puts "  Error: #{err}"
     -999
   end
-  puts "With error binding: #{data}"
+  puts "Error binding: #{data}"
 
-  # Error propagation
-  calc_result = safe_calc(20, 5) rescue -1
-  puts "safe_calc(20, 5): #{calc_result}"
-
+  # Error propagation through call chain
+  calc_ok = safe_calc(20, 5) rescue -1
   calc_fail = safe_calc(10, 0) rescue -1
+  puts "safe_calc(20, 5): #{calc_ok}"
   puts "safe_calc(10, 0): #{calc_fail}"
 
-  # Validate function (error-only return)
+  # Validate function (error-only)
   err = validate(10)
-  if err == nil
-    puts "10 is valid"
-  end
+  puts "validate(10): #{err == nil ? "ok" : "failed"}"
 
   err = validate(-5)
-  if err != nil
-    puts "Validation failed for -5"
-  end
+  puts "validate(-5): #{err == nil ? "ok" : "failed"}"
 
-  # Error utilities (spec 15.7)
+  # Error utilities
   _, read_err = os.read_file("/nonexistent/file")
   if error_is?(read_err, os.ErrNotExist)
     puts "File not found (error_is? works)"
   end
-
-  # must_be_positive(5) works fine
-  # must_be_positive(-1) would panic
 
   puts "Done!"
 end

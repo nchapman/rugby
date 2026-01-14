@@ -1,55 +1,56 @@
 # Rugby Blocks
-# Demonstrates: do...end, {}, iteration methods, symbol-to-proc (spec 5.4, 12.3)
+# Demonstrates: do...end, {}, iteration, transformation, symbol-to-proc
+#
+# Blocks are Rugby's bread and butter. Prefer them over manual loops.
+# NOTE: return/break/next are NOT allowed inside blocks (use loops for control flow).
 
 def main
   nums = [1, 2, 3, 4, 5]
 
-  # each with do...end block
-  puts "Each with do...end:"
-  nums.each do |n|
-    puts "  #{n}"
+  # Braces for single-line blocks
+  puts "Doubled: #{nums.map { |n| n * 2 }}"
+
+  # do...end for multi-line blocks
+  results = nums.map do |n|
+    squared = n * n
+    squared + 1
   end
+  puts "Squared+1: #{results}"
 
-  # each with {} block (single-line preferred)
-  puts "Each with {}:"
-  nums.each { |n| puts "  #{n}" }
+  # Symbol-to-proc shorthand
+  words = ["hello", "world"]
+  puts "Uppercase: #{words.map(&:upcase)}"
 
-  # map - transform elements (spec 12.3)
-  doubled = nums.map { |n| n * 2 }
-  puts "Doubled: #{doubled}"
+  # Filtering
+  evens = nums.select { |n| n.even? }
+  odds = nums.reject { |n| n.even? }
+  puts "Evens: #{evens}, Odds: #{odds}"
 
-  # select/filter - keep matching elements
-  evens = nums.select { |n| n % 2 == 0 }
-  puts "Evens: #{evens}"
+  # Short form with symbol-to-proc
+  items = ["", "foo", "", "bar"]
+  non_empty = items.reject(&:empty?)
+  puts "Non-empty: #{non_empty}"
 
-  # reject - remove matching elements
-  odds = nums.reject { |n| n % 2 == 0 }
-  puts "Odds: #{odds}"
-
-  # find - first matching element (returns optional)
-  first_even = nums.find { |n| n % 2 == 0 }
+  # find returns an optional
+  first_even = nums.find { |n| n.even? }
   puts "First even: #{first_even ?? 0}"
 
-  # reduce - accumulate into single value
+  # reduce for aggregation
   sum = nums.reduce(0) { |acc, n| acc + n }
-  puts "Sum: #{sum}"
-
   product = nums.reduce(1) { |acc, n| acc * n }
-  puts "Product: #{product}"
+  puts "Sum: #{sum}, Product: #{product}"
 
   # Predicate methods
-  has_even = nums.any? { |n| n % 2 == 0 }
-  puts "Has even: #{has_even}"
+  puts "any even? #{nums.any? { |n| n.even? }}"
+  puts "all positive? #{nums.all? { |n| n > 0 }}"
+  puts "none negative? #{nums.none? { |n| n < 0 }}"
 
-  all_positive = nums.all? { |n| n > 0 }
-  puts "All positive: #{all_positive}"
+  # Built-in aggregations
+  puts "Sum: #{nums.sum}, Min: #{nums.min ?? 0}, Max: #{nums.max ?? 0}"
 
-  none_negative = nums.none? { |n| n < 0 }
-  puts "None negative: #{none_negative}"
-
-  # include?/contains? (spec 12.3)
-  puts "Contains 3? #{nums.include?(3)}"
-  puts "Contains 10? #{nums.contains?(10)}"
+  # each for side effects
+  puts "Iteration:"
+  nums.each { |n| puts "  #{n}" }
 
   # each_with_index
   puts "With index:"
@@ -57,48 +58,21 @@ def main
     puts "  [#{i}] = #{n}"
   end
 
-  # Array utility methods (spec 12.3)
-  puts "Sum: #{nums.sum}"
-  puts "Min: #{nums.min ?? 0}"
-  puts "Max: #{nums.max ?? 0}"
-  puts "First: #{nums.first ?? 0}"
-  puts "Last: #{nums.last ?? 0}"
+  # Integer iteration methods
+  puts "3 times:"
+  3.times { |i| puts "  #{i}" }
 
-  # Append with << (spec 12.3)
-  arr = [1, 2]
-  arr = arr << 3
-  puts "Appended: #{arr}"
-
-  # Sorting (spec 12.3)
-  unsorted = [3, 1, 4, 1, 5]
-  sorted = unsorted.sorted
-  puts "Sorted (copy): #{sorted}"
-  puts "Original: #{unsorted}"
-
-  # Integer times (spec 12.6)
-  puts "Three times:"
-  3.times do |i|
-    puts "  Iteration #{i}"
-  end
-
-  # upto/downto
   puts "1 upto 3:"
   1.upto(3) { |i| puts "  #{i}" }
 
-  puts "3 downto 1:"
-  3.downto(1) { |i| puts "  #{i}" }
+  # Map iteration
+  ages = {"alice" => 30, "bob" => 25}
+  ages.each { |k, v| puts "  #{k}: #{v}" }
+  puts "Keys: #{ages.keys}, Values: #{ages.values}"
 
-  # Symbol-to-proc shorthand (spec 5.4)
-  words = ["hello", "world"]
-  upper = words.map(&:upcase)
-  puts "Uppercase: #{upper}"
-
-  # Map iteration methods (spec 12.4)
-  puts "Map methods:"
-  m = {"a" => 1, "b" => 2, "c" => 3}
-  m.each { |k, v| puts "  #{k}: #{v}" }
-  puts "Keys: #{m.keys}"
-  puts "Values: #{m.values}"
-  puts "Has 'a'? #{m.has_key?("a")}"
-  puts "Fetch 'z' with default: #{m.fetch("z", 0)}"
+  # Chaining (functional pipelines)
+  result = [1, 2, 3, 4, 5, 6]
+    .select { |n| n.even? }
+    .map { |n| n * 10 }
+  puts "Chained: #{result}"
 end

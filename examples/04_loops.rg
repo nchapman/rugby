@@ -1,5 +1,8 @@
 # Rugby Loops
-# Demonstrates: for/in, while, until, break, next, loop modifiers (spec 5.3, 5.6)
+# Demonstrates: for/in, while, until, break, next
+#
+# NOTE: Use loops when you need control flow (break, next, return).
+# For data transformation, prefer blocks (see 09_blocks.rg).
 
 def main
   # for/in with array
@@ -26,7 +29,7 @@ def main
   n = 1
   while n <= 3
     puts "  #{n}"
-    n = n + 1
+    n += 1
   end
 
   # until loop (inverse of while)
@@ -34,7 +37,7 @@ def main
   m = 3
   until m == 0
     puts "  #{m}"
-    m = m - 1
+    m -= 1
   end
 
   # break to exit early
@@ -47,24 +50,18 @@ def main
   # next to skip iteration
   puts "Skip evens:"
   for i in 1..5
-    next if i % 2 == 0
+    next if i.even?
     puts "  #{i}"
   end
 
-  # Compound assignment (spec 5.1)
-  puts "Compound assignment:"
+  # Compound assignment
   sum = 0
   for i in 1..5
     sum += i
   end
-  puts "  Sum 1..5 = #{sum}"
+  puts "Sum 1..5: #{sum}"
 
-  # ||= assign if nil/false/absent (spec 5.1)
-  cache : String? = nil
-  cache ||= "default value"
-  puts "||= cache: #{cache}"
-
-  # Loop modifiers - execute repeatedly (spec 5.6)
+  # Loop modifiers - execute repeatedly
   puts "Loop modifier (while):"
   items = [1, 2, 3]
   puts "  #{items.shift}" while items.any?

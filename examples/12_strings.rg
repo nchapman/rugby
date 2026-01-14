@@ -1,53 +1,40 @@
 # Rugby Strings
-# Demonstrates: string methods, interpolation, heredocs (spec 3.3, 3.4, 12.5)
+# Demonstrates: string methods, interpolation, heredocs, conversion
 
 def main
   s = "  Hello, World!  "
 
-  # Basic info
   puts "Original: '#{s}'"
-  puts "Length (bytes): #{s.length}"
+  puts "Length: #{s.length}"
 
-  # Transformation methods (spec 12.5)
-  puts "Upcase: #{s.upcase}"
-  puts "Downcase: #{s.downcase}"
-  puts "Strip: '#{s.strip}'"
+  # Transformation
+  puts "upcase: #{s.upcase}"
+  puts "downcase: #{s.downcase}"
+  puts "strip: '#{s.strip}'"
 
   # Query methods
   greeting = "Hello, World!"
-  puts "Contains 'World': #{greeting.contains?("World")}"
-  puts "Starts with 'Hello': #{greeting.start_with?("Hello")}"
-  puts "Ends with '!': #{greeting.end_with?("!")}"
-  puts "Empty?: #{greeting.empty?}"
+  puts "contains? 'World': #{greeting.contains?("World")}"
+  puts "start_with? 'Hello': #{greeting.start_with?("Hello")}"
+  puts "end_with? '!': #{greeting.end_with?("!")}"
+  puts "empty?: #{greeting.empty?}"
 
-  # Splitting
+  # Splitting and joining
   csv = "apple,banana,cherry"
   parts = csv.split(",")
   puts "Split: #{parts}"
-  puts "First part: #{parts[0]}"
 
   # Replace
   text = "foo bar foo"
-  puts "Replace foo->baz: #{text.replace("foo", "baz")}"
+  puts "Replace: #{text.replace("foo", "baz")}"
 
-  # Lines
-  multiline = "line1\nline2\nline3"
-  lines = multiline.lines
-  puts "Line count: #{lines.length}"
-
-  # Characters
+  # Characters and indexing
   word = "Rugby"
-  chars = word.chars
-  puts "Chars: #{chars}"
-
-  # Indexing with negative indices (spec 4.2)
-  puts "word[0]: #{word[0]}"
-  puts "word[-1]: #{word[-1]}"
-
-  # Range slicing
+  puts "Chars: #{word.chars}"
+  puts "word[0]: #{word[0]}, word[-1]: #{word[-1]}"
   puts "word[0..2]: #{word[0..2]}"
 
-  # Heredoc basic (spec 3.4)
+  # Heredoc basic
   doc = <<END
 This is a heredoc.
 It preserves lines.
@@ -55,14 +42,7 @@ END
   puts "Heredoc:"
   puts doc
 
-  # Heredoc with indented delimiter <<- (spec 3.4)
-  msg = <<-MSG
-Hello there!
-  MSG
-  puts "Heredoc <<-:"
-  puts msg
-
-  # Heredoc with indent stripping <<~ (spec 3.4)
+  # Heredoc with indent stripping (most useful)
   sql = <<~SQL
     SELECT *
     FROM users
@@ -71,16 +51,15 @@ Hello there!
   puts "SQL Query:"
   puts sql
 
-  # String to number conversion (spec 12.5)
-  num_str = "42"
-  n, err = num_str.to_i
-  if err == nil
-    puts "Parsed: #{n}"
-  end
+  # Heredoc with indented delimiter
+  msg = <<-MSG
+Hello there!
+  MSG
+  puts "<<- heredoc:"
+  puts msg
 
-  float_str = "3.14"
-  f, err2 = float_str.to_f
-  if err2 == nil
-    puts "Parsed float: #{f}"
-  end
+  # String to number (returns tuple with error)
+  n = "42".to_i rescue 0
+  f = "3.14".to_f rescue 0.0
+  puts "Parsed: #{n}, #{f}"
 end

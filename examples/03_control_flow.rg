@@ -1,8 +1,8 @@
 # Rugby Control Flow
-# Demonstrates: if/elsif/else, unless, case/when, case_type, ternary (spec 5.2)
+# Demonstrates: if/elsif/else, unless, case/when, case_type, ternary, modifiers
 
 def main
-  # Basic if/elsif/else
+  # if/elsif/else
   score = 85
   if score >= 90
     puts "Grade: A"
@@ -20,16 +20,16 @@ def main
     puts "Not empty!"
   end
 
-  # Statement modifier form (spec 5.5)
+  # Statement modifiers - put simple conditions at the end
   value = 10
   puts "Positive" if value > 0
   puts "Not zero" unless value == 0
 
-  # Ternary operator (spec 5.2)
+  # Ternary operator
   max = 5 > 3 ? 5 : 3
   puts "Max: #{max}"
 
-  # case/when with single values
+  # case/when - value matching
   status = 200
   case status
   when 200
@@ -64,21 +64,20 @@ def main
     puts "Hot"
   end
 
-  # case_type for type matching (spec 5.2)
+  # case_type - type matching (Go type switch)
   describe_type("hello")
   describe_type(42)
   describe_type(3.14)
 end
 
-# case_type matches on type (spec 5.2)
 def describe_type(x : any)
   case_type x
   when String
-    puts "String: #{x}"
+    puts "It's a string: #{x}"
   when Int
-    puts "Int: #{x}"
+    puts "It's an int: #{x}"
   when Float
-    puts "Float: #{x}"
+    puts "It's a float: #{x}"
   else
     puts "Unknown type"
   end

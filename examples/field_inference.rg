@@ -1,8 +1,13 @@
-class User
-  @role : String  # 1. explicit declaration
+# Field Inference - How Rugby infers class fields
+# Demonstrates: explicit declarations, parameter promotion, assignment inference
 
-  def initialize(@name : String, email : String, role : String)  # 2. parameter promotion (@name)
-    @email = email  # 3. first assignment inference
+class User
+  @role : String  # 1. Explicit declaration
+
+  # 2. Parameter promotion (@name) - declares field and assigns argument
+  # 3. Assignment inference (@email) - first assignment in initialize
+  def initialize(@name : String, email : String, role : String)
+    @email = email
     @role = role
   end
 
@@ -11,11 +16,11 @@ class User
   end
 
   def introduce
-    puts("I'm #{@name}, email: #{@email}, role: #{@role}")
+    puts "I'm #{@name}, email: #{@email}, role: #{@role}"
   end
 end
 
 u = User.new("Alice", "alice@example.com", "admin")
-u.introduce()
+u.introduce
 u.update_email("alice.new@example.com")
-u.introduce()
+u.introduce

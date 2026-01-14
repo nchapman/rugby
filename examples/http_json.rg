@@ -1,21 +1,20 @@
-# Example: HTTP and JSON stdlib usage
-# Demonstrates fetching data from an API and parsing JSON
+# HTTP and JSON - Fetching data from an API
+# Demonstrates: rugby/http stdlib, error handling with ! and rescue
 
 import rugby/http
 
 # Fetch a user from JSONPlaceholder API
-# Uses error propagation (!) to handle HTTP errors
 def fetch_user(id : Int) -> (Map[String, any], error)
   url = "https://jsonplaceholder.typicode.com/users/#{id}"
-  resp = http.Get(url)!
-  resp.JSON()
+  resp = http.get(url)!
+  resp.json
 end
 
 # Fetch posts for a user
 def fetch_posts(user_id : Int) -> (Array[any], error)
   url = "https://jsonplaceholder.typicode.com/users/#{user_id}/posts"
-  resp = http.Get(url)!
-  resp.JSONArray()
+  resp = http.get(url)!
+  resp.json_array
 end
 
 def main
@@ -39,8 +38,8 @@ def main
 
   puts "Found #{posts.length} posts"
 
-  # Show first 3 posts
-  for i in 0..2
-    puts "- #{posts[i]["title"]}"
+  # Show first 3 posts (use slice to avoid out-of-bounds)
+  posts[0..2].each do |post|
+    puts "- #{post["title"]}"
   end
 end

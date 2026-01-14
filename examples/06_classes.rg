@@ -1,16 +1,11 @@
 # Rugby Classes
-# Demonstrates: class, initialize, fields, accessors, inheritance, pub (spec 7, 10)
+# Demonstrates: class, initialize, fields, accessors, inheritance, self, pub
 
+# Simple class with parameter promotion
 class Point
-  # Explicit field declarations (spec 7)
-  @x : Int
-  @y : Int
-
-  # Initialize with parameter promotion (spec 7)
   def initialize(@x : Int, @y : Int)
   end
 
-  # Instance methods access fields with @
   def magnitude_squared -> Int
     @x * @x + @y * @y
   end
@@ -19,17 +14,17 @@ class Point
     "(#{@x}, #{@y})"
   end
 
-  # Explicit self usage (spec 7)
-  def equals(other : Point) -> Bool
+  # Use self for method chaining or explicit reference
+  def equals?(other : Point) -> Bool
     self.magnitude_squared == other.magnitude_squared
   end
 end
 
+# Class with accessors
 class Person
-  # Using accessor declarations (spec 7.4)
-  getter name : String
-  getter age : Int
-  property email : String
+  getter name : String      # def name -> String
+  getter age : Int          # def age -> Int
+  property email : String   # getter + setter
 
   def initialize(@name : String, @age : Int, @email : String)
   end
@@ -39,23 +34,19 @@ class Person
   end
 
   def have_birthday
-    @age = @age + 1
+    @age += 1
   end
 end
 
-# Inheritance with < (spec 7.5)
+# Inheritance with <
 class Animal
-  @name : String
+  getter name : String
 
   def initialize(@name : String)
   end
 
   def speak -> String
     "..."
-  end
-
-  def name -> String
-    @name
   end
 end
 
@@ -71,7 +62,7 @@ class Dog < Animal
   end
 end
 
-# pub exports to Go (spec 10)
+# pub exports to Go (uppercase in generated code)
 pub class Counter
   @count : Int
 
@@ -81,6 +72,7 @@ pub class Counter
 
   pub def inc
     @count += 1
+    self  # return self for chaining
   end
 
   pub def value -> Int
@@ -94,34 +86,29 @@ def main
   p2 = Point.new(4, 3)
   puts "Point: #{p1.to_s}"
   puts "Magnitude squared: #{p1.magnitude_squared}"
-  puts "p1.equals(p2): #{p1.equals(p2)}"
+  puts "p1.equals?(p2): #{p1.equals?(p2)}"
 
-  # Create Person with accessors
+  # Person with accessors
   person = Person.new("Alice", 30, "alice@example.com")
   puts person.introduce
 
-  # Use getter
   puts "Name: #{person.name}"
-  puts "Age: #{person.age}"
-
-  # Use property getter and setter
   puts "Email: #{person.email}"
+
   person.email = "alice.new@example.com"
   puts "New email: #{person.email}"
 
-  # Modify through method
   person.have_birthday
   puts "After birthday: #{person.age}"
 
-  # Inheritance (spec 7.5)
+  # Inheritance and polymorphism
   cat = Cat.new("Whiskers")
   dog = Dog.new("Rex")
   puts cat.speak
   puts dog.speak
 
-  # Exported class
+  # Method chaining with self
   counter = Counter.new
-  counter.inc
-  counter.inc
+  counter.inc.inc.inc
   puts "Counter: #{counter.value}"
 end
