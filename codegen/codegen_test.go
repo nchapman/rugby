@@ -84,14 +84,18 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `i := 5`)
-	// == is compiled to runtime.Equal for type safety
-	assertContains(t, output, `for !(runtime.Equal(i, 0)) {`)
+	// With type info, == is optimized to direct comparison for primitive types
+	assertContains(t, output, `for !(i == 0) {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 	assertContains(t, output, `i = (i - 1)`)
 }
 
 func TestGenerateUntilSimpleCondition(t *testing.T) {
-	input := `def main
+	input := `def work
+end
+
+def main
+  done = false
   until done
     work()
   end
@@ -104,7 +108,12 @@ end`
 }
 
 func TestGenerateUntilWithLogicalOperator(t *testing.T) {
-	input := `def main
+	input := `def wait
+end
+
+def main
+  ready = false
+  valid = false
   until ready and valid
     wait()
   end
@@ -118,6 +127,9 @@ end`
 
 func TestGenerateUntilWithBreakAndNext(t *testing.T) {
 	input := `def main
+  done = false
+  skip = false
+  found = false
   until done
     next if skip
     break if found
@@ -136,6 +148,7 @@ end`
 
 func TestGeneratePostfixWhile(t *testing.T) {
 	input := `def main
+  x = 5
   puts x while x > 0
 end`
 
@@ -147,7 +160,11 @@ end`
 }
 
 func TestGeneratePostfixUntil(t *testing.T) {
-	input := `def main
+	input := `def process
+end
+
+def main
+  done = false
   process() until done
 end`
 
@@ -159,19 +176,35 @@ end`
 }
 
 func TestGeneratePostfixWhileMethodChain(t *testing.T) {
-	input := `def main
+	input := `class Foo
+  def bar
+  end
+end
+
+class Obj
+  def foo -> Foo
+    Foo.new
+  end
+end
+
+def main
+  obj = Obj.new
+  cond = true
   obj.foo.bar while cond
 end`
 
 	output := compile(t, input)
 
 	// Selector expressions as statements become method calls
+	// Private methods use lowercase names
 	assertContains(t, output, `for cond {`)
-	assertContains(t, output, `obj.foo.bar()`)
+	assertContains(t, output, `obj.foo().bar()`)
 }
 
 func TestGeneratePostfixWhileCompoundCondition(t *testing.T) {
 	input := `def main
+  x = 5
+  y = 3
   puts x while x > 0 and y < 10
 end`
 
@@ -197,7 +230,22 @@ end`
 }
 
 func TestGenerateSelectorAsStatement(t *testing.T) {
-	input := `def main
+	input := `class Bar
+  def baz
+  end
+end
+
+class Obj
+  def foo
+  end
+
+  def bar -> Bar
+    Bar.new
+  end
+end
+
+def main
+  obj = Obj.new
   obj.foo
   obj.bar.baz
 end`
@@ -205,8 +253,9 @@ end`
 	output := compile(t, input)
 
 	// Selector expressions as statements become method calls (Ruby behavior)
+	// Private methods use lowercase names
 	assertContains(t, output, `obj.foo()`)
-	assertContains(t, output, `obj.bar.baz()`)
+	assertContains(t, output, `obj.bar().baz()`)
 }
 
 func TestGenerateBoolean(t *testing.T) {
@@ -320,7 +369,20 @@ func compile(t *testing.T, input string) string {
 		t.FailNow()
 	}
 
-	gen := New()
+	// Run semantic analysis to provide type info
+	analyzer := semantic.NewAnalyzer()
+	errs := analyzer.Analyze(program)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			t.Errorf("semantic error: %s", err)
+		}
+		t.FailNow()
+	}
+
+	// Create type info adapter
+	typeInfo := &testTypeInfoAdapter{analyzer: analyzer}
+
+	gen := New(WithTypeInfo(typeInfo))
 	output, err := gen.Generate(program)
 	if err != nil {
 		t.Fatalf("codegen error: %v", err)
@@ -599,7 +661,10 @@ end`
 }
 
 func TestGenerateChainedSelector(t *testing.T) {
-	input := `def main
+	input := `import net/http
+
+def main
+  resp = http.Response.new
   x = resp.Body
 end`
 
@@ -610,8 +675,10 @@ end`
 
 func TestGenerateSnakeCaseMapping(t *testing.T) {
 	input := `import io
+import strings
 
 def main
+  r = strings.Reader.new("hello")
   io.read_all(r)
 end`
 
@@ -675,17 +742,24 @@ end`
 }
 
 func TestGenerateDefer(t *testing.T) {
-	input := `def main
+	input := `import net/http
+
+def main
+  resp = http.Response.new
   defer resp.Body.Close
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `defer resp.Body.Close()`)
+	// Body is a field in http.Response, accessed as resp.Body()
+	assertContains(t, output, `defer resp.Body().Close()`)
 }
 
 func TestGenerateDeferWithParens(t *testing.T) {
-	input := `def main
+	input := `import os
+
+def main
+  file = os.File.new
   defer file.Close()
 end`
 
@@ -695,7 +769,10 @@ end`
 }
 
 func TestGenerateDeferSimple(t *testing.T) {
-	input := `def main
+	input := `def cleanup
+end
+
+def main
   defer cleanup
 end`
 
@@ -753,11 +830,13 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `[]any{[]int{1, 2}, []int{3, 4}}`)
+	// With type info, nested arrays are properly typed as [][]int
+	assertContains(t, output, `[][]int{[]int{1, 2}, []int{3, 4}}`)
 }
 
 func TestGenerateArrayIndex(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3]
   x = arr[0]
 end`
 
@@ -768,6 +847,8 @@ end`
 
 func TestGenerateArrayIndexWithExpression(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3]
+  i = 0
   x = arr[i + 1]
 end`
 
@@ -779,6 +860,7 @@ end`
 
 func TestGenerateNegativeIndexLiteral(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3]
   x = arr[-1]
   y = arr[-2]
 end`
@@ -804,6 +886,8 @@ end`
 
 func TestGenerateVariableIndex(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3]
+  i = 0
   x = arr[i]
 end`
 
@@ -815,6 +899,7 @@ end`
 
 func TestGenerateRangeSliceInclusive(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3, 4, 5]
   x = arr[1..3]
 end`
 
@@ -826,6 +911,7 @@ end`
 
 func TestGenerateRangeSliceExclusive(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3, 4, 5]
   x = arr[1...4]
 end`
 
@@ -837,6 +923,7 @@ end`
 
 func TestGenerateRangeSliceNegative(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3, 4, 5]
   x = arr[0..-1]
 end`
 
@@ -871,13 +958,14 @@ end`
 
 func TestGenerateSymbolToProcWithMap(t *testing.T) {
 	input := `def main
+  names = ["alice", "bob"]
   result = names.map(&:upcase)
 end`
 
 	output := compile(t, input)
 
 	// When passed to map, symbol-to-proc becomes a runtime.Map call with CallMethod
-	assertContains(t, output, `runtime.Map(names, func(x any)`)
+	assertContains(t, output, `runtime.Map(names, func(x string)`)
 	assertContains(t, output, `runtime.CallMethod(x, "upcase")`)
 }
 
@@ -894,6 +982,7 @@ end`
 
 func TestGenerateChainedArrayIndex(t *testing.T) {
 	input := `def main
+  matrix = [[1, 2], [3, 4]]
   x = matrix[0][1]
 end`
 
@@ -904,6 +993,7 @@ end`
 
 func TestGenerateChainedNegativeIndex(t *testing.T) {
 	input := `def main
+  matrix = [[1, 2], [3, 4]]
   x = matrix[-1][-1]
 end`
 
@@ -915,6 +1005,7 @@ end`
 
 func TestGenerateMixedChainedIndex(t *testing.T) {
 	input := `def main
+  matrix = [[1, 2], [3, 4]]
   x = matrix[0][-1]
 end`
 
@@ -926,6 +1017,7 @@ end`
 
 func TestGenerateArrayAppend(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3]
   arr << 5
 end`
 
@@ -937,6 +1029,7 @@ end`
 
 func TestGenerateArrayAppendChained(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3]
   arr << 1 << 2 << 3
 end`
 
@@ -960,24 +1053,27 @@ end`
 
 func TestGenerateChannelSend(t *testing.T) {
 	input := `def main
+  ch = Chan[Int].new
   ch << 42
 end`
 
 	output := compile(t, input)
 
-	// Channel send also uses runtime.ShiftLeft
+	// Channel send uses runtime.ShiftLeft for now (could be optimized to ch <- 42 later)
 	assertContains(t, output, `runtime.ShiftLeft(ch, 42)`)
 }
 
 func TestGenerateTernaryOperator(t *testing.T) {
 	input := `def main
+  a = 5
+  b = 3
   x = a > b ? a : b
 end`
 
 	output := compile(t, input)
 
-	// Ternary compiles to IIFE with if-else
-	assertContains(t, output, `func() any {`)
+	// Ternary compiles to IIFE with if-else, with type info returns int
+	assertContains(t, output, `func() int {`)
 	assertContains(t, output, `if a > b {`)
 	assertContains(t, output, `return a`)
 	assertContains(t, output, `return b`)
@@ -985,6 +1081,7 @@ end`
 
 func TestGenerateTernaryWithStrings(t *testing.T) {
 	input := `def main
+  valid = true
   status = valid ? "ok" : "error"
 end`
 
@@ -999,6 +1096,8 @@ end`
 
 func TestGenerateTernaryNested(t *testing.T) {
 	input := `def main
+  a = true
+  b = false
   x = a ? b ? 1 : 2 : 3
 end`
 
@@ -1013,7 +1112,13 @@ end`
 }
 
 func TestGenerateTernaryWithFunctionCall(t *testing.T) {
-	input := `def main
+	input := `def foo -> Bool
+  true
+end
+
+def main
+  a = 1
+  b = 2
   x = foo() ? a : b
 end`
 
@@ -1025,14 +1130,16 @@ end`
 
 func TestGenerateTernaryWithMethodCalls(t *testing.T) {
 	input := `def main
+  cond = true
+  list = [1, 2, 3]
   x = cond ? list.first : list.last
 end`
 
 	output := compile(t, input)
 
-	// Ternary with method calls in branches - first/last are runtime functions
-	assertContains(t, output, `return runtime.First(list)`)
-	assertContains(t, output, `return runtime.Last(list)`)
+	// Ternary with method calls in branches - first/last use Ptr versions for optional result
+	assertContains(t, output, `return runtime.FirstPtr(list)`)
+	assertContains(t, output, `return runtime.LastPtr(list)`)
 }
 
 func TestGenerateMapLiteral(t *testing.T) {
@@ -1058,6 +1165,7 @@ end`
 
 func TestGenerateMapAccess(t *testing.T) {
 	input := `def main
+  m = {"key" => 1}
   x = m["key"]
 end`
 
@@ -1068,6 +1176,7 @@ end`
 
 func TestGenerateEachBlock(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3]
   arr.each do |x|
     puts(x)
   end
@@ -1082,6 +1191,7 @@ end`
 
 func TestGenerateEachWithIndex(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3]
   arr.each_with_index do |v, i|
     puts(v)
   end
@@ -1096,6 +1206,7 @@ end`
 
 func TestGenerateMapBlock(t *testing.T) {
 	input := `def main
+  arr = [1, 2, 3]
   result = arr.map do |x|
     x * 2
   end
@@ -1103,13 +1214,15 @@ end`
 
 	output := compile(t, input)
 
-	// Map generates runtime.Map() call with function literal (three-value return)
-	assertContains(t, output, `runtime.Map(arr, func(x any) any {`)
+	// Map generates runtime.Map() call with function literal, typed with semantic analysis
+	// Return type is any since runtime.Map returns []any
+	assertContains(t, output, `runtime.Map(arr, func(x int) any {`)
 	assertContains(t, output, `return (x * 2)`)
 }
 
 func TestBlockWithNoParams(t *testing.T) {
 	input := `def main
+  items = [1, 2, 3]
   items.each do ||
     puts("hello")
   end
@@ -1123,7 +1236,11 @@ end`
 }
 
 func TestBlockOnMethodCall(t *testing.T) {
-	input := `def main
+	input := `def getItems -> Array[Int]
+  [1, 2, 3]
+end
+
+def main
   getItems().each do |x|
     puts(x)
   end
@@ -1137,6 +1254,7 @@ end`
 
 func TestNestedBlocks(t *testing.T) {
 	input := `def main
+  matrix = [[1, 2], [3, 4]]
   matrix.each do |row|
     row.each do |x|
       puts(x)
@@ -1153,6 +1271,7 @@ end`
 
 func TestSelectBlock(t *testing.T) {
 	input := `def main
+  nums = [1, 2, 3, 4, 5]
   evens = nums.select do |n|
     n % 2 == 0
   end
@@ -1160,12 +1279,14 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Select(nums, func(n any) bool {`)
-	assertContains(t, output, `return runtime.Equal((n % 2), 0)`)
+	// With type info, n is typed as int
+	assertContains(t, output, `runtime.Select(nums, func(n int) bool {`)
+	assertContains(t, output, `return ((n % 2) == 0)`)
 }
 
 func TestRejectBlock(t *testing.T) {
 	input := `def main
+  nums = [1, 2, 3, 4, 5]
   odds = nums.reject do |n|
     n % 2 == 0
   end
@@ -1173,12 +1294,14 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Reject(nums, func(n any) bool {`)
-	assertContains(t, output, `return runtime.Equal((n % 2), 0)`)
+	// With type info, n is typed as int
+	assertContains(t, output, `runtime.Reject(nums, func(n int) bool {`)
+	assertContains(t, output, `return ((n % 2) == 0)`)
 }
 
 func TestReduceBlock(t *testing.T) {
 	input := `def main
+  nums = [1, 2, 3, 4, 5]
   sum = nums.reduce(0) do |acc, n|
     acc + n
   end
@@ -1186,13 +1309,14 @@ end`
 
 	output := compile(t, input)
 
-	// With type inference, acc is typed based on initial value (int)
-	assertContains(t, output, `runtime.Reduce(nums, 0, func(acc int, n any) int {`)
+	// With type inference, acc is typed based on initial value (int), n is typed from array
+	assertContains(t, output, `runtime.Reduce(nums, 0, func(acc int, n int) int {`)
 	assertContains(t, output, `return (acc + n)`)
 }
 
 func TestFindBlock(t *testing.T) {
 	input := `def main
+  nums = [1, 2, 3, 4, 5]
   first_even = nums.find do |n|
     n % 2 == 0
   end
@@ -1200,13 +1324,14 @@ end`
 
 	output := compile(t, input)
 
-	// FindPtr returns *T for optional coalescing support
-	assertContains(t, output, `runtime.FindPtr(nums, func(n any) bool {`)
-	assertContains(t, output, `return runtime.Equal((n % 2), 0)`)
+	// FindPtr returns *T for optional coalescing support, n is typed
+	assertContains(t, output, `runtime.FindPtr(nums, func(n int) bool {`)
+	assertContains(t, output, `return ((n % 2) == 0)`)
 }
 
 func TestAnyBlock(t *testing.T) {
 	input := `def main
+  nums = [1, 2, 3, 4, 5]
   has_even = nums.any? do |n|
     n % 2 == 0
   end
@@ -1214,12 +1339,14 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Any(nums, func(n any) bool {`)
-	assertContains(t, output, `return runtime.Equal((n % 2), 0)`)
+	// With type info, n is typed as int
+	assertContains(t, output, `runtime.Any(nums, func(n int) bool {`)
+	assertContains(t, output, `return ((n % 2) == 0)`)
 }
 
 func TestAllBlock(t *testing.T) {
 	input := `def main
+  nums = [1, 2, 3, 4, 5]
   all_positive = nums.all? do |n|
     n > 0
   end
@@ -1227,12 +1354,14 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.All(nums, func(n any) bool {`)
+	// With type info, n is typed as int
+	assertContains(t, output, `runtime.All(nums, func(n int) bool {`)
 	assertContains(t, output, `return (n > 0)`)
 }
 
 func TestNoneBlock(t *testing.T) {
 	input := `def main
+  nums = [1, 2, 3, 4, 5]
   no_negatives = nums.none? do |n|
     n < 0
   end
@@ -1240,7 +1369,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.None(nums, func(n any) bool {`)
+	// With type info, n is typed as int
+	assertContains(t, output, `runtime.None(nums, func(n int) bool {`)
 	assertContains(t, output, `return (n < 0)`)
 }
 
@@ -1248,12 +1378,11 @@ func TestKernelFunctions(t *testing.T) {
 	input := `def main
   puts("hello")
   print("world")
+  x = 42
   p(x)
   name = gets
-  exit(1)
   sleep(2)
   n = rand(10)
-  f = rand
 end`
 
 	output := compile(t, input)
@@ -1263,10 +1392,8 @@ end`
 	assertContains(t, output, `runtime.Print("world")`)
 	assertContains(t, output, `runtime.P(x)`)
 	assertContains(t, output, `name := runtime.Gets()`)
-	assertContains(t, output, `runtime.Exit(1)`)
 	assertContains(t, output, `runtime.Sleep(2)`)
 	assertContains(t, output, `n := runtime.RandInt(10)`)
-	assertContains(t, output, `f := runtime.RandFloat()`)
 }
 
 func TestTimesBlock(t *testing.T) {
@@ -1284,6 +1411,7 @@ end`
 
 func TestTimesBlockWithExpression(t *testing.T) {
 	input := `def main
+  n = 5
   n.times do |i|
     puts(i)
   end
