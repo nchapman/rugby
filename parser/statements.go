@@ -218,31 +218,19 @@ func (p *Parser) parseIfStmt() *ast.IfStmt {
 		p.nextToken() // consume '='
 		stmt.AssignExpr = p.parseExpression(lowest)
 		p.nextToken() // move past expression
-	} else if p.curTokenIs(token.LPAREN) {
-		// Check for assignment-in-condition pattern: if (name = expr)
-		// Peek ahead to see if it's (ident = expr) pattern
+	} else if p.curTokenIs(token.LPAREN) && p.isAssignmentPattern() {
+		// Assignment-in-condition pattern: if (name = expr)
 		p.nextToken() // consume '('
-		if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.ASSIGN) {
-			// Assignment pattern detected
-			stmt.AssignName = p.curToken.Literal
-			p.nextToken() // consume ident
-			p.nextToken() // consume '='
-			stmt.AssignExpr = p.parseExpression(lowest)
-			p.nextToken() // move past expression
-			if !p.curTokenIs(token.RPAREN) {
-				p.errorAt(p.curToken.Line, p.curToken.Column, "expected ')' after assignment expression")
-				return nil
-			}
-			p.nextToken() // consume ')'
-		} else {
-			// Regular parenthesized condition - parse as grouped expression
-			// We already consumed '(', so parse the inner expression
-			stmt.Cond = p.parseExpression(lowest)
-			p.nextToken() // move past expression
-			if p.curTokenIs(token.RPAREN) {
-				p.nextToken() // consume ')'
-			}
+		stmt.AssignName = p.curToken.Literal
+		p.nextToken() // consume ident
+		p.nextToken() // consume '='
+		stmt.AssignExpr = p.parseExpression(lowest)
+		p.nextToken() // move past expression
+		if !p.curTokenIs(token.RPAREN) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ')' after assignment expression")
+			return nil
 		}
+		p.nextToken() // consume ')'
 	} else {
 		stmt.Cond = p.parseExpression(lowest)
 		p.nextToken() // move past condition

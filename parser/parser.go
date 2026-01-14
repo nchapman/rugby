@@ -114,6 +114,27 @@ func (p *Parser) peekAheadIsDotAfterNewlines() bool {
 	return result
 }
 
+// isAssignmentPattern checks if we have a (ident = expr) assignment pattern.
+// This is used to distinguish `if (x = getValue())` from `if (1..10).include?(5)`.
+// Must be called when curToken is LPAREN.
+func (p *Parser) isAssignmentPattern() bool {
+	// Save lexer state and parser tokens
+	lexerState := p.l.SaveState()
+	savedCur := p.curToken
+	savedPeek := p.peekToken
+
+	// Look inside the parens: consume '(' then check for IDENT = pattern
+	p.nextToken() // move past '('
+	result := p.curTokenIs(token.IDENT) && p.peekTokenIs(token.ASSIGN)
+
+	// Restore lexer state and parser tokens
+	p.l.RestoreState(lexerState)
+	p.curToken = savedCur
+	p.peekToken = savedPeek
+
+	return result
+}
+
 // parseBlocksAndChaining handles blocks and method chaining after an expression.
 // This enables:
 //   - arr.select { |x| }.map { |x| } (inline chaining)
