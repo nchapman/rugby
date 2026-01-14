@@ -19,6 +19,9 @@ make check
 # Run all tests
 make test
 
+# Run spec tests (language feature tests)
+make test-spec
+
 # Run linters
 make lint
 
@@ -134,6 +137,71 @@ Go package providing Ruby-like methods, imported as `rugby/runtime`.
 - **optional.go**: `OptionalInt`, `OptionalString`, etc. with `SomeT()`/`NoneT()` constructors
 - **equal.go**: `Equal()` for deep equality (checks `Equaler` interface first)
 - **io.go**: `Puts`, `Print`, `P`, `Gets`, `Exit`, `Sleep`
+
+## Spec Testing
+
+The `tests/spec/` directory contains spec-driven tests that verify language features end-to-end. These tests catch integration bugs that unit tests miss.
+
+```bash
+# Run spec tests
+make test-spec
+
+# Run spec tests and update golden files
+make test-spec-bless
+```
+
+### Test File Format
+
+Spec tests are self-contained `.rg` files with directives:
+
+```ruby
+#@ run-pass           # Must compile and run successfully
+#@ check-output       # Verify stdout matches expected
+
+puts "Hello"
+
+#@ expect:
+# Hello
+```
+
+### Directives
+
+| Directive | Meaning |
+|-----------|---------|
+| `#@ run-pass` | Must compile and run without error (default) |
+| `#@ run-fail` | Must compile but fail at runtime |
+| `#@ compile-fail` | Must fail to compile |
+| `#@ check-output` | Verify stdout matches `#@ expect:` block |
+| `#@ skip: reason` | Skip test with reason |
+| `#~ ERROR: pattern` | Inline: expected error matching regex |
+
+### Directory Structure
+
+```
+tests/spec/
+├── literals/          # Integer, string, array, range literals
+├── classes/           # Class definitions, inheritance
+├── control_flow/      # If/elsif/else, loops
+├── functions/         # Function definitions
+├── blocks/            # Block iteration (each, map, select)
+├── optionals/         # Optional types, if-let, nil coalescing
+├── interfaces/        # Interface definitions, structural typing
+├── go_interop/        # Go package imports
+├── modules/           # Module definitions
+├── concurrency/       # Channels, spawn/await
+└── errors/            # compile-fail tests for known bugs
+```
+
+### Writing New Spec Tests
+
+1. Create a `.rg` file in the appropriate category
+2. Add directives at the top (`#@ run-pass`, etc.)
+3. For expected output, use `#@ expect:` block or create a `.stdout` golden file
+4. Run `make test-spec` to verify
+
+### Bug Documentation
+
+Known bugs are documented as `compile-fail` tests in `tests/spec/errors/`. When a bug is fixed, the test is moved to the appropriate feature directory and converted to `run-pass`.
 
 ## Language Spec
 

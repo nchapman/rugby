@@ -1,4 +1,4 @@
-.PHONY: build test lint clean install run repl help
+.PHONY: build test test-spec test-spec-bless lint clean install run repl help
 
 # Build the rugby compiler
 build:
@@ -14,6 +14,16 @@ test:
 test-coverage:
 	@echo "Running tests with coverage..."
 	@go test -cover ./...
+
+# Run spec tests (language specification tests)
+test-spec: build
+	@echo "Running spec tests..."
+	@cd tests && go test -v -run TestSpecs
+
+# Run spec tests and update golden files
+test-spec-bless: build
+	@echo "Running spec tests with blessing..."
+	@cd tests && go test -v -run TestSpecs -args -bless
 
 # Run linters
 lint:
@@ -66,6 +76,8 @@ help:
 	@echo "  build           - Build the rugby compiler"
 	@echo "  test            - Run all tests"
 	@echo "  test-coverage   - Run tests with coverage"
+	@echo "  test-spec       - Run language specification tests"
+	@echo "  test-spec-bless - Run spec tests and update golden files"
 	@echo "  lint            - Run static analysis"
 	@echo "  fmt             - Format code"
 	@echo "  clean           - Clean build artifacts"
