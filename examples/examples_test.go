@@ -25,11 +25,11 @@ func allExamples() []example {
 		{file: "03_control_flow.rg", expectedOutput: "Grade: B\nNot empty!\nPositive\nNot zero\nMax: 5\nOK\nWeekend\nNice\nIt's a string: hello\nIt's an int: 42\nIt's a float: 3.14\n"},
 		{file: "04_loops.rg"},                    // predicate methods now work
 		{file: "05_functions.rg"},                // optional return types now work
-		{file: "06_classes.rg", hasBugs: true},   // self return, method chaining
+		{file: "06_classes.rg", hasBugs: true},   // lint: unused base class methods
 		{file: "07_interfaces.rg"},               // interface structural typing works
 		{file: "08_modules.rg"},                  // modules now generate interfaces for lint compliance
 		{file: "09_blocks.rg", hasBugs: true},    // method chaining with newlines
-		{file: "10_optionals.rg", hasBugs: true}, // safe navigation on getters, unwrap
+		{file: "10_optionals.rg"},                // safe navigation and unwrap fixed
 		{file: "11_errors.rg"},                   // errors.new now works
 		{file: "12_strings.rg"},                  // string methods work
 		{file: "13_ranges.rg"},                   // range methods work
@@ -44,7 +44,7 @@ func allExamples() []example {
 		{file: "todo_app.rg", hasBugs: true},    // map literal parsing in method body
 
 		// HTTP + JSON (needs network, has bugs too)
-		{file: "http_json.rg", skipRun: true, hasBugs: true}, // resp.json method, interface indexing
+		{file: "http_json.rg", skipRun: true}, // needs network, resp.json and interface indexing fixed
 	}
 }
 
