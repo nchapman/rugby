@@ -432,10 +432,15 @@ func (g *Generator) genSafeNavExpr(e *ast.SafeNavExpr) {
 	// Safe navigation is used with optional-returning getters/methods, so the receiver
 	// must be called (not just referenced as a field).
 	if sel, ok := e.Receiver.(*ast.SelectorExpr); ok {
+		// Check if genExpr will already add () for this selector (getter/method)
+		selectorKind := g.getSelectorKind(sel)
 		g.genExpr(e.Receiver)
-		// Always call selector expressions in safe nav context - they return optionals
-		// which means they must be methods/getters, not raw field accesses.
-		if !strings.HasPrefix(sel.Sel, "_") {
+		// Only add () if genExpr didn't already handle it.
+		// genExpr adds () for SelectorMethod, SelectorGetter, and SelectorGoMethod.
+		// Underscore-prefixed selectors (e.g., _field) are raw field accesses that
+		// bypass the getter mechanism and don't need ().
+		if selectorKind != ast.SelectorMethod && selectorKind != ast.SelectorGetter &&
+			selectorKind != ast.SelectorGoMethod && !strings.HasPrefix(sel.Sel, "_") {
 			g.buf.WriteString("()")
 		}
 	} else {
@@ -1251,49 +1256,62 @@ func (g *Generator) genBlockCall(call *ast.CallExpr) {
 }
 
 // genOptionalMapBlock generates code for optional.map { |x| ... }
+// Returns *ResultType (pointer) to maintain optional semantics for nil coalescing.
 func (g *Generator) genOptionalMapBlock(receiver ast.Expression, block *ast.BlockExpr, optType string) {
-	g.needsRuntime = true
-
-	varName := "_"
+	varName := "_optVal"
+	blockParam := "_"
 	if len(block.Params) > 0 {
-		varName = block.Params[0]
+		blockParam = block.Params[0]
 	}
 
 	// Determine the inner type (without ?)
 	innerType := strings.TrimSuffix(optType, "?")
 	goType := mapType(innerType)
 
-	g.buf.WriteString("runtime.OptionalMapString(")
-	g.genExpr(receiver)
-	g.buf.WriteString(", func(")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" ")
-	g.buf.WriteString(goType)
-	g.buf.WriteString(") string {\n")
-
-	g.indent++
-
-	// Generate all but last statement normally
-	for i, stmt := range block.Body {
-		if i == len(block.Body)-1 {
-			// Last statement - generate as return
-			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
-				g.writeIndent()
-				g.buf.WriteString("return ")
-				g.genExpr(exprStmt.Expr)
-				g.buf.WriteString("\n")
-			} else {
-				g.genStatement(stmt)
+	// Infer the block's return type from its last expression
+	blockReturnGoType := "string" // default fallback
+	if len(block.Body) > 0 {
+		if exprStmt, ok := block.Body[len(block.Body)-1].(*ast.ExprStmt); ok {
+			if inferredType := g.inferTypeFromExpr(exprStmt.Expr); inferredType != "" {
+				blockReturnGoType = mapType(inferredType)
 			}
-		} else {
-			g.genStatement(stmt)
 		}
 	}
 
-	g.indent--
+	// Generate: func() *ResultType { if opt := receiver; opt != nil { result := block(*opt); return &result }; return nil }()
+	g.buf.WriteString("func() *")
+	g.buf.WriteString(blockReturnGoType)
+	g.buf.WriteString(" { if ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.genExpr(receiver)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" != nil { ")
+	g.buf.WriteString(blockParam)
+	g.buf.WriteString(" := *")
+	g.buf.WriteString(varName)
+	// Declare _ to avoid unused variable if blockParam is used
+	if blockParam != "_" {
+		g.buf.WriteString("; _ = ")
+		g.buf.WriteString(blockParam)
+	}
+	g.buf.WriteString("; _result := ")
 
-	g.writeIndent()
-	g.buf.WriteString("})")
+	// Generate block body - last expression is the result
+	if len(block.Body) > 0 {
+		lastStmt := block.Body[len(block.Body)-1]
+		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
+			g.genExpr(exprStmt.Expr)
+		} else {
+			g.buf.WriteString("\"\"") // fallback
+		}
+	} else {
+		g.buf.WriteString("\"\"")
+	}
+
+	g.buf.WriteString("; return &_result }; return nil }()")
+	_ = goType // inner type used for block param binding
 }
 
 // genOptionalEachBlock generates code for optional.each { |x| ... }

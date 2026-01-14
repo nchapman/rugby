@@ -1964,6 +1964,12 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 				a.checkArgumentTypes(methodName, method, argTypes)
 			}
 
+			// Special handling for optional.map { } - return type is Optional[BlockReturnType]
+			if receiverType.Kind == TypeOptional && sel.Sel == "map" && call.Block != nil {
+				blockReturnType := a.inferBlockReturnType(call.Block)
+				return NewOptionalType(blockReturnType)
+			}
+
 			// Return method's return type
 			if len(method.ReturnTypes) == 1 {
 				return method.ReturnTypes[0]
@@ -2185,6 +2191,24 @@ func (a *Analyzer) analyzeBlockWithTypes(block *ast.BlockExpr, paramTypes []*Typ
 		a.analyzeStatement(stmt)
 	}
 	a.scope = prevScope
+}
+
+// inferBlockReturnType returns the type that a block expression produces.
+// This is the type of the last expression in the block body.
+func (a *Analyzer) inferBlockReturnType(block *ast.BlockExpr) *Type {
+	if block == nil || len(block.Body) == 0 {
+		return TypeAnyVal
+	}
+
+	// The return value is the last expression in the block
+	lastStmt := block.Body[len(block.Body)-1]
+	if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
+		if typ := a.getNodeType(exprStmt.Expr); typ != nil && typ.Kind != TypeUnknown {
+			return typ
+		}
+	}
+
+	return TypeAnyVal
 }
 
 func (a *Analyzer) checkBinaryExpr(op string, left, right *Type) *Type {
