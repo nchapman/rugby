@@ -4,6 +4,30 @@ Roadmap to a bulletproof compiler.
 
 ## Development Approach
 
+### Spec-Driven Development (for new features)
+
+When implementing new language features, follow this workflow:
+
+1. **Write the spec test first** in `tests/spec/errors/<feature>.rg` with `#@ compile-fail`
+2. **Document expected behavior** clearly in comments with examples
+3. **Implement the feature** in parser → semantic → codegen as needed
+4. **Flip to `#@ run-pass`** and move to the appropriate feature directory
+5. **Code review + commit**
+
+This creates a clear contract, catches regressions, and documents intent.
+
+#### Feature Priority
+
+| Feature | Value | Complexity | Notes |
+|---------|-------|------------|-------|
+| Class methods (`def self.method`) | High | Medium | Very common Ruby pattern |
+| Super calls with args | High | Medium | Partially works, needs args |
+| Symbol-to-proc (`&:method`) | Medium | Low-Medium | Nice ergonomic win |
+| Spawn closure capture | Medium | Medium | Currently broken |
+| Begin/rescue/ensure | Medium | Medium | Inline rescue works |
+
+### Documenting Limitations (for workarounds)
+
 When writing spec tests and discovering limitations:
 
 1. **Document the limitation** in the "Known Limitations" section below
