@@ -32,7 +32,6 @@ Parser → AST → Semantic (types) → CodeGen (emit)
 | ~~Super calls with args~~ | ~~High~~ | ~~Medium~~ | ✅ Done |
 | ~~Symbol-to-proc (`&:method`)~~ | ~~Medium~~ | ~~Low-Medium~~ | ✅ Done |
 | ~~Spawn closure capture~~ | ~~Medium~~ | ~~Medium~~ | ✅ Works |
-| Begin/rescue/ensure | Medium | Medium | Inline rescue works |
 
 ### Documenting Limitations (for workarounds)
 
@@ -161,12 +160,11 @@ Current spec tests (54 total):
 - [ ] `concurrently` blocks with scoped spawn
 - [ ] WaitGroup usage
 
-### Error Handling
+### Error Handling (Go-style, not exceptions)
 - [x] Inline rescue (`value = expr rescue default`)
-- [x] Block rescue with error binding
-- [ ] Begin/rescue/ensure blocks
-- [ ] Raise/throw
-- [ ] Custom error classes
+- [x] Block rescue with error binding (`rescue => err do`)
+- [x] Bang operator (`!`) for error propagation
+- [ ] `error_is?` and `error_as` utilities
 
 ---
 
