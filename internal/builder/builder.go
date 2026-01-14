@@ -140,6 +140,16 @@ func (t *typeInfoAdapter) IsVariableUsedAt(node ast.Node, name string) bool {
 	return t.analyzer.IsVariableUsedAt(node, name)
 }
 
+// IsDeclaration returns true if this AST node declares a new variable.
+func (t *typeInfoAdapter) IsDeclaration(node ast.Node) bool {
+	return t.analyzer.IsDeclaration(node)
+}
+
+// GetFieldType returns the Rugby type of a class field by class and field name.
+func (t *typeInfoAdapter) GetFieldType(className, fieldName string) string {
+	return t.analyzer.GetFieldType(className, fieldName)
+}
+
 // Styles for pretty output
 var successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 

@@ -182,14 +182,26 @@ Currently `codegen/codegen.go` Generator struct has 35+ fields mixing:
 - [x] Tests run semantic analysis before codegen (via `compile()` helper)
 - [x] Simplified `inferTypeFromExpr()` to rely on semantic type info
 - [x] Removed redundant `compileWithTypeInfo()` test helper
-- [ ] Move symbol tables to semantic analyzer
-- [ ] Expand `TypeInfo` interface to provide all resolution info
+- [x] Extended TypeInfo interface with `IsDeclaration()` and `GetFieldType()`
+- [x] Added `shouldDeclare()` helper to use semantic analysis for `:=` vs `=` decisions
+- [x] Added `getFieldType()` helper to use semantic analysis for class field types
+- [ ] Move remaining symbol tables to semantic analyzer
+- [ ] Further expand `TypeInfo` interface to provide all resolution info
 - [ ] Codegen only transforms AST nodes to Go syntax
 
-**Note on g.vars/g.classFields:**
-The `g.vars` and `g.classFields` maps were kept because they're still needed for
-declaration tracking (`:=` vs `=`). Fully removing them would require passing this
-information from the semantic analyzer, which is a larger refactoring effort.
+**Progress on g.vars/g.classFields:**
+Declaration tracking now uses semantic analysis via `TypeInfo.IsDeclaration()`. Field type
+lookup uses `TypeInfo.GetFieldType()`. Both helpers have nil safety checks (defaulting to
+declaration=true, fieldType="") but all tests now use semantic analysis via shared helpers.
+
+**Test infrastructure:**
+Consolidated test helpers into `codegen/helpers_test.go`:
+- `compile()` - strict mode, fails on parser/semantic errors
+- `compileRelaxed()` - ignores semantic errors (for testing codegen patterns)
+- `compileExpectError()` - returns Generate() error
+- `compileWithErrors()` - returns collected errors from gen.Errors()
+- `compileWithLineDirectives()` - with source file for line directive tests
+- `assertContains()`/`assertNotContains()` - output assertions
 
 ### Improve Semantic Analysis
 

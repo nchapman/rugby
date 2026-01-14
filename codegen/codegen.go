@@ -92,6 +92,15 @@ type TypeInfo interface {
 	// IsVariableUsedAt checks if a variable declared at a specific AST node is used.
 	// This is used to replace unused variables with _ in multi-value assignments.
 	IsVariableUsedAt(node ast.Node, name string) bool
+
+	// IsDeclaration returns true if this AST node declares a new variable.
+	// This is used to determine whether to use := (declaration) or = (assignment).
+	// Works for AssignStmt, MultiAssignStmt, ForStmt, if-let statements, etc.
+	IsDeclaration(node ast.Node) bool
+
+	// GetFieldType returns the Rugby type of a class field by class and field name.
+	// Returns empty string if field not found.
+	GetFieldType(className, fieldName string) string
 }
 
 type Generator struct {
@@ -111,7 +120,6 @@ type Generator struct {
 	currentClassModuleMethods    map[string]bool              // methods from included modules (need self.method() call)
 	pubClasses                   map[string]bool              // track public classes for constructor naming
 	classes                      map[string]bool              // track all class names for pointer type mapping
-	classFields                  map[string]string            // track fields of the current class and their types
 	accessorFields               map[string]bool              // track which fields have accessor methods (need underscore prefix)
 	classAccessorFields          map[string]map[string]bool   // class name -> accessor field names (for subclass access)
 	modules                      map[string]*ast.ModuleDecl   // track module definitions for include
@@ -196,7 +204,6 @@ func New(opts ...Option) *Generator {
 		vars:                         make(map[string]string),
 		imports:                      make(map[string]bool),
 		pubClasses:                   make(map[string]bool),
-		classFields:                  make(map[string]string),
 		accessorFields:               make(map[string]bool),
 		currentClassModuleMethods:    make(map[string]bool),
 		classes:                      make(map[string]bool),
@@ -219,10 +226,14 @@ func New(opts ...Option) *Generator {
 	return g
 }
 
-// isDeclared checks if a variable has been declared in the current scope
-func (g *Generator) isDeclared(name string) bool {
-	_, exists := g.vars[name]
-	return exists
+// shouldDeclare returns true if this AST node should use := (declaration)
+// and false if it should use = (assignment). Requires typeInfo from semantic analysis.
+func (g *Generator) shouldDeclare(node ast.Node) bool {
+	if g.typeInfo == nil {
+		// Default to declaration if no type info - Go will error on redeclaration
+		return true
+	}
+	return g.typeInfo.IsDeclaration(node)
 }
 
 // scopedVar temporarily binds a variable to a type for the duration of fn,
@@ -295,6 +306,14 @@ func (g *Generator) isAccessorField(fieldName string) bool {
 		}
 	}
 	return false
+}
+
+// getFieldType returns the Rugby type of a class field. Requires typeInfo from semantic analysis.
+func (g *Generator) getFieldType(fieldName string) string {
+	if g.typeInfo == nil {
+		return ""
+	}
+	return g.typeInfo.GetFieldType(g.currentClass, fieldName)
 }
 
 // isOptionalType checks if a type is an optional type (ends with ?)

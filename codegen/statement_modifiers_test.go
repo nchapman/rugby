@@ -3,10 +3,9 @@ package codegen
 import (
 	"strings"
 	"testing"
-
-	"github.com/nchapman/rugby/lexer"
-	"github.com/nchapman/rugby/parser"
 )
+
+// Tests in this file use compileRelaxed() from helpers_test.go
 
 func TestStatementModifierCodegen(t *testing.T) {
 	tests := []struct {
@@ -54,19 +53,7 @@ end`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New(tt.input)
-			p := parser.New(l)
-			program := p.ParseProgram()
-
-			if len(p.Errors()) > 0 {
-				t.Fatalf("Parser errors: %v", p.Errors())
-			}
-
-			gen := New()
-			output, err := gen.Generate(program)
-			if err != nil {
-				t.Fatalf("Codegen error: %v", err)
-			}
+			output := compileRelaxed(t, tt.input)
 
 			for _, substr := range tt.contains {
 				if !strings.Contains(output, substr) {
@@ -123,19 +110,7 @@ end`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New(tt.input)
-			p := parser.New(l)
-			program := p.ParseProgram()
-
-			if len(p.Errors()) > 0 {
-				t.Fatalf("Parser errors: %v", p.Errors())
-			}
-
-			gen := New()
-			output, err := gen.Generate(program)
-			if err != nil {
-				t.Fatalf("Codegen error: %v", err)
-			}
+			output := compileRelaxed(t, tt.input)
 
 			for _, substr := range tt.contains {
 				if !strings.Contains(output, substr) {

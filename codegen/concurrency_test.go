@@ -3,10 +3,9 @@ package codegen
 import (
 	"strings"
 	"testing"
-
-	"github.com/nchapman/rugby/lexer"
-	"github.com/nchapman/rugby/parser"
 )
+
+// Tests in this file use compileRelaxed() from helpers_test.go
 
 func TestGoStatement(t *testing.T) {
 	tests := []struct {
@@ -29,46 +28,18 @@ end`,
 	}
 
 	for _, tt := range tests {
-		l := lexer.New(tt.input)
-		p := parser.New(l)
-		program := p.ParseProgram()
-
-		if len(p.Errors()) != 0 {
-			t.Errorf("%s: parser errors: %v", tt.desc, p.Errors())
-			continue
-		}
-
-		g := New()
-		code, err := g.Generate(program)
-		if err != nil {
-			t.Errorf("%s: codegen error: %v", tt.desc, err)
-			continue
-		}
-
-		if !strings.Contains(code, tt.expected) {
-			t.Errorf("%s: expected code to contain '%s', got:\n%s", tt.desc, tt.expected, code)
-		}
+		t.Run(tt.desc, func(t *testing.T) {
+			code := compileRelaxed(t, tt.input)
+			if !strings.Contains(code, tt.expected) {
+				t.Errorf("expected code to contain '%s', got:\n%s", tt.expected, code)
+			}
+		})
 	}
 }
 
 func TestSpawnExpression(t *testing.T) {
 	input := `t = spawn { 42 }`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	expected := "runtime.Spawn"
 	if !strings.Contains(code, expected) {
@@ -78,22 +49,7 @@ func TestSpawnExpression(t *testing.T) {
 
 func TestAwaitExpression(t *testing.T) {
 	input := `result = await t`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	expected := "runtime.Await"
 	if !strings.Contains(code, expected) {
@@ -110,22 +66,7 @@ when ch2 << 42
 else
 	puts("default")
 end`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	// Should generate select { case ... }
 	if !strings.Contains(code, "select {") {
@@ -150,22 +91,7 @@ func TestConcurrentlyStatement(t *testing.T) {
 	a = scope.spawn { 1 }
 	x = await a
 end`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	// Should generate NewScope
 	if !strings.Contains(code, "runtime.NewScope") {
@@ -184,22 +110,7 @@ func TestConcurrentlyExpression(t *testing.T) {
 	await a
 	42
 end`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	// Should generate assignment with IIFE
 	if !strings.Contains(code, "result := func() any") {
@@ -238,25 +149,12 @@ func TestChannelCreation(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		l := lexer.New(tt.input)
-		p := parser.New(l)
-		program := p.ParseProgram()
-
-		if len(p.Errors()) != 0 {
-			t.Errorf("%s: parser errors: %v", tt.desc, p.Errors())
-			continue
-		}
-
-		g := New()
-		code, err := g.Generate(program)
-		if err != nil {
-			t.Errorf("%s: codegen error: %v", tt.desc, err)
-			continue
-		}
-
-		if !strings.Contains(code, tt.expected) {
-			t.Errorf("%s: expected '%s', got:\n%s", tt.desc, tt.expected, code)
-		}
+		t.Run(tt.desc, func(t *testing.T) {
+			code := compileRelaxed(t, tt.input)
+			if !strings.Contains(code, tt.expected) {
+				t.Errorf("expected '%s', got:\n%s", tt.expected, code)
+			}
+		})
 	}
 }
 
@@ -289,25 +187,12 @@ func TestChannelOperations(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		l := lexer.New(tt.input)
-		p := parser.New(l)
-		program := p.ParseProgram()
-
-		if len(p.Errors()) != 0 {
-			t.Errorf("%s: parser errors: %v", tt.desc, p.Errors())
-			continue
-		}
-
-		g := New()
-		code, err := g.Generate(program)
-		if err != nil {
-			t.Errorf("%s: codegen error: %v", tt.desc, err)
-			continue
-		}
-
-		if !strings.Contains(code, tt.expected) {
-			t.Errorf("%s: expected '%s', got:\n%s", tt.desc, tt.expected, code)
-		}
+		t.Run(tt.desc, func(t *testing.T) {
+			code := compileRelaxed(t, tt.input)
+			if !strings.Contains(code, tt.expected) {
+				t.Errorf("expected '%s', got:\n%s", tt.expected, code)
+			}
+		})
 	}
 }
 
@@ -315,22 +200,7 @@ func TestChannelIteration(t *testing.T) {
 	input := `for msg in ch
 	puts(msg)
 end`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	// Channel iteration uses for range
 	if !strings.Contains(code, "for _, msg := range ch") {
@@ -345,22 +215,7 @@ func TestScopedSpawnBlock(t *testing.T) {
 	t = scope.spawn { compute() }
 	x = await t
 end`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	// Should generate scope.Spawn(func() any { ... })
 	if !strings.Contains(code, "scope.Spawn(func() any {") {
@@ -370,22 +225,7 @@ end`
 
 func TestTaskAwaitMethod(t *testing.T) {
 	input := `result = task.await`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	// Should generate runtime.Await(task)
 	if !strings.Contains(code, "runtime.Await(task)") {
@@ -398,22 +238,7 @@ func TestSpawnWithDoBlock(t *testing.T) {
 	x = setup()
 	process(x)
 end`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	if !strings.Contains(code, "runtime.Spawn(func() any {") {
 		t.Errorf("expected 'runtime.Spawn(func() any {', got:\n%s", code)
@@ -434,25 +259,12 @@ func TestChannelTypeMapping(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		l := lexer.New(tt.input)
-		p := parser.New(l)
-		program := p.ParseProgram()
-
-		if len(p.Errors()) != 0 {
-			t.Errorf("%s: parser errors: %v", tt.desc, p.Errors())
-			continue
-		}
-
-		g := New()
-		code, err := g.Generate(program)
-		if err != nil {
-			t.Errorf("%s: codegen error: %v", tt.desc, err)
-			continue
-		}
-
-		if !strings.Contains(code, tt.expected) {
-			t.Errorf("%s: expected '%s', got:\n%s", tt.desc, tt.expected, code)
-		}
+		t.Run(tt.desc, func(t *testing.T) {
+			code := compileRelaxed(t, tt.input)
+			if !strings.Contains(code, tt.expected) {
+				t.Errorf("expected '%s', got:\n%s", tt.expected, code)
+			}
+		})
 	}
 }
 
@@ -461,22 +273,7 @@ func TestGoBlockClosesOver(t *testing.T) {
 	puts(x)
 	puts(y)
 end`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	// Should generate anonymous function
 	if !strings.Contains(code, "go func() {") {
@@ -497,22 +294,7 @@ when ch2 << value
 	log("sent")
 	cleanup()
 end`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	if !strings.Contains(code, "case a := <-ch1:") {
 		t.Errorf("expected 'case a := <-ch1:', got:\n%s", code)
@@ -530,22 +312,7 @@ when val = ch.try_receive
 else
 	default_action()
 end`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	// Should generate case val := <-ch, not runtime.TryReceive
 	if !strings.Contains(code, "case val := <-ch:") {
@@ -560,22 +327,7 @@ func TestConcurrentlyGeneratesDefer(t *testing.T) {
 	input := `concurrently do |s|
 	s.spawn { work() }
 end`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	// Should have both NewScope and defer Wait
 	if !strings.Contains(code, "s := runtime.NewScope()") {
@@ -598,25 +350,12 @@ func TestChannelSendExpressions(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		l := lexer.New(tt.input)
-		p := parser.New(l)
-		program := p.ParseProgram()
-
-		if len(p.Errors()) != 0 {
-			t.Errorf("%s: parser errors: %v", tt.desc, p.Errors())
-			continue
-		}
-
-		g := New()
-		code, err := g.Generate(program)
-		if err != nil {
-			t.Errorf("%s: codegen error: %v", tt.desc, err)
-			continue
-		}
-
-		if !strings.Contains(code, tt.expected) {
-			t.Errorf("%s: expected '%s', got:\n%s", tt.desc, tt.expected, code)
-		}
+		t.Run(tt.desc, func(t *testing.T) {
+			code := compileRelaxed(t, tt.input)
+			if !strings.Contains(code, tt.expected) {
+				t.Errorf("expected '%s', got:\n%s", tt.expected, code)
+			}
+		})
 	}
 }
 
@@ -626,22 +365,7 @@ func TestSpawnReturnsLastExpression(t *testing.T) {
 	y = 2
 	x + y
 }`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	// Should return the last expression (may have parentheses)
 	if !strings.Contains(code, "return x + y") && !strings.Contains(code, "return (x + y)") {
@@ -651,22 +375,7 @@ func TestSpawnReturnsLastExpression(t *testing.T) {
 
 func TestAwaitWithParentheses(t *testing.T) {
 	input := `result = await(task)`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	if !strings.Contains(code, "runtime.Await(task)") {
 		t.Errorf("expected 'runtime.Await(task)', got:\n%s", code)
@@ -675,22 +384,7 @@ func TestAwaitWithParentheses(t *testing.T) {
 
 func TestChannelCloseWithParens(t *testing.T) {
 	input := `ch.close()`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	if !strings.Contains(code, "close(ch)") {
 		t.Errorf("expected 'close(ch)', got:\n%s", code)
@@ -702,22 +396,7 @@ func TestMultipleChannelOperationsSequence(t *testing.T) {
 ch << 2
 val1 = ch.receive
 val2 = ch.receive`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	if !strings.Contains(code, "runtime.ShiftLeft(ch, 1)") {
 		t.Errorf("expected 'runtime.ShiftLeft(ch, 1)', got:\n%s", code)
@@ -742,22 +421,7 @@ func TestScopedSpawnWithMultiStatements(t *testing.T) {
 	end
 	result = await t
 end`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	if !strings.Contains(code, "scope.Spawn(func() any {") {
 		t.Errorf("expected 'scope.Spawn(func() any {', got:\n%s", code)
@@ -781,47 +445,19 @@ func TestBufferedChannelCreation(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		l := lexer.New(tt.input)
-		p := parser.New(l)
-		program := p.ParseProgram()
-
-		if len(p.Errors()) != 0 {
-			t.Errorf("%s: parser errors: %v", tt.desc, p.Errors())
-			continue
-		}
-
-		g := New()
-		code, err := g.Generate(program)
-		if err != nil {
-			t.Errorf("%s: codegen error: %v", tt.desc, err)
-			continue
-		}
-
-		if !strings.Contains(code, tt.expected) {
-			t.Errorf("%s: expected '%s', got:\n%s", tt.desc, tt.expected, code)
-		}
+		t.Run(tt.desc, func(t *testing.T) {
+			code := compileRelaxed(t, tt.input)
+			if !strings.Contains(code, tt.expected) {
+				t.Errorf("expected '%s', got:\n%s", tt.expected, code)
+			}
+		})
 	}
 }
 
 func TestGoWithArgumentCapture(t *testing.T) {
 	// When go is used with a call, arguments should be captured
 	input := `go process(x, y, z)`
-
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Errorf("parser errors: %v", p.Errors())
-		return
-	}
-
-	g := New()
-	code, err := g.Generate(program)
-	if err != nil {
-		t.Errorf("codegen error: %v", err)
-		return
-	}
+	code := compileRelaxed(t, input)
 
 	if !strings.Contains(code, "go process(x, y, z)") {
 		t.Errorf("expected 'go process(x, y, z)', got:\n%s", code)

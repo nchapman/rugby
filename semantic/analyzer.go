@@ -29,6 +29,9 @@ type Analyzer struct {
 
 	// Track symbols declared at each AST node (for multi-assign unused var detection)
 	declaredAt map[ast.Node]map[string]*Symbol
+
+	// Track which assignment nodes declare new variables (for := vs = in codegen)
+	declarations map[ast.Node]bool
 }
 
 // NewAnalyzer creates a new semantic analyzer.
@@ -45,6 +48,7 @@ func NewAnalyzer() *Analyzer {
 		functions:     make(map[string]*Symbol),
 		usedSymbols:   make(map[*Symbol]bool),
 		declaredAt:    make(map[ast.Node]map[string]*Symbol),
+		declarations:  make(map[ast.Node]bool),
 	}
 	a.defineBuiltins()
 	return a
@@ -793,6 +797,7 @@ func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
 	existing := a.scope.Lookup(s.Name)
 	if existing != nil {
 		// Assignment to existing variable - check type compatibility
+		a.declarations[s] = false // not a declaration, it's a reassignment
 		if existing.Type.Kind != TypeUnknown && valueType.Kind != TypeUnknown {
 			if !a.isAssignable(existing.Type, valueType) {
 				a.addError(&TypeMismatchError{
@@ -808,6 +813,7 @@ func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
 		}
 	} else {
 		// New variable declaration
+		a.declarations[s] = true // this is a declaration
 		var typ *Type
 		if s.Type != "" {
 			typ = ParseType(s.Type)
@@ -846,6 +852,7 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 
 	// Initialize tracking for symbols declared at this node
 	a.declaredAt[s] = make(map[string]*Symbol)
+	hasNewVar := false // track if any variable is new
 
 	// For tuple unpacking, we need to match the number of names to tuple elements
 	if valueType.Kind == TypeTuple {
@@ -867,6 +874,7 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 				v := NewVariable(name, elemType)
 				_ = a.scope.DefineOrShadow(v)
 				a.declaredAt[s][name] = v
+				hasNewVar = true
 			}
 		}
 	} else if valueType.Kind == TypeOptional {
@@ -884,6 +892,7 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 					v := NewVariable(valName, innerType)
 					_ = a.scope.DefineOrShadow(v)
 					a.declaredAt[s][valName] = v
+					hasNewVar = true
 				}
 			}
 			if okName != "_" {
@@ -892,6 +901,7 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 					v := NewVariable(okName, TypeBoolVal)
 					_ = a.scope.DefineOrShadow(v)
 					a.declaredAt[s][okName] = v
+					hasNewVar = true
 				}
 			}
 		}
@@ -908,9 +918,13 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 				v := NewVariable(name, TypeAnyVal)
 				_ = a.scope.DefineOrShadow(v)
 				a.declaredAt[s][name] = v
+				hasNewVar = true
 			}
 		}
 	}
+
+	// Mark whether this multi-assign declares any new variables (for := vs =)
+	a.declarations[s] = hasNewVar
 }
 
 func (a *Analyzer) analyzeCompoundAssign(s *ast.CompoundAssignStmt) {
@@ -962,8 +976,13 @@ func (a *Analyzer) analyzeOrAssign(s *ast.OrAssignStmt) {
 	// Variable may or may not exist
 	existing := a.scope.Lookup(s.Name)
 	if existing == nil {
+		// First use - this is a declaration
+		a.declarations[s] = true
 		v := NewVariable(s.Name, valueType)
 		_ = a.scope.DefineOrShadow(v)
+	} else {
+		// Variable already exists - this is a reassignment (nil check)
+		a.declarations[s] = false
 	}
 }
 
@@ -2758,6 +2777,41 @@ func (a *Analyzer) IsVariableUsedAt(node ast.Node, name string) bool {
 		return true // variable was not declared here, assume used
 	}
 	return a.usedSymbols[sym]
+}
+
+// IsDeclaration returns true if this AST node declares a new variable.
+// This is used by codegen to determine whether to use := (declaration) or = (assignment).
+func (a *Analyzer) IsDeclaration(node ast.Node) bool {
+	// Check the declarations map for assignment statements
+	if isDecl, ok := a.declarations[node]; ok {
+		return isDecl
+	}
+
+	// ForStmt loop variables are always new declarations
+	if _, ok := node.(*ast.ForStmt); ok {
+		return true
+	}
+
+	// Default to true (declaration) for safety - if unknown, use :=
+	// This is safer because Go will error on redeclaration, which is more obvious
+	// than silently reassigning when we wanted to declare
+	return true
+}
+
+// GetFieldType returns the Rugby type of a class field by class and field name.
+// Returns empty string if field not found.
+func (a *Analyzer) GetFieldType(className, fieldName string) string {
+	classSym, ok := a.classes[className]
+	if !ok {
+		return ""
+	}
+	if classSym.Fields == nil {
+		return ""
+	}
+	if fieldSym, ok := classSym.Fields[fieldName]; ok && fieldSym.Type != nil {
+		return fieldSym.Type.String()
+	}
+	return ""
 }
 
 // GetSymbol looks up a symbol by name in the global scope.

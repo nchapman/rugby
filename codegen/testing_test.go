@@ -3,10 +3,9 @@ package codegen
 import (
 	"strings"
 	"testing"
-
-	"github.com/nchapman/rugby/lexer"
-	"github.com/nchapman/rugby/parser"
 )
+
+// Tests in this file use compileRelaxed() from helpers_test.go
 
 func TestDescribeCodegen(t *testing.T) {
 	tests := []struct {
@@ -58,19 +57,7 @@ end`,
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l := lexer.New(tt.input)
-			p := parser.New(l)
-			program := p.ParseProgram()
-
-			if len(p.Errors()) > 0 {
-				t.Fatalf("parser errors: %v", p.Errors())
-			}
-
-			gen := New()
-			output, err := gen.Generate(program)
-			if err != nil {
-				t.Fatalf("codegen error: %v", err)
-			}
+			output := compileRelaxed(t, tt.input)
 
 			for _, substr := range tt.contains {
 				if !strings.Contains(output, substr) {
@@ -87,19 +74,7 @@ func TestTestCodegen(t *testing.T) {
   puts(x)
 end`
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) > 0 {
-		t.Fatalf("parser errors: %v", p.Errors())
-	}
-
-	gen := New()
-	output, err := gen.Generate(program)
-	if err != nil {
-		t.Fatalf("codegen error: %v", err)
-	}
+	output := compileRelaxed(t, input)
 
 	expected := []string{
 		"func TestMathAdd(t *testing.T)",
@@ -129,19 +104,7 @@ func TestBeforeAfterCodegen(t *testing.T) {
   end
 end`
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) > 0 {
-		t.Fatalf("parser errors: %v", p.Errors())
-	}
-
-	gen := New()
-	output, err := gen.Generate(program)
-	if err != nil {
-		t.Fatalf("codegen error: %v", err)
-	}
+	output := compileRelaxed(t, input)
 
 	expected := []string{
 		"func TestDatabase(t *testing.T)",
@@ -169,19 +132,7 @@ func TestAssertCodegen(t *testing.T) {
   end
 end`
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) > 0 {
-		t.Fatalf("parser errors: %v", p.Errors())
-	}
-
-	gen := New()
-	output, err := gen.Generate(program)
-	if err != nil {
-		t.Fatalf("codegen error: %v", err)
-	}
+	output := compileRelaxed(t, input)
 
 	expected := []string{
 		"test.AssertInstance.Equal(t, 1, 1)",

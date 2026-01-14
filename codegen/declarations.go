@@ -191,8 +191,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	g.currentClass = className
 	g.currentClassEmbeds = cls.Embeds
 	g.pubClasses[className] = cls.Pub
-	g.classes[className] = true // Track all class names for pointer type mapping
-	clear(g.classFields)
+	g.classes[className] = true           // Track all class names for pointer type mapping
 	clear(g.currentClassModuleMethods)    // Reset for new class
 	clear(g.currentClassInterfaceMethods) // Reset for new class
 
@@ -340,7 +339,6 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			g.buf.WriteString("\n")
 		}
 		for _, field := range allFields {
-			g.classFields[field.Name] = field.Type // Store field type (original name for lookup)
 			// Use underscore prefix for accessor fields to avoid conflict with getter/setter methods
 			goFieldName := field.Name
 			if g.accessorFields[field.Name] {
@@ -437,7 +435,6 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 
 	g.currentClass = ""
 	g.currentClassEmbeds = nil
-	clear(g.classFields)
 }
 
 func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, pub bool) {

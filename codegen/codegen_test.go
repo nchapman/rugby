@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nchapman/rugby/ast"
 	"github.com/nchapman/rugby/lexer"
 	"github.com/nchapman/rugby/parser"
 	"github.com/nchapman/rugby/semantic"
@@ -357,213 +356,7 @@ end`
 	}
 }
 
-func compile(t *testing.T, input string) string {
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) > 0 {
-		for _, err := range p.Errors() {
-			t.Errorf("parser error: %s", err)
-		}
-		t.FailNow()
-	}
-
-	// Run semantic analysis to provide type info
-	analyzer := semantic.NewAnalyzer()
-	errs := analyzer.Analyze(program)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			t.Errorf("semantic error: %s", err)
-		}
-		t.FailNow()
-	}
-
-	// Create type info adapter
-	typeInfo := &testTypeInfoAdapter{analyzer: analyzer}
-
-	gen := New(WithTypeInfo(typeInfo))
-	output, err := gen.Generate(program)
-	if err != nil {
-		t.Fatalf("codegen error: %v", err)
-	}
-
-	return output
-}
-
-// compileWithErrors runs codegen without semantic analysis and returns any collected errors.
-// This is used for testing codegen-specific error detection (e.g., module method conflicts)
-// that happens during code generation rather than semantic analysis.
-func compileWithErrors(t *testing.T, input string) []error {
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) > 0 {
-		for _, err := range p.Errors() {
-			t.Errorf("parser error: %s", err)
-		}
-		t.FailNow()
-	}
-
-	gen := New()
-	_, _ = gen.Generate(program)
-	return gen.Errors()
-}
-
-// testTypeInfoAdapter adapts semantic.Analyzer to implement TypeInfo for tests.
-type testTypeInfoAdapter struct {
-	analyzer *semantic.Analyzer
-}
-
-func (t *testTypeInfoAdapter) GetTypeKind(node ast.Node) TypeKind {
-	typ := t.analyzer.GetType(node)
-	if typ == nil {
-		return TypeUnknown
-	}
-	switch typ.Kind {
-	case semantic.TypeInt:
-		return TypeInt
-	case semantic.TypeInt64:
-		return TypeInt64
-	case semantic.TypeFloat:
-		return TypeFloat
-	case semantic.TypeBool:
-		return TypeBool
-	case semantic.TypeString:
-		return TypeString
-	case semantic.TypeNil:
-		return TypeNil
-	case semantic.TypeArray:
-		return TypeArray
-	case semantic.TypeMap:
-		return TypeMap
-	case semantic.TypeClass:
-		return TypeClass
-	case semantic.TypeOptional:
-		return TypeOptional
-	default:
-		return TypeUnknown
-	}
-}
-
-func (t *testTypeInfoAdapter) GetGoType(node ast.Node) string {
-	typ := t.analyzer.GetType(node)
-	if typ == nil {
-		return ""
-	}
-	return typ.GoType()
-}
-
-func (t *testTypeInfoAdapter) GetRugbyType(node ast.Node) string {
-	typ := t.analyzer.GetType(node)
-	if typ == nil {
-		return ""
-	}
-	return typ.String()
-}
-
-func (t *testTypeInfoAdapter) GetSelectorKind(node ast.Node) ast.SelectorKind {
-	// First check if the AST node has a resolved kind
-	if sel, ok := node.(*ast.SelectorExpr); ok && sel.ResolvedKind != ast.SelectorUnknown {
-		return sel.ResolvedKind
-	}
-	// Fall back to semantic analyzer lookup
-	return t.analyzer.GetSelectorKind(node)
-}
-
-func (t *testTypeInfoAdapter) GetElementType(node ast.Node) string {
-	typ := t.analyzer.GetType(node)
-	if typ == nil || typ.Elem == nil {
-		return ""
-	}
-	return typ.Elem.String()
-}
-
-func (t *testTypeInfoAdapter) GetKeyValueTypes(node ast.Node) (string, string) {
-	typ := t.analyzer.GetType(node)
-	if typ == nil || typ.Kind != semantic.TypeMap {
-		return "", ""
-	}
-	keyType := ""
-	valueType := ""
-	if typ.KeyType != nil {
-		keyType = typ.KeyType.String()
-	}
-	if typ.ValueType != nil {
-		valueType = typ.ValueType.String()
-	}
-	return keyType, valueType
-}
-
-func (t *testTypeInfoAdapter) GetTupleTypes(node ast.Node) []string {
-	typ := t.analyzer.GetType(node)
-	if typ == nil {
-		return nil
-	}
-	if typ.Kind == semantic.TypeTuple && len(typ.Elements) > 0 {
-		result := make([]string, len(typ.Elements))
-		for i, elem := range typ.Elements {
-			result[i] = elem.String()
-		}
-		return result
-	}
-	if typ.Kind == semantic.TypeOptional && typ.Elem != nil {
-		return []string{typ.Elem.String(), "Bool"}
-	}
-	return nil
-}
-
-func (t *testTypeInfoAdapter) IsVariableUsedAt(node ast.Node, name string) bool {
-	return t.analyzer.IsVariableUsedAt(node, name)
-}
-
-func assertContains(t *testing.T, output, substr string) {
-	if !strings.Contains(output, substr) {
-		t.Errorf("expected output to contain %q, got:\n%s", substr, output)
-	}
-}
-
-func assertNotContains(t *testing.T, output, substr string) {
-	if strings.Contains(output, substr) {
-		t.Errorf("expected output NOT to contain %q, got:\n%s", substr, output)
-	}
-}
-
-// compileWithLineDirectives runs codegen with line directive emission enabled
-func compileWithLineDirectives(t *testing.T, input string, sourceFile string) string {
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) > 0 {
-		for _, err := range p.Errors() {
-			t.Errorf("parser error: %s", err)
-		}
-		t.FailNow()
-	}
-
-	// Run semantic analysis
-	analyzer := semantic.NewAnalyzer()
-	errs := analyzer.Analyze(program)
-	if len(errs) > 0 {
-		for _, err := range errs {
-			t.Errorf("semantic error: %s", err)
-		}
-		t.FailNow()
-	}
-
-	// Create type info adapter
-	typeInfo := &testTypeInfoAdapter{analyzer: analyzer}
-
-	gen := New(WithSourceFile(sourceFile), WithTypeInfo(typeInfo))
-	output, err := gen.Generate(program)
-	if err != nil {
-		t.Fatalf("codegen error: %v", err)
-	}
-
-	return output
-}
+// Test helpers are in helpers_test.go
 
 func TestLineDirectiveEmission(t *testing.T) {
 	input := `def main
@@ -2878,12 +2671,7 @@ func TestRangeRejectsFloatStart(t *testing.T) {
   r = 1.5..10
 end`
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	gen := New()
-	_, err := gen.Generate(program)
+	err := compileExpectError(t, input)
 
 	if err == nil {
 		t.Fatal("expected error for range with Float start")
@@ -2900,12 +2688,7 @@ func TestRangeRejectsStringEnd(t *testing.T) {
   r = 1.."z"
 end`
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	gen := New()
-	_, err := gen.Generate(program)
+	err := compileExpectError(t, input)
 
 	if err == nil {
 		t.Fatal("expected error for range with String end")
@@ -3221,12 +3004,7 @@ func TestPredicateMethodRejectsNonBoolReturn(t *testing.T) {
   42
 end`
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	gen := New()
-	_, err := gen.Generate(program)
+	err := compileExpectError(t, input)
 
 	if err == nil {
 		t.Fatal("expected error for predicate method not returning Bool")
@@ -3243,12 +3021,7 @@ func TestPredicateMethodRejectsNoReturnType(t *testing.T) {
   true
 end`
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	gen := New()
-	_, err := gen.Generate(program)
+	err := compileExpectError(t, input)
 
 	if err == nil {
 		t.Fatal("expected error for predicate method without explicit Bool return")
@@ -3280,12 +3053,7 @@ func TestClassPredicateMethodRejectsNonBoolReturn(t *testing.T) {
   end
 end`
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	gen := New()
-	_, err := gen.Generate(program)
+	err := compileExpectError(t, input)
 
 	if err == nil {
 		t.Fatal("expected error for class predicate method not returning Bool")
@@ -3519,16 +3287,7 @@ end
 
 puts("top-level")`
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) > 0 {
-		t.Skipf("parser error: %v", p.Errors())
-	}
-
-	gen := New()
-	_, err := gen.Generate(program)
+	err := compileExpectError(t, input)
 
 	if err == nil {
 		t.Error("expected error for conflicting main and top-level statements, got none")

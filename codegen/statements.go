@@ -211,7 +211,7 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 		g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, goFieldName))
 
 		// Check for optional wrapping
-		fieldType := g.classFields[s.Name]
+		fieldType := g.getFieldType(s.Name)
 		sourceType := g.inferTypeFromExpr(s.Value)
 		needsWrap := false
 
@@ -238,7 +238,7 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 }
 
 func (g *Generator) genOrAssignStmt(s *ast.OrAssignStmt) {
-	if !g.isDeclared(s.Name) {
+	if g.shouldDeclare(s) {
 		// First declaration: just use :=
 		g.writeIndent()
 		g.buf.WriteString(s.Name)
@@ -312,12 +312,6 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 
 	g.writeIndent()
 
-	// Get tuple element types from type info
-	var tupleTypes []string
-	if g.typeInfo != nil {
-		tupleTypes = g.typeInfo.GetTupleTypes(s.Value)
-	}
-
 	// Determine effective names (replace unused variables with _)
 	effectiveNames := make([]string, len(s.Names))
 	for i, name := range s.Names {
@@ -331,18 +325,8 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 		}
 	}
 
-	// Check if any effective names are new declarations
-	// Skip blank identifier (_) as it doesn't affect declaration status
-	allDeclared := true
-	for _, name := range effectiveNames {
-		if name == "_" {
-			continue
-		}
-		if !g.isDeclared(name) {
-			allDeclared = false
-			break
-		}
-	}
+	// Use semantic analysis to determine if this is a declaration
+	isDeclaration := g.shouldDeclare(s)
 
 	// Generate names
 	for i, name := range effectiveNames {
@@ -353,23 +337,10 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 	}
 
 	// Use := if any variable is new, = if all are already declared
-	if allDeclared {
-		g.buf.WriteString(" = ")
-	} else {
+	if isDeclaration {
 		g.buf.WriteString(" := ")
-		// Mark new variables as declared with their types from semantic analysis
-		for i, name := range effectiveNames {
-			if name == "_" {
-				continue
-			}
-			if !g.isDeclared(name) {
-				varType := ""
-				if i < len(tupleTypes) {
-					varType = tupleTypes[i]
-				}
-				g.vars[name] = varType
-			}
-		}
+	} else {
+		g.buf.WriteString(" = ")
 	}
 
 	g.genExpr(s.Value)
@@ -386,6 +357,9 @@ func (g *Generator) genMultiAssignFromOptional(s *ast.MultiAssignStmt, optType s
 	unwrappedType := strings.TrimSuffix(optType, "?")
 	goType := mapType(unwrappedType)
 
+	// Use semantic analysis to determine if this is a declaration
+	isDeclaration := g.shouldDeclare(s)
+
 	// Generate temp variable assignment
 	tempVar := fmt.Sprintf("_opt%d", g.tempVarCounter)
 	g.tempVarCounter++
@@ -398,10 +372,9 @@ func (g *Generator) genMultiAssignFromOptional(s *ast.MultiAssignStmt, optType s
 
 	// Generate ok assignment
 	g.writeIndent()
-	if !g.isDeclared(okName) && okName != "_" {
+	if isDeclaration && okName != "_" {
 		g.buf.WriteString(okName)
 		g.buf.WriteString(" := ")
-		g.vars[okName] = "Bool"
 	} else {
 		g.buf.WriteString(okName)
 		g.buf.WriteString(" = ")
@@ -412,13 +385,12 @@ func (g *Generator) genMultiAssignFromOptional(s *ast.MultiAssignStmt, optType s
 	// Generate val declaration with zero value
 	if valName != "_" {
 		g.writeIndent()
-		if !g.isDeclared(valName) {
+		if isDeclaration {
 			g.buf.WriteString("var ")
 			g.buf.WriteString(valName)
 			g.buf.WriteString(" ")
 			g.buf.WriteString(goType)
 			g.buf.WriteString("\n")
-			g.vars[valName] = unwrappedType
 		}
 
 		// Generate conditional assignment
@@ -452,7 +424,7 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 		goFieldName = "_" + s.Name
 	}
 	field := fmt.Sprintf("%s.%s", recv, goFieldName)
-	fieldType := g.classFields[s.Name]
+	fieldType := g.getFieldType(s.Name)
 
 	// Generate check
 	g.writeIndent()
@@ -555,13 +527,13 @@ func (g *Generator) genSelectorAssignStmt(s *ast.SelectorAssignStmt) {
 func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 	// Handle BangExpr: x = call()! -> x, _err := call(); if _err != nil { ... }
 	if bangExpr, ok := s.Value.(*ast.BangExpr); ok {
-		g.genBangAssign(s.Name, s.Type, bangExpr)
+		g.genBangAssign(s, bangExpr)
 		return
 	}
 
 	// Handle RescueExpr: x = call() rescue default
 	if rescueExpr, ok := s.Value.(*ast.RescueExpr); ok {
-		g.genRescueAssign(s.Name, s.Type, rescueExpr)
+		g.genRescueAssign(s, rescueExpr)
 		return
 	}
 
@@ -584,11 +556,11 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 	if isNilAssignment && isValueTypeOptional(targetType) {
 		baseType := strings.TrimSuffix(targetType, "?")
 
-		if s.Type != "" && !g.isDeclared(s.Name) {
+		if s.Type != "" && g.shouldDeclare(s) {
 			// Typed declaration: var x Int? = nil
 			g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
 			g.vars[s.Name] = s.Type
-		} else if g.isDeclared(s.Name) {
+		} else if !g.shouldDeclare(s) {
 			// Reassignment: x = nil
 			g.buf.WriteString(s.Name)
 			g.buf.WriteString(" = ")
@@ -614,11 +586,11 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 		}
 	}
 
-	if s.Type != "" && !g.isDeclared(s.Name) {
+	if s.Type != "" && g.shouldDeclare(s) {
 		// Typed declaration: var x int = value
 		g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
 		g.vars[s.Name] = s.Type // store the declared type
-	} else if g.isDeclared(s.Name) {
+	} else if !g.shouldDeclare(s) {
 		// Reassignment: x = value
 		g.buf.WriteString(s.Name)
 		g.buf.WriteString(" = ")
@@ -679,12 +651,14 @@ func (g *Generator) getShiftLeftTargetType(expr ast.Expression) string {
 
 // genBangAssign generates code for: x = call()!
 // Produces: x, _err0 := call(); if _err0 != nil { return/Fatal }
-func (g *Generator) genBangAssign(name string, _ string, bang *ast.BangExpr) {
+func (g *Generator) genBangAssign(s *ast.AssignStmt, bang *ast.BangExpr) {
 	call, ok := bang.Expr.(*ast.CallExpr)
 	if !ok {
 		g.addError(fmt.Errorf("bang expression must be a call expression"))
 		return
 	}
+
+	name := s.Name
 
 	// Use unique error variable name to avoid conflicts
 	errVar := fmt.Sprintf("_err%d", g.tempVarCounter)
@@ -692,7 +666,7 @@ func (g *Generator) genBangAssign(name string, _ string, bang *ast.BangExpr) {
 
 	// Generate: name, _errN := call()
 	g.writeIndent()
-	if g.isDeclared(name) {
+	if !g.shouldDeclare(s) {
 		// Reassignment needs a temp for error
 		g.buf.WriteString(fmt.Sprintf("%s, %s = ", name, errVar))
 	} else {
@@ -735,12 +709,14 @@ func (g *Generator) genBangStmt(bang *ast.BangExpr) {
 
 // genRescueAssign generates code for: x = call() rescue default
 // Produces: x, _err0 := call(); if _err0 != nil { x = default }
-func (g *Generator) genRescueAssign(name string, _ string, rescue *ast.RescueExpr) {
+func (g *Generator) genRescueAssign(s *ast.AssignStmt, rescue *ast.RescueExpr) {
 	call, ok := rescue.Expr.(*ast.CallExpr)
 	if !ok {
 		g.addError(fmt.Errorf("rescue expression must be a call expression"))
 		return
 	}
+
+	name := s.Name
 
 	// Use unique error variable name to avoid conflicts
 	errVar := fmt.Sprintf("_err%d", g.tempVarCounter)
@@ -748,7 +724,7 @@ func (g *Generator) genRescueAssign(name string, _ string, rescue *ast.RescueExp
 
 	// Generate: name, _errN := call()
 	g.writeIndent()
-	if g.isDeclared(name) {
+	if !g.shouldDeclare(s) {
 		g.buf.WriteString(fmt.Sprintf("%s, %s = ", name, errVar))
 	} else {
 		g.buf.WriteString(fmt.Sprintf("%s, %s := ", name, errVar))

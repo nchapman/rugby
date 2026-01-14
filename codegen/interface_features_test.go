@@ -4,10 +4,153 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nchapman/rugby/ast"
 	"github.com/nchapman/rugby/codegen"
 	"github.com/nchapman/rugby/lexer"
 	"github.com/nchapman/rugby/parser"
+	"github.com/nchapman/rugby/semantic"
 )
+
+// testTypeInfo adapts semantic.Analyzer to implement codegen.TypeInfo
+type testTypeInfo struct {
+	analyzer *semantic.Analyzer
+}
+
+func (t *testTypeInfo) GetTypeKind(node ast.Node) codegen.TypeKind {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return codegen.TypeUnknown
+	}
+	switch typ.Kind {
+	case semantic.TypeInt:
+		return codegen.TypeInt
+	case semantic.TypeInt64:
+		return codegen.TypeInt64
+	case semantic.TypeFloat:
+		return codegen.TypeFloat
+	case semantic.TypeBool:
+		return codegen.TypeBool
+	case semantic.TypeString:
+		return codegen.TypeString
+	case semantic.TypeNil:
+		return codegen.TypeNil
+	case semantic.TypeArray:
+		return codegen.TypeArray
+	case semantic.TypeMap:
+		return codegen.TypeMap
+	case semantic.TypeClass:
+		return codegen.TypeClass
+	case semantic.TypeOptional:
+		return codegen.TypeOptional
+	case semantic.TypeAny:
+		return codegen.TypeAny
+	default:
+		return codegen.TypeUnknown
+	}
+}
+
+func (t *testTypeInfo) GetGoType(node ast.Node) string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return ""
+	}
+	return typ.GoType()
+}
+
+func (t *testTypeInfo) GetRugbyType(node ast.Node) string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return ""
+	}
+	return typ.String()
+}
+
+func (t *testTypeInfo) GetSelectorKind(node ast.Node) ast.SelectorKind {
+	if sel, ok := node.(*ast.SelectorExpr); ok && sel.ResolvedKind != ast.SelectorUnknown {
+		return sel.ResolvedKind
+	}
+	return t.analyzer.GetSelectorKind(node)
+}
+
+func (t *testTypeInfo) GetElementType(node ast.Node) string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil || typ.Elem == nil {
+		return ""
+	}
+	return typ.Elem.String()
+}
+
+func (t *testTypeInfo) GetKeyValueTypes(node ast.Node) (string, string) {
+	typ := t.analyzer.GetType(node)
+	if typ == nil || typ.Kind != semantic.TypeMap {
+		return "", ""
+	}
+	keyType := ""
+	valueType := ""
+	if typ.KeyType != nil {
+		keyType = typ.KeyType.String()
+	}
+	if typ.ValueType != nil {
+		valueType = typ.ValueType.String()
+	}
+	return keyType, valueType
+}
+
+func (t *testTypeInfo) GetTupleTypes(node ast.Node) []string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return nil
+	}
+	if typ.Kind == semantic.TypeTuple && len(typ.Elements) > 0 {
+		result := make([]string, len(typ.Elements))
+		for i, elem := range typ.Elements {
+			result[i] = elem.String()
+		}
+		return result
+	}
+	if typ.Kind == semantic.TypeOptional && typ.Elem != nil {
+		return []string{typ.Elem.String(), "Bool"}
+	}
+	return nil
+}
+
+func (t *testTypeInfo) IsVariableUsedAt(node ast.Node, name string) bool {
+	return t.analyzer.IsVariableUsedAt(node, name)
+}
+
+func (t *testTypeInfo) IsDeclaration(node ast.Node) bool {
+	return t.analyzer.IsDeclaration(node)
+}
+
+func (t *testTypeInfo) GetFieldType(className, fieldName string) string {
+	return t.analyzer.GetFieldType(className, fieldName)
+}
+
+// compileWithTypeInfo runs the full compilation pipeline.
+// It ignores semantic errors since some tests use constructs not known to semantic analyzer.
+func compileWithTypeInfo(t *testing.T, input string) string {
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) != 0 {
+		t.Fatalf("Parser errors: %v", p.Errors())
+	}
+
+	// Run semantic analysis (required for codegen) but ignore semantic errors
+	// since some tests use constructs not known to semantic analyzer
+	analyzer := semantic.NewAnalyzer()
+	_ = analyzer.Analyze(program)
+
+	typeInfo := &testTypeInfo{analyzer: analyzer}
+	g := codegen.New(codegen.WithTypeInfo(typeInfo))
+	output, err := g.Generate(program)
+	if err != nil {
+		t.Fatalf("Codegen error: %v", err)
+	}
+
+	return output
+}
 
 func TestInterfaceInheritance(t *testing.T) {
 	input := `
@@ -24,19 +167,7 @@ interface IO < Reader, Writer
 end
 `
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Fatalf("Parser errors: %v", p.Errors())
-	}
-
-	g := codegen.New()
-	output, err := g.Generate(program)
-	if err != nil {
-		t.Fatalf("Codegen error: %v", err)
-	}
+	output := compileWithTypeInfo(t, input)
 
 	// Check for interface embedding
 	if !strings.Contains(output, "type IO interface {") {
@@ -63,30 +194,18 @@ end
 class User implements Speaker, Serializable
   def initialize(@name : String)
   end
-  
+
   def speak -> String
     @name
   end
-  
+
   def to_json -> String
     @name
   end
 end
 `
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Fatalf("Parser errors: %v", p.Errors())
-	}
-
-	g := codegen.New()
-	output, err := g.Generate(program)
-	if err != nil {
-		t.Fatalf("Codegen error: %v", err)
-	}
+	output := compileWithTypeInfo(t, input)
 
 	// Check for compile-time conformance checks
 	if !strings.Contains(output, "var _ Speaker = (*User)(nil)") {
@@ -104,19 +223,7 @@ def log(thing : any)
 end
 `
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Fatalf("Parser errors: %v", p.Errors())
-	}
-
-	g := codegen.New()
-	output, err := g.Generate(program)
-	if err != nil {
-		t.Fatalf("Codegen error: %v", err)
-	}
+	output := compileWithTypeInfo(t, input)
 
 	// Check that 'any' maps to Go's any
 	if !strings.Contains(output, "func log(thing any)") {
@@ -131,19 +238,7 @@ def check(obj : any) -> Bool
 end
 `
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Fatalf("Parser errors: %v", p.Errors())
-	}
-
-	g := codegen.New()
-	output, err := g.Generate(program)
-	if err != nil {
-		t.Fatalf("Codegen error: %v", err)
-	}
+	output := compileWithTypeInfo(t, input)
 
 	// Check for type assertion
 	if !strings.Contains(output, "func() bool") {
@@ -161,19 +256,7 @@ def cast(obj : any) -> (String, Bool)
 end
 `
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Fatalf("Parser errors: %v", p.Errors())
-	}
-
-	g := codegen.New()
-	output, err := g.Generate(program)
-	if err != nil {
-		t.Fatalf("Codegen error: %v", err)
-	}
+	output := compileWithTypeInfo(t, input)
 
 	// Check for type assertion with value
 	if !strings.Contains(output, "v, ok :=") {
@@ -186,26 +269,14 @@ func TestMessageMethodMapping(t *testing.T) {
 class CustomError
   def initialize(@msg : String)
   end
-  
+
   def message -> String
     @msg
   end
 end
 `
 
-	l := lexer.New(input)
-	p := parser.New(l)
-	program := p.ParseProgram()
-
-	if len(p.Errors()) != 0 {
-		t.Fatalf("Parser errors: %v", p.Errors())
-	}
-
-	g := codegen.New()
-	output, err := g.Generate(program)
-	if err != nil {
-		t.Fatalf("Codegen error: %v", err)
-	}
+	output := compileWithTypeInfo(t, input)
 
 	// Check that message -> Error()
 	if !strings.Contains(output, "func (c *CustomError) Error() string") {
