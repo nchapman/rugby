@@ -133,7 +133,6 @@ Current spec tests (58 total):
 - [x] Statement modifiers (`puts x if condition`)
 - [x] While/until loops
 - [x] Loop control (`break`, `next`)
-- [ ] Begin/rescue/ensure
 
 ### Classes (expand `tests/spec/classes/`)
 - [x] Property declarations (`property`, `getter`, `setter`)
