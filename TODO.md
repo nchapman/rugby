@@ -213,14 +213,16 @@ Consolidated test helpers into `codegen/helpers_test.go`:
 - [x] Track module method origin (which methods come from included modules)
 - [x] Circular inheritance detection with clear error messages
 - [x] Interface validation considers inherited methods
-- [x] Line fields added to TernaryExpr, BangExpr, IndexExpr for better error positions
-- [ ] Complete type inference for all expressions
-- [ ] Add Line field to NilCoalesceExpr for error positions
+- [x] Line fields added to TernaryExpr, BangExpr, IndexExpr, NilCoalesceExpr for better error positions
+- [x] SpawnExpr infers Task element type from block return type
+- [x] Array.map infers return type as Array[BlockReturnType]
+- [x] Improved "Did you mean?" suggestions using Levenshtein distance
+- [ ] Complete type inference for remaining edge cases
 
 ### Error Recovery
 
-- [ ] Parser: Continue after syntax errors to report multiple issues
-- [ ] Semantic: Collect all type errors before failing
+- [x] Parser: Continue after syntax errors to report multiple issues
+- [x] Semantic: Collect all type errors before failing
 - [ ] Codegen: Generate placeholder code for unresolved symbols
 
 ---
@@ -286,7 +288,8 @@ Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
 - Additional limitations discovered: 4 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, array mutation in closures)
 - Features implemented: class methods, super calls, symbol-to-proc, spawn closure capture, module method overriding
-- Semantic analysis: circular inheritance detection, inherited method interface validation, improved error positions
+- Semantic analysis: circular inheritance detection, inherited method interface validation, improved error positions, better type inference for spawn/map blocks, Levenshtein-based typo suggestions
+- Error recovery: both parser and semantic analyzer collect and report multiple errors with source snippets
 - Phase 2 complete: All spec test categories covered
 - Spec tests: 58 passing
 - All `make check` passes
