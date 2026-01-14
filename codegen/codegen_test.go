@@ -1075,7 +1075,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(arr, func(x any) {`)
+	// Each now generates a native for-range loop for proper type inference
+	assertContains(t, output, `for _, x := range arr {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 }
 
@@ -1088,7 +1089,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.EachWithIndex(arr, func(v any, i int) {`)
+	// Each with index now generates a native for-range loop for proper type inference
+	assertContains(t, output, `for i, v := range arr {`)
 	assertContains(t, output, `runtime.Puts(v)`)
 }
 
@@ -1116,7 +1118,7 @@ end`
 	output := compile(t, input)
 
 	// Block with no params should use _ for the parameter
-	assertContains(t, output, `runtime.Each(items, func(_ any) {`)
+	assertContains(t, output, `for _, _ := range items {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
@@ -1129,7 +1131,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(getItems(), func(x any) {`)
+	assertContains(t, output, `for _, x := range getItems() {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 }
 
@@ -1144,8 +1146,8 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(matrix, func(row any) {`)
-	assertContains(t, output, `runtime.Each(row, func(x any) {`)
+	assertContains(t, output, `for _, row := range matrix {`)
+	assertContains(t, output, `for _, x := range row {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 }
 
@@ -1392,7 +1394,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Each(arr, func(x any) {`)
+	assertContains(t, output, `for _, x := range arr {`)
 	assertContains(t, output, `runtime.Puts(x)`)
 }
 
@@ -3485,9 +3487,9 @@ end`
 
 	output := compile(t, input)
 
-	// Should have implicit main with each block
+	// Should have implicit main with for-range loop
 	assertContains(t, output, "func main()")
-	assertContains(t, output, "runtime.Each")
+	assertContains(t, output, "for _, x := range")
 }
 
 func TestBareScriptMixedOrdering(t *testing.T) {

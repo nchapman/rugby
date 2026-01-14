@@ -1364,8 +1364,6 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 		return
 	}
 
-	g.needsRuntime = true
-
 	// Check if iterating over a map with two parameters (key, value)
 	// Use semantic analysis for Go type if available
 	var goType string
@@ -1380,6 +1378,7 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	isMapIteration := len(block.Params) >= 2 && (strings.HasPrefix(goType, "map[") || goType == "Map")
 
 	if isMapIteration {
+		g.needsRuntime = true
 		// If we have semantic type info with specific map type, use it; otherwise infer
 		if strings.HasPrefix(goType, "map[") {
 			g.genMapEachBlock(iterable, block, goType)
@@ -1395,14 +1394,18 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 		varName = block.Params[0]
 	}
 
-	// runtime.Each uses any, not generics
-	g.buf.WriteString("runtime.Each(")
-	g.genExpr(iterable)
-	g.buf.WriteString(", func(")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" any) {\n")
+	// Infer element type for proper type inference in the loop
+	elemType := g.inferArrayElementGoType(iterable)
 
-	g.scopedVar(varName, "", func() {
+	// Generate a native for-range loop instead of runtime.Each
+	// This allows proper type inference for block parameters
+	g.buf.WriteString("for _, ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := range ")
+	g.genExpr(iterable)
+	g.buf.WriteString(" {\n")
+
+	g.scopedVar(varName, elemType, func() {
 		g.indent++
 		for _, stmt := range block.Body {
 			g.genStatement(stmt)
@@ -1411,7 +1414,7 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	})
 
 	g.writeIndent()
-	g.buf.WriteString("})")
+	g.buf.WriteString("}")
 }
 
 func (g *Generator) genMapEachBlock(iterable ast.Expression, block *ast.BlockExpr, mapType string) {
@@ -1514,8 +1517,6 @@ func (g *Generator) genRangeEachBlock(rangeExpr ast.Expression, block *ast.Block
 }
 
 func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.BlockExpr) {
-	g.needsRuntime = true
-
 	varName := "_"
 	indexName := "_"
 	if len(block.Params) > 0 {
@@ -1525,18 +1526,22 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 		indexName = block.Params[1]
 	}
 
-	// runtime.EachWithIndex uses any, not generics
-	g.buf.WriteString("runtime.EachWithIndex(")
-	g.genExpr(iterable)
-	g.buf.WriteString(", func(")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" any, ")
+	// Infer element type for proper type inference in the loop
+	elemType := g.inferArrayElementGoType(iterable)
+
+	// Generate a native for-range loop instead of runtime.EachWithIndex
+	// This allows proper type inference for block parameters
+	g.buf.WriteString("for ")
 	g.buf.WriteString(indexName)
-	g.buf.WriteString(" int) {\n")
+	g.buf.WriteString(", ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := range ")
+	g.genExpr(iterable)
+	g.buf.WriteString(" {\n")
 
 	g.scopedVars([]struct{ name, varType string }{
-		{varName, ""},
-		{indexName, "Int"},
+		{varName, elemType},
+		{indexName, "int"},
 	}, func() {
 		g.indent++
 		for _, stmt := range block.Body {
@@ -1546,7 +1551,7 @@ func (g *Generator) genEachWithIndexBlock(iterable ast.Expression, block *ast.Bl
 	})
 
 	g.writeIndent()
-	g.buf.WriteString("})")
+	g.buf.WriteString("}")
 }
 
 func (g *Generator) genTimesBlock(times ast.Expression, block *ast.BlockExpr) {

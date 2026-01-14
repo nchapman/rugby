@@ -662,8 +662,8 @@ The `rugby/runtime` package provides Ruby-like methods for Go types.
 ### 12.3 Array methods (`Array[T]`)
 
 **Iteration:**
-* `each { |x| }` → `runtime.Each(arr, fn)`
-* `each_with_index { |x, i| }` → `runtime.EachWithIndex(arr, fn)`
+* `each { |x| }` → `for _, x := range arr { ... }` (native for-range loop for proper type inference)
+* `each_with_index { |x, i| }` → `for i, x := range arr { ... }` (note: Go convention puts index first)
 
 **Transformation:**
 * `map { |x| }` → `runtime.Map(arr, fn)` → `[]R`
