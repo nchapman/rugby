@@ -534,7 +534,8 @@ func (b *Builder) needsModTidy(goModPath, goSumPath string) bool {
 }
 
 // needsGoModUpdate checks if .rugby/go.mod needs to be regenerated.
-// Returns true if rugby.mod is newer than .rugby/go.mod or if .rugby/go.mod doesn't exist.
+// Returns true if rugby.mod is newer than .rugby/go.mod, if .rugby/go.mod doesn't exist,
+// or if the go.mod content is missing required directives.
 func (b *Builder) needsGoModUpdate(goModPath string) bool {
 	goModInfo, err := os.Stat(goModPath)
 	if err != nil {
@@ -542,11 +543,22 @@ func (b *Builder) needsGoModUpdate(goModPath string) bool {
 		return true
 	}
 
+	// Check if go.mod has the required runtime dependency
+	// Look for the module anywhere in the file (handles both single-line and block require)
+	content, err := os.ReadFile(goModPath)
+	if err != nil {
+		return true
+	}
+	if !strings.Contains(string(content), RuntimeModule) {
+		// Missing runtime dependency - regenerate
+		return true
+	}
+
 	// If rugby.mod exists, check if it's newer than .rugby/go.mod
 	rugbyModPath := b.project.RugbyModPath()
 	rugbyModInfo, err := os.Stat(rugbyModPath)
 	if err != nil {
-		// No rugby.mod, but we still need go.mod - only regenerate if missing
+		// No rugby.mod - go.mod is up to date (has required directive)
 		return false
 	}
 

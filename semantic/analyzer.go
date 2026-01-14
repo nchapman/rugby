@@ -107,6 +107,10 @@ func (a *Analyzer) Analyze(program *ast.Program) []error {
 		a.collectDeclaration(decl)
 	}
 
+	// Propagate inherited fields from parent classes to child classes
+	// This must happen after all classes are collected
+	a.propagateInheritedFields(program)
+
 	// Resolve types: convert class types to interface types where appropriate
 	// This must happen after all declarations are collected so we know what interfaces exist
 	a.resolveTypes()
@@ -120,6 +124,72 @@ func (a *Analyzer) Analyze(program *ast.Program) []error {
 	}
 
 	return a.errors
+}
+
+// propagateInheritedFields copies fields from parent classes to child classes.
+// This ensures that inherited fields (including getters/setters) are accessible
+// through the child class symbol. Uses recursion to handle multi-level inheritance.
+func (a *Analyzer) propagateInheritedFields(program *ast.Program) {
+	// Build a map from class name to its AST declaration for easy lookup
+	classDecls := make(map[string]*ast.ClassDecl)
+	for _, decl := range program.Declarations {
+		if cls, ok := decl.(*ast.ClassDecl); ok {
+			classDecls[cls.Name] = cls
+		}
+	}
+
+	// Track which classes have been processed to handle multi-level inheritance
+	visited := make(map[string]bool)
+
+	// Recursive function to propagate fields from all ancestors
+	var propagate func(className string)
+	propagate = func(className string) {
+		if visited[className] {
+			return
+		}
+		visited[className] = true
+
+		cls := classDecls[className]
+		if cls == nil || len(cls.Embeds) == 0 {
+			return
+		}
+
+		childSym := a.classes[className]
+		if childSym == nil {
+			return
+		}
+
+		// Copy fields from parent class(es)
+		for _, parentName := range cls.Embeds {
+			// Recursively ensure parent has all its inherited fields first
+			propagate(parentName)
+
+			parentSym := a.classes[parentName]
+			if parentSym == nil {
+				continue
+			}
+
+			// Copy all fields from parent that don't exist in child
+			for name, field := range parentSym.Fields {
+				if childSym.Fields[name] == nil {
+					// Create a copy of the field symbol
+					inheritedField := NewField(name, field.Type)
+					inheritedField.HasGetter = field.HasGetter
+					inheritedField.HasSetter = field.HasSetter
+					inheritedField.Public = field.Public
+					childSym.AddField(inheritedField)
+				}
+			}
+		}
+
+		// Store the parent class name for later reference
+		childSym.Parent = cls.Embeds[0]
+	}
+
+	// Process all classes
+	for className := range classDecls {
+		propagate(className)
+	}
 }
 
 // validateInterfaceImplementations checks that classes implement their declared interfaces.
