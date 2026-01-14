@@ -22,7 +22,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 08_modules.rg | FAIL | Lint: unused module methods generated |
 | 09_blocks.rg | FAIL | Method chaining with newlines |
 | 10_optionals.rg | FAIL | Safe navigation on getters, unwrap |
-| 11_errors.rg | FAIL | errors.new not resolving |
+| 11_errors.rg | PASS | errors.new now works |
 | 12_strings.rg | PASS | String methods now work |
 | 13_ranges.rg | PASS | Range methods on variables now work |
 | 14_go_interop.rg | PASS | Go interop now works |
@@ -89,18 +89,6 @@ The `unwrap` method on optionals doesn't work correctly:
 known = find_user(1).unwrap
 # invalid operation: _nc5 != nil (mismatched types OptionalResult and untyped nil)
 ```
-
-### BUG-041: errors.new not resolving (identifier mangling)
-**File:** 11_errors.rg
-
-Calling `errors.new` doesn't work - the codegen mangles the identifier:
-```ruby
-import errors
-
-return 0, errors.new("division by zero") if b == 0
-# error: undefined: newerrors
-```
-The error message is also confusing - it shows `newerrors` instead of `errors.new` or `errors.New`.
 
 ### BUG-045: Chan type in function parameters
 **File:** worker_pool.rg
@@ -275,12 +263,15 @@ Functions defined after `def main` are now found during semantic analysis. The a
 ### ~~BUG-044: sync.WaitGroup snake_case methods~~ FIXED
 WaitGroup and other Go type methods now map snake_case to PascalCase. The codegen tracks variables holding Go interop types (via `goInteropVars`) and uses PascalCase for method calls on those variables.
 
+### ~~BUG-041: errors.new identifier mangling~~ FIXED
+Calling `errors.new(...)` now correctly generates `errors.New(...)`. The codegen was treating `errors` as a Rugby class name and generating `newerrors(...)`. Fixed by checking if the identifier is a Go import before applying the Rugby class constructor pattern.
+
 ---
 
 ## Statistics
 
-- **Passing:** 12 examples
-- **Failing:** 9 examples
-- **Active bugs:** 11
-- **Fixed bugs:** 38
+- **Passing:** 13 examples
+- **Failing:** 8 examples
+- **Active bugs:** 10
+- **Fixed bugs:** 39
 - **Total examples:** 21

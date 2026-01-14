@@ -30,7 +30,7 @@ func allExamples() []example {
 		{file: "08_modules.rg", hasBugs: true},         // lint: unused module methods
 		{file: "09_blocks.rg", hasBugs: true},          // method chaining with newlines
 		{file: "10_optionals.rg", hasBugs: true},       // safe navigation on getters, unwrap
-		{file: "11_errors.rg", hasBugs: true},          // errors.new not resolving
+		{file: "11_errors.rg"},                          // errors.new now works
 		{file: "12_strings.rg"},                        // string methods work
 		{file: "13_ranges.rg"},                         // range methods work
 		{file: "14_go_interop.rg", expectedOutput: "Upper: HELLO WORLD\nContains 'world': true\nSplit: [hello world]\nJoined: one-two-three\nReplaced: hello Rugby\nInt to string: 42\nString to int: 123\nName: Alice, Age: 30\nStarting cleanup demo\nMiddle of function\nEnd of function body\nDeferred: runs last\n"},

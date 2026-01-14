@@ -1873,6 +1873,21 @@ end`
 	assertContains(t, output, `reader.readAll()`)
 }
 
+func TestGoPackageNewCall(t *testing.T) {
+	// BUG-041: errors.new should generate errors.New, not newerrors
+	input := `import errors
+
+def main
+  err = errors.new("something went wrong")
+end`
+
+	output := compile(t, input)
+
+	// Should generate errors.New, not newerrors
+	assertContains(t, output, `errors.New("something went wrong")`)
+	assertNotContains(t, output, "newerrors")
+}
+
 func TestSelfKeyword(t *testing.T) {
 	input := `class Builder
   def initialize

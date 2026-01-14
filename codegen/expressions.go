@@ -884,7 +884,9 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		}
 
 		if fn.Sel == "new" {
-			if ident, ok := fn.X.(*ast.Ident); ok {
+			// Only treat as Rugby class constructor if NOT a Go import
+			// (errors.new should become errors.New, not newerrors)
+			if ident, ok := fn.X.(*ast.Ident); ok && !g.imports[ident.Name] {
 				var ctorName string
 				if g.pubClasses[ident.Name] {
 					ctorName = fmt.Sprintf("New%s", ident.Name)
