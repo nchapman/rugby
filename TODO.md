@@ -106,10 +106,10 @@ All major bugs have been fixed. The remaining items are documented limitations.
 
 Goal: Every language feature has spec tests covering all syntactic variations.
 
-Current spec tests (56 total):
+Current spec tests (58 total):
 - `tests/spec/blocks/` - 9 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto, symbol_to_proc, multiple_params)
 - `tests/spec/classes/` - 9 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors, method_chaining, visibility, class_methods, super_calls)
-- `tests/spec/concurrency/` - 4 tests (channels, goroutines, spawn_await, spawn_closure)
+- `tests/spec/concurrency/` - 6 tests (channels, goroutines, spawn_await, spawn_closure, concurrently, waitgroup)
 - `tests/spec/control_flow/` - 7 tests (if_else, case_when, case_type, while_until, statement_modifiers, loop_modifiers, break_next)
 - `tests/spec/errors/` - 2 tests (known limitations + runtime_panic)
 - `tests/spec/error_handling/` - 2 tests (rescue, error_utilities)
@@ -157,8 +157,8 @@ Current spec tests (56 total):
 - [x] Channel operations (`Chan[T].new`, send, receive)
 - [x] Goroutines (`go do ... end`)
 - [x] `spawn`/`await` blocks
-- [ ] `concurrently` blocks with scoped spawn
-- [ ] WaitGroup usage
+- [x] `concurrently` blocks with scoped spawn
+- [x] WaitGroup usage (via sync.WaitGroup)
 
 ### Error Handling (Go-style, not exceptions)
 - [x] Inline rescue (`value = expr rescue default`)
@@ -263,5 +263,5 @@ Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
 - Additional limitations discovered: 4 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, array mutation in closures)
 - Features implemented: class methods, super calls, symbol-to-proc, spawn closure capture
-- Spec tests: 56 passing
+- Spec tests: 58 passing
 - All `make check` passes
