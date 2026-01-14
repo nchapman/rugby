@@ -74,9 +74,9 @@ All major bugs have been fixed. The remaining items are documented limitations.
 
 Goal: Every language feature has spec tests covering all syntactic variations.
 
-Current spec tests (46 total):
+Current spec tests (50 total):
 - `tests/spec/blocks/` - 7 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto)
-- `tests/spec/classes/` - 5 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors)
+- `tests/spec/classes/` - 7 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors, method_chaining, visibility)
 - `tests/spec/concurrency/` - 3 tests (channels, goroutines, spawn_await)
 - `tests/spec/control_flow/` - 7 tests (if_else, case_when, case_type, while_until, statement_modifiers, loop_modifiers, break_next)
 - `tests/spec/errors/` - 3 tests (known limitations + runtime_panic)
@@ -85,15 +85,16 @@ Current spec tests (46 total):
 - `tests/spec/go_interop/` - 1 test (strings)
 - `tests/spec/interfaces/` - 2 tests (basic, any_indexing)
 - `tests/spec/literals/` - 11 tests (arrays, integers, strings, ranges, range_include, empty_typed_array, map_symbol_shorthand, floats, heredocs, symbols, word_arrays)
-- `tests/spec/modules/` - 1 test (basic)
+- `tests/spec/modules/` - 2 tests (basic, multiple_includes)
 - `tests/spec/optionals/` - 3 tests (basic, if_let, nil_coalescing)
+- `tests/spec/stdlib/` - 1 test (regex)
 
 ### Literals (expand `tests/spec/literals/`)
 - [x] Floats (basic operations, predicates, rounding)
 - [x] Heredocs (`<<DELIM`)
 - [x] Word arrays (`%w[a b c]`, `%w(...)`)
 - [x] Symbol literals (`:foo`, symbol in maps)
-- [ ] Regex literals (`/pattern/`)
+- [x] Regex via `rugby/regex` module (no literal syntax)
 
 ### Control Flow (expand `tests/spec/control_flow/`)
 - [x] Case/when statements
@@ -104,10 +105,10 @@ Current spec tests (46 total):
 
 ### Classes (expand `tests/spec/classes/`)
 - [x] Property declarations (`property`, `getter`, `setter`)
-- [ ] Class methods (`def self.method`)
-- [ ] Visibility (`pub`, `private`)
-- [ ] Method chaining with `self` return
-- [ ] Super calls in methods
+- [x] Visibility (`pub` class and methods)
+- [x] Method chaining with `self` return
+- [ ] Class methods (`def self.method`) - not implemented
+- [ ] Super calls in methods - limited support
 
 ### Blocks (expand `tests/spec/blocks/`)
 - [x] Iterator methods (`find`, `any?`, `all?`, `none?`)
@@ -117,8 +118,8 @@ Current spec tests (46 total):
 
 ### Modules
 - [x] Module definition and include
-- [ ] Module method resolution
-- [ ] Multiple module includes
+- [x] Multiple module includes
+- [ ] Module method resolution (overriding)
 
 ### Concurrency (expand `tests/spec/concurrency/`)
 - [x] Channel operations (`Chan[T].new`, send, receive)
@@ -230,5 +231,5 @@ When fixing a bug:
 Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
 - Additional limitations discovered: 6 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, super calls, class methods, spawn closure capture)
-- Spec tests: 46 passing
+- Spec tests: 50 passing
 - All `make check` passes
