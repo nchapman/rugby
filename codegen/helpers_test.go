@@ -208,6 +208,8 @@ func (t *testTypeInfoAdapter) GetTypeKind(node ast.Node) TypeKind {
 		return TypeClass
 	case semantic.TypeOptional:
 		return TypeOptional
+	case semantic.TypeAny:
+		return TypeAny
 	default:
 		return TypeUnknown
 	}
@@ -288,4 +290,12 @@ func (t *testTypeInfoAdapter) IsDeclaration(node ast.Node) bool {
 
 func (t *testTypeInfoAdapter) GetFieldType(className, fieldName string) string {
 	return t.analyzer.GetFieldType(className, fieldName)
+}
+
+func (t *testTypeInfoAdapter) IsClass(typeName string) bool {
+	return t.analyzer.IsClass(typeName)
+}
+
+func (t *testTypeInfoAdapter) IsInterface(typeName string) bool {
+	return t.analyzer.IsInterface(typeName)
 }

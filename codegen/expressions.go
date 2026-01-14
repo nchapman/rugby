@@ -956,7 +956,7 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		}
 
 		// Handle class method calls (ClassName.method_name)
-		if ident, ok := fn.X.(*ast.Ident); ok && g.classes[ident.Name] {
+		if ident, ok := fn.X.(*ast.Ident); ok && g.isClass(ident.Name) {
 			if methodMap, hasClass := g.classMethods[ident.Name]; hasClass {
 				if funcName, hasMethod := methodMap[fn.Sel]; hasMethod {
 					g.buf.WriteString(funcName)
@@ -1921,7 +1921,7 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 	}
 
 	// Handle class method calls (ClassName.method_name) - implicit call without parens
-	if ident, ok := sel.X.(*ast.Ident); ok && g.classes[ident.Name] {
+	if ident, ok := sel.X.(*ast.Ident); ok && g.isClass(ident.Name) {
 		if methodMap, hasClass := g.classMethods[ident.Name]; hasClass {
 			if funcName, hasMethod := methodMap[sel.Sel]; hasMethod {
 				// Generate function call: ClassName_methodName()

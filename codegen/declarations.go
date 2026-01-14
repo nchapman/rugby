@@ -36,7 +36,7 @@ func (g *Generator) mapParamType(rubyType string) string {
 
 	// If it's a known class type (not already a pointer), make it a pointer
 	// Note: mapType returns class names unchanged, so we check for them here
-	if g.classes[rubyType] && !strings.HasPrefix(goType, "*") && !strings.HasPrefix(goType, "[]") && !strings.HasPrefix(goType, "map[") {
+	if g.isClass(rubyType) && !strings.HasPrefix(goType, "*") && !strings.HasPrefix(goType, "[]") && !strings.HasPrefix(goType, "map[") {
 		return "*" + goType
 	}
 
@@ -627,7 +627,7 @@ func (g *Generator) genSubclassConstructor(className, parentClass string, pub bo
 
 	// Only generate delegating constructor if parent is a known Rugby class
 	// If parent is external (Go type), skip constructor generation - the struct embedding still works
-	if !g.classes[parentClass] {
+	if !g.isClass(parentClass) {
 		return
 	}
 

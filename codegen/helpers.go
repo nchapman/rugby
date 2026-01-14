@@ -211,7 +211,7 @@ func (g *Generator) zeroValue(rubyType string) string {
 			return "nil"
 		}
 		// Check if this is a declared interface type
-		if g.interfaces[rubyType] || g.interfaces[goType] {
+		if g.isInterface(rubyType) || g.isInterface(goType) {
 			return "nil"
 		}
 		// Qualified Go types (e.g., io.Reader, http.Handler) are likely interfaces.

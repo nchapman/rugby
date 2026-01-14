@@ -1371,7 +1371,8 @@ end`
 
 	assertContains(t, output, `type Calculator struct{}`)
 	assertContains(t, output, `func (c *Calculator) add(a any, b any) int`)
-	assertContains(t, output, `return (a + b)`)
+	// When operands are 'any' type, codegen uses runtime.Add() since Go doesn't allow + on any
+	assertContains(t, output, `return runtime.Add(a, b)`)
 }
 
 func TestClassMethodSnakeCaseToCamelCase(t *testing.T) {

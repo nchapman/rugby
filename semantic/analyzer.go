@@ -2814,6 +2814,18 @@ func (a *Analyzer) GetFieldType(className, fieldName string) string {
 	return ""
 }
 
+// IsClass returns true if the given type name is a declared class.
+func (a *Analyzer) IsClass(typeName string) bool {
+	_, ok := a.classes[typeName]
+	return ok
+}
+
+// IsInterface returns true if the given type name is a declared interface.
+func (a *Analyzer) IsInterface(typeName string) bool {
+	_, ok := a.interfaces[typeName]
+	return ok
+}
+
 // GetSymbol looks up a symbol by name in the global scope.
 func (a *Analyzer) GetSymbol(name string) *Symbol {
 	return a.globalScope.Lookup(name)

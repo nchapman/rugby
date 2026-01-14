@@ -150,6 +150,16 @@ func (t *typeInfoAdapter) GetFieldType(className, fieldName string) string {
 	return t.analyzer.GetFieldType(className, fieldName)
 }
 
+// IsClass returns true if the given type name is a declared class.
+func (t *typeInfoAdapter) IsClass(typeName string) bool {
+	return t.analyzer.IsClass(typeName)
+}
+
+// IsInterface returns true if the given type name is a declared interface.
+func (t *typeInfoAdapter) IsInterface(typeName string) bool {
+	return t.analyzer.IsInterface(typeName)
+}
+
 // Styles for pretty output
 var successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 

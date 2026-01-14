@@ -101,6 +101,12 @@ type TypeInfo interface {
 	// GetFieldType returns the Rugby type of a class field by class and field name.
 	// Returns empty string if field not found.
 	GetFieldType(className, fieldName string) string
+
+	// IsClass returns true if the given type name is a declared class.
+	IsClass(typeName string) bool
+
+	// IsInterface returns true if the given type name is a declared interface.
+	IsInterface(typeName string) bool
 }
 
 type Generator struct {
@@ -314,6 +320,24 @@ func (g *Generator) getFieldType(fieldName string) string {
 		return ""
 	}
 	return g.typeInfo.GetFieldType(g.currentClass, fieldName)
+}
+
+// isClass checks if a type name is a declared class.
+// Uses TypeInfo when available, falls back to local classes map.
+func (g *Generator) isClass(typeName string) bool {
+	if g.typeInfo != nil {
+		return g.typeInfo.IsClass(typeName)
+	}
+	return g.classes[typeName]
+}
+
+// isInterface checks if a type name is a declared interface.
+// Uses TypeInfo when available, falls back to local interfaces map.
+func (g *Generator) isInterface(typeName string) bool {
+	if g.typeInfo != nil {
+		return g.typeInfo.IsInterface(typeName)
+	}
+	return g.interfaces[typeName]
 }
 
 // isOptionalType checks if a type is an optional type (ends with ?)
