@@ -24,7 +24,8 @@ func (g *Generator) mapParamType(rubyType string) string {
 }
 
 func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
-	clear(g.vars) // reset vars for each function
+	clear(g.vars)          // reset vars for each function
+	clear(g.goInteropVars) // reset Go interop tracking for each function
 	g.currentReturnTypes = fn.ReturnTypes
 	g.inMainFunc = fn.Name == "main"
 
@@ -566,7 +567,8 @@ func (g *Generator) genSubclassConstructor(className, parentClass string, pub bo
 }
 
 func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
-	clear(g.vars) // reset vars for each method
+	clear(g.vars)          // reset vars for each method
+	clear(g.goInteropVars) // reset Go interop tracking for each method
 	g.currentReturnTypes = method.ReturnTypes
 	g.currentMethod = method.Name
 	g.currentMethodPub = method.Pub

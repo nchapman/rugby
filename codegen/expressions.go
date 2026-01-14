@@ -62,6 +62,10 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			// Module method call within class - generate as self.method()
 			recv := receiverName(g.currentClass)
 			g.buf.WriteString(fmt.Sprintf("%s.%s()", recv, e.Name))
+		} else if g.noArgFunctions[e.Name] {
+			// No-arg function - call it implicitly (Ruby-style)
+			goName := snakeToCamelWithAcronyms(e.Name)
+			g.buf.WriteString(fmt.Sprintf("%s()", goName))
 		} else {
 			g.buf.WriteString(e.Name)
 		}
@@ -1087,7 +1091,9 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			}
 		}
 
-		if !found {
+		// Only check uniqueMethods if this isn't a Go interop call
+		// Otherwise strings.split() would incorrectly match the String.split method
+		if !found && !g.isGoInterop(fn.X) {
 			if def, ok := uniqueMethods[fn.Sel]; ok {
 				methodDef = def
 				found = true
@@ -1945,12 +1951,43 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 func (g *Generator) isGoInterop(expr ast.Expression) bool {
 	switch e := expr.(type) {
 	case *ast.Ident:
-		return g.imports[e.Name]
+		// Check both imports and variables holding Go interop types
+		return g.imports[e.Name] || g.goInteropVars[e.Name]
 	case *ast.SelectorExpr:
 		return g.isGoInterop(e.X)
 	default:
 		return false
 	}
+}
+
+// isGoInteropTypeConstructor checks if an expression is a Go type constructor like sync.WaitGroup.new
+// Returns true if the expression creates an instance of a Go type.
+func (g *Generator) isGoInteropTypeConstructor(expr ast.Expression) bool {
+	// First check for CallExpr (sync.WaitGroup.new())
+	if call, ok := expr.(*ast.CallExpr); ok {
+		sel, ok := call.Func.(*ast.SelectorExpr)
+		if !ok || sel.Sel != "new" {
+			return false
+		}
+		expr = sel // Continue checking the selector
+	}
+
+	// Check for SelectorExpr (sync.WaitGroup.new - property style)
+	sel, ok := expr.(*ast.SelectorExpr)
+	if !ok || sel.Sel != "new" {
+		return false
+	}
+	// Check if it's pkg.Type.new pattern
+	innerSel, ok := sel.X.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	// Check if the package is a Go import
+	pkgIdent, ok := innerSel.X.(*ast.Ident)
+	if !ok {
+		return false
+	}
+	return g.imports[pkgIdent.Name]
 }
 
 // isInterfaceMethod checks if a method name matches any interface method in the program.
@@ -2128,6 +2165,11 @@ func (g *Generator) genArrayPropertyMethod(sel *ast.SelectorExpr) bool {
 // like x.even?, x.abs, f.floor, s.upcase, etc.
 // Returns true if the method was handled, false otherwise.
 func (g *Generator) genStdLibPropertyMethod(sel *ast.SelectorExpr) bool {
+	// Don't intercept Go interop calls - they should use native Go methods
+	if g.isGoInterop(sel.X) {
+		return false
+	}
+
 	receiverType := g.inferTypeFromExpr(sel.X)
 
 	// Map common Go types to Rugby types for lookup

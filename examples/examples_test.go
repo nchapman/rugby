@@ -33,8 +33,8 @@ func allExamples() []example {
 		{file: "11_errors.rg", hasBugs: true},          // errors.new not resolving
 		{file: "12_strings.rg"},                        // string methods work
 		{file: "13_ranges.rg"},                         // range methods work
-		{file: "14_go_interop.rg", hasBugs: true},      // strings.split/join, function not found
-		{file: "15_concurrency.rg", hasBugs: true},     // functions not found, snake_case WaitGroup
+		{file: "14_go_interop.rg", expectedOutput: "Upper: HELLO WORLD\nContains 'world': true\nSplit: [hello world]\nJoined: one-two-three\nReplaced: hello Rugby\nInt to string: 42\nString to int: 123\nName: Alice, Age: 30\nStarting cleanup demo\nMiddle of function\nEnd of function body\nDeferred: runs last\n"},
+		{file: "15_concurrency.rg", skipRun: true},      // output is non-deterministic due to goroutines
 
 		// Additional examples
 		{file: "fizzbuzz.rg", expectedOutput: "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n"},

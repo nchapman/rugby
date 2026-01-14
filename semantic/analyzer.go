@@ -1364,6 +1364,12 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 
 	case *ast.Ident:
 		sym := a.scope.Lookup(e.Name)
+		// Check top-level functions as fallback (handles forward references)
+		if sym == nil {
+			if fn := a.functions[e.Name]; fn != nil {
+				sym = fn
+			}
+		}
 		if sym == nil {
 			a.addError(&UndefinedError{Name: e.Name, Line: e.Line, Column: e.Column, Candidates: a.findSimilar(e.Name)})
 			typ = TypeUnknownVal

@@ -25,8 +25,8 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | 11_errors.rg | FAIL | errors.new not resolving |
 | 12_strings.rg | PASS | String methods now work |
 | 13_ranges.rg | PASS | Range methods on variables now work |
-| 14_go_interop.rg | FAIL | strings.split/join, function not found |
-| 15_concurrency.rg | FAIL | Functions not found, snake_case WaitGroup |
+| 14_go_interop.rg | PASS | Go interop now works |
+| 15_concurrency.rg | PASS | Concurrency features now work |
 | fizzbuzz.rg | PASS | None |
 | field_inference.rg | PASS | None |
 | json_simple.rg | PASS | None |
@@ -101,40 +101,6 @@ return 0, errors.new("division by zero") if b == 0
 # error: undefined: newerrors
 ```
 The error message is also confusing - it shows `newerrors` instead of `errors.new` or `errors.New`.
-
-### BUG-042: Go package methods with snake_case
-**File:** 14_go_interop.rg
-
-Some Go package methods aren't mapping correctly:
-```ruby
-parts = strings.split(s, " ")  # too many arguments in call to runtime.Split
-joined = strings.join(words, "-")  # too many arguments in call to runtime.Join
-```
-
-### BUG-043: Functions defined after main not found
-**Files:** 14_go_interop.rg, 15_concurrency.rg
-
-Functions defined after `def main` are not found:
-```ruby
-def main
-  cleanup_demo  # undefined: cleanup_demo
-end
-
-def cleanup_demo
-  # ...
-end
-```
-
-### BUG-044: sync.WaitGroup snake_case methods
-**File:** 15_concurrency.rg
-
-WaitGroup methods don't map from snake_case to CamelCase:
-```ruby
-wg = sync.WaitGroup.new
-wg.add(3)   # has no field or method add, but does have method Add
-wg.done     # has no field or method done, but does have method Done
-wg.wait     # has no field or method wait, but does have method Wait
-```
 
 ### BUG-045: Chan type in function parameters
 **File:** worker_pool.rg
@@ -300,12 +266,21 @@ Variables declared in multi-value assignments that are never used are now automa
 ### ~~BUG-033: String positive indexing returns byte instead of character~~ FIXED
 String indexing like `word[0]` now correctly returns characters instead of byte values. The codegen detects when the receiver is a string type and uses `runtime.AtIndex` for all string indexing, ensuring consistent behavior for both positive and negative indices.
 
+### ~~BUG-042: Go package methods with snake_case~~ FIXED
+Go package methods with snake_case names (like `strings.split`, `strings.join`) now correctly map to CamelCase Go methods. The codegen's `genStdLibPropertyMethod` and `uniqueMethods` lookup now check `isGoInterop` first to avoid incorrectly routing Go package calls through the runtime.
+
+### ~~BUG-043: Functions defined after main not found~~ FIXED
+Functions defined after `def main` are now found during semantic analysis. The analyzer checks `a.functions` map as a fallback when a symbol isn't in scope, enabling forward references to functions.
+
+### ~~BUG-044: sync.WaitGroup snake_case methods~~ FIXED
+WaitGroup and other Go type methods now map snake_case to PascalCase. The codegen tracks variables holding Go interop types (via `goInteropVars`) and uses PascalCase for method calls on those variables.
+
 ---
 
 ## Statistics
 
-- **Passing:** 10 examples
-- **Failing:** 11 examples
-- **Active bugs:** 14
-- **Fixed bugs:** 35
+- **Passing:** 12 examples
+- **Failing:** 9 examples
+- **Active bugs:** 11
+- **Fixed bugs:** 38
 - **Total examples:** 21

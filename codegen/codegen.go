@@ -119,6 +119,8 @@ type Generator struct {
 	interfaceMethods             map[string]map[string]bool // interface name -> method names (for interface implementation)
 	currentClassInterfaceMethods map[string]bool            // methods that must be exported for current class (to satisfy interfaces)
 	classConstructorParams       map[string][]*ast.Param    // track constructor parameters for each class (for subclass delegation)
+	noArgFunctions               map[string]bool            // track no-arg top-level functions (for implicit call)
+	goInteropVars                map[string]bool            // track variables holding Go interop types
 	sourceFile                   string                     // original .rg filename for //line directives
 	emitLineDir                  bool                       // whether to emit //line directives
 	currentReturnTypes           []string                   // return types of the current function/method
@@ -200,6 +202,8 @@ func New(opts ...Option) *Generator {
 		interfaceMethods:             make(map[string]map[string]bool),
 		currentClassInterfaceMethods: make(map[string]bool),
 		classConstructorParams:       make(map[string][]*ast.Param),
+		noArgFunctions:               make(map[string]bool),
+		goInteropVars:                make(map[string]bool),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -478,6 +482,16 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 			}
 			for _, method := range iface.Methods {
 				g.interfaceMethods[iface.Name][method.Name] = true
+			}
+		}
+	}
+
+	// Pre-pass: collect no-arg functions for implicit call syntax
+	// In Rugby, calling a no-arg function without parentheses is allowed (like Ruby)
+	for _, def := range definitions {
+		if fn, ok := def.(*ast.FuncDecl); ok {
+			if len(fn.Params) == 0 {
+				g.noArgFunctions[fn.Name] = true
 			}
 		}
 	}

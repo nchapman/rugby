@@ -629,6 +629,14 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 		g.vars[s.Name] = sourceType // infer type from value if variable is new
 	}
 
+	// Track Go interop type variables for method call snake_case -> PascalCase conversion
+	if g.isGoInteropTypeConstructor(s.Value) {
+		g.goInteropVars[s.Name] = true
+	} else if g.goInteropVars[s.Name] {
+		// Variable was reassigned to non-Go-interop value, remove tracking
+		delete(g.goInteropVars, s.Name)
+	}
+
 	if needsWrap {
 		baseType := strings.TrimSuffix(targetType, "?")
 		g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
@@ -1331,6 +1339,14 @@ func (g *Generator) genExprStmt(s *ast.ExprStmt) {
 	expr := s.Expr
 	if sel, ok := expr.(*ast.SelectorExpr); ok {
 		expr = &ast.CallExpr{Func: sel, Args: nil}
+	}
+
+	// Convert Ident to CallExpr when it's a no-arg function (Ruby-style method call)
+	// e.g., "helper" as statement becomes "helper()"
+	if ident, ok := expr.(*ast.Ident); ok {
+		if g.noArgFunctions[ident.Name] {
+			expr = &ast.CallExpr{Func: ident, Args: nil}
+		}
 	}
 
 	if s.Condition != nil {
