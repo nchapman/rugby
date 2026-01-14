@@ -449,11 +449,8 @@ func isValueTypeOptional(t string) bool {
 // For example, if expr evaluates to []int, this returns "int".
 // Returns "any" if the element type cannot be determined.
 func (g *Generator) inferArrayElementGoType(expr ast.Expression) string {
-	if g.typeInfo != nil {
-		goType := g.typeInfo.GetGoType(expr)
-		if strings.HasPrefix(goType, "[]") {
-			return goType[2:] // Remove "[]" prefix
-		}
+	if goType := g.typeInfo.GetGoType(expr); strings.HasPrefix(goType, "[]") {
+		return goType[2:] // Remove "[]" prefix
 	}
 	// Fall back to AST-based inference
 	switch e := expr.(type) {
@@ -482,11 +479,8 @@ func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {
 	}
 
 	// Then check TypeInfo
-	if g.typeInfo != nil {
-		kind := g.typeInfo.GetSelectorKind(sel)
-		if kind != ast.SelectorUnknown {
-			return kind
-		}
+	if kind := g.typeInfo.GetSelectorKind(sel); kind != ast.SelectorUnknown {
+		return kind
 	}
 
 	// Fall back to heuristics:
@@ -513,12 +507,10 @@ func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {
 // literal type detection for robustness.
 func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 	// Primary: use semantic type info
-	if g.typeInfo != nil {
-		// GetRugbyType returns the full type including generics (e.g., "Array[Int]", "String?")
-		// Note: "any" is a valid type that should be returned
-		if rugbyType := g.typeInfo.GetRugbyType(expr); rugbyType != "" && rugbyType != "unknown" {
-			return rugbyType
-		}
+	// GetRugbyType returns the full type including generics (e.g., "Array[Int]", "String?")
+	// Note: "any" is a valid type that should be returned
+	if rugbyType := g.typeInfo.GetRugbyType(expr); rugbyType != "" && rugbyType != "unknown" {
+		return rugbyType
 	}
 
 	// Minimal fallback: literal type detection only

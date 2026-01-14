@@ -301,9 +301,6 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 // We require both because if only one is any, it's likely due to generic typing
 // (like reduce's accumulator) where codegen infers concrete types.
 func (g *Generator) hasAnyTypedOperand(left, right ast.Expression) bool {
-	if g.typeInfo == nil {
-		return false
-	}
 	leftKind := g.typeInfo.GetTypeKind(left)
 	rightKind := g.typeInfo.GetTypeKind(right)
 	return leftKind == TypeAny && rightKind == TypeAny
@@ -312,21 +309,17 @@ func (g *Generator) hasAnyTypedOperand(left, right ast.Expression) bool {
 // canUseDirectComparison returns true if we can use Go's == operator directly
 // instead of runtime.Equal. This is possible when:
 // 1. Both operands are primitive literals, OR
-// 2. We have type info and both operands are primitive types (Int, Float, String, Bool)
+// 2. Both operands are primitive types (Int, Float, String, Bool)
 func (g *Generator) canUseDirectComparison(left, right ast.Expression) bool {
 	// Primitive literals can always use direct comparison
 	if isPrimitiveLiteral(left) && isPrimitiveLiteral(right) {
 		return true
 	}
 
-	// If we have type info, check if both types are primitive
-	if g.typeInfo != nil {
-		leftKind := g.typeInfo.GetTypeKind(left)
-		rightKind := g.typeInfo.GetTypeKind(right)
-		return isPrimitiveKind(leftKind) && isPrimitiveKind(rightKind)
-	}
-
-	return false
+	// Check if both types are primitive
+	leftKind := g.typeInfo.GetTypeKind(left)
+	rightKind := g.typeInfo.GetTypeKind(right)
+	return isPrimitiveKind(leftKind) && isPrimitiveKind(rightKind)
 }
 
 // isPrimitiveKind returns true for types that support direct == comparison in Go.
@@ -557,10 +550,8 @@ func (g *Generator) genArrayLit(arr *ast.ArrayLit) {
 // Uses semantic type info when available, falls back to expression inference.
 func (g *Generator) getArrayType(arr *ast.ArrayLit) string {
 	// Try semantic type info first (most reliable)
-	if g.typeInfo != nil {
-		if goType := g.typeInfo.GetGoType(arr); goType != "" {
-			return goType
-		}
+	if goType := g.typeInfo.GetGoType(arr); goType != "" {
+		return goType
 	}
 
 	// Fall back to expression-based inference
@@ -749,10 +740,8 @@ func (g *Generator) genMapLit(m *ast.MapLit) {
 // Uses semantic type info when available, falls back to expression inference.
 func (g *Generator) getMapType(m *ast.MapLit) string {
 	// Try semantic type info first (most reliable)
-	if g.typeInfo != nil {
-		if goType := g.typeInfo.GetGoType(m); goType != "" {
-			return goType
-		}
+	if goType := g.typeInfo.GetGoType(m); goType != "" {
+		return goType
 	}
 
 	// Fall back to expression-based inference
@@ -1404,11 +1393,8 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	}
 
 	// Check if iterating over a map with two parameters (key, value)
-	// Use semantic analysis for Go type if available
-	var goType string
-	if g.typeInfo != nil {
-		goType = g.typeInfo.GetGoType(iterable)
-	}
+	// Use semantic analysis for Go type
+	goType := g.typeInfo.GetGoType(iterable)
 	if goType == "" {
 		goType = g.inferTypeFromExpr(iterable)
 	}
@@ -2133,14 +2119,12 @@ func (g *Generator) isInterfaceMethod(methodName string) bool {
 // For example, if expr is a variable of type *User, returns "User".
 // Returns empty string if the class name cannot be determined.
 func (g *Generator) getReceiverClassName(expr ast.Expression) string {
-	// Use type info if available
-	if g.typeInfo != nil {
-		if typ := g.typeInfo.GetRugbyType(expr); typ != "" {
-			// Strip pointer/optional prefixes if present
-			typ = strings.TrimPrefix(typ, "*")
-			typ = strings.TrimSuffix(typ, "?")
-			return typ
-		}
+	// Use type info from semantic analysis
+	if typ := g.typeInfo.GetRugbyType(expr); typ != "" {
+		// Strip pointer/optional prefixes if present
+		typ = strings.TrimPrefix(typ, "*")
+		typ = strings.TrimSuffix(typ, "?")
+		return typ
 	}
 
 	// Fall back to inferring from expression

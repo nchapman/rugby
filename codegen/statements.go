@@ -317,7 +317,7 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 	for i, name := range s.Names {
 		if name == "_" {
 			effectiveNames[i] = "_"
-		} else if g.typeInfo != nil && !g.typeInfo.IsVariableUsedAt(s, name) {
+		} else if !g.typeInfo.IsVariableUsedAt(s, name) {
 			// Variable is declared but never used - replace with _
 			effectiveNames[i] = "_"
 		} else {
@@ -635,10 +635,8 @@ func (g *Generator) getShiftLeftTargetType(expr ast.Expression) string {
 	}
 
 	// Get the Go type of the left operand (the array/channel being appended to)
-	if g.typeInfo != nil {
-		if goType := g.typeInfo.GetGoType(binExpr.Left); goType != "" && strings.HasPrefix(goType, "[]") {
-			return goType
-		}
+	if goType := g.typeInfo.GetGoType(binExpr.Left); goType != "" && strings.HasPrefix(goType, "[]") {
+		return goType
 	}
 
 	// Fall back to inferring element type from left operand
