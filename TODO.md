@@ -194,13 +194,21 @@ Currently `codegen/codegen.go` Generator struct has 35+ fields mixing:
 - [x] Removed fallback maps from codegen - helpers now panic if TypeInfo is nil
 - [x] Removed pre-pass loops that populated fallback maps
 - [x] Removed unused Generator fields: pubClasses, classes, classAccessorFields, interfaces, interfaceMethods, classConstructorParams, noArgFunctions
-- [ ] Move remaining symbol tables to semantic analyzer (vars, goInteropVars, modules)
-- [ ] Codegen only transforms AST nodes to Go syntax
 
-**Progress on TypeInfo consolidation:**
-All type/symbol queries now go through TypeInfo interface. Helper methods panic if typeInfo
-is nil, enforcing that semantic analysis must run before code generation. Removed 7 fallback
-maps from Generator struct. Remaining work: move vars, goInteropVars, and modules tracking.
+**Remaining Phase 3 work:**
+
+| Issue | Description | Priority |
+|-------|-------------|----------|
+| Module accessor inheritance | `HasAccessor()` doesn't return true for fields from included modules. Semantic analyzer should propagate module accessors to classes. | High |
+| Module method origin | Add `IsModuleMethod(className, methodName)` to TypeInfo. Currently tracked in `g.currentClassModuleMethods`. | Medium |
+| Variable type queries | `g.vars` used for type lookups in 50+ places. Many could use `TypeInfo.GetGoType()` instead. | Low |
+| Go interop tracking | `g.goInteropVars` tracks variables assigned from Go calls. Complex to move - runtime dependent. | Low |
+
+**Acceptable in codegen (emission-time state):**
+- `g.vars` for scoped variable tracking via `scopedVar()`/`scopedVars()`
+- `g.classMethods` for generated Go function name mapping
+- `g.modules` for module AST access during include processing
+- `g.accessorFields` for current class (but should use TypeInfo once module inheritance fixed)
 
 **Test infrastructure:**
 Consolidated test helpers into `codegen/helpers_test.go`:
@@ -216,6 +224,8 @@ Consolidated test helpers into `codegen/helpers_test.go`:
 - [x] Field inheritance propagation (getters/setters)
 - [x] Track variable usage for unused variable detection
 - [x] Resolve selector kinds (field/method/getter)
+- [ ] Module accessor inheritance (propagate module accessors to including classes)
+- [ ] Track module method origin (which methods come from included modules)
 - [ ] Complete type inference for all expressions
 - [ ] Validate interface satisfaction at analysis time
 - [ ] Better error messages with source context
