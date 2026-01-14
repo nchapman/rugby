@@ -6,15 +6,24 @@ Roadmap to a bulletproof compiler.
 
 ### Spec-Driven Development (for new features)
 
+> 📖 **Full guide:** See [`docs/guide.md`](docs/guide.md) for detailed patterns and examples.
+
 When implementing new language features, follow this workflow:
 
-1. **Write the spec test first** in `tests/spec/errors/<feature>.rg` with `#@ compile-fail`
-2. **Document expected behavior** clearly in comments with examples
-3. **Implement the feature** in parser → semantic → codegen as needed
-4. **Flip to `#@ run-pass`** and move to the appropriate feature directory
-5. **Code review + commit**
+1. **Spec test first** → `tests/spec/errors/<feature>.rg` with `#@ compile-fail`
+2. **AST** → Add/modify nodes in `ast/ast.go`
+3. **Parser** → Recognize syntax in `parser/`, build AST
+4. **Semantic** → Type inference + validation in `semantic/` (this is where the magic happens)
+5. **CodeGen** → Emit Go code in `codegen/`, querying `typeInfo` (no inference!)
+6. **Flip test** → Move to feature directory, change to `#@ run-pass`
 
-This creates a clear contract, catches regressions, and documents intent.
+**The golden rule:** Semantic analysis owns all type inference. CodeGen is a pure emitter.
+
+```
+Parser → AST → Semantic (types) → CodeGen (emit)
+                   ↓                  ↑
+              nodeTypes ──────► typeInfo queries
+```
 
 #### Feature Priority
 
