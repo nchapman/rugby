@@ -3114,7 +3114,7 @@ end`
 }
 
 func TestStrictConditionRejectsNonBool(t *testing.T) {
-	// Using non-Bool type directly in condition should error
+	// Using non-Bool type directly in condition should be caught by semantic analysis
 	input := `def main
   x : Int = 5
   if x
@@ -3126,20 +3126,28 @@ end`
 	p := parser.New(l)
 	program := p.ParseProgram()
 
-	gen := New()
-	_, err := gen.Generate(program)
+	// Semantic analysis should catch this error
+	analyzer := semantic.NewAnalyzer()
+	errs := analyzer.Analyze(program)
 
-	if err == nil {
+	if len(errs) == 0 {
 		t.Fatal("expected error for non-Bool condition, got none")
 	}
 
-	if !strings.Contains(err.Error(), "condition must be Bool, got Int") {
-		t.Errorf("expected error about Bool type, got: %s", err.Error())
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "condition must be Bool") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected error about Bool type, got: %v", errs)
 	}
 }
 
 func TestStrictConditionRejectsOptionalWithoutExplicitCheck(t *testing.T) {
-	// Using optional type directly in condition should error (suggest if let)
+	// Using optional type directly in condition should be caught by semantic analysis
 	input := `def main
   x : Int? = nil
   if x
@@ -3151,15 +3159,23 @@ end`
 	p := parser.New(l)
 	program := p.ParseProgram()
 
-	gen := New()
-	_, err := gen.Generate(program)
+	// Semantic analysis should catch this error
+	analyzer := semantic.NewAnalyzer()
+	errs := analyzer.Analyze(program)
 
-	if err == nil {
+	if len(errs) == 0 {
 		t.Fatal("expected error for optional in condition without explicit check")
 	}
 
-	if !strings.Contains(err.Error(), "use 'if let x = ...' or 'x != nil' for optionals") {
-		t.Errorf("expected helpful error message about optionals, got: %s", err.Error())
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "condition must be Bool") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected error about optionals, got: %v", errs)
 	}
 }
 

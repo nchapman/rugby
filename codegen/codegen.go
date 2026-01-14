@@ -374,9 +374,9 @@ func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {
 	return ast.SelectorUnknown
 }
 
-// inferTypeFromExpr returns the type of an expression.
-// Primary source is TypeInfo from semantic analysis; fallback only for literals
-// when no TypeInfo is available.
+// inferTypeFromExpr returns the Rugby type for an expression.
+// Primary source is TypeInfo from semantic analysis. Fallback is minimal
+// literal type detection for robustness.
 func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 	// Primary: use semantic type info
 	if g.typeInfo != nil {
@@ -387,9 +387,9 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		}
 	}
 
-	// Fallback: minimal AST-based inference for when TypeInfo is unavailable
-	// This supports tests that don't run semantic analysis
-	switch e := expr.(type) {
+	// Minimal fallback: literal type detection only
+	// Semantic analysis should provide types for all other expressions
+	switch expr.(type) {
 	case *ast.IntLit:
 		return "Int"
 	case *ast.FloatLit:
@@ -408,34 +408,8 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		return "Array"
 	case *ast.MapLit:
 		return "Map"
-	case *ast.Ident:
-		// Check local variable tracking
-		if t, ok := g.vars[e.Name]; ok && t != "" {
-			return t
-		}
-	case *ast.InstanceVar:
-		// Check class field tracking
-		if t, ok := g.classFields[e.Name]; ok && t != "" {
-			return t
-		}
-	case *ast.BinaryExpr:
-		// Comparison and logical operators always return Bool
-		switch e.Op {
-		case "==", "!=", "<", ">", "<=", ">=", "and", "or":
-			return "Bool"
-		}
-	case *ast.UnaryExpr:
-		if e.Op == "not" || e.Op == "!" {
-			return "Bool"
-		}
-	case *ast.TernaryExpr:
-		// Return the type of the then branch (or else branch if then is unknown)
-		if t := g.inferTypeFromExpr(e.Then); t != "" {
-			return t
-		}
-		return g.inferTypeFromExpr(e.Else)
 	}
-	return "" // unknown
+	return "" // unknown - semantic analysis should have provided the type
 }
 
 func (g *Generator) Generate(program *ast.Program) (string, error) {
