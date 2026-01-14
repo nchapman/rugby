@@ -391,7 +391,9 @@ func compile(t *testing.T, input string) string {
 	return output
 }
 
-// compileWithErrors runs codegen and returns any collected errors (for testing error detection)
+// compileWithErrors runs codegen without semantic analysis and returns any collected errors.
+// This is used for testing codegen-specific error detection (e.g., module method conflicts)
+// that happens during code generation rather than semantic analysis.
 func compileWithErrors(t *testing.T, input string) []error {
 	l := lexer.New(input)
 	p := parser.New(l)
@@ -541,7 +543,20 @@ func compileWithLineDirectives(t *testing.T, input string, sourceFile string) st
 		t.FailNow()
 	}
 
-	gen := New(WithSourceFile(sourceFile))
+	// Run semantic analysis
+	analyzer := semantic.NewAnalyzer()
+	errs := analyzer.Analyze(program)
+	if len(errs) > 0 {
+		for _, err := range errs {
+			t.Errorf("semantic error: %s", err)
+		}
+		t.FailNow()
+	}
+
+	// Create type info adapter
+	typeInfo := &testTypeInfoAdapter{analyzer: analyzer}
+
+	gen := New(WithSourceFile(sourceFile), WithTypeInfo(typeInfo))
 	output, err := gen.Generate(program)
 	if err != nil {
 		t.Fatalf("codegen error: %v", err)
@@ -2083,8 +2098,6 @@ end`
 	assertContains(t, output, `c.setValue(1).setValue(2)`)
 }
 
-// TestSelfOutsideClass was removed - semantic analysis now catches this error
-
 func TestToSMethod(t *testing.T) {
 	input := `class User
   def initialize(name : String)
@@ -2512,8 +2525,6 @@ end`
 	assertContains(t, output, `same := (count == 42)`)
 	assertNotContains(t, output, `runtime.Equal(count, 42)`)
 }
-
-// TestMixedTypeArrayFallsBackToAny was removed - semantic analysis rejects mixed-type arrays
 
 func TestEmptyArrayUsesAny(t *testing.T) {
 	input := `def main
