@@ -179,6 +179,9 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 
 	p.nextToken() // consume '['
 
+	// Skip newlines after opening bracket (allows multiline arrays)
+	p.skipNewlines()
+
 	// Handle empty array
 	if p.curTokenIs(token.RBRACKET) {
 		return arr
@@ -192,10 +195,30 @@ func (p *Parser) parseArrayLiteral() ast.Expression {
 	}
 	arr.Elements = append(arr.Elements, elem)
 
-	// Parse remaining elements
-	for p.peekTokenIs(token.COMMA) {
+	// Parse remaining elements - handle both commas and newlines between elements
+	// After parsing an element, current is at the element, peek is what comes next
+	for {
+		// Skip any newlines after the current element
+		for p.peekTokenIs(token.NEWLINE) {
+			p.nextToken()
+		}
+
+		// Check for end of array
+		if p.peekTokenIs(token.RBRACKET) {
+			p.nextToken() // move to ']'
+			return arr
+		}
+
+		// Expect comma between elements
+		if !p.peekTokenIs(token.COMMA) {
+			break // exit loop, will hit error below
+		}
+
 		p.nextToken() // move to ','
-		p.nextToken() // move past ',' to next element
+		p.nextToken() // move past ',' to next element or newline
+
+		// Skip newlines after comma
+		p.skipNewlines()
 
 		// Allow trailing comma
 		if p.curTokenIs(token.RBRACKET) {
@@ -243,6 +266,9 @@ func (p *Parser) parseMapLiteral() ast.Expression {
 
 	p.nextToken() // consume '{'
 
+	// Skip newlines after opening brace (allows multiline maps)
+	p.skipNewlines()
+
 	// Handle empty map
 	if p.curTokenIs(token.RBRACE) {
 		return mapLit
@@ -255,10 +281,30 @@ func (p *Parser) parseMapLiteral() ast.Expression {
 	}
 	mapLit.Entries = append(mapLit.Entries, entry)
 
-	// Parse remaining entries
-	for p.peekTokenIs(token.COMMA) {
+	// Parse remaining entries - handle both commas and newlines between entries
+	// After parsing an entry, current is at the value, peek is what comes next
+	for {
+		// Skip any newlines after the current entry
+		for p.peekTokenIs(token.NEWLINE) {
+			p.nextToken()
+		}
+
+		// Check for end of map
+		if p.peekTokenIs(token.RBRACE) {
+			p.nextToken() // move to '}'
+			return mapLit
+		}
+
+		// Expect comma between entries
+		if !p.peekTokenIs(token.COMMA) {
+			break // exit loop, will hit error below
+		}
+
 		p.nextToken() // move to ','
-		p.nextToken() // move past ',' to next key
+		p.nextToken() // move past ',' to next key or newline
+
+		// Skip newlines after comma
+		p.skipNewlines()
 
 		// Allow trailing comma
 		if p.curTokenIs(token.RBRACE) {
@@ -312,8 +358,8 @@ func (p *Parser) parseMapEntry() (ast.MapEntry, bool) {
 		p.nextToken() // move to ':'
 
 		// Check for implicit value shorthand: {x:, y:} or {x:}
-		// If peek is comma or rbrace, use identifier as value and stay on ':'
-		if p.peekTokenIs(token.COMMA) || p.peekTokenIs(token.RBRACE) {
+		// If peek is comma, rbrace, or newline (for multiline), use identifier as value
+		if p.peekTokenIs(token.COMMA) || p.peekTokenIs(token.RBRACE) || p.peekTokenIs(token.NEWLINE) {
 			value := &ast.Ident{Name: keyName, Line: keyLine, Column: keyCol}
 			return ast.MapEntry{Key: key, Value: value}, true
 		}

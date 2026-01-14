@@ -1148,6 +1148,159 @@ end`
 	}
 }
 
+func TestMultilineArrayLiteral(t *testing.T) {
+	input := `def main
+  x = [
+    1,
+    2,
+    3,
+  ]
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	if len(fn.Body) != 1 {
+		t.Fatalf("expected 1 statement in body, got %d", len(fn.Body))
+	}
+
+	assign := fn.Body[0].(*ast.AssignStmt)
+	arr, ok := assign.Value.(*ast.ArrayLit)
+	if !ok {
+		t.Fatalf("expected ArrayLit, got %T", assign.Value)
+	}
+	if len(arr.Elements) != 3 {
+		t.Errorf("expected 3 elements, got %d", len(arr.Elements))
+	}
+}
+
+func TestMultilineMapLiteral(t *testing.T) {
+	input := `def main
+  x = {
+    "a" => 1,
+    "b" => 2,
+    "c" => 3,
+  }
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+	mapLit, ok := assign.Value.(*ast.MapLit)
+	if !ok {
+		t.Fatalf("expected MapLit, got %T", assign.Value)
+	}
+	if len(mapLit.Entries) != 3 {
+		t.Errorf("expected 3 entries, got %d", len(mapLit.Entries))
+	}
+}
+
+func TestMultilineMapWithSymbolKeys(t *testing.T) {
+	input := `def main
+  x = {
+    name: "Alice",
+    age: 30,
+  }
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+	mapLit, ok := assign.Value.(*ast.MapLit)
+	if !ok {
+		t.Fatalf("expected MapLit, got %T", assign.Value)
+	}
+	if len(mapLit.Entries) != 2 {
+		t.Errorf("expected 2 entries, got %d", len(mapLit.Entries))
+	}
+}
+
+func TestMultilineMapWithImplicitValues(t *testing.T) {
+	input := `def main
+  name = "Alice"
+  age = 30
+  x = {
+    name:,
+    age:,
+  }
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[2].(*ast.AssignStmt)
+	mapLit, ok := assign.Value.(*ast.MapLit)
+	if !ok {
+		t.Fatalf("expected MapLit, got %T", assign.Value)
+	}
+	if len(mapLit.Entries) != 2 {
+		t.Errorf("expected 2 entries, got %d", len(mapLit.Entries))
+	}
+
+	// Check that key and value are both present
+	entry := mapLit.Entries[0]
+	keyStr, ok := entry.Key.(*ast.StringLit)
+	if !ok {
+		t.Fatalf("expected StringLit key, got %T", entry.Key)
+	}
+	if keyStr.Value != "name" {
+		t.Errorf("expected key 'name', got %q", keyStr.Value)
+	}
+	valueIdent, ok := entry.Value.(*ast.Ident)
+	if !ok {
+		t.Fatalf("expected Ident value (implicit), got %T", entry.Value)
+	}
+	if valueIdent.Name != "name" {
+		t.Errorf("expected value 'name', got %q", valueIdent.Name)
+	}
+}
+
+func TestNestedMultilineArrays(t *testing.T) {
+	input := `def main
+  x = [
+    [1, 2],
+    [3, 4],
+  ]
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	assign := fn.Body[0].(*ast.AssignStmt)
+	arr, ok := assign.Value.(*ast.ArrayLit)
+	if !ok {
+		t.Fatalf("expected ArrayLit, got %T", assign.Value)
+	}
+	if len(arr.Elements) != 2 {
+		t.Errorf("expected 2 elements, got %d", len(arr.Elements))
+	}
+
+	inner1, ok := arr.Elements[0].(*ast.ArrayLit)
+	if !ok {
+		t.Fatalf("element 0: expected ArrayLit, got %T", arr.Elements[0])
+	}
+	if len(inner1.Elements) != 2 {
+		t.Errorf("inner array 0: expected 2 elements, got %d", len(inner1.Elements))
+	}
+}
+
 func TestArrayIndexing(t *testing.T) {
 	input := `def main
   x = arr[0]
