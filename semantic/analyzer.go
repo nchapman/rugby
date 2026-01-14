@@ -133,6 +133,7 @@ func (a *Analyzer) Analyze(program *ast.Program) []error {
 // propagateInheritedFields copies fields from parent classes to child classes.
 // This ensures that inherited fields (including getters/setters) are accessible
 // through the child class symbol. Uses recursion to handle multi-level inheritance.
+// Also detects and reports circular inheritance.
 func (a *Analyzer) propagateInheritedFields(program *ast.Program) {
 	// Build a map from class name to its AST declaration for easy lookup
 	classDecls := make(map[string]*ast.ClassDecl)
@@ -142,31 +143,60 @@ func (a *Analyzer) propagateInheritedFields(program *ast.Program) {
 		}
 	}
 
-	// Track which classes have been processed to handle multi-level inheritance
+	// Track which classes have been fully processed
 	visited := make(map[string]bool)
+	// Track current path for cycle detection
+	inPath := make(map[string]bool)
 
 	// Recursive function to propagate fields from all ancestors
-	var propagate func(className string)
-	propagate = func(className string) {
-		if visited[className] {
-			return
+	var propagate func(className string, path []string) bool
+	propagate = func(className string, path []string) bool {
+		// Check for cycle: if className is already in current path, we have a cycle
+		if inPath[className] {
+			// Build cycle path for error message
+			cycle := append(path, className)
+			cls := classDecls[path[0]]
+			line := 0
+			if cls != nil {
+				line = cls.Line
+			}
+			a.addError(&CircularInheritanceError{
+				Cycle: cycle,
+				Line:  line,
+			})
+			return false
 		}
-		visited[className] = true
+
+		// Skip if already fully processed
+		if visited[className] {
+			return true
+		}
 
 		cls := classDecls[className]
 		if cls == nil || len(cls.Embeds) == 0 {
-			return
+			visited[className] = true
+			return true
 		}
+
+		// Mark as being processed (in current path)
+		inPath[className] = true
+		newPath := append(path, className)
 
 		childSym := a.classes[className]
 		if childSym == nil {
-			return
+			inPath[className] = false
+			visited[className] = true
+			return true
 		}
 
 		// Copy fields from parent class(es)
 		for _, parentName := range cls.Embeds {
 			// Recursively ensure parent has all its inherited fields first
-			propagate(parentName)
+			if !propagate(parentName, newPath) {
+				// Cycle detected, stop processing
+				inPath[className] = false
+				return false
+			}
 
 			parentSym := a.classes[parentName]
 			if parentSym == nil {
@@ -186,13 +216,21 @@ func (a *Analyzer) propagateInheritedFields(program *ast.Program) {
 			}
 		}
 
-		// Store the parent class name for later reference
+		// Store the parent class name for later reference.
+		// Note: Methods are NOT copied here. Instead, getClassMethod() traverses the
+		// Parent chain at lookup time. This is more memory-efficient and ensures
+		// method override resolution works correctly.
 		childSym.Parent = cls.Embeds[0]
+
+		// Mark as fully processed and remove from path
+		inPath[className] = false
+		visited[className] = true
+		return true
 	}
 
 	// Process all classes
 	for className := range classDecls {
-		propagate(className)
+		propagate(className, nil)
 	}
 }
 
@@ -209,9 +247,9 @@ func (a *Analyzer) validateInterfaceImplementations() {
 				continue
 			}
 
-			// Check each interface method is implemented
+			// Check each interface method is implemented (including inherited methods)
 			for methodName, ifaceMethod := range iface.Methods {
-				clsMethod := cls.GetMethod(methodName)
+				clsMethod := a.getClassMethod(cls.Name, methodName)
 				if clsMethod == nil {
 					a.addError(&InterfaceNotImplementedError{
 						ClassName:     cls.Name,
@@ -295,6 +333,21 @@ func (a *Analyzer) typesMatch(expected, got *Type) bool {
 		return true
 	}
 	return expected.Equals(got)
+}
+
+// getClassMethod finds a method on a class, including inherited methods from parent classes.
+func (a *Analyzer) getClassMethod(className, methodName string) *Symbol {
+	for className != "" {
+		cls := a.classes[className]
+		if cls == nil {
+			return nil
+		}
+		if method := cls.GetMethod(methodName); method != nil {
+			return method
+		}
+		className = cls.Parent
+	}
+	return nil
 }
 
 // formatMethodSignature returns a human-readable method signature.
@@ -1820,7 +1873,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				typ = leftType
 			} else {
 				// Array index must be Int
-				a.checkIndexType(indexType)
+				a.checkIndexType(indexType, e.Line)
 				typ = leftType.Elem
 			}
 		case TypeMap:
@@ -1833,7 +1886,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				typ = TypeStringVal
 			} else {
 				// String index must be Int
-				a.checkIndexType(indexType)
+				a.checkIndexType(indexType, e.Line)
 				typ = TypeStringVal
 			}
 		default:
@@ -1847,7 +1900,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			a.addError(&ConditionTypeMismatchError{
 				Got:     condType,
 				Context: "ternary",
-				Line:    0, // TernaryExpr doesn't have Line field
+				Line:    e.Line,
 			})
 		}
 		thenType := a.analyzeExpr(e.Then)
@@ -1973,7 +2026,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		if !isErrorTuple && innerType.Kind != TypeUnknown && innerType.Kind != TypeAny {
 			a.addError(&BangOnNonErrorError{
 				Got:  innerType,
-				Line: 0, // BangExpr doesn't have Line field
+				Line: e.Line,
 			})
 		}
 
@@ -1983,7 +2036,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			lastReturn := fnScope.ReturnTypes[len(fnScope.ReturnTypes)-1]
 			if lastReturn.Kind != TypeError && lastReturn.Kind != TypeUnknown && lastReturn.Kind != TypeAny {
 				a.addError(&BangOutsideErrorFunctionError{
-					Line: 0, // BangExpr doesn't have Line field
+					Line: e.Line,
 				})
 			}
 		}
@@ -2351,7 +2404,7 @@ func (a *Analyzer) checkCondition(cond ast.Expression, context string, line int)
 }
 
 // checkIndexType validates that an array/string index is Int.
-func (a *Analyzer) checkIndexType(indexType *Type) {
+func (a *Analyzer) checkIndexType(indexType *Type, line int) {
 	// Skip if type is unknown or any
 	if indexType.Kind == TypeUnknown || indexType.Kind == TypeAny {
 		return
@@ -2361,7 +2414,7 @@ func (a *Analyzer) checkIndexType(indexType *Type) {
 	if indexType.Kind != TypeInt && indexType.Kind != TypeInt64 {
 		a.addError(&IndexTypeMismatchError{
 			Got:  indexType,
-			Line: 0, // IndexExpr doesn't have Line field
+			Line: line,
 		})
 	}
 }
@@ -2643,15 +2696,14 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 // classImplementsInterface checks if a class structurally implements an interface.
 // This enables Go-style duck typing where explicit 'implements' is not required.
 func (a *Analyzer) classImplementsInterface(className, interfaceName string) bool {
-	cls := a.classes[className]
 	iface := a.interfaces[interfaceName]
-	if cls == nil || iface == nil {
+	if iface == nil {
 		return false
 	}
 
-	// Check each interface method is implemented by the class
+	// Check each interface method is implemented by the class (including inherited methods)
 	for methodName, ifaceMethod := range iface.Methods {
-		clsMethod := cls.GetMethod(methodName)
+		clsMethod := a.getClassMethod(className, methodName)
 		if clsMethod == nil {
 			return false
 		}

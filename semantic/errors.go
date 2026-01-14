@@ -1,6 +1,9 @@
 package semantic
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Error represents a semantic analysis error with position information.
 type Error struct {
@@ -67,6 +70,28 @@ func (e *ArityMismatchError) Error() string {
 		return fmt.Sprintf("line %d: %s", e.Line, msg)
 	}
 	return msg
+}
+
+// CircularInheritanceError is returned when class inheritance creates a cycle.
+type CircularInheritanceError struct {
+	Cycle []string // class names in the cycle (e.g., ["A", "B", "A"])
+	Line  int
+}
+
+func (e *CircularInheritanceError) Error() string {
+	msg := fmt.Sprintf("circular inheritance detected: %s", formatCycle(e.Cycle))
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// formatCycle formats a cycle path like "A -> B -> A"
+func formatCycle(cycle []string) string {
+	if len(cycle) == 0 {
+		return ""
+	}
+	return strings.Join(cycle, " -> ")
 }
 
 // ReturnOutsideFunctionError is returned for return statements outside functions.

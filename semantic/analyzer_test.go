@@ -2509,6 +2509,143 @@ end`,
 			wantErr: true,
 			errMsg:  "missing method 'move'",
 		},
+		{
+			name: "inherited method satisfies interface",
+			input: `
+interface Speaker
+  def speak -> String
+end
+
+class Animal
+  def speak -> String
+    "sound"
+  end
+end
+
+class Dog < Animal implements Speaker
+end`,
+			wantErr: false,
+		},
+		{
+			name: "inherited method with override satisfies interface",
+			input: `
+interface Speaker
+  def speak -> String
+end
+
+class Animal
+  def speak -> String
+    "sound"
+  end
+end
+
+class Dog < Animal implements Speaker
+  def speak -> String
+    "woof"
+  end
+end`,
+			wantErr: false,
+		},
+		{
+			name: "parent missing method fails interface",
+			input: `
+interface Speaker
+  def speak -> String
+end
+
+class Animal
+end
+
+class Dog < Animal implements Speaker
+end`,
+			wantErr: true,
+			errMsg:  "missing method 'speak'",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				if tt.errMsg != "" {
+					found := false
+					for _, err := range errs {
+						if strings.Contains(err.Error(), tt.errMsg) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected error containing %q, got: %v", tt.errMsg, errs)
+					}
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}
+
+func TestAnalyzeCircularInheritance(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "direct circular inheritance",
+			input: `
+class A < B
+end
+class B < A
+end`,
+			wantErr: true,
+			errMsg:  "circular inheritance",
+		},
+		{
+			name: "self inheritance",
+			input: `
+class A < A
+end`,
+			wantErr: true,
+			errMsg:  "circular inheritance",
+		},
+		{
+			name: "circular inheritance chain",
+			input: `
+class A < B
+end
+class B < C
+end
+class C < A
+end`,
+			wantErr: true,
+			errMsg:  "circular inheritance",
+		},
+		{
+			name: "valid inheritance chain",
+			input: `
+class Animal
+end
+class Dog < Animal
+end
+class Puppy < Dog
+end`,
+			wantErr: false,
+		},
 	}
 
 	for _, tt := range tests {

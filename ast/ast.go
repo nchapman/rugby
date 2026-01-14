@@ -259,6 +259,7 @@ func (d *DoubleSplatExpr) exprNode() {}
 type IndexExpr struct {
 	Left  Expression // the expression being indexed
 	Index Expression // the index expression
+	Line  int        // source line number (1-indexed)
 }
 
 func (i *IndexExpr) node()     {}
@@ -313,6 +314,7 @@ func (u *UnaryExpr) exprNode() {}
 // Unwraps (T, error) and propagates error on failure
 type BangExpr struct {
 	Expr Expression // must be a CallExpr
+	Line int        // source line number (1-indexed)
 }
 
 func (b *BangExpr) node()     {}
@@ -345,6 +347,7 @@ type TernaryExpr struct {
 	Condition Expression // the condition to test
 	Then      Expression // value if condition is truthy
 	Else      Expression // value if condition is falsy
+	Line      int        // source line number (1-indexed)
 }
 
 func (t *TernaryExpr) node()     {}

@@ -192,6 +192,7 @@ func (p *Parser) parseCallExprWithParens(fn ast.Expression) ast.Expression {
 // parseIndexExpr parses array/map indexing: arr[i].
 func (p *Parser) parseIndexExpr(left ast.Expression) ast.Expression {
 	// curToken is '['
+	line := p.curToken.Line
 	p.nextToken() // move past '[' to the index expression
 
 	index := p.parseExpression(lowest)
@@ -208,7 +209,7 @@ func (p *Parser) parseIndexExpr(left ast.Expression) ast.Expression {
 		return nil
 	}
 
-	return &ast.IndexExpr{Left: left, Index: index}
+	return &ast.IndexExpr{Left: left, Index: index, Line: line}
 }
 
 // parseGroupedExpr parses a parenthesized expression: (expr).
@@ -241,17 +242,18 @@ func (p *Parser) parsePrefixExpr() ast.Expression {
 // parseBangExpr parses postfix error propagation: call()! or selector!
 // For selector/ident expressions (like resp.json! or foo!), converts to a zero-arg call.
 func (p *Parser) parseBangExpr(left ast.Expression) ast.Expression {
+	line := p.curToken.Line // curToken is '!'
 	switch expr := left.(type) {
 	case *ast.CallExpr:
-		return &ast.BangExpr{Expr: expr}
+		return &ast.BangExpr{Expr: expr, Line: line}
 	case *ast.SelectorExpr:
 		// Convert selector to zero-arg call: resp.json! → resp.json()!
 		call := &ast.CallExpr{Func: expr}
-		return &ast.BangExpr{Expr: call}
+		return &ast.BangExpr{Expr: call, Line: line}
 	case *ast.Ident:
 		// Convert identifier to zero-arg call: foo! → foo()!
 		call := &ast.CallExpr{Func: expr}
-		return &ast.BangExpr{Expr: call}
+		return &ast.BangExpr{Expr: call, Line: line}
 	default:
 		p.errorWithHint("'!' can only follow a call or method expression",
 			"use: method()! or obj.method!")
@@ -316,6 +318,7 @@ func (p *Parser) parseRescueExpr(left ast.Expression) ast.Expression {
 // Ruby: status = valid? ? "ok" : "error"
 func (p *Parser) parseTernaryExpr(condition ast.Expression) ast.Expression {
 	// curToken is '?'
+	line := p.curToken.Line
 	// Parse the "then" expression with ternary precedence - 1 for right-associativity
 	// This means a ? b ? c : d : e parses as a ? (b ? c : d) : e
 	p.nextToken()
@@ -336,6 +339,7 @@ func (p *Parser) parseTernaryExpr(condition ast.Expression) ast.Expression {
 		Condition: condition,
 		Then:      thenExpr,
 		Else:      elseExpr,
+		Line:      line,
 	}
 }
 
