@@ -19,34 +19,32 @@ type example struct {
 // allExamples returns all example files with their expected outputs
 func allExamples() []example {
 	return []example{
-		// Working examples
-		{file: "01_hello.rg", expectedOutput: "Hello, Rugby!\nHello, World!\n2 + 3 = 5\n"},
-		{file: "02_types.rg"}, // Int/Float methods now work
-		{file: "03_control_flow.rg", expectedOutput: "Grade: B\nNot empty!\nPositive\nNot zero\nMax: 5\nOK\nWeekend\nNice\nString: hello\nInt: 42\nFloat: 3.14\n"},
-		{file: "05_functions.rg"}, // Optional return types now work
-		{file: "09_blocks.rg"},    // Block methods now work
+		// Core language examples (01-15)
+		{file: "01_hello.rg", expectedOutput: "Hello, Rugby!\nHello, World!\n2 + 3 = 5\nUppercase: HELLO\n"},
+		{file: "02_types.rg", hasBugs: true},           // inline type annotation, empty typed arrays
+		{file: "03_control_flow.rg", expectedOutput: "Grade: B\nNot empty!\nPositive\nNot zero\nMax: 5\nOK\nWeekend\nNice\nIt's a string: hello\nIt's an int: 42\nIt's a float: 3.14\n"},
+		{file: "04_loops.rg"},                          // predicate methods now work
+		{file: "05_functions.rg"},                      // optional return types now work
+		{file: "06_classes.rg", hasBugs: true},         // self return, method chaining
+		{file: "07_interfaces.rg"},                     // interface structural typing works
+		{file: "08_modules.rg", hasBugs: true},         // lint: unused module methods
+		{file: "09_blocks.rg", hasBugs: true},          // method chaining with newlines
+		{file: "10_optionals.rg", hasBugs: true},       // safe navigation on getters, unwrap
+		{file: "11_errors.rg", hasBugs: true},          // errors.new not resolving
+		{file: "12_strings.rg"},                        // string methods work
+		{file: "13_ranges.rg"},                         // range methods work
+		{file: "14_go_interop.rg", hasBugs: true},      // strings.split/join, function not found
+		{file: "15_concurrency.rg", hasBugs: true},     // functions not found, snake_case WaitGroup
 
-		// Examples with known bugs (see BUGS.md)
-		{file: "04_loops.rg", hasBugs: true},       // predicate methods on arrays (any?, empty?)
-		{file: "06_classes.rg", hasBugs: true},     // Multiple class-related issues
-		{file: "07_interfaces.rg"},                 // interface structural typing now works
-		{file: "08_modules.rg", hasBugs: true},     // pointer printing instead of values
-		{file: "10_optionals.rg", hasBugs: true},   // "if let" pattern not implemented
-		{file: "11_errors.rg", hasBugs: true},      // os.ReadFile multi-value return
-		{file: "12_strings.rg", hasBugs: true},     // string methods (contains?, etc.)
-		{file: "13_ranges.rg", hasBugs: true},      // range.size method
-		{file: "14_go_interop.rg"},                 // multi-value Go function returns now work
-		{file: "15_concurrency.rg", hasBugs: true}, // Chan generic syntax, sync.WaitGroup.new
-
-		// Legacy working examples
+		// Additional examples
 		{file: "fizzbuzz.rg", expectedOutput: "1\n2\nFizz\n4\nBuzz\nFizz\n7\n8\nFizz\nBuzz\n11\nFizz\n13\n14\nFizzBuzz\n"},
 		{file: "field_inference.rg", expectedOutput: "I'm Alice, email: alice@example.com, role: admin\nI'm Alice, email: alice.new@example.com, role: admin\n"},
+		{file: "json_simple.rg"},                       // rugby/json stdlib works
+		{file: "worker_pool.rg", hasBugs: true},        // Chan type in function params
+		{file: "todo_app.rg", hasBugs: true},           // map literal parsing in method body
 
-		// JSON (no network needed)
-		{file: "json_simple.rg", expectedOutput: ""}, // output format may vary, just verify it runs
-
-		// HTTP + JSON (needs network, skip execution)
-		{file: "http_json.rg", skipRun: true},
+		// HTTP + JSON (needs network, has bugs too)
+		{file: "http_json.rg", skipRun: true, hasBugs: true}, // resp.json method, interface indexing
 	}
 }
 
