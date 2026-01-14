@@ -111,13 +111,13 @@ Current spec tests (58 total):
 - `tests/spec/classes/` - 9 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors, method_chaining, visibility, class_methods, super_calls)
 - `tests/spec/concurrency/` - 6 tests (channels, goroutines, spawn_await, spawn_closure, concurrently, waitgroup)
 - `tests/spec/control_flow/` - 7 tests (if_else, case_when, case_type, while_until, statement_modifiers, loop_modifiers, break_next)
-- `tests/spec/errors/` - 2 tests (known limitations + runtime_panic)
+- `tests/spec/errors/` - 3 tests (known limitations + runtime_panic)
 - `tests/spec/error_handling/` - 2 tests (rescue, error_utilities)
 - `tests/spec/functions/` - 1 test (basic)
 - `tests/spec/go_interop/` - 1 test (strings)
 - `tests/spec/interfaces/` - 2 tests (basic, any_indexing)
 - `tests/spec/literals/` - 11 tests (arrays, integers, strings, ranges, range_include, empty_typed_array, map_symbol_shorthand, floats, heredocs, symbols, word_arrays)
-- `tests/spec/modules/` - 2 tests (basic, multiple_includes)
+- `tests/spec/modules/` - 3 tests (basic, multiple_includes, method_override)
 - `tests/spec/optionals/` - 3 tests (basic, if_let, nil_coalescing)
 - `tests/spec/stdlib/` - 1 test (regex)
 
@@ -150,7 +150,7 @@ Current spec tests (58 total):
 ### Modules
 - [x] Module definition and include
 - [x] Multiple module includes
-- [ ] Module method resolution (overriding)
+- [x] Module method resolution (overriding)
 
 ### Concurrency (expand `tests/spec/concurrency/`)
 - [x] Channel operations (`Chan[T].new`, send, receive)
@@ -261,6 +261,7 @@ When fixing a bug:
 Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
 - Additional limitations discovered: 4 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, array mutation in closures)
-- Features implemented: class methods, super calls, symbol-to-proc, spawn closure capture
+- Features implemented: class methods, super calls, symbol-to-proc, spawn closure capture, module method overriding
+- Phase 2 complete: All spec test categories covered
 - Spec tests: 58 passing
 - All `make check` passes

@@ -38,8 +38,10 @@ def main
 
   puts "Found #{posts.length} posts"
 
-  # Show first 3 posts (use slice to avoid out-of-bounds)
-  posts[0..2].each do |post|
-    puts "- #{post["title"]}"
+  # Show first 3 post titles (using times loop to avoid range slice limitation)
+  3.times do |i|
+    if i < posts.length
+      puts "- #{posts[i]["title"]}"
+    end
   end
 end
