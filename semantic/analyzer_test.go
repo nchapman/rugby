@@ -1785,18 +1785,17 @@ func TestAnalyzeArrayMapHomogeneity(t *testing.T) {
 			context: "map key",
 		},
 
-		// Invalid heterogeneous maps - value type
+		// Heterogeneous maps - allowed (widens to Map[K, any])
+		// This is valid in Ruby/Rugby: {host:, port:} where host is String and port is Int
 		{
 			name:    "mixed value types (int and string)",
 			input:   "m = {\"a\" => 1, \"b\" => \"two\"}",
-			wantErr: true,
-			context: "map value",
+			wantErr: false,
 		},
 		{
 			name:    "mixed value types (string and bool)",
 			input:   "m = {1 => \"one\", 2 => true}",
-			wantErr: true,
-			context: "map value",
+			wantErr: false,
 		},
 	}
 

@@ -1895,6 +1895,49 @@ end`
 	}
 }
 
+func TestInlineTypeAnnotation(t *testing.T) {
+	input := `def main
+  empty_nums = [] : Array[Int]
+  empty_map = {} : Map[String, Int]
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	if len(decl.Body) != 2 {
+		t.Fatalf("expected 2 statements, got %d", len(decl.Body))
+	}
+
+	// Check first assignment has inline type annotation
+	assign1, ok := decl.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", decl.Body[0])
+	}
+	if assign1.Name != "empty_nums" {
+		t.Errorf("expected name 'empty_nums', got %q", assign1.Name)
+	}
+	if assign1.Type != "Array[Int]" {
+		t.Errorf("expected type 'Array[Int]', got %q", assign1.Type)
+	}
+
+	// Check second assignment has inline type annotation for map
+	assign2, ok := decl.Body[1].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", decl.Body[1])
+	}
+	if assign2.Name != "empty_map" {
+		t.Errorf("expected name 'empty_map', got %q", assign2.Name)
+	}
+	if assign2.Type != "Map[String, Int]" {
+		t.Errorf("expected type 'Map[String, Int]', got %q", assign2.Type)
+	}
+}
+
 // ====================
 // Await expression edge cases
 // ====================

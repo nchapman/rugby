@@ -717,6 +717,15 @@ func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
 					Context:  "assignment",
 				})
 			}
+
+			// For empty array/map literals, propagate the expected type to the value node
+			// This allows codegen to generate properly typed literals (e.g., []int{} not []any{})
+			if arr, ok := s.Value.(*ast.ArrayLit); ok && len(arr.Elements) == 0 {
+				a.setNodeType(arr, typ)
+			}
+			if mp, ok := s.Value.(*ast.MapLit); ok && len(mp.Entries) == 0 {
+				a.setNodeType(mp, typ)
+			}
 		} else {
 			typ = valueType
 		}
@@ -1476,13 +1485,9 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 					valueType = vt
 				} else if valueType.Kind != TypeUnknown && valueType.Kind != TypeAny &&
 					vt.Kind != TypeUnknown && vt.Kind != TypeAny {
-					// Validate value type matches
+					// If value types don't match, widen to any (heterogeneous map)
 					if !a.isAssignable(valueType, vt) && !a.isAssignable(vt, valueType) {
-						a.addError(&TypeMismatchError{
-							Expected: valueType,
-							Got:      vt,
-							Context:  "map value",
-						})
+						valueType = TypeAnyVal
 					}
 				}
 			}
@@ -2362,6 +2367,23 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 	// Int64 can be assigned to Float
 	if from.Kind == TypeInt64 && to.Kind == TypeFloat {
 		return true
+	}
+
+	// Empty array (Array[any]) is assignable to any typed array
+	// This handles cases like: nums : Array[Int] = []
+	if to.Kind == TypeArray && from.Kind == TypeArray {
+		if from.Elem != nil && from.Elem.Kind == TypeAny {
+			return true
+		}
+	}
+
+	// Empty map (Map[any, any]) is assignable to any typed map
+	// This handles cases like: data : Map[String, Int] = {}
+	if to.Kind == TypeMap && from.Kind == TypeMap {
+		if from.KeyType != nil && from.KeyType.Kind == TypeAny &&
+			from.ValueType != nil && from.ValueType.Kind == TypeAny {
+			return true
+		}
 	}
 
 	return to.Equals(from)

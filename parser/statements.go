@@ -150,7 +150,19 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 		value = p.parseBlockCall(value)
 	}
 
-	p.nextToken() // move past expression
+	// Check for inline type annotation: x = value : Type
+	// This is an alternative to: x : Type = value
+	if typeAnnotation == "" && p.peekTokenIs(token.COLON) {
+		p.nextToken() // move to ':'
+		p.nextToken() // move past ':'
+		if !p.curTokenIs(token.IDENT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
+			return nil
+		}
+		typeAnnotation = p.parseTypeName()
+	} else {
+		p.nextToken() // move past expression
+	}
 	p.skipNewlines()
 
 	return &ast.AssignStmt{Name: name, Type: typeAnnotation, Value: value, Line: line}
