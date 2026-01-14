@@ -211,9 +211,11 @@ Consolidated test helpers into `codegen/helpers_test.go`:
 - [x] Resolve selector kinds (field/method/getter)
 - [x] Module accessor inheritance (propagate module accessors to including classes)
 - [x] Track module method origin (which methods come from included modules)
+- [x] Circular inheritance detection with clear error messages
+- [x] Interface validation considers inherited methods
+- [x] Line fields added to TernaryExpr, BangExpr, IndexExpr for better error positions
 - [ ] Complete type inference for all expressions
-- [ ] Validate interface satisfaction at analysis time
-- [ ] Better error messages with source context
+- [ ] Add Line field to NilCoalesceExpr for error positions
 
 ### Error Recovery
 
@@ -284,6 +286,7 @@ Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
 - Additional limitations discovered: 4 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, array mutation in closures)
 - Features implemented: class methods, super calls, symbol-to-proc, spawn closure capture, module method overriding
+- Semantic analysis: circular inheritance detection, inherited method interface validation, improved error positions
 - Phase 2 complete: All spec test categories covered
 - Spec tests: 58 passing
 - All `make check` passes
