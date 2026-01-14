@@ -869,7 +869,8 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 					} else {
 						chanType = "any"
 					}
-					goType := mapType(chanType)
+					// Use mapParamType to properly convert class types to pointers
+					goType := g.mapParamType(chanType)
 
 					g.buf.WriteString("make(chan ")
 					g.buf.WriteString(goType)
@@ -1818,7 +1819,8 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 				} else {
 					chanType = "any"
 				}
-				goType := mapType(chanType)
+				// Use mapParamType to properly convert class types to pointers
+				goType := g.mapParamType(chanType)
 				g.buf.WriteString("make(chan ")
 				g.buf.WriteString(goType)
 				g.buf.WriteString(")")

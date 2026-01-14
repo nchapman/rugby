@@ -30,7 +30,7 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 | fizzbuzz.rg | PASS | None |
 | field_inference.rg | PASS | None |
 | json_simple.rg | PASS | None |
-| worker_pool.rg | FAIL | Chan type in function params |
+| worker_pool.rg | FAIL | Getter access on channel receive results |
 | todo_app.rg | FAIL | Map literal parsing in method body |
 | http_json.rg | FAIL | resp.json method, interface indexing |
 
@@ -90,14 +90,16 @@ known = find_user(1).unwrap
 # invalid operation: _nc5 != nil (mismatched types OptionalResult and untyped nil)
 ```
 
-### BUG-045: Chan type in function parameters
+### BUG-050: Getter access on channel receive results
 **File:** worker_pool.rg
 
-Using `Chan[T]` as a function parameter type fails:
+When receiving from a channel, the result type is not tracked by the semantic analyzer, so getter access fails:
 ```ruby
-def worker(id : Int, jobs : Chan[Job], results : Chan[Result])
-# undefined: Chan
+results = Chan[Result].new(10)
+result = results.receive
+puts "#{result.job_id}"  # job_id is printed as method value, not called
 ```
+The generated code is `result.jobID` instead of `result.jobID()`.
 
 ### BUG-046: Map literal in method body
 **File:** todo_app.rg
@@ -266,12 +268,15 @@ WaitGroup and other Go type methods now map snake_case to PascalCase. The codege
 ### ~~BUG-041: errors.new identifier mangling~~ FIXED
 Calling `errors.new(...)` now correctly generates `errors.New(...)`. The codegen was treating `errors` as a Rugby class name and generating `newerrors(...)`. Fixed by checking if the identifier is a Go import before applying the Rugby class constructor pattern.
 
+### ~~BUG-045: Chan type in function parameters~~ FIXED
+`Chan[T]` in function parameters, return types, and channel creation now works correctly. The `mapParamType` function recursively converts class types to pointers in generic types. For loop iteration over channels now correctly generates single-variable syntax (`for x := range ch` instead of `for _, x := range ch`).
+
 ---
 
 ## Statistics
 
 - **Passing:** 13 examples
 - **Failing:** 8 examples
-- **Active bugs:** 10
-- **Fixed bugs:** 39
+- **Active bugs:** 11
+- **Fixed bugs:** 40
 - **Total examples:** 21

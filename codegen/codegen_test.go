@@ -1888,6 +1888,35 @@ end`
 	assertNotContains(t, output, "newerrors")
 }
 
+func TestChanTypeInFunctionParams(t *testing.T) {
+	// BUG-045: Chan[T] in function params should generate chan *T for classes
+	input := `class Job
+  def initialize(@id : Int)
+  end
+end
+
+def worker(jobs : Chan[Job])
+  for job in jobs
+    puts job
+  end
+end
+
+def main
+  ch = Chan[Job].new(10)
+  worker(ch)
+end`
+
+	output := compile(t, input)
+
+	// Channel with class element type should use pointer
+	assertContains(t, output, "func worker(jobs chan *Job)")
+	// Channel creation should use pointer type
+	assertContains(t, output, "make(chan *Job, 10)")
+	// For loop over channel should use single variable (not _, job)
+	assertContains(t, output, "for job := range jobs")
+	assertNotContains(t, output, "for _, job := range jobs")
+}
+
 func TestSelfKeyword(t *testing.T) {
 	input := `class Builder
   def initialize

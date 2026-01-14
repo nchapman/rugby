@@ -7,10 +7,30 @@ import (
 	"github.com/nchapman/rugby/ast"
 )
 
-// mapParamType maps a Rugby type to a Go type, using pointers for class types.
-// In Rugby, class instances are always references, so parameters of class type
-// should be *ClassName in Go.
+// mapParamType converts Rugby types to Go types, making class types pointers.
+// This handles nested generic types like Chan[Job] -> chan *Job and Array[Job] -> []*Job.
 func (g *Generator) mapParamType(rubyType string) string {
+	// Handle Array[T] - recursively convert element type
+	if strings.HasPrefix(rubyType, "Array[") && strings.HasSuffix(rubyType, "]") {
+		inner := rubyType[6 : len(rubyType)-1]
+		return "[]" + g.mapParamType(inner)
+	}
+	// Handle Chan[T] - recursively convert element type
+	if strings.HasPrefix(rubyType, "Chan[") && strings.HasSuffix(rubyType, "]") {
+		inner := rubyType[5 : len(rubyType)-1]
+		return "chan " + g.mapParamType(inner)
+	}
+	// Handle Map[K, V] - recursively convert key and value types
+	if strings.HasPrefix(rubyType, "Map[") && strings.HasSuffix(rubyType, "]") {
+		content := rubyType[4 : len(rubyType)-1]
+		parts := strings.Split(content, ",")
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			return fmt.Sprintf("map[%s]%s", g.mapParamType(key), g.mapParamType(val))
+		}
+	}
+
 	// Use mapType for the base mapping
 	goType := mapType(rubyType)
 
@@ -66,16 +86,17 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	g.buf.WriteString(")")
 
 	// Generate return type(s) if specified
+	// Use mapParamType to properly convert class types to pointers
 	if len(fn.ReturnTypes) == 1 {
 		g.buf.WriteString(" ")
-		g.buf.WriteString(mapType(fn.ReturnTypes[0]))
+		g.buf.WriteString(g.mapParamType(fn.ReturnTypes[0]))
 	} else if len(fn.ReturnTypes) > 1 {
 		g.buf.WriteString(" (")
 		for i, rt := range fn.ReturnTypes {
 			if i > 0 {
 				g.buf.WriteString(", ")
 			}
-			g.buf.WriteString(mapType(rt))
+			g.buf.WriteString(g.mapParamType(rt))
 		}
 		g.buf.WriteString(")")
 	}
@@ -395,17 +416,17 @@ func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
 		}
 		g.buf.WriteString(")")
 
-		// Return types
+		// Return types - use mapParamType to convert class types to pointers
 		if len(method.ReturnTypes) == 1 {
 			g.buf.WriteString(" ")
-			g.buf.WriteString(mapType(method.ReturnTypes[0]))
+			g.buf.WriteString(g.mapParamType(method.ReturnTypes[0]))
 		} else if len(method.ReturnTypes) > 1 {
 			g.buf.WriteString(" (")
 			for i, rt := range method.ReturnTypes {
 				if i > 0 {
 					g.buf.WriteString(", ")
 				}
-				g.buf.WriteString(mapType(rt))
+				g.buf.WriteString(g.mapParamType(rt))
 			}
 			g.buf.WriteString(")")
 		}
@@ -716,16 +737,17 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	g.buf.WriteString(")")
 
 	// Generate return type(s) if specified
+	// Use mapParamType to properly convert class types to pointers
 	if len(method.ReturnTypes) == 1 {
 		g.buf.WriteString(" ")
-		g.buf.WriteString(mapType(method.ReturnTypes[0]))
+		g.buf.WriteString(g.mapParamType(method.ReturnTypes[0]))
 	} else if len(method.ReturnTypes) > 1 {
 		g.buf.WriteString(" (")
 		for i, rt := range method.ReturnTypes {
 			if i > 0 {
 				g.buf.WriteString(", ")
 			}
-			g.buf.WriteString(mapType(rt))
+			g.buf.WriteString(g.mapParamType(rt))
 		}
 		g.buf.WriteString(")")
 	}
