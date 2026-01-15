@@ -2652,6 +2652,43 @@ end`
 	}
 }
 
+func TestForStatementTwoVariables(t *testing.T) {
+	input := `def main
+  for key, value in data
+    puts(key)
+    puts(value)
+  end
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn := program.Declarations[0].(*ast.FuncDecl)
+	forStmt, ok := fn.Body[0].(*ast.ForStmt)
+	if !ok {
+		t.Fatalf("expected ForStmt, got %T", fn.Body[0])
+	}
+
+	if forStmt.Var != "key" {
+		t.Errorf("expected loop variable 'key', got %q", forStmt.Var)
+	}
+
+	if forStmt.Var2 != "value" {
+		t.Errorf("expected second loop variable 'value', got %q", forStmt.Var2)
+	}
+
+	ident, ok := forStmt.Iterable.(*ast.Ident)
+	if !ok || ident.Name != "data" {
+		t.Errorf("expected iterable 'data', got %v", forStmt.Iterable)
+	}
+
+	if len(forStmt.Body) != 2 {
+		t.Errorf("expected 2 body statements, got %d", len(forStmt.Body))
+	}
+}
+
 func TestBreakStatement(t *testing.T) {
 	input := `def main
   while true

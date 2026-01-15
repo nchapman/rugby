@@ -16,6 +16,11 @@ func receiverName(className string) string {
 
 // mapType converts Rugby type names to Go type names
 func mapType(rubyType string) string {
+	// Handle function types: () -> Int, (Int) -> String, etc.
+	if strings.HasPrefix(rubyType, "(") && strings.Contains(rubyType, " -> ") {
+		return mapFunctionType(rubyType)
+	}
+
 	// Handle Array<T>
 	if strings.HasPrefix(rubyType, "Array<") && strings.HasSuffix(rubyType, ">") {
 		inner := rubyType[6 : len(rubyType)-1]
@@ -102,6 +107,78 @@ func mapType(rubyType string) string {
 	default:
 		return rubyType // pass through unknown types (e.g., user-defined)
 	}
+}
+
+// mapFunctionType converts a Rugby function type to Go func type.
+// Examples:
+//   - "() -> Int" → "func() int"
+//   - "(Int) -> String" → "func(int) string"
+//   - "(Int, String) -> Bool" → "func(int, string) bool"
+func mapFunctionType(rubyType string) string {
+	// Find the " -> " separator
+	arrowIdx := strings.Index(rubyType, " -> ")
+	if arrowIdx == -1 {
+		return rubyType // Not a valid function type
+	}
+
+	// Extract params part: "(T1, T2)"
+	paramsStr := rubyType[:arrowIdx]
+	// Extract return type: "R"
+	returnStr := rubyType[arrowIdx+4:]
+
+	// Parse params (strip outer parens and split by comma)
+	if !strings.HasPrefix(paramsStr, "(") || !strings.HasSuffix(paramsStr, ")") {
+		return rubyType // Invalid
+	}
+	paramsInner := paramsStr[1 : len(paramsStr)-1]
+
+	var goParams []string
+	if paramsInner != "" {
+		// Split by comma, handling nested types
+		params := splitTopLevelCommas(paramsInner)
+		for _, param := range params {
+			goParams = append(goParams, mapType(strings.TrimSpace(param)))
+		}
+	}
+
+	// Map return type (could be another function type)
+	goReturn := mapType(returnStr)
+
+	return fmt.Sprintf("func(%s) %s", strings.Join(goParams, ", "), goReturn)
+}
+
+// splitTopLevelCommas splits a string by commas, but only at the top level
+// (not inside parentheses or angle brackets).
+func splitTopLevelCommas(s string) []string {
+	var result []string
+	var current strings.Builder
+	depth := 0
+
+	for _, r := range s {
+		switch r {
+		case '(', '<', '[':
+			depth++
+			current.WriteRune(r)
+		case ')', '>', ']':
+			depth--
+			current.WriteRune(r)
+		case ',':
+			if depth == 0 {
+				result = append(result, current.String())
+				current.Reset()
+			} else {
+				current.WriteRune(r)
+			}
+		default:
+			current.WriteRune(r)
+		}
+	}
+
+	if current.Len() > 0 {
+		result = append(result, current.String())
+	}
+
+	return result
 }
 
 // Common acronyms that should be uppercased in Go identifiers

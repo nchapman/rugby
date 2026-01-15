@@ -562,8 +562,10 @@ func (u *UntilStmt) node()     {}
 func (u *UntilStmt) stmtNode() {}
 
 // ForStmt represents a for...in loop: for item in items ... end
+// For maps: for key, value in map ... end
 type ForStmt struct {
-	Var      string     // loop variable name
+	Var      string     // loop variable name (or key for maps)
+	Var2     string     // second loop variable for maps (value)
 	Iterable Expression // the collection to iterate over
 	Body     []Statement
 	Line     int           // source line number (1-indexed)

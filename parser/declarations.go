@@ -119,6 +119,49 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 	return &ast.Param{Name: name, Type: paramType}
 }
 
+// parseFunctionType parses a function type like () -> Int or (Int, String) -> Bool.
+// Returns the full function type string including params and return type.
+// Assumes the parser is positioned at '(' when called.
+func (p *Parser) parseFunctionType() string {
+	result := "("
+	p.nextToken() // consume '('
+
+	// Parse parameter types
+	if !p.curTokenIs(token.RPAREN) {
+		result += p.parseTypeName()
+		for p.curTokenIs(token.COMMA) {
+			result += ", "
+			p.nextToken() // consume ','
+			result += p.parseTypeName()
+		}
+	}
+
+	if !p.curTokenIs(token.RPAREN) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected ')' in function type")
+		return result
+	}
+	result += ")"
+	p.nextToken() // consume ')'
+
+	if !p.curTokenIs(token.ARROW) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '->' after function params")
+		return result
+	}
+	result += " -> "
+	p.nextToken() // consume '->'
+
+	// Parse return type (which could itself be a function type)
+	if p.curTokenIs(token.LPAREN) {
+		result += p.parseFunctionType()
+	} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
+		result += p.parseTypeName()
+	} else {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected return type")
+	}
+
+	return result
+}
+
 // parseTypeName parses a type name (e.g., "Int", "String?")
 // The ? suffix is already included in the identifier by the lexer for simple types (Int?).
 // For generics (Array<Int>), angle brackets are tokens.
@@ -211,38 +254,44 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 		p.nextToken() // consume ')'
 	}
 
-	// Parse optional return type: -> Type or -> (Type1, Type2)
+	// Parse optional return type: -> Type, -> (Type1, Type2), or -> () -> T (function type)
 	if p.curTokenIs(token.ARROW) {
 		p.nextToken() // consume '->'
 
 		if p.curTokenIs(token.LPAREN) {
-			// Multiple return types: (Type1, Type2, ...)
-			p.nextToken() // consume '('
+			// Could be tuple return (Type1, Type2) or function type () -> T
+			// Use lookahead to check if it's a function type
+			if p.isFunctionTypeAhead() {
+				fn.ReturnTypes = append(fn.ReturnTypes, p.parseFunctionType())
+			} else {
+				// Multiple return types: (Type1, Type2, ...)
+				p.nextToken() // consume '('
 
-			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
-				p.errorAt(p.curToken.Line, p.curToken.Column, "expected type in return type list")
-				return nil
-			}
-			fn.ReturnTypes = append(fn.ReturnTypes, p.parseTypeName())
-
-			for p.curTokenIs(token.COMMA) {
-				p.nextToken() // consume ','
-				// Allow trailing comma
-				if p.curTokenIs(token.RPAREN) {
-					break
-				}
 				if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
-					p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after comma")
+					p.errorAt(p.curToken.Line, p.curToken.Column, "expected type in return type list")
 					return nil
 				}
 				fn.ReturnTypes = append(fn.ReturnTypes, p.parseTypeName())
-			}
 
-			if !p.curTokenIs(token.RPAREN) {
-				p.errorAt(p.curToken.Line, p.curToken.Column, "expected ')' after return types")
-				return nil
+				for p.curTokenIs(token.COMMA) {
+					p.nextToken() // consume ','
+					// Allow trailing comma
+					if p.curTokenIs(token.RPAREN) {
+						break
+					}
+					if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+						p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after comma")
+						return nil
+					}
+					fn.ReturnTypes = append(fn.ReturnTypes, p.parseTypeName())
+				}
+
+				if !p.curTokenIs(token.RPAREN) {
+					p.errorAt(p.curToken.Line, p.curToken.Column, "expected ')' after return types")
+					return nil
+				}
+				p.nextToken() // consume ')'
 			}
-			p.nextToken() // consume ')'
 		} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
 			// Single return type
 			fn.ReturnTypes = append(fn.ReturnTypes, p.parseTypeName())

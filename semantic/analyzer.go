@@ -1383,6 +1383,7 @@ func (a *Analyzer) analyzeFor(s *ast.ForStmt) {
 
 	// Determine loop variable type from iterable
 	var elemType *Type
+	var valueType *Type // for maps with two-variable syntax
 	switch iterableType.Kind {
 	case TypeArray:
 		elemType = iterableType.Elem
@@ -1391,8 +1392,9 @@ func (a *Analyzer) analyzeFor(s *ast.ForStmt) {
 	case TypeChan:
 		elemType = iterableType.Elem
 	case TypeMap:
-		// For maps, the loop variable is the key
+		// For maps, the first variable is the key
 		elemType = iterableType.KeyType
+		valueType = iterableType.Elem
 	case TypeString:
 		elemType = TypeStringVal // iterating runes as strings
 	default:
@@ -1402,9 +1404,18 @@ func (a *Analyzer) analyzeFor(s *ast.ForStmt) {
 		elemType = TypeAnyVal
 	}
 
-	// Create loop scope with loop variable
+	// Create loop scope with loop variable(s)
 	loopScope := NewScope(ScopeLoop, a.scope)
 	mustDefine(loopScope, NewVariable(s.Var, elemType))
+
+	// If there's a second variable (for key, value in map), add it too
+	if s.Var2 != "" {
+		if valueType != nil {
+			mustDefine(loopScope, NewVariable(s.Var2, valueType))
+		} else {
+			mustDefine(loopScope, NewVariable(s.Var2, TypeAnyVal))
+		}
+	}
 
 	prevScope := a.scope
 	a.scope = loopScope

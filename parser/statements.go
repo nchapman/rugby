@@ -624,7 +624,18 @@ func (p *Parser) parseForStmt() *ast.ForStmt {
 	}
 
 	stmt := &ast.ForStmt{Var: p.curToken.Literal, Line: line}
-	p.nextToken() // consume variable name
+	p.nextToken() // consume first variable name
+
+	// Check for second variable (for key, value in map)
+	if p.curTokenIs(token.COMMA) {
+		p.nextToken() // consume ','
+		if !p.curTokenIs(token.IDENT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected variable name after ','")
+			return nil
+		}
+		stmt.Var2 = p.curToken.Literal
+		p.nextToken() // consume second variable name
+	}
 
 	if !p.curTokenIs(token.IN) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'in' after loop variable")

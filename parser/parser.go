@@ -135,6 +135,45 @@ func (p *Parser) isAssignmentPattern() bool {
 	return result
 }
 
+// isFunctionTypeAhead checks if the current position is at a function type.
+// A function type is: () -> T or (T) -> U or (T, U) -> V
+// Must be called when curToken is LPAREN.
+// This is used to distinguish `-> () -> Int` (function type) from `-> (Int, String)` (tuple).
+func (p *Parser) isFunctionTypeAhead() bool {
+	// Save lexer state and parser tokens
+	lexerState := p.l.SaveState()
+	savedCur := p.curToken
+	savedPeek := p.peekToken
+
+	// Consume '(' and scan to matching ')'
+	p.nextToken() // consume '('
+	depth := 1
+	for depth > 0 && !p.curTokenIs(token.EOF) {
+		if p.curTokenIs(token.LPAREN) {
+			depth++
+		} else if p.curTokenIs(token.RPAREN) {
+			depth--
+		}
+		if depth > 0 {
+			p.nextToken()
+		}
+	}
+
+	// Now curToken should be ')'. Check if next is '->'
+	var result bool
+	if p.curTokenIs(token.RPAREN) {
+		p.nextToken() // consume ')'
+		result = p.curTokenIs(token.ARROW)
+	}
+
+	// Restore lexer state and parser tokens
+	p.l.RestoreState(lexerState)
+	p.curToken = savedCur
+	p.peekToken = savedPeek
+
+	return result
+}
+
 // parseBlocksAndChaining handles blocks and method chaining after an expression.
 // This enables:
 //   - arr.select { |x| }.map { |x| } (inline chaining)

@@ -2609,6 +2609,55 @@ end`
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
+func TestForLoopMapSingleVariable(t *testing.T) {
+	input := `def main
+  data = {"a" => 1, "b" => 2}
+  for key in data
+    puts(key)
+  end
+end`
+
+	output := compile(t, input)
+
+	// Single-variable map iteration: for key := range map
+	assertContains(t, output, `for key := range data {`)
+	assertContains(t, output, `runtime.Puts(key)`)
+}
+
+func TestForLoopMapTwoVariables(t *testing.T) {
+	input := `def main
+  data = {"a" => 1, "b" => 2}
+  for key, value in data
+    puts(key)
+    puts(value)
+  end
+end`
+
+	output := compile(t, input)
+
+	// Two-variable map iteration: for key, value := range map
+	assertContains(t, output, `for key, value := range data {`)
+	assertContains(t, output, `runtime.Puts(key)`)
+	assertContains(t, output, `runtime.Puts(value)`)
+}
+
+func TestForLoopArrayTwoVariables(t *testing.T) {
+	input := `def main
+  arr = [10, 20, 30]
+  for i, v in arr
+    puts(i)
+    puts(v)
+  end
+end`
+
+	output := compile(t, input)
+
+	// Two-variable array iteration: for i, v := range arr
+	assertContains(t, output, `for i, v := range arr {`)
+	assertContains(t, output, `runtime.Puts(i)`)
+	assertContains(t, output, `runtime.Puts(v)`)
+}
+
 func TestRangeToArray(t *testing.T) {
 	input := `def main
   nums = (1..5).to_a

@@ -1170,6 +1170,11 @@ func (g *Generator) genUntilStmt(s *ast.UntilStmt) {
 func (g *Generator) genForStmt(s *ast.ForStmt) {
 	// Save variable state
 	prevType, wasDefinedBefore := g.vars[s.Var]
+	var prevType2 string
+	var wasDefinedBefore2 bool
+	if s.Var2 != "" {
+		prevType2, wasDefinedBefore2 = g.vars[s.Var2]
+	}
 
 	// Check if iterable is a range literal - optimize to C-style for loop
 	if rangeLit, ok := s.Iterable.(*ast.RangeLit); ok {
@@ -1195,7 +1200,24 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 		g.buf.WriteString(" := range ")
 		g.genExpr(s.Iterable)
 		g.buf.WriteString(" {\n")
+	} else if s.Var2 != "" {
+		// Two-variable form: for key, value in map/array
+		g.buf.WriteString("for ")
+		g.buf.WriteString(s.Var)
+		g.buf.WriteString(", ")
+		g.buf.WriteString(s.Var2)
+		g.buf.WriteString(" := range ")
+		g.genExpr(s.Iterable)
+		g.buf.WriteString(" {\n")
+	} else if strings.HasPrefix(iterType, "map[") || strings.HasPrefix(iterType, "Map<") {
+		// Single-variable map iteration: get keys only
+		g.buf.WriteString("for ")
+		g.buf.WriteString(s.Var)
+		g.buf.WriteString(" := range ")
+		g.genExpr(s.Iterable)
+		g.buf.WriteString(" {\n")
 	} else {
+		// Single-variable array iteration: skip index, get values
 		g.buf.WriteString("for _, ")
 		g.buf.WriteString(s.Var)
 		g.buf.WriteString(" := range ")
@@ -1204,6 +1226,9 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 	}
 
 	g.vars[s.Var] = "" // loop variable, type unknown
+	if s.Var2 != "" {
+		g.vars[s.Var2] = "" // second loop variable
+	}
 
 	g.enterLoop()
 	g.indent++
@@ -1218,6 +1243,13 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 		delete(g.vars, s.Var)
 	} else {
 		g.vars[s.Var] = prevType
+	}
+	if s.Var2 != "" {
+		if !wasDefinedBefore2 {
+			delete(g.vars, s.Var2)
+		} else {
+			g.vars[s.Var2] = prevType2
+		}
 	}
 
 	g.writeIndent()
