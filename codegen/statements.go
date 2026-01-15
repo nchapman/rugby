@@ -226,23 +226,26 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 		}
 		g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, goFieldName))
 
-		// Check for optional wrapping
+		// Check for optional wrapping - need to take address for value type optionals
+		// (e.g., @count : Int? with @count = 5 -> c.count = func() *int { v := 5; return &v }())
 		fieldType := g.getFieldType(s.Name)
 		sourceType := g.inferTypeFromExpr(s.Value)
 		needsWrap := false
 
 		if isValueTypeOptional(fieldType) {
 			baseType := strings.TrimSuffix(fieldType, "?")
-			if sourceType == baseType {
+			if sourceType == baseType || sourceType == "" {
 				needsWrap = true
 			}
 		}
 
 		if needsWrap {
-			baseType := strings.TrimSuffix(fieldType, "?")
-			g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+			// For value type optionals (Int?, Bool?, etc.), we use pointer types (*int, *bool)
+			// Take the address of the value using an IIFE to handle non-addressable expressions
+			goType := mapType(strings.TrimSuffix(fieldType, "?"))
+			g.buf.WriteString(fmt.Sprintf("func() *%s { _v := ", goType))
 			g.genExpr(s.Value)
-			g.buf.WriteString(")")
+			g.buf.WriteString("; return &_v }()")
 		} else {
 			g.genExpr(s.Value)
 		}
@@ -456,21 +459,23 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 	g.buf.WriteString(field)
 	g.buf.WriteString(" = ")
 
-	// Check for optional wrapping
+	// Check for optional wrapping - need to take address for value type optionals
 	sourceType := g.inferTypeFromExpr(s.Value)
 	needsWrap := false
 	if isValueTypeOptional(fieldType) {
 		baseType := strings.TrimSuffix(fieldType, "?")
-		if sourceType == baseType {
+		if sourceType == baseType || sourceType == "" {
 			needsWrap = true
 		}
 	}
 
 	if needsWrap {
-		baseType := strings.TrimSuffix(fieldType, "?")
-		g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+		// For value type optionals (Int?, Bool?, etc.), we use pointer types (*int, *bool)
+		// Take the address of the value using an IIFE to handle non-addressable expressions
+		goType := mapType(strings.TrimSuffix(fieldType, "?"))
+		g.buf.WriteString(fmt.Sprintf("func() *%s { _v := ", goType))
 		g.genExpr(s.Value)
-		g.buf.WriteString(")")
+		g.buf.WriteString("; return &_v }()")
 	} else {
 		g.genExpr(s.Value)
 	}

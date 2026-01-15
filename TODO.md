@@ -680,7 +680,7 @@ When a phase is complete, all tests in that phase should PASS.
 - ✅ **Runtime improvements:** Ruby-like `p` formatting, nil coalescing in command arguments
 
 ### Next Priorities
-1. `Any` type semantics (Int/String should be assignable to Any parameters/collections)
+1. ~~`Any` type semantics~~ ✅ Complete
 2. Module instance variables and state
 3. Optional methods (`ok?`, `nil?`, `unwrap`, `unwrap_or`)
 4. Type aliases with function types

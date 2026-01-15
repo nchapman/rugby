@@ -1146,6 +1146,22 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			return
 		}
 
+		// Check for module method call within class context
+		// (e.g., touch(now) in a class that includes a module with touch method)
+		if g.currentClass != "" && g.isModuleMethod(funcName) {
+			recv := receiverName(g.currentClass)
+			methodName := snakeToPascalWithAcronyms(funcName)
+			g.buf.WriteString(fmt.Sprintf("%s.%s(", recv, methodName))
+			for i, arg := range call.Args {
+				if i > 0 {
+					g.buf.WriteString(", ")
+				}
+				g.genExpr(arg)
+			}
+			g.buf.WriteString(")")
+			return
+		}
+
 		if kf, ok := kernelFuncs[funcName]; ok {
 			g.needsRuntime = true
 			if kf.transform != nil {

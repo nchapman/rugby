@@ -4582,7 +4582,8 @@ end`
 	assertContains(t, output, "var _ Loggable = (*Service)(nil)")
 }
 
-func TestModuleMethodConflictDetection(t *testing.T) {
+func TestModuleMethodLastIncludeWins(t *testing.T) {
+	// Test: when multiple modules define the same method, the last included module wins
 	input := `module A
   def greet
     puts "A"
@@ -4603,21 +4604,12 @@ end
 def main
 end`
 
-	errs := compileWithErrors(t, input)
+	result := compile(t, input)
 
-	// Should detect conflict between module A and B
-	if len(errs) == 0 {
-		t.Fatal("expected conflict error for duplicate method 'greet'")
-	}
-	found := false
-	for _, err := range errs {
-		if strings.Contains(err.Error(), "method 'greet' from module 'B' conflicts with module 'A'") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected conflict error mentioning 'greet' from modules A and B, got: %v", errs)
+	// Should NOT error - last include wins (B overrides A)
+	// Check that B's greet method is in the generated code
+	if !strings.Contains(result, `runtime.Puts("B")`) {
+		t.Errorf("expected B's greet method to be used (last include wins), got:\n%s", result)
 	}
 }
 

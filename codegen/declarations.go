@@ -286,23 +286,28 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 				allAccessors = append(allAccessors, acc)
 			}
 		}
-		// Add module methods with conflict detection
+		// Add module methods with conflict resolution (last include wins)
 		for _, m := range mod.Methods {
 			if source, exists := methodSources[m.Name]; exists {
 				// Conflict: method already defined
 				// If class defined it, class wins (intentional override)
-				// If another module defined it, that's a conflict
 				if source == className {
 					// Class intentionally overrides module method - skip module version
 					continue
 				}
-				g.addError(fmt.Errorf("method '%s' from module '%s' conflicts with %s", m.Name, modName, source))
-			} else {
-				methodSources[m.Name] = fmt.Sprintf("module '%s'", modName)
-				allMethods = append(allMethods, m)
-				// Mark as interface method so it's exported (PascalCase) to satisfy module interface
-				g.currentClassInterfaceMethods[m.Name] = true
+				// If another module defined it, replace with this version (last include wins)
+				// Remove old method and add new one
+				for i, existing := range allMethods {
+					if existing.Name == m.Name {
+						allMethods = append(allMethods[:i], allMethods[i+1:]...)
+						break
+					}
+				}
 			}
+			methodSources[m.Name] = fmt.Sprintf("module '%s'", modName)
+			allMethods = append(allMethods, m)
+			// Mark as interface method so it's exported (PascalCase) to satisfy module interface
+			g.currentClassInterfaceMethods[m.Name] = true
 		}
 	}
 
@@ -370,6 +375,12 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	// If no initialize but has parent class, generate delegating constructor
 	if !hasInitialize && len(cls.Embeds) > 0 {
 		g.genSubclassConstructor(className, cls.Embeds[0], cls.Pub)
+	}
+
+	// If no initialize and no parent, generate a simple default constructor
+	// This enables instantiation of classes that only have methods (no fields)
+	if !hasInitialize && len(cls.Embeds) == 0 {
+		g.genDefaultConstructor(className, cls.Pub)
 	}
 
 	// Emit accessor methods (including from modules)
@@ -676,6 +687,21 @@ func (g *Generator) genSubclassConstructor(className, parentClass string, pub bo
 
 	// Return instance
 	g.buf.WriteString(fmt.Sprintf("\treturn %s\n", recv))
+	g.buf.WriteString("}\n\n")
+}
+
+// genDefaultConstructor generates a zero-argument constructor for a class that has fields
+// but no initialize method (e.g., classes that only include modules with fields).
+func (g *Generator) genDefaultConstructor(className string, pub bool) {
+	// Constructor name: newClassName (private) or NewClassName (pub)
+	constructorName := "new" + className
+	if pub {
+		constructorName = "New" + className
+	}
+
+	// Generate: func newClassName() *ClassName { return &ClassName{} }
+	g.buf.WriteString(fmt.Sprintf("func %s() *%s {\n", constructorName, className))
+	g.buf.WriteString(fmt.Sprintf("\treturn &%s{}\n", className))
 	g.buf.WriteString("}\n\n")
 }
 
