@@ -57,9 +57,47 @@ func P(args ...any) {
 		if i > 0 {
 			fmt.Print(" ")
 		}
-		fmt.Printf("%#v", arg)
+		formatDebugValue(arg)
 	}
 	fmt.Println()
+}
+
+// formatDebugValue prints a value in Ruby-like debug format.
+func formatDebugValue(arg any) {
+	switch v := arg.(type) {
+	case []int:
+		fmt.Print("[")
+		for i, elem := range v {
+			if i > 0 {
+				fmt.Print(" ")
+			}
+			fmt.Print(elem)
+		}
+		fmt.Print("]")
+	case []string:
+		fmt.Print("[")
+		for i, elem := range v {
+			if i > 0 {
+				fmt.Print(" ")
+			}
+			fmt.Printf("%q", elem)
+		}
+		fmt.Print("]")
+	case []any:
+		fmt.Print("[")
+		for i, elem := range v {
+			if i > 0 {
+				fmt.Print(" ")
+			}
+			formatDebugValue(elem)
+		}
+		fmt.Print("]")
+	case string:
+		fmt.Printf("%q", v)
+	default:
+		// Fall back to Go's default formatting
+		fmt.Printf("%#v", v)
+	}
 }
 
 // Gets reads a line from stdin, returning the string without the newline.
