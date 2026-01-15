@@ -707,6 +707,7 @@ func (p *Parser) canStartCommandArg() bool {
 // This handles ambiguous cases like:
 //   - `foo -1` (command with unary minus) vs `foo - 1` (binary subtraction)
 //   - `foo [1,2]` (command with array) vs `foo[1]` (index expression)
+//   - `foo (expr)` (command with grouped expr) vs `foo(expr)` (function call with parens)
 func (p *Parser) looksLikeCommandArg() bool {
 	// Must have space before
 	if !p.peekToken.SpaceBefore {
@@ -732,6 +733,11 @@ func (p *Parser) looksLikeCommandArg() bool {
 	case token.LBRACKET:
 		// `foo [1,2]` with space → array literal argument
 		// `foo[1]` without space → index expression (handled by SpaceBefore check)
+		return true
+
+	case token.LPAREN:
+		// `foo (expr)` with space → command argument (grouped expression)
+		// `foo(expr)` without space → function call with parentheses
 		return true
 
 		// Note: LBRACE is NOT handled here - `foo { }` is a block, not a map argument
