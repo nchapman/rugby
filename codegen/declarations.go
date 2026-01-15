@@ -272,7 +272,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 				fieldNames[acc.Name] = true
 			}
 		}
-		// Add module accessors with conflict detection
+		// Add module accessors with conflict resolution (last include wins)
 		for _, acc := range mod.Accessors {
 			if source, exists := accessorSources[acc.Name]; exists {
 				// Conflict: accessor already defined
@@ -280,11 +280,16 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 				if source == className {
 					continue
 				}
-				g.addError(fmt.Errorf("accessor '%s' from module '%s' conflicts with %s", acc.Name, modName, source))
-			} else {
-				accessorSources[acc.Name] = fmt.Sprintf("module '%s'", modName)
-				allAccessors = append(allAccessors, acc)
+				// If another module defined it, replace with this version (last include wins)
+				for i, existing := range allAccessors {
+					if existing.Name == acc.Name {
+						allAccessors = append(allAccessors[:i], allAccessors[i+1:]...)
+						break
+					}
+				}
 			}
+			accessorSources[acc.Name] = fmt.Sprintf("module '%s'", modName)
+			allAccessors = append(allAccessors, acc)
 		}
 		// Add module methods with conflict resolution (last include wins)
 		for _, m := range mod.Methods {

@@ -4691,7 +4691,8 @@ end`
 	}
 }
 
-func TestModuleAccessorConflictDetection(t *testing.T) {
+func TestModuleAccessorLastIncludeWins(t *testing.T) {
+	// Test: when multiple modules define the same accessor, the last included module wins
 	input := `module A
   property name : String
 end
@@ -4708,21 +4709,12 @@ end
 def main
 end`
 
-	errs := compileWithErrors(t, input)
+	// Should NOT error - last include wins (B overrides A)
+	result := compile(t, input)
 
-	// Should detect conflict between module A and B accessors
-	if len(errs) == 0 {
-		t.Fatal("expected conflict error for duplicate accessor 'name'")
-	}
-	found := false
-	for _, err := range errs {
-		if strings.Contains(err.Error(), "accessor 'name' from module 'B' conflicts with module 'A'") {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Errorf("expected conflict error mentioning 'name' from modules A and B, got: %v", errs)
+	// Check that the Worker struct exists with the name field
+	if !strings.Contains(result, "type Worker struct") {
+		t.Error("expected Worker struct to be generated")
 	}
 }
 
