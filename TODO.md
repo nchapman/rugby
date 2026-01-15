@@ -307,8 +307,8 @@ Update the parser to recognize angle bracket type parameters:
 
 ### 7.2 Module State
 
-- [ ] Module instance variables
-- [ ] `||=` in modules
+- [x] Module instance variables
+- [x] `||=` in modules
 
 **Tests:** `tests/spec/modules/module_state.rg`
 
@@ -681,7 +681,7 @@ When a phase is complete, all tests in that phase should PASS.
 
 ### Next Priorities
 1. ~~`Any` type semantics~~ ✅ Complete
-2. Module instance variables and state
+2. ~~Module instance variables and state~~ ✅ Complete
 3. Optional methods (`ok?`, `nil?`, `unwrap`, `unwrap_or`)
 4. Type aliases with function types
 5. `case_type` for type switching
