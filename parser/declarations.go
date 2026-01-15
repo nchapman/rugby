@@ -768,6 +768,7 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 	}
 
 	// Accept regular identifiers or operator tokens (== for custom equality)
+	// Also accept test keywords (describe, it, before, after) as method names
 	var methodName string
 	switch p.curToken.Type {
 	case token.IDENT:
@@ -780,6 +781,10 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 		}
 	case token.EQ:
 		methodName = "=="
+		p.nextToken()
+	case token.DESCRIBE, token.IT, token.BEFORE, token.AFTER:
+		// Allow test keywords as method names
+		methodName = p.curToken.Literal
 		p.nextToken()
 	default:
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected method name after def")

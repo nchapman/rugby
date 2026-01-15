@@ -510,8 +510,11 @@ func (p *Parser) parseSelectorExpr(x ast.Expression) ast.Expression {
 	p.nextToken() // move past '.' to the selector
 
 	// Allow certain keywords as method names (obj.as(Type), arr.select { |x| ... }, scope.spawn { })
+	// Also allow test keywords as method names
 	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.AS) && !p.curTokenIs(token.SELECT) &&
-		!p.curTokenIs(token.SPAWN) && !p.curTokenIs(token.AWAIT) {
+		!p.curTokenIs(token.SPAWN) && !p.curTokenIs(token.AWAIT) &&
+		!p.curTokenIs(token.DESCRIBE) && !p.curTokenIs(token.IT) &&
+		!p.curTokenIs(token.BEFORE) && !p.curTokenIs(token.AFTER) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '.'")
 		return nil
 	}
