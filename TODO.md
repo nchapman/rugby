@@ -44,12 +44,12 @@ Tracking implementation of `spec.md` sections.
 - [x] 5.1 Primitive Types (Int, String, Bool, Float, etc.)
 - [x] 5.2 Composite Types (Array, Map, Chan, Task)
 - [x] 5.3 Type Aliases (`type UserID = Int64`)
-- [ ] 5.4 Tuples (`(T, U)` types, destructuring)
+- [x] 5.4 Tuples (`(T, U)` types, implicit tuple returns)
 - [x] 5.5 Array Literals
 - [x] 5.6 Indexing (negative indices)
 - [x] 5.7 Range Slicing (`arr[1..3]`, `arr[1..-1]`)
 - [x] 5.8 Map Literals
-- [ ] 5.9 Set Literals (`Set{1, 2, 3}`)
+- [x] 5.9 Set Literals (`Set{1, 2, 3}`, `Set<T>{}`, operators `|`, `&`, `-`)
 - [x] 5.10 Range Type
 - [x] 5.11 Channel Type
 - [x] 5.12 Task Type
@@ -207,7 +207,7 @@ All major bugs have been fixed. The remaining items are documented limitations.
 
 Goal: Every language feature has spec tests covering all syntactic variations.
 
-Current spec tests (58 total):
+Current spec tests (65 total):
 - `tests/spec/blocks/` - 9 tests (each, map_select, reduce, block_arithmetic, method_chaining_newlines, find_any_all_none, times_upto_downto, symbol_to_proc, multiple_params)
 - `tests/spec/classes/` - 9 tests (basic, inheritance, inherited_getter, multilevel_inheritance, accessors, method_chaining, visibility, class_methods, super_calls)
 - `tests/spec/concurrency/` - 6 tests (channels, goroutines, spawn_await, spawn_closure, concurrently, waitgroup)
@@ -221,6 +221,7 @@ Current spec tests (58 total):
 - `tests/spec/modules/` - 3 tests (basic, multiple_includes, method_override)
 - `tests/spec/optionals/` - 3 tests (basic, if_let, nil_coalescing)
 - `tests/spec/stdlib/` - 1 test (regex)
+- `tests/spec/types/` - 4 tests (primitives, sets, tuples, type_aliases)
 
 ### Literals (expand `tests/spec/literals/`)
 - [x] Floats (basic operations, predicates, rounding)
@@ -390,10 +391,11 @@ When fixing a bug:
 Current status:
 - Original bugs: 8 fixed, 2 documented as limitations (multi-line if, inline type annotations)
 - Additional limitations discovered: 4 (case/when implicit returns, compound assignment in loop modifiers, range slice returns any, array mutation in closures)
-- Features implemented: class methods, super calls, symbol-to-proc, spawn closure capture, module method overriding
+- Features implemented: class methods, super calls, symbol-to-proc, spawn closure capture, module method overriding, type aliases, tuples, set literals
 - Semantic analysis: circular inheritance detection, inherited method interface validation, improved error positions, better type inference for spawn/map blocks, Levenshtein-based typo suggestions, reduce accumulator type inference, block return type inference from control flow, inherited field type resolution
 - Error recovery: parser, semantic analyzer, and codegen all collect and report multiple errors
 - Phase 2 complete: All spec test categories covered
 - Phase 3 complete: TypeInfo migration, error collection
-- Spec tests: 58 passing
+- Section 5 (Types) complete: All type features implemented
+- Spec tests: 65 passing
 - All `make check` passes
