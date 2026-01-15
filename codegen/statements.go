@@ -1326,6 +1326,28 @@ func (g *Generator) genExprStmt(s *ast.ExprStmt) {
 		return
 	}
 
+	// Handle BinaryExpr with << on Ident: arr << value becomes arr = arr << value
+	// This provides Ruby-like mutation semantics for array append
+	if binExpr, ok := s.Expr.(*ast.BinaryExpr); ok {
+		if binExpr.Op == "<<" {
+			if ident, ok := binExpr.Left.(*ast.Ident); ok {
+				// Generate: arr = runtime.ShiftLeft(arr, value).([]T)
+				g.writeIndent()
+				g.buf.WriteString(ident.Name)
+				g.buf.WriteString(" = ")
+				g.genExpr(s.Expr)
+				// Add type assertion if needed
+				if goType := g.getShiftLeftTargetType(binExpr); goType != "" {
+					g.buf.WriteString(".(")
+					g.buf.WriteString(goType)
+					g.buf.WriteString(")")
+				}
+				g.buf.WriteString("\n")
+				return
+			}
+		}
+	}
+
 	// Convert SelectorExpr to CallExpr when used as statement (Ruby-style method call)
 	// e.g., "obj.foo" as statement becomes "obj.foo()"
 	expr := s.Expr
