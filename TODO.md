@@ -25,13 +25,114 @@ Parser → AST → Semantic (types) → CodeGen (emit)
               nodeTypes ──────► typeInfo queries
 ```
 
-#### Feature Priority
+---
 
-| Feature | Value | Complexity | Notes |
-|---------|-------|------------|-------|
-| ~~Super calls with args~~ | ~~High~~ | ~~Medium~~ | ✅ Done |
-| ~~Symbol-to-proc (`&:method`)~~ | ~~Medium~~ | ~~Low-Medium~~ | ✅ Done |
-| ~~Spawn closure capture~~ | ~~Medium~~ | ~~Medium~~ | ✅ Works |
+## Spec Implementation Progress
+
+Tracking implementation of `spec.md` sections.
+
+### Section 4: Lexical Structure ✅ COMPLETE
+- [x] 4.1 Comments
+- [x] 4.2 Identifiers (snake_case, predicates, setters, instance vars)
+- [x] 4.3 Lambdas (`-> (x) { }` and `-> (x) do...end`)
+- [x] 4.4 Strings (double quotes, interpolation, single quotes)
+- [x] 4.5 Heredocs (`<<DELIM`, `<<-`, `<<~`, `<<'DELIM'`)
+- [x] 4.6 Symbols (`:foo`, symbol keys in maps)
+- [x] 4.7 Regular Expressions (`/pattern/`, `=~`, `!~`)
+
+### Section 5: Types
+- [x] 5.1 Primitive Types (Int, String, Bool, Float, etc.)
+- [x] 5.2 Composite Types (Array, Map, Chan, Task)
+- [x] 5.3 Type Aliases (`type UserID = Int64`)
+- [ ] 5.4 Tuples (`(T, U)` types, destructuring)
+- [x] 5.5 Array Literals
+- [x] 5.6 Indexing (negative indices)
+- [x] 5.7 Range Slicing (`arr[1..3]`, `arr[1..-1]`)
+- [x] 5.8 Map Literals
+- [ ] 5.9 Set Literals (`Set{1, 2, 3}`)
+- [x] 5.10 Range Type
+- [x] 5.11 Channel Type
+- [x] 5.12 Task Type
+
+### Section 6: Generics
+- [ ] 6.1 Generic Functions (`def identity<T>(x : T) -> T`)
+- [ ] 6.2 Generic Classes (`class Box<T>`)
+- [ ] 6.3 Generic Interfaces
+- [ ] 6.4 Type Constraints (`T : Comparable`)
+- [ ] 6.5 Type Inference for Generics
+
+### Section 7: Enums
+- [ ] 7.1 Basic Enums
+- [ ] 7.2 Enums with Explicit Values
+- [ ] 7.3 Enum Methods (`to_s`, `values`, `from_string`)
+
+### Section 8: Optionals ✅ COMPLETE
+- [x] 8.1 Optional Operators (`??`, `&.`)
+- [x] 8.2 Optional Methods (`ok?`, `unwrap`, `map`)
+- [x] 8.3 Unwrapping Patterns (`if let`)
+- [x] 8.4 The `nil` Keyword
+
+### Section 9: Variables and Control Flow
+- [x] 9.1 Variables (assignment, compound, `||=`)
+- [x] 9.2 Constants
+- [ ] 9.3 Destructuring (`a, b = pair`, `{name:} = map`)
+- [x] 9.4 Conditionals (if/unless/elsif)
+- [x] 9.5 Case Expressions
+- [x] 9.6 Case Type (`case_type`)
+- [x] 9.7 Loops (for/while/until/loop)
+- [x] 9.8 Statement Modifiers
+- [x] 9.9 Loop Modifiers
+
+### Section 10: Functions
+- [x] 10.1 Basic Functions
+- [x] 10.2 Multiple Return Values
+- [ ] 10.3 Default Parameters (`def foo(x = 10)`)
+- [ ] 10.4 Named Parameters (`foo(timeout: 60)`)
+- [ ] 10.5 Variadic Functions (`*args`)
+- [x] 10.6 Lambdas
+- [x] 10.7 Closures
+- [x] 10.8 Symbol-to-Proc (`&:method`)
+- [x] 10.9 Function Types
+- [x] 10.10 Calling Convention
+
+### Section 11: Classes ✅ COMPLETE
+- [x] 11.1-11.7 All class features implemented
+
+### Section 12: Structs
+- [ ] 12.1 Struct Definition
+- [ ] 12.2 Struct Features (auto-constructor, equality)
+- [ ] 12.3 Struct Methods
+- [ ] 12.4 Struct Immutability
+- [ ] 12.5 Struct vs Class
+
+### Section 13-14: Interfaces & Modules ✅ COMPLETE
+- [x] Interfaces, structural typing, modules, mixins
+
+### Section 15: Visibility ✅ COMPLETE
+- [x] `pub`, private, naming transformations
+
+### Section 16: Errors ✅ COMPLETE
+- [x] Error signatures, `!` operator, `rescue`, custom errors
+
+### Section 17: Concurrency ✅ COMPLETE
+- [x] Goroutines, channels, select, spawn/await, concurrently
+
+### Section 18: Go Interop ✅ COMPLETE
+- [x] Imports, name mapping, defer
+
+### Section 19: Runtime Package
+- [x] Array methods (each, map, select, etc.)
+- [x] Map methods
+- [x] String methods
+- [x] Integer methods (times, upto, downto)
+- [x] Float methods
+- [x] Global functions (puts, print, gets, etc.)
+
+### Section 20-25: Testing & Appendices
+- [ ] 20: Testing framework (describe, assertions)
+- [x] Diagnostics, error messages
+
+---
 
 ### Documenting Limitations (for workarounds)
 

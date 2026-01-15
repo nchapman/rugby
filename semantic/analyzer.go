@@ -6,6 +6,12 @@ import (
 	"github.com/nchapman/rugby/ast"
 )
 
+// typeAliasInfo stores information about a type alias for error reporting.
+type typeAliasInfo struct {
+	Type string // underlying type
+	Line int    // declaration line
+}
+
 // Analyzer performs semantic analysis on a Rugby AST.
 type Analyzer struct {
 	scope       *Scope
@@ -23,6 +29,9 @@ type Analyzer struct {
 	interfaces map[string]*Symbol
 	modules    map[string]*Symbol
 	functions  map[string]*Symbol
+
+	// Type aliases: maps alias name to alias info (type and line)
+	typeAliases map[string]typeAliasInfo
 
 	// Track which symbols are used (read) vs just declared
 	usedSymbols map[*Symbol]bool
@@ -46,6 +55,7 @@ func NewAnalyzer() *Analyzer {
 		interfaces:    make(map[string]*Symbol),
 		modules:       make(map[string]*Symbol),
 		functions:     make(map[string]*Symbol),
+		typeAliases:   make(map[string]typeAliasInfo),
 		usedSymbols:   make(map[*Symbol]bool),
 		declaredAt:    make(map[ast.Node]map[string]*Symbol),
 		declarations:  make(map[ast.Node]bool),
@@ -104,6 +114,13 @@ func (a *Analyzer) Analyze(program *ast.Program) []error {
 			Type: TypeAnyVal, // Go packages can have any methods
 		}
 		mustDefine(a.globalScope, sym)
+	}
+
+	// Pre-pass: collect type aliases first so they're available when parsing other types
+	for _, decl := range program.Declarations {
+		if typeAlias, ok := decl.(*ast.TypeAliasDecl); ok {
+			a.collectTypeAlias(typeAlias)
+		}
 	}
 
 	// First pass: collect all top-level declarations (classes, interfaces, modules, functions)
@@ -473,6 +490,8 @@ func (a *Analyzer) resolveType(t *Type) *Type {
 }
 
 // collectDeclaration does a quick first pass to register top-level names.
+// Note: TypeAliasDecl is handled in a separate pre-pass so aliases are available
+// when parsing other types.
 func (a *Analyzer) collectDeclaration(stmt ast.Statement) {
 	switch s := stmt.(type) {
 	case *ast.FuncDecl:
@@ -483,6 +502,7 @@ func (a *Analyzer) collectDeclaration(stmt ast.Statement) {
 		a.collectInterface(s)
 	case *ast.ModuleDecl:
 		a.collectModule(s)
+		// TypeAliasDecl is collected in pre-pass, skip here
 	}
 }
 
@@ -696,6 +716,92 @@ func (a *Analyzer) collectModule(m *ast.ModuleDecl) {
 	a.modules[m.Name] = mod
 }
 
+// collectTypeAlias registers a type alias for later resolution.
+func (a *Analyzer) collectTypeAlias(t *ast.TypeAliasDecl) {
+	// Check for duplicate type alias
+	if existing, ok := a.typeAliases[t.Name]; ok {
+		a.addError(&DuplicateTypeAliasError{Name: t.Name, Line: existing.Line})
+		return
+	}
+
+	// Note: Conflict checks with classes/interfaces/modules would need to happen
+	// in a second pass since type aliases are collected before other declarations.
+	// For now, Go will catch any naming conflicts at compile time.
+
+	a.typeAliases[t.Name] = typeAliasInfo{Type: t.Type, Line: t.Line}
+}
+
+// resolveTypeAlias returns the underlying type name if the given name is a type alias,
+// otherwise returns the original name. Handles chained aliases and reports circular errors.
+func (a *Analyzer) resolveTypeAlias(name string) string {
+	// Follow alias chain (e.g., type A = B, type B = Int → A resolves to Int)
+	visited := make(map[string]bool)
+	startName := name
+	for {
+		if visited[name] {
+			// Circular alias - report error and stop
+			if info, ok := a.typeAliases[startName]; ok {
+				a.addError(&CircularTypeAliasError{Name: startName, Line: info.Line})
+			}
+			return name
+		}
+		visited[name] = true
+
+		if info, ok := a.typeAliases[name]; ok {
+			name = info.Type
+		} else {
+			return name
+		}
+	}
+}
+
+// resolveTypeAliasType checks if a Type is a class type that corresponds to a type alias,
+// and if so, returns the resolved underlying type. Otherwise returns the type unchanged.
+// This function recursively resolves all nested type aliases.
+func (a *Analyzer) resolveTypeAliasType(t *Type) *Type {
+	if t == nil {
+		return t
+	}
+
+	// Only resolve TypeClass that might be type aliases
+	if t.Kind == TypeClass && t.Name != "" {
+		resolvedName := a.resolveTypeAlias(t.Name)
+		if resolvedName != t.Name {
+			// It was an alias, parse the underlying type and recursively resolve it
+			resolved := ParseType(resolvedName)
+			return a.resolveTypeAliasType(resolved)
+		}
+	}
+
+	// Resolve nested types (e.g., Array[UserID] should resolve to Array[Int64])
+	if t.Elem != nil {
+		resolved := a.resolveTypeAliasType(t.Elem)
+		if resolved != t.Elem {
+			switch t.Kind {
+			case TypeArray:
+				return NewArrayType(resolved)
+			case TypeOptional:
+				return NewOptionalType(resolved)
+			case TypeChan:
+				return NewChanType(resolved)
+			case TypeTask:
+				return NewTaskType(resolved)
+			}
+		}
+	}
+
+	// Resolve Map key and value types
+	if t.Kind == TypeMap {
+		keyResolved := a.resolveTypeAliasType(t.KeyType)
+		valueResolved := a.resolveTypeAliasType(t.ValueType)
+		if keyResolved != t.KeyType || valueResolved != t.ValueType {
+			return NewMapType(keyResolved, valueResolved)
+		}
+	}
+
+	return t
+}
+
 // analyzeStatement analyzes a statement and returns its type (if applicable).
 func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 	switch s := stmt.(type) {
@@ -767,6 +873,8 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 		a.analyzeBefore(s)
 	case *ast.AfterStmt:
 		a.analyzeAfter(s)
+	case *ast.TypeAliasDecl:
+		// Type aliases are collected in the pre-pass; no body analysis needed
 	}
 }
 
@@ -2745,6 +2853,12 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 	if to == nil || from == nil {
 		return true
 	}
+
+	// Resolve type aliases: if either type is a TypeClass that's actually a type alias,
+	// resolve it to the underlying type before comparison
+	to = a.resolveTypeAliasType(to)
+	from = a.resolveTypeAliasType(from)
+
 	if to.Kind == TypeAny || from.Kind == TypeAny {
 		return true
 	}

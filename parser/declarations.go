@@ -938,3 +938,44 @@ func (p *Parser) parseModuleDeclWithDoc(doc *ast.CommentGroup) *ast.ModuleDecl {
 
 	return mod
 }
+
+// parseTypeAliasDecl parses a type alias declaration: type UserID = Int64
+func (p *Parser) parseTypeAliasDecl() *ast.TypeAliasDecl {
+	doc := p.leadingComments(p.curToken.Line)
+	return p.parseTypeAliasDeclWithDoc(doc)
+}
+
+// parseTypeAliasDeclWithDoc parses a type alias with pre-collected doc comment
+func (p *Parser) parseTypeAliasDeclWithDoc(doc *ast.CommentGroup) *ast.TypeAliasDecl {
+	line := p.curToken.Line
+	p.nextToken() // consume 'type'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type alias name after 'type'")
+		return nil
+	}
+
+	name := p.curToken.Literal
+	p.nextToken() // consume name
+
+	if !p.curTokenIs(token.ASSIGN) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '=' after type alias name")
+		return nil
+	}
+	p.nextToken() // consume '='
+
+	// Parse the underlying type using the full type parser (handles generics like Array[T])
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after '='")
+		return nil
+	}
+
+	typeName := p.parseTypeName()
+
+	return &ast.TypeAliasDecl{
+		Name: name,
+		Type: typeName,
+		Line: line,
+		Doc:  doc,
+	}
+}

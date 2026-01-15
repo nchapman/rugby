@@ -94,6 +94,49 @@ func formatCycle(cycle []string) string {
 	return strings.Join(cycle, " -> ")
 }
 
+// CircularTypeAliasError is returned when type aliases form a cycle.
+type CircularTypeAliasError struct {
+	Name string
+	Line int
+}
+
+func (e *CircularTypeAliasError) Error() string {
+	msg := fmt.Sprintf("circular type alias: '%s' references itself", e.Name)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// DuplicateTypeAliasError is returned when a type alias is defined twice.
+type DuplicateTypeAliasError struct {
+	Name string
+	Line int
+}
+
+func (e *DuplicateTypeAliasError) Error() string {
+	msg := fmt.Sprintf("type alias '%s' already defined", e.Name)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// TypeAliasConflictError is returned when a type alias conflicts with an existing type.
+type TypeAliasConflictError struct {
+	Name     string
+	Conflict string // "class", "interface", "module"
+	Line     int
+}
+
+func (e *TypeAliasConflictError) Error() string {
+	msg := fmt.Sprintf("type alias '%s' conflicts with existing %s", e.Name, e.Conflict)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
 // ReturnOutsideFunctionError is returned for return statements outside functions.
 type ReturnOutsideFunctionError struct {
 	Line   int

@@ -708,6 +708,19 @@ type MethodSig struct {
 	ReturnTypes []string // return types
 }
 
+// TypeAliasDecl represents a type alias declaration: type UserID = Int64
+type TypeAliasDecl struct {
+	Name    string        // alias name (e.g., "UserID")
+	Type    string        // underlying type (e.g., "Int64")
+	Pub     bool          // true if exported (pub type)
+	Line    int           // source line number (1-indexed)
+	Doc     *CommentGroup // leading comments
+	Comment *CommentGroup // trailing comment on same line
+}
+
+func (t *TypeAliasDecl) node()     {}
+func (t *TypeAliasDecl) stmtNode() {}
+
 // DescribeStmt represents a describe block for grouping tests
 // describe "name" do ... end
 type DescribeStmt struct {

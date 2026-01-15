@@ -286,8 +286,13 @@ func (p *Parser) ParseProgram() *ast.Program {
 					mod.Pub = true
 					program.Declarations = append(program.Declarations, mod)
 				}
+			case token.TYPE:
+				if typeAlias := p.parseTypeAliasDeclWithDoc(doc); typeAlias != nil {
+					typeAlias.Pub = true
+					program.Declarations = append(program.Declarations, typeAlias)
+				}
 			default:
-				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' must be followed by 'def', 'class', 'interface', or 'module'")
+				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' must be followed by 'def', 'class', 'interface', 'module', or 'type'")
 				p.nextToken()
 			}
 		case token.DEF:
@@ -314,6 +319,10 @@ func (p *Parser) ParseProgram() *ast.Program {
 		case token.MODULE:
 			if mod := p.parseModuleDecl(); mod != nil {
 				program.Declarations = append(program.Declarations, mod)
+			}
+		case token.TYPE:
+			if typeAlias := p.parseTypeAliasDecl(); typeAlias != nil {
+				program.Declarations = append(program.Declarations, typeAlias)
 			}
 		case token.DESCRIBE:
 			if desc := p.parseDescribeStmt(); desc != nil {

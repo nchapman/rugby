@@ -959,3 +959,10 @@ func (g *Generator) genClassMethod(className string, method *ast.MethodDecl) {
 	g.currentMethod = ""
 	g.currentMethodPub = false
 }
+
+// genTypeAliasDecl generates a Go type alias from a Rugby type alias
+// e.g., type UserID = Int64 becomes type UserID = int64
+func (g *Generator) genTypeAliasDecl(typeAlias *ast.TypeAliasDecl) {
+	goType := mapType(typeAlias.Type)
+	g.buf.WriteString(fmt.Sprintf("type %s = %s\n\n", typeAlias.Name, goType))
+}

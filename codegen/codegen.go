@@ -582,6 +582,8 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 			definitions = append(definitions, d)
 		case *ast.ModuleDecl:
 			definitions = append(definitions, d)
+		case *ast.TypeAliasDecl:
+			definitions = append(definitions, d)
 		// Test constructs are definitions, not top-level statements
 		case *ast.DescribeStmt, *ast.TestStmt, *ast.TableStmt:
 			definitions = append(definitions, decl)
