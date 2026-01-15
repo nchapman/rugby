@@ -586,40 +586,58 @@ These features are in the spec but marked as `skip` in tests. Implement after co
 - [ ] Generic classes `class Box<T>`
 - [ ] Generic interfaces
 - [ ] Type constraints `T : Comparable`
+- [ ] Built-in constraints: `Numeric`, `Ordered`, `Equatable`, `Hashable`
+- [ ] Type inference for generics
 
-**Tests:** `tests/spec/generics/*.rg`
+**Tests:** `tests/spec/generics/*.rg` (7 test files)
 
 ### 14.2 Enums (Section 7)
 
 - [ ] Basic enums `enum Status ... end`
 - [ ] Explicit values `Ok = 200`
-- [ ] Enum methods `to_s`, `values`, `from_string`
+- [ ] `.value` to get numeric value
+- [ ] `.to_s` for string representation
+- [ ] `.values` class method (returns all variants)
+- [ ] `.from_string("Name")` returns `Enum?`
+- [ ] Use in `case`/`when` expressions
 
-**Tests:** `tests/spec/enums/*.rg`
+**Tests:** `tests/spec/enums/*.rg` (3 test files)
 
 ### 14.3 Structs (Section 12)
 
 - [ ] `struct Name ... end`
-- [ ] Value semantics
-- [ ] Immutability
-- [ ] Auto-generated constructor, equality, hash
+- [ ] Value semantics (copy on assignment)
+- [ ] Immutability (compile error on field mutation)
+- [ ] Auto-generated constructor `Struct{field: value}`
+- [ ] Auto-generated equality (`==`)
+- [ ] Auto-generated hash (for use as map keys)
+- [ ] Auto-generated `to_s` / String representation
+- [ ] Methods with value receivers (return new struct for "mutation")
 
-**Tests:** `tests/spec/structs/*.rg`
+**Tests:** `tests/spec/structs/*.rg` (8 test files)
 
 ### 14.4 Function Features (Section 10)
 
-- [ ] Default parameters `def foo(x = 10)`
+- [ ] Default parameters `def foo(x : Int = 10)`
 - [ ] Named parameters `foo(timeout: 60)`
-- [ ] Variadic functions `def log(*messages)`
+- [ ] Named params in any order
+- [ ] Variadic functions `def log(*messages : String)`
+- [ ] Variadic with Any `def format(*args : Any)`
+- [ ] Splat to expand array into variadic `log(*items)`
 
 **Tests:** `tests/spec/functions/default_params.rg`, `named_params.rg`, `variadic.rg`
 
 ### 14.5 Destructuring (Section 9.3)
 
-- [ ] Splat `first, *rest = items`
+- [ ] Tuple destructuring `a, b = get_pair()`
+- [ ] Splat patterns `first, *rest = items`
+- [ ] Reverse splat `*head, last = items`
+- [ ] Underscore ignore `_, second, _ = triple`
 - [ ] Map destructuring `{name:, age:} = data`
+- [ ] Map destructuring with rename `{name: n, age: a} = data`
+- [ ] Parameter destructuring `def process({name:, age:} : Data)`
 
-**Tests:** `tests/spec/control_flow/destructuring.rg`
+**Tests:** `tests/spec/control_flow/destructuring*.rg` (5 test files)
 
 ---
 
