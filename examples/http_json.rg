@@ -4,14 +4,14 @@
 import rugby/http
 
 # Fetch a user from JSONPlaceholder API
-def fetch_user(id : Int) -> (Map<String, any>, error)
+def fetch_user(id : Int) -> (Map<String, any>, Error)
   url = "https://jsonplaceholder.typicode.com/users/#{id}"
   resp = http.get(url)!
   resp.json
 end
 
 # Fetch posts for a user
-def fetch_posts(user_id : Int) -> (Array<any>, error)
+def fetch_posts(user_id : Int) -> (Array<any>, Error)
   url = "https://jsonplaceholder.typicode.com/users/#{user_id}/posts"
   resp = http.get(url)!
   resp.json_array

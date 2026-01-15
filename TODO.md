@@ -662,7 +662,11 @@ When a phase is complete, all tests in that phase should PASS.
 
 ## Recent Progress (2026-01-15)
 
-**Test Status:** 97 PASSING / 63 FAILING / 27 SKIPPED
+**Test Status:** 98 PASSING / 61 FAILING / 27 SKIPPED
+
+### Completed Today
+- ✅ **`const` keyword:** Full implementation (token, AST, parser, semantic, codegen)
+- ✅ **Spec test fix:** `findRugbyBinary` now always rebuilds to avoid stale binary issues
 
 ### Completed Overnight
 - ✅ **Phase 1 Complete:** Angle bracket syntax migration (Array<T>, Map<K,V>, etc.)
@@ -675,14 +679,13 @@ When a phase is complete, all tests in that phase should PASS.
 - ✅ **Runtime improvements:** Ruby-like `p` formatting, nil coalescing in command arguments
 
 ### Next Priorities
-1. `const` keyword implementation (currently not recognized)
-2. Class variables `@@` (needs full stack: lexer → parser → AST → semantic → codegen)
-3. `Any` type semantics (Int/String should be assignable to Any parameters/collections)
-4. Module instance variables and state
-5. Optional methods (`ok?`, `nil?`, `unwrap`, `unwrap_or`)
-6. Type aliases with function types
-7. `case_type` for type switching
-8. Loop modifiers (`expr while/until condition`)
+1. Class variables `@@` (needs full stack: lexer → parser → AST → semantic → codegen)
+2. `Any` type semantics (Int/String should be assignable to Any parameters/collections)
+3. Module instance variables and state
+4. Optional methods (`ok?`, `nil?`, `unwrap`, `unwrap_or`)
+5. Type aliases with function types
+6. `case_type` for type switching
+7. Loop modifiers (`expr while/until condition`)
 
 ### Key Insights
 - Heredoc behavior matches Ruby: content includes newlines, delimiter line doesn't

@@ -6,20 +6,20 @@
 import errors
 import os
 
-# Function that can fail - returns (T, error)
-def divide(a : Int, b : Int) -> (Int, error)
+# Function that can fail - returns (T, Error)
+def divide(a : Int, b : Int) -> (Int, Error)
   return 0, errors.new("division by zero") if b == 0
   return a / b, nil
 end
 
 # Propagate errors with ! (like Rust's ?)
-def safe_calc(x : Int, y : Int) -> (Int, error)
+def safe_calc(x : Int, y : Int) -> (Int, Error)
   result = divide(x, y)!
   return result * 2, nil
 end
 
-# Function returning just error
-def validate(n : Int) -> error
+# Function returning just Error
+def validate(n : Int) -> Error
   return errors.new("negative not allowed") if n < 0
   nil
 end

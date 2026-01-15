@@ -3819,7 +3819,7 @@ func (a *Analyzer) parseTypeFromExpr(expr ast.Expression) *Type {
 			return TypeBytesVal
 		case "any":
 			return TypeAnyVal
-		case "error":
+		case "Error", "error":
 			return TypeErrorVal
 		default:
 			// Check if it's a class type

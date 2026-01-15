@@ -82,7 +82,7 @@ class TodoList
     "#{done}/#{total} completed"
   end
 
-  def save(path : String) -> error
+  def save(path : String) -> Error
     data = @todos.map { |t| t.to_map }
     content = json.pretty(data)!
     file.write(path, content)

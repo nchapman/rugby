@@ -2301,7 +2301,7 @@ func TestAnalyzeBangOperator(t *testing.T) {
 		{
 			name: "bang at top level (allowed for scripts)",
 			input: `
-def read_file(path : String) -> (String, error)
+def read_file(path : String) -> (String, Error)
   return "contents", nil
 end
 
@@ -2312,7 +2312,7 @@ puts data`,
 		{
 			name: "bang in non-error-returning function",
 			input: `
-def read_file(path : String) -> (String, error)
+def read_file(path : String) -> (String, Error)
   return "contents", nil
 end
 
@@ -2325,11 +2325,11 @@ end`,
 		{
 			name: "bang on error-only return",
 			input: `
-def validate(x : Int) -> error
+def validate(x : Int) -> Error
   nil
 end
 
-def process -> error
+def process -> Error
   validate(5)!
   nil
 end`,
@@ -2342,7 +2342,7 @@ def get_value -> Int
   42
 end
 
-def process -> error
+def process -> Error
   get_value!
   nil
 end`,

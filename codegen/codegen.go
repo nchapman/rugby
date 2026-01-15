@@ -195,7 +195,8 @@ func (g *Generator) returnsError() bool {
 	if len(g.currentReturnTypes) == 0 {
 		return false
 	}
-	return g.currentReturnTypes[len(g.currentReturnTypes)-1] == "error"
+	lastType := g.currentReturnTypes[len(g.currentReturnTypes)-1]
+	return lastType == "error" || lastType == "Error"
 }
 
 func (g *Generator) enterLoop() {

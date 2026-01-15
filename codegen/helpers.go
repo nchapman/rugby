@@ -97,7 +97,7 @@ func mapType(rubyType string) string {
 	// Special types
 	case "any":
 		return "any"
-	case "error":
+	case "Error", "error":
 		return "error"
 	default:
 		return rubyType // pass through unknown types (e.g., user-defined)

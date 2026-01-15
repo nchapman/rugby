@@ -16,12 +16,17 @@ test-coverage:
 	@go test -cover ./...
 
 # Run spec tests (language specification tests)
+# Clears cached .rugby directories to ensure tests use fresh compiler output
 test-spec: build
+	@echo "Clearing spec test caches..."
+	@find tests/spec -name ".rugby" -type d -exec rm -rf {} + 2>/dev/null || true
 	@echo "Running spec tests..."
 	@cd tests && go test -v -run TestSpecs
 
 # Run spec tests and update golden files
 test-spec-bless: build
+	@echo "Clearing spec test caches..."
+	@find tests/spec -name ".rugby" -type d -exec rm -rf {} + 2>/dev/null || true
 	@echo "Running spec tests with blessing..."
 	@cd tests && go test -v -run TestSpecs -args -bless
 

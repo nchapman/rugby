@@ -3066,7 +3066,7 @@ end`
 }
 
 func TestStringToIntWithBang(t *testing.T) {
-	input := `def process(s : String) -> (Int, error)
+	input := `def process(s : String) -> (Int, Error)
   n = s.to_i()!
   n
 end`
@@ -3080,7 +3080,7 @@ end`
 }
 
 func TestStringToFloatWithBang(t *testing.T) {
-	input := `def process(s : String) -> (Float, error)
+	input := `def process(s : String) -> (Float, Error)
   n = s.to_f()!
   n
 end`
@@ -3132,7 +3132,7 @@ func TestErrorIs(t *testing.T) {
 	input := `import "io"
 
 def main
-  err : error = nil
+  err : Error = nil
   if error_is?(err, io.EOF)
     puts("end of file")
   end
@@ -3147,7 +3147,7 @@ end`
 }
 
 func TestErrorIsWithCustomError(t *testing.T) {
-	input := `def check(err : error, target : error) -> Bool
+	input := `def check(err : Error, target : Error) -> Bool
   error_is?(err, target)
 end`
 
@@ -3160,7 +3160,7 @@ func TestErrorAs(t *testing.T) {
 	input := `import "os"
 
 def main
-  err : error = nil
+  err : Error = nil
   if let pathErr = error_as(err, os.PathError)
     puts(pathErr.Path)
   end
@@ -3181,7 +3181,7 @@ func TestErrorAsWithIfLet(t *testing.T) {
   end
 end
 
-def check(err : error) -> Int
+def check(err : Error) -> Int
   if let myErr = error_as(err, MyError)
     myErr.code
   else
@@ -3670,7 +3670,7 @@ end`
 // Error handling tests (Phase 19)
 
 func TestGenerateErrorReturnType(t *testing.T) {
-	input := `def save(path : String) -> error
+	input := `def save(path : String) -> Error
   nil
 end
 
@@ -3684,7 +3684,7 @@ end`
 }
 
 func TestGenerateValueAndErrorReturnType(t *testing.T) {
-	input := `def read_file(path : String) -> (String, error)
+	input := `def read_file(path : String) -> (String, Error)
   return "content", nil
 end
 
@@ -3698,7 +3698,7 @@ end`
 }
 
 func TestGenerateMultipleValuesAndErrorReturnType(t *testing.T) {
-	input := `def parse(s : String) -> (Int, Bool, error)
+	input := `def parse(s : String) -> (Int, Bool, Error)
   return 42, true, nil
 end
 
@@ -3744,7 +3744,7 @@ end`
 }
 
 func TestGenerateBangInMain(t *testing.T) {
-	input := `def read_file(path : String) -> (String, error)
+	input := `def read_file(path : String) -> (String, Error)
   return "content", nil
 end
 
@@ -3762,11 +3762,11 @@ end`
 }
 
 func TestGenerateBangInErrorFunction(t *testing.T) {
-	input := `def read_file(path : String) -> (String, error)
+	input := `def read_file(path : String) -> (String, Error)
   return "content", nil
 end
 
-def load(path : String) -> (String, error)
+def load(path : String) -> (String, Error)
   data = read_file(path)!
   return data, nil
 end
@@ -3783,7 +3783,7 @@ end`
 }
 
 func TestGenerateBangAsStatement(t *testing.T) {
-	input := `def do_something() -> error
+	input := `def do_something() -> Error
   return nil
 end
 
@@ -3800,11 +3800,11 @@ end`
 
 func TestGenerateBangWithMultiReturnError(t *testing.T) {
 	// Test error propagation in a function that returns (T, T, error)
-	input := `def fetch(url : String) -> (String, error)
+	input := `def fetch(url : String) -> (String, Error)
   return "data", nil
 end
 
-def process(url : String) -> (String, Int, error)
+def process(url : String) -> (String, Int, Error)
   data = fetch(url)!
   return data, 200, nil
 end
@@ -3820,11 +3820,11 @@ end`
 }
 
 func TestGenerateBangWithInterfaceReturn(t *testing.T) {
-	input := `def parse(s : String) -> (any, error)
+	input := `def parse(s : String) -> (any, Error)
   return nil, nil
 end
 
-def process(s : String) -> (any, error)
+def process(s : String) -> (any, Error)
   obj = parse(s)!
   return obj, nil
 end
@@ -3852,11 +3852,11 @@ class FileReader
   end
 end
 
-def open_reader(path : String) -> (FileReader, error)
+def open_reader(path : String) -> (FileReader, Error)
   return FileReader.new, nil
 end
 
-def process(path : String) -> (FileReader, error)
+def process(path : String) -> (FileReader, Error)
   r = open_reader(path)!
   return r, nil
 end
@@ -3875,7 +3875,7 @@ end`
 }
 
 func TestGenerateRescueInline(t *testing.T) {
-	input := `def read_config(path : String) -> (String, error)
+	input := `def read_config(path : String) -> (String, Error)
   return "config", nil
 end
 
@@ -3893,7 +3893,7 @@ end`
 }
 
 func TestGenerateRescueBlock(t *testing.T) {
-	input := `def load_data(path : String) -> (String, error)
+	input := `def load_data(path : String) -> (String, Error)
   return "data", nil
 end
 
@@ -3914,7 +3914,7 @@ end`
 }
 
 func TestGenerateRescueWithErrorBinding(t *testing.T) {
-	input := `def fetch_url(url : String) -> (String, error)
+	input := `def fetch_url(url : String) -> (String, Error)
   return "response", nil
 end
 
@@ -3936,7 +3936,7 @@ end`
 }
 
 func TestGenerateErrorKernelFunc(t *testing.T) {
-	input := `def validate(n : Int) -> (Int, error)
+	input := `def validate(n : Int) -> (Int, Error)
   if n < 0
     return 0, error("negative number")
   end
@@ -3953,7 +3953,7 @@ end`
 }
 
 func TestGenerateErrorWithInterpolation(t *testing.T) {
-	input := `def validate(n : Int) -> (Int, error)
+	input := `def validate(n : Int) -> (Int, Error)
   if n < 0
     return 0, error("negative: #{n}")
   end

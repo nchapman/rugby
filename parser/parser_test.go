@@ -6234,7 +6234,7 @@ end`
 
 func TestMethodSig_MultipleReturnTypes(t *testing.T) {
 	input := `interface Parser
-  def parse(input : String) -> (AST, error)
+  def parse(input : String) -> (AST, Error)
 end`
 
 	l := lexer.New(input)
@@ -6254,8 +6254,8 @@ end`
 	if sig.ReturnTypes[0] != "AST" {
 		t.Errorf("expected first return type 'AST', got %q", sig.ReturnTypes[0])
 	}
-	if sig.ReturnTypes[1] != "error" {
-		t.Errorf("expected second return type 'error', got %q", sig.ReturnTypes[1])
+	if sig.ReturnTypes[1] != "Error" {
+		t.Errorf("expected second return type 'Error', got %q", sig.ReturnTypes[1])
 	}
 }
 
