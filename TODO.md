@@ -375,11 +375,12 @@ Update the parser to recognize angle bracket type parameters:
 
 ### 8.5 Optional Methods
 
-- [ ] `ok?` / `present?`
-- [ ] `nil?` / `absent?`
-- [ ] `unwrap` (panics if nil)
-- [ ] `unwrap_or(default)`
-- [ ] `map`, `flat_map`, `each`, `filter`
+- [x] `ok?` / `present?`
+- [x] `nil?` / `absent?`
+- [x] `unwrap` (panics if nil)
+- [x] `unwrap_or(default)`
+- [x] `map`, `each` (with blocks)
+- [ ] `flat_map`, `filter`
 
 **Tests:** `tests/spec/optionals/optional_methods.rg`
 
@@ -676,9 +677,10 @@ When a phase is complete, all tests in that phase should PASS.
 
 ## Recent Progress (2026-01-15)
 
-**Test Status:** 98 PASSING / 61 FAILING / 27 SKIPPED
+**Test Status:** 114 PASSING / 46 FAILING / 27 SKIPPED
 
 ### Completed Today
+- ✅ **Optional methods:** `unwrap_or(default)` for optionals (`ok?`, `nil?`, `unwrap` already worked)
 - ✅ **`const` keyword:** Full implementation (token, AST, parser, semantic, codegen)
 - ✅ **Spec test fix:** `findRugbyBinary` now always rebuilds to avoid stale binary issues
 - ✅ **Class variables `@@`:** Full stack implementation (token, lexer, AST, parser, semantic, codegen)
@@ -696,7 +698,7 @@ When a phase is complete, all tests in that phase should PASS.
 ### Next Priorities
 1. ~~`Any` type semantics~~ ✅ Complete
 2. ~~Module instance variables and state~~ ✅ Complete
-3. Optional methods (`ok?`, `nil?`, `unwrap`, `unwrap_or`)
+3. ~~Optional methods (`ok?`, `nil?`, `unwrap`, `unwrap_or`)~~ ✅ Complete
 4. Type aliases with function types
 5. `case_type` for type switching
 6. Loop modifiers (`expr while/until condition`)

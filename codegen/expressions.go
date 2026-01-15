@@ -1581,6 +1581,60 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				g.buf.WriteString("*")
 				g.genExpr(fn.X)
 				return
+			case "unwrap_or":
+				if len(call.Args) == 0 {
+					g.buf.WriteString("/* unwrap_or requires default argument */")
+					return
+				}
+				g.needsRuntime = true
+				// Check if the receiver is a safe navigation expression (returns any)
+				_, isSafeNav := fn.X.(*ast.SafeNavExpr)
+				// Generate coalescing code based on the optional type
+				switch receiverType {
+				case "Int?":
+					g.buf.WriteString("runtime.CoalesceInt(")
+				case "Int64?":
+					g.buf.WriteString("runtime.CoalesceInt64(")
+				case "Float?":
+					g.buf.WriteString("runtime.CoalesceFloat(")
+				case "String?":
+					// Use CoalesceStringAny for safe navigation (which returns any)
+					if isSafeNav {
+						g.buf.WriteString("runtime.CoalesceStringAny(")
+					} else {
+						g.buf.WriteString("runtime.CoalesceString(")
+					}
+				case "Bool?":
+					g.buf.WriteString("runtime.CoalesceBool(")
+				default:
+					// Generic optional type - use IIFE
+					varName := fmt.Sprintf("_uo%d", g.tempVarCounter)
+					g.tempVarCounter++
+					g.buf.WriteString("func() ")
+					defaultType := g.inferTypeFromExpr(call.Args[0])
+					if defaultType != "" {
+						g.buf.WriteString(mapType(defaultType))
+					} else {
+						g.buf.WriteString("any")
+					}
+					g.buf.WriteString(" { ")
+					g.buf.WriteString(varName)
+					g.buf.WriteString(" := ")
+					g.genExpr(fn.X)
+					g.buf.WriteString("; if ")
+					g.buf.WriteString(varName)
+					g.buf.WriteString(" != nil { return *")
+					g.buf.WriteString(varName)
+					g.buf.WriteString(" }; return ")
+					g.genExpr(call.Args[0])
+					g.buf.WriteString(" }()")
+					return
+				}
+				g.genExpr(fn.X)
+				g.buf.WriteString(", ")
+				g.genExpr(call.Args[0])
+				g.buf.WriteString(")")
+				return
 			}
 		}
 
