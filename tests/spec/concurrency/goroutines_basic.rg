@@ -7,19 +7,19 @@ import "sync"
 
 # go with expression
 wg = sync.WaitGroup{}
-wg.Add(2)
+wg.add(2)
 
 go do
   puts "goroutine 1"
-  wg.Done
+  wg.done
 end
 
 go do
   puts "goroutine 2"
-  wg.Done
+  wg.done
 end
 
-wg.Wait
+wg.wait
 puts "done"
 
 #@ expect:

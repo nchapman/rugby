@@ -9,19 +9,19 @@ once = sync.Once{}
 initialized = false
 
 wg = sync.WaitGroup{}
-wg.Add(3)
+wg.add(3)
 
 for i in 1..3
   go do
-    once.Do -> do
+    once.do -> do
       puts "initializing"
       initialized = true
     end
-    wg.Done
+    wg.done
   end
 end
 
-wg.Wait
+wg.wait
 puts initialized
 
 #@ expect:

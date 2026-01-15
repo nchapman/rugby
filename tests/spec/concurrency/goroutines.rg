@@ -9,24 +9,24 @@ import "sync"
 wg = sync.WaitGroup.new
 ch = Chan<String>.new(3)
 
-wg.Add(3)
+wg.add(3)
 
 go do
   ch << "first"
-  wg.Done
+  wg.done
 end
 
 go do
   ch << "second"
-  wg.Done
+  wg.done
 end
 
 go do
   ch << "third"
-  wg.Done
+  wg.done
 end
 
-wg.Wait
+wg.wait
 
 # Collect results (order may vary, so we collect and sort)
 results : Array<String> = []

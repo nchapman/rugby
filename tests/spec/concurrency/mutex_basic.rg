@@ -9,18 +9,18 @@ mutex = sync.Mutex{}
 counter = 0
 
 wg = sync.WaitGroup{}
-wg.Add(3)
+wg.add(3)
 
 for i in 1..3
   go do
-    mutex.Lock
+    mutex.lock
     counter += 10
-    mutex.Unlock
-    wg.Done
+    mutex.unlock
+    wg.done
   end
 end
 
-wg.Wait
+wg.wait
 puts counter
 
 #@ expect:

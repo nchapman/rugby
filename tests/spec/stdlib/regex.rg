@@ -5,21 +5,21 @@
 
 import "rugby/regex"
 
-# Match - check if pattern exists
-puts regex.Match("\\d+", "abc123")
-puts regex.Match("\\d+", "abc")
+# match - check if pattern exists
+puts regex.match("\\d+", "abc123")
+puts regex.match("\\d+", "abc")
 
-# Find - get first match
-match, ok = regex.Find("\\d+", "abc123def")
+# find - get first match
+match, ok = regex.find("\\d+", "abc123def")
 puts ok
 puts match
 
-# FindAll - get all matches
-matches = regex.FindAll("\\d+", "a1b2c3")
+# find_all - get all matches
+matches = regex.find_all("\\d+", "a1b2c3")
 matches.each -> (m) { puts m }
 
-# Replace - replace all matches
-result = regex.Replace("hello world", "\\w+", "X")
+# replace - replace all matches
+result = regex.replace("hello world", "\\w+", "X")
 puts result
 
 #@ expect:
