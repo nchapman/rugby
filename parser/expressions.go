@@ -748,9 +748,9 @@ func (p *Parser) parseCommandCall(fn ast.Expression) *ast.CallExpr {
 
 	p.nextToken() // move to first argument token
 
-	// Parse first argument at andPrec level
-	// This includes ==, +, etc. but excludes and/or which terminate the argument list
-	arg := p.parseExpression(andPrec)
+	// Parse first argument at ternaryPrec level
+	// This includes ==, +, ??, ternary, ranges, etc. but excludes and/or which terminate the argument list
+	arg := p.parseExpression(ternaryPrec)
 	if arg == nil {
 		return call
 	}
@@ -760,7 +760,7 @@ func (p *Parser) parseCommandCall(fn ast.Expression) *ast.CallExpr {
 	for p.peekTokenIs(token.COMMA) {
 		p.nextToken() // consume comma
 		p.nextToken() // move to next arg
-		arg := p.parseExpression(andPrec)
+		arg := p.parseExpression(ternaryPrec)
 		if arg != nil {
 			call.Args = append(call.Args, arg)
 		}
