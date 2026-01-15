@@ -397,6 +397,11 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 			if field := p.parseFieldDecl(); field != nil {
 				cls.Fields = append(cls.Fields, field)
 			}
+		case token.ATAT:
+			// Class variable declaration: @@name = value
+			if classVar := p.parseClassVarDecl(); classVar != nil {
+				cls.ClassVars = append(cls.ClassVars, classVar)
+			}
 		case token.GETTER, token.SETTER, token.PROPERTY:
 			// Accessor declaration: getter/setter/property name : Type
 			if accessor := p.parseAccessorDecl(); accessor != nil {
@@ -686,6 +691,32 @@ func (p *Parser) parseFieldDecl() *ast.FieldDecl {
 
 	fieldType := p.parseTypeName()
 	return &ast.FieldDecl{Name: name, Type: fieldType}
+}
+
+// parseClassVarDecl parses a class variable declaration: @@name = value
+func (p *Parser) parseClassVarDecl() *ast.ClassVarDecl {
+	line := p.curToken.Line
+	p.nextToken() // consume '@@'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected variable name after '@@'")
+		return nil
+	}
+
+	name := p.curToken.Literal
+	p.nextToken() // consume variable name
+
+	if !p.curTokenIs(token.ASSIGN) {
+		p.errorWithHint("class variable requires initial value",
+			fmt.Sprintf("add initial value: @@%s = value", name))
+		return nil
+	}
+	p.nextToken() // consume '='
+
+	value := p.parseExpression(lowest)
+	p.nextToken() // move past the expression
+	p.skipNewlines()
+	return &ast.ClassVarDecl{Name: name, Value: value, Line: line}
 }
 
 // extractFields extracts field declarations from instance variable assignments and

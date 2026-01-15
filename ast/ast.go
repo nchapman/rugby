@@ -638,6 +638,7 @@ type ClassDecl struct {
 	Embeds     []string        // embedded types (Go struct embedding), empty if none
 	Implements []string        // interfaces this class explicitly implements
 	Fields     []*FieldDecl    // fields inferred from initialize
+	ClassVars  []*ClassVarDecl // class variable declarations (@@name = value)
 	Methods    []*MethodDecl   // methods defined in class
 	Accessors  []*AccessorDecl // accessor declarations (getter, setter, property)
 	Includes   []string        // modules to include
@@ -645,6 +646,13 @@ type ClassDecl struct {
 	Line       int             // source line number (1-indexed)
 	Doc        *CommentGroup   // leading comments
 	Comment    *CommentGroup   // trailing comment on same line
+}
+
+// ClassVarDecl represents a class variable declaration (@@name = value)
+type ClassVarDecl struct {
+	Name  string     // variable name without @@
+	Value Expression // initial value
+	Line  int
 }
 
 func (c *ClassDecl) node()     {}
@@ -708,6 +716,35 @@ type InstanceVarCompoundAssign struct {
 
 func (i *InstanceVarCompoundAssign) node()     {}
 func (i *InstanceVarCompoundAssign) stmtNode() {}
+
+// ClassVar represents a class variable reference (@@name)
+type ClassVar struct {
+	Name string // variable name without @@
+}
+
+func (c *ClassVar) node()     {}
+func (c *ClassVar) exprNode() {}
+
+// ClassVarAssign represents @@name = value
+type ClassVarAssign struct {
+	Name  string // variable name without @@
+	Value Expression
+	Line  int
+}
+
+func (c *ClassVarAssign) node()     {}
+func (c *ClassVarAssign) stmtNode() {}
+
+// ClassVarCompoundAssign represents @@name += value, @@name -= value, etc.
+type ClassVarCompoundAssign struct {
+	Name  string // variable name without @@
+	Op    string // operator: "+", "-", "*", "/"
+	Value Expression
+	Line  int
+}
+
+func (c *ClassVarCompoundAssign) node()     {}
+func (c *ClassVarCompoundAssign) stmtNode() {}
 
 // InterfaceDecl represents an interface definition
 type InterfaceDecl struct {

@@ -43,6 +43,10 @@ func getStatementLine(stmt ast.Statement) int {
 		return s.Line
 	case *ast.InstanceVarCompoundAssign:
 		return s.Line
+	case *ast.ClassVarAssign:
+		return s.Line
+	case *ast.ClassVarCompoundAssign:
+		return s.Line
 
 	// Expressions
 	case *ast.ExprStmt:
@@ -147,6 +151,10 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genInstanceVarOrAssign(s)
 	case *ast.InstanceVarCompoundAssign:
 		g.genInstanceVarCompoundAssign(s)
+	case *ast.ClassVarAssign:
+		g.genClassVarAssign(s)
+	case *ast.ClassVarCompoundAssign:
+		g.genClassVarCompoundAssign(s)
 	case *ast.SelectorAssignStmt:
 		g.genSelectorAssignStmt(s)
 
@@ -501,6 +509,43 @@ func (g *Generator) genInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAssig
 	g.buf.WriteString("\n")
 }
 
+func (g *Generator) genClassVarAssign(s *ast.ClassVarAssign) {
+	if g.currentClass == "" {
+		g.addError(fmt.Errorf("class variable '@@%s' assignment used outside of class context", s.Name))
+		return
+	}
+
+	// Class variables are package-level vars named _ClassName_varname
+	varName := fmt.Sprintf("_%s_%s", g.currentClass, s.Name)
+
+	g.writeIndent()
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" = ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+}
+
+func (g *Generator) genClassVarCompoundAssign(s *ast.ClassVarCompoundAssign) {
+	if g.currentClass == "" {
+		g.addError(fmt.Errorf("class variable '@@%s' %s= used outside of class context", s.Name, s.Op))
+		return
+	}
+
+	// Class variables are package-level vars named _ClassName_varname
+	varName := fmt.Sprintf("_%s_%s", g.currentClass, s.Name)
+
+	// Generate: varName = varName op value
+	g.writeIndent()
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" = ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(s.Op)
+	g.buf.WriteString(" ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+}
+
 // genSelectorAssignStmt generates code for setter assignment: obj.field = value
 // This generates a setter method call: obj.setField(value) or obj.SetField(value) for pub classes
 func (g *Generator) genSelectorAssignStmt(s *ast.SelectorAssignStmt) {
@@ -597,8 +642,8 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 		// Typed declaration: var x int = value
 		g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
 		g.vars[s.Name] = s.Type // store the declared type
-	} else if !g.shouldDeclare(s) {
-		// Reassignment: x = value
+	} else if s.Name == "_" || !g.shouldDeclare(s) {
+		// Blank identifier or reassignment: x = value
 		g.buf.WriteString(s.Name)
 		g.buf.WriteString(" = ")
 	} else {

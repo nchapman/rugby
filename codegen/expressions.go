@@ -93,6 +93,20 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			g.addError(fmt.Errorf("instance variable '@%s' used outside of class context", e.Name))
 			g.buf.WriteString("nil")
 		}
+	case *ast.ClassVar:
+		// Class variables are package-level vars named _ClassName_varname
+		if g.currentClass != "" {
+			key := g.currentClass + "@@" + e.Name
+			if varName, ok := g.classVars[key]; ok {
+				g.buf.WriteString(varName)
+			} else {
+				// Fall back to generated name (for forward references)
+				g.buf.WriteString(fmt.Sprintf("_%s_%s", g.currentClass, e.Name))
+			}
+		} else {
+			g.addError(fmt.Errorf("class variable '@@%s' used outside of class context", e.Name))
+			g.buf.WriteString("nil")
+		}
 
 	// Operators
 	case *ast.BinaryExpr:

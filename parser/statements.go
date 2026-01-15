@@ -76,6 +76,20 @@ func (p *Parser) parseStatement() ast.Statement {
 			return p.parseInstanceVarCompoundAssign()
 		}
 		// Otherwise fall through to expression parsing
+	case token.ATAT:
+		// Check if this is assignment: @@name = expr
+		// Pattern: ATAT IDENT ASSIGN
+		if p.peekTokenIs(token.IDENT) && p.peekTokenAfterIs(token.ASSIGN) {
+			return p.parseClassVarAssign()
+		}
+		// Check for compound assignment: @@name += expr, @@name -= expr, etc.
+		// Pattern: ATAT IDENT PLUSASSIGN/MINUSASSIGN/STARASSIGN/SLASHASSIGN
+		if p.peekTokenIs(token.IDENT) && (p.peekTokenAfterIs(token.PLUSASSIGN) ||
+			p.peekTokenAfterIs(token.MINUSASSIGN) || p.peekTokenAfterIs(token.STARASSIGN) ||
+			p.peekTokenAfterIs(token.SLASHASSIGN)) {
+			return p.parseClassVarCompoundAssign()
+		}
+		// Otherwise fall through to expression parsing
 	}
 
 	// Default: expression statement
@@ -963,6 +977,71 @@ func (p *Parser) parseInstanceVarCompoundAssign() *ast.InstanceVarCompoundAssign
 	p.skipNewlines()
 
 	return &ast.InstanceVarCompoundAssign{Name: name, Op: op, Value: value, Line: line}
+}
+
+func (p *Parser) parseClassVarAssign() *ast.ClassVarAssign {
+	line := p.curToken.Line
+	p.nextToken() // consume '@@'
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@@'")
+		return nil
+	}
+	name := p.curToken.Literal
+	p.nextToken() // consume identifier
+
+	if !p.curTokenIs(token.ASSIGN) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '=' after class variable")
+		return nil
+	}
+	p.nextToken() // consume '='
+
+	value := p.parseExpression(lowest)
+
+	// Handle blocks and method chaining (inline and multi-line)
+	value = p.parseBlocksAndChaining(value)
+
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	return &ast.ClassVarAssign{Name: name, Value: value, Line: line}
+}
+
+func (p *Parser) parseClassVarCompoundAssign() *ast.ClassVarCompoundAssign {
+	line := p.curToken.Line
+	p.nextToken() // consume '@@'
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@@'")
+		return nil
+	}
+	name := p.curToken.Literal
+	p.nextToken() // consume identifier
+
+	// Determine the operator
+	var op string
+	switch p.curToken.Type {
+	case token.PLUSASSIGN:
+		op = "+"
+	case token.MINUSASSIGN:
+		op = "-"
+	case token.STARASSIGN:
+		op = "*"
+	case token.SLASHASSIGN:
+		op = "/"
+	default:
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected compound assignment operator")
+		return nil
+	}
+	p.nextToken() // consume operator
+
+	value := p.parseExpression(lowest)
+
+	// Handle blocks and method chaining (inline and multi-line)
+	value = p.parseBlocksAndChaining(value)
+
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	return &ast.ClassVarCompoundAssign{Name: name, Op: op, Value: value, Line: line}
 }
 
 // parseGoStmt parses: go func_call() or go do ... end

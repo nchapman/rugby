@@ -72,6 +72,7 @@ const (
 	TRIPLEDOT  TokenType = "..."
 	PIPE       TokenType = "|"
 	AT         TokenType = "@"
+	ATAT       TokenType = "@@"
 	COLON      TokenType = ":"
 	SHOVELLEFT TokenType = "<<"
 

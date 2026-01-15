@@ -247,7 +247,12 @@ func (l *Lexer) NextToken() token.Token {
 			tok = l.newToken(token.PIPE, "|")
 		}
 	case '@':
-		tok = l.newToken(token.AT, "@")
+		if l.peekChar() == '@' {
+			l.readChar()
+			tok = l.newToken(token.ATAT, "@@")
+		} else {
+			tok = l.newToken(token.AT, "@")
+		}
 	case ':':
 		// Check if this is a symbol (:identifier) or type annotation
 		if isLetter(l.peekChar()) {

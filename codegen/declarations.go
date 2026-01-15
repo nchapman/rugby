@@ -314,6 +314,21 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		}
 	}
 
+	// Emit class variable declarations (package-level vars)
+	for _, cv := range cls.ClassVars {
+		varName := fmt.Sprintf("_%s_%s", className, cv.Name)
+		g.buf.WriteString("var ")
+		g.buf.WriteString(varName)
+		g.buf.WriteString(" = ")
+		g.genExpr(cv.Value)
+		g.buf.WriteString("\n")
+		// Track this class variable for later reference
+		g.classVars[className+"@@"+cv.Name] = varName
+	}
+	if len(cls.ClassVars) > 0 {
+		g.buf.WriteString("\n")
+	}
+
 	// Emit struct definition
 	// Class names are already PascalCase by convention; pub affects field/method visibility
 	// Accessor fields use underscore prefix (e.g., _name) to avoid Go field/method name conflict

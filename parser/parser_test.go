@@ -6787,7 +6787,7 @@ func TestConstDeclaration(t *testing.T) {
 		input         string
 		expectedName  string
 		expectedType  string
-		expectedValue interface{}
+		expectedValue any
 	}{
 		{"const MAX_SIZE = 1024", "MAX_SIZE", "", int64(1024)},
 		{"const PI = 3.14", "PI", "", 3.14},

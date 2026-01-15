@@ -21,10 +21,10 @@ end
 
 puts Counter.count
 
-c1 = Counter.new
+_ = Counter.new
 puts Counter.count
 
-c2 = Counter.new
+_ = Counter.new
 puts Counter.count
 
 Counter.reset

@@ -1042,6 +1042,12 @@ func (a *Analyzer) analyzeMethodDecl(m *ast.MethodDecl) {
 func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
 	valueType := a.analyzeExpr(s.Value)
 
+	// Handle blank identifier specially - always use = not :=
+	if s.Name == "_" {
+		a.declarations[s] = false
+		return
+	}
+
 	// Check if variable already exists
 	existing := a.scope.Lookup(s.Name)
 	if existing != nil {

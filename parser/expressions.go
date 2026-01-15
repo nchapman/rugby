@@ -45,6 +45,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parsePrefixExpr()
 	case token.AT:
 		left = p.parseInstanceVar()
+	case token.ATAT:
+		left = p.parseClassVar()
 	case token.SELF:
 		left = &ast.Ident{Name: "self", Line: p.curToken.Line, Column: p.curToken.Column}
 	case token.SUPER:
@@ -536,6 +538,17 @@ func (p *Parser) parseInstanceVar() ast.Expression {
 	return &ast.InstanceVar{Name: name}
 }
 
+// parseClassVar parses a class variable read: @@name.
+func (p *Parser) parseClassVar() ast.Expression {
+	p.nextToken() // consume '@@'
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@@'")
+		return nil
+	}
+	name := p.curToken.Literal
+	return &ast.ClassVar{Name: name}
+}
+
 // parseSuperExpr parses a super call: super or super(args).
 func (p *Parser) parseSuperExpr() ast.Expression {
 	line := p.curToken.Line
@@ -690,8 +703,8 @@ func (p *Parser) canStartCommandArg() bool {
 	// Lambda expression (arrow syntax)
 	case token.ARROW:
 		return true
-	// Instance variable
-	case token.AT:
+	// Instance variable and class variable
+	case token.AT, token.ATAT:
 		return true
 	// Prefix operators - only if followed immediately by their operand (no space after)
 	// This handles `foo -1` (command with unary minus) vs `foo - 1` (binary)

@@ -178,6 +178,7 @@ type Generator struct {
 	baseClassMethods             map[string][]string          // base class name -> method names (for lint suppression)
 	baseClassAccessors           map[string][]string          // base class name -> accessor names (for lint suppression)
 	classMethods                 map[string]map[string]string // class name -> method name -> generated function name
+	classVars                    map[string]string            // "ClassName@@varname" -> "_ClassName_varname" (package-level var)
 }
 
 // addError records an error during code generation
@@ -249,6 +250,7 @@ func New(opts ...Option) *Generator {
 		baseClassMethods:             make(map[string][]string),
 		baseClassAccessors:           make(map[string][]string),
 		classMethods:                 make(map[string]map[string]string),
+		classVars:                    make(map[string]string),
 	}
 	for _, opt := range opts {
 		opt(g)
