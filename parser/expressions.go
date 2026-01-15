@@ -586,10 +586,13 @@ func (p *Parser) canStartCommandArg() bool {
 	switch t {
 	// Literals and identifiers
 	case token.IDENT, token.INT, token.FLOAT, token.STRING, token.HEREDOC, token.HEREDOCLITERAL,
-		token.SYMBOL, token.TRUE, token.FALSE, token.NIL, token.SELF:
+		token.SYMBOL, token.TRUE, token.FALSE, token.NIL, token.SELF, token.REGEX:
 		return true
 	// Grouping and collection literals (not LBRACE - that's handled as a block)
 	case token.LPAREN, token.LBRACKET:
+		return true
+	// Lambda expression (arrow syntax)
+	case token.ARROW:
 		return true
 	// Instance variable
 	case token.AT:

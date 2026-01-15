@@ -42,6 +42,32 @@ func (p *Parser) parseBlockCall(expr ast.Expression) ast.Expression {
 	}
 }
 
+// parseTrailingLambda parses a lambda attached to a method call.
+// Converts expr.method or expr.method(args) followed by -> (params) { ... }
+// into a CallExpr with the lambda appended as an argument.
+func (p *Parser) parseTrailingLambda(expr ast.Expression) ast.Expression {
+	// Parse the lambda expression (curToken is before ARROW)
+	p.nextToken() // move to ARROW
+	lambda := p.parseLambdaExpr()
+	if lambda == nil {
+		return expr
+	}
+
+	// Append lambda as an argument to the CallExpr
+	switch e := expr.(type) {
+	case *ast.SelectorExpr:
+		// arr.each -> (x) { } -> CallExpr{Func: SelectorExpr{arr, "each"}, Args: [lambda]}
+		return &ast.CallExpr{Func: e, Args: []ast.Expression{lambda}}
+	case *ast.CallExpr:
+		// arr.reduce(0) -> (acc, x) { } -> append lambda to existing args
+		e.Args = append(e.Args, lambda)
+		return e
+	default:
+		p.errorAt(p.curToken.Line, p.curToken.Column, "lambda can only follow a method call")
+		return expr
+	}
+}
+
 // parseBlock parses a block: do |params| ... end  OR  {|params| ... }
 // Assumes curToken is 'do' or '{'. terminator specifies the closing token (END or RBRACE).
 func (p *Parser) parseBlock(terminator token.TokenType) *ast.BlockExpr {

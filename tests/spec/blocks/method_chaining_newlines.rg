@@ -1,13 +1,12 @@
 #@ run-pass
 #@ check-output
 #
-# Test that method chaining works with newlines
+# Test that method chaining works with lambdas
 
-result = [1, 2, 3, 4, 5, 6]
-  .select { |n| n.even? }
-  .map { |n| n * 10 }
+# Use parenthesized form for chaining
+result = [1, 2, 3, 4, 5, 6].filter(-> (n) { n.even? }).map(-> (n) { n * 10 })
 
-result.each { |n| puts n }
+result.each -> (n) { puts n }
 
 #@ expect:
 # 20

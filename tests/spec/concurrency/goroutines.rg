@@ -36,7 +36,7 @@ results = results << ch.receive
 
 # Print sorted for deterministic output
 results = results.sorted
-results.each { |r| puts r }
+results.each -> (r) { puts r }
 
 #@ expect:
 # first

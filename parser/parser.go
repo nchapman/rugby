@@ -148,6 +148,11 @@ func (p *Parser) parseBlocksAndChaining(expr ast.Expression) ast.Expression {
 			expr = p.parseBlockCall(expr)
 			continue
 		}
+		// Check for trailing lambda: expr -> (params) { ... }
+		if p.peekTokenIs(token.ARROW) {
+			expr = p.parseTrailingLambda(expr)
+			continue
+		}
 		// Check for newline-continued method chain after a block
 		if p.peekTokenIs(token.NEWLINE) && p.peekAheadIsDotAfterNewlines() {
 			p.nextToken() // curToken is now NEWLINE

@@ -471,6 +471,19 @@ func (g *Generator) inferArrayElementGoType(expr ast.Expression) string {
 	return "any"
 }
 
+// inferExprGoType returns the Go type for an expression.
+// Uses semantic type info with mapType conversion, falls back to "any".
+func (g *Generator) inferExprGoType(expr ast.Expression) string {
+	if goType := g.typeInfo.GetGoType(expr); goType != "" && goType != "unknown" {
+		return goType
+	}
+	// Fall back to Rugby type inference and mapping
+	if rugbyType := g.inferTypeFromExpr(expr); rugbyType != "" {
+		return mapType(rugbyType)
+	}
+	return "any"
+}
+
 // getSelectorKind returns the resolved selector kind for a SelectorExpr.
 // First checks the AST annotation, then falls back to TypeInfo, then to heuristics.
 func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {

@@ -3389,11 +3389,15 @@ func (a *Analyzer) intMethod(name string) *Symbol {
 	case "to_f":
 		return NewMethod(name, nil, []*Type{TypeFloatVal})
 	case "times":
-		// times takes no arguments, just a block
-		return NewMethod(name, nil, nil)
+		// times takes an optional lambda argument
+		method := NewMethod(name, nil, nil)
+		method.Variadic = true // Allow 0 args (block) or 1 arg (lambda)
+		return method
 	case "upto", "downto":
-		// upto/downto take 1 Int argument (the target)
-		return NewMethod(name, []*Symbol{NewParam("n", TypeIntVal)}, nil)
+		// upto/downto take 1 Int argument (the target) + optional lambda
+		method := NewMethod(name, []*Symbol{NewParam("n", TypeIntVal)}, nil)
+		method.Variadic = true // Allow 1 arg (block) or 2 args (target + lambda)
+		return method
 	}
 	return nil
 }
@@ -3443,7 +3447,10 @@ func (a *Analyzer) arrayMethod(name string, elemType *Type) *Symbol {
 	case "min", "max":
 		return NewMethod(name, nil, []*Type{NewOptionalType(elemType)})
 	case "each", "each_with_index":
-		return NewMethod(name, nil, nil)
+		// These take a lambda argument for iteration
+		method := NewMethod(name, nil, nil)
+		method.Variadic = true // Allow 0 args (block) or 1 arg (lambda)
+		return method
 	case "map", "select", "filter", "reject", "find", "detect", "any?", "all?", "none?":
 		// These can take an optional symbol-to-proc argument (&:method)
 		method := NewMethod(name, nil, nil)
@@ -3460,8 +3467,10 @@ func (a *Analyzer) arrayMethod(name string, elemType *Type) *Symbol {
 		}
 		return method
 	case "reduce":
-		// reduce takes 1 argument (initial value)
-		return NewMethod(name, []*Symbol{NewParam("initial", TypeAnyVal)}, []*Type{TypeUnknownVal})
+		// reduce takes 1 argument (initial value) or 2 arguments (initial value + lambda)
+		method := NewMethod(name, []*Symbol{NewParam("initial", TypeAnyVal)}, []*Type{TypeUnknownVal})
+		method.Variadic = true // Allow 1 or 2 args
+		return method
 	case "join":
 		return NewMethod(name, []*Symbol{NewParam("sep", TypeStringVal)}, []*Type{TypeStringVal})
 	case "push", "pop", "shift", "unshift":
@@ -3496,9 +3505,13 @@ func (a *Analyzer) mapMethod(name string, keyType, valueType *Type) *Symbol {
 	case "each", "each_key", "each_value", "select", "reject":
 		switch name {
 		case "each", "each_key", "each_value":
-			return NewMethod(name, nil, nil)
+			method := NewMethod(name, nil, nil)
+			method.Variadic = true // Allow 0 args (block) or 1 arg (lambda)
+			return method
 		case "select", "reject":
-			return NewMethod(name, nil, []*Type{NewMapType(keyType, valueType)})
+			method := NewMethod(name, nil, []*Type{NewMapType(keyType, valueType)})
+			method.Variadic = true // Allow 0 args (block) or 1 arg (lambda)
+			return method
 		}
 	case "delete":
 		return NewMethod(name, []*Symbol{NewParam("key", keyType)}, []*Type{NewOptionalType(valueType)})

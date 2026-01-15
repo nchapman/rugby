@@ -16,7 +16,7 @@ puts match
 
 # FindAll - get all matches
 matches = regex.FindAll("\\d+", "a1b2c3")
-matches.each { |m| puts m }
+matches.each -> (m) { puts m }
 
 # Replace - replace all matches
 result = regex.Replace("hello world", "\\w+", "X")

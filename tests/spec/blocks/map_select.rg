@@ -1,21 +1,21 @@
 #@ run-pass
 #@ check-output
 #
-# Test: Map and select block methods
+# Test: Map and select with lambda
 
 nums = [1, 2, 3, 4, 5]
 
 # Map
-doubled = nums.map { |n| n * 2 }
-doubled.each { |n| puts n }
+doubled = nums.map -> (n) { n * 2 }
+doubled.each -> (n) { puts n }
 
 # Select
-evens = nums.select { |n| n.even? }
-evens.each { |n| puts n }
+evens = nums.select -> (n) { n.even? }
+evens.each -> (n) { puts n }
 
 # Reject
-odds = nums.reject { |n| n.even? }
-odds.each { |n| puts n }
+odds = nums.reject -> (n) { n.even? }
+odds.each -> (n) { puts n }
 
 #@ expect:
 # 2

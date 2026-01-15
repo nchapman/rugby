@@ -960,6 +960,45 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 					g.genSymbolToProcBlockCall(sel.X, stp, bm)
 					return
 				}
+				// Handle lambda argument for iteration methods
+				if lambda, ok := call.Args[0].(*ast.LambdaExpr); ok {
+					g.genLambdaIterationCall(sel.X, sel.Sel, lambda, call.Args[1:])
+					return
+				}
+				// Handle reduce with initial value + lambda
+				if bm.hasAccumulator && len(call.Args) >= 2 {
+					if lambda, ok := call.Args[1].(*ast.LambdaExpr); ok {
+						g.genLambdaIterationCall(sel.X, sel.Sel, lambda, call.Args[:1])
+						return
+					}
+				}
+			}
+		}
+		// Handle each/each_with_index with lambda argument
+		if sel.Sel == "each" || sel.Sel == "each_with_index" {
+			if len(call.Args) >= 1 {
+				if lambda, ok := call.Args[0].(*ast.LambdaExpr); ok {
+					g.genLambdaIterationCall(sel.X, sel.Sel, lambda, call.Args[1:])
+					return
+				}
+			}
+		}
+		// Handle times with lambda argument (n.times -> (i) { ... })
+		if sel.Sel == "times" {
+			if len(call.Args) >= 1 {
+				if lambda, ok := call.Args[0].(*ast.LambdaExpr); ok {
+					g.genLambdaIterationCall(sel.X, sel.Sel, lambda, call.Args[1:])
+					return
+				}
+			}
+		}
+		// Handle upto/downto with lambda argument (n.upto(m) -> (i) { ... })
+		if sel.Sel == "upto" || sel.Sel == "downto" {
+			if len(call.Args) >= 2 {
+				if lambda, ok := call.Args[1].(*ast.LambdaExpr); ok {
+					g.genLambdaIterationCall(sel.X, sel.Sel, lambda, call.Args[:1])
+					return
+				}
 			}
 		}
 	}
@@ -1568,6 +1607,603 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	g.scopedVar(varName, elemType, func() {
 		g.indent++
 		for _, stmt := range block.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	})
+
+	g.writeIndent()
+	g.buf.WriteString("}")
+}
+
+// genLambdaIterationCall generates code for iteration methods with lambda arguments.
+// For example: arr.each -> (x) { puts x } becomes a for loop calling the lambda.
+func (g *Generator) genLambdaIterationCall(iterable ast.Expression, method string, lambda *ast.LambdaExpr, extraArgs []ast.Expression) {
+	switch method {
+	case "each":
+		g.genLambdaEach(iterable, lambda)
+	case "each_with_index":
+		g.genLambdaEachWithIndex(iterable, lambda)
+	case "map":
+		g.genLambdaMap(iterable, lambda)
+	case "select", "filter":
+		g.genLambdaSelect(iterable, lambda)
+	case "reject":
+		g.genLambdaReject(iterable, lambda)
+	case "find", "detect":
+		g.genLambdaFind(iterable, lambda)
+	case "any?":
+		g.genLambdaAny(iterable, lambda)
+	case "all?":
+		g.genLambdaAll(iterable, lambda)
+	case "none?":
+		g.genLambdaNone(iterable, lambda)
+	case "reduce":
+		if len(extraArgs) > 0 {
+			g.genLambdaReduce(iterable, lambda, extraArgs[0])
+		} else {
+			g.buf.WriteString("/* reduce requires initial value */")
+		}
+	case "times":
+		g.genLambdaTimes(iterable, lambda)
+	case "upto":
+		if len(extraArgs) > 0 {
+			g.genLambdaUpto(iterable, lambda, extraArgs[0])
+		} else {
+			g.buf.WriteString("/* upto requires target value */")
+		}
+	case "downto":
+		if len(extraArgs) > 0 {
+			g.genLambdaDownto(iterable, lambda, extraArgs[0])
+		} else {
+			g.buf.WriteString("/* downto requires target value */")
+		}
+	default:
+		g.buf.WriteString(fmt.Sprintf("/* unsupported lambda iteration: %s */", method))
+	}
+}
+
+// genLambdaEach generates a for loop that calls the lambda for each element.
+func (g *Generator) genLambdaEach(iterable ast.Expression, lambda *ast.LambdaExpr) {
+	// Check if iterating over a map with 2 parameters (key, value)
+	if len(lambda.Params) == 2 {
+		// Check if the iterable type is a map
+		if goType := g.typeInfo.GetGoType(iterable); strings.HasPrefix(goType, "map[") {
+			keyName := lambda.Params[0].Name
+			valueName := lambda.Params[1].Name
+			// Extract key and value types from map[K]V
+			mapType := goType
+			keyType := "any"
+			valueType := "any"
+			if strings.HasPrefix(mapType, "map[") {
+				rest := mapType[4:]
+				depth := 0
+				for i, ch := range rest {
+					if ch == '[' {
+						depth++
+					} else if ch == ']' {
+						if depth == 0 {
+							keyType = rest[:i]
+							valueType = rest[i+1:]
+							break
+						}
+						depth--
+					}
+				}
+			}
+
+			g.buf.WriteString("for ")
+			g.buf.WriteString(keyName)
+			g.buf.WriteString(", ")
+			g.buf.WriteString(valueName)
+			g.buf.WriteString(" := range ")
+			g.genExpr(iterable)
+			g.buf.WriteString(" {\n")
+
+			// Use scopedVars to register both key and value variables
+			g.scopedVars([]struct{ name, varType string }{{keyName, keyType}, {valueName, valueType}}, func() {
+				g.indent++
+				for _, stmt := range lambda.Body {
+					g.genStatement(stmt)
+				}
+				g.indent--
+			})
+
+			g.writeIndent()
+			g.buf.WriteString("}")
+			return
+		}
+	}
+
+	// Generate: for _, v := range iterable { lambda(v) }
+	varName := "_v"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	elemType := g.inferArrayElementGoType(iterable)
+
+	g.buf.WriteString("for _, ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := range ")
+	g.genExpr(iterable)
+	g.buf.WriteString(" {\n")
+
+	// Use scopedVar to register the loop variable with its type
+	g.scopedVar(varName, elemType, func() {
+		g.indent++
+		for _, stmt := range lambda.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	})
+
+	g.writeIndent()
+	g.buf.WriteString("}")
+}
+
+// genLambdaEachWithIndex generates a for loop with index.
+func (g *Generator) genLambdaEachWithIndex(iterable ast.Expression, lambda *ast.LambdaExpr) {
+	varName := "_v"
+	idxName := "_i"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+	if len(lambda.Params) > 1 {
+		idxName = lambda.Params[1].Name
+	}
+
+	elemType := g.inferArrayElementGoType(iterable)
+
+	g.buf.WriteString("for ")
+	g.buf.WriteString(idxName)
+	g.buf.WriteString(", ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := range ")
+	g.genExpr(iterable)
+	g.buf.WriteString(" {\n")
+
+	// Use scopedVars to register both index and element variables
+	g.scopedVars([]struct{ name, varType string }{{idxName, "int"}, {varName, elemType}}, func() {
+		g.indent++
+		for _, stmt := range lambda.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	})
+
+	g.writeIndent()
+	g.buf.WriteString("}")
+}
+
+// genLambdaMap generates code for arr.map -> (x) { expr }
+func (g *Generator) genLambdaMap(iterable ast.Expression, lambda *ast.LambdaExpr) {
+	g.needsRuntime = true
+	varName := "_v"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	// Infer element type for proper typing
+	elemType := g.inferArrayElementGoType(iterable)
+
+	g.buf.WriteString("runtime.Map(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(elemType)
+	g.buf.WriteString(") any {\n")
+
+	g.indent++
+	// Generate body, last expression is return value
+	for i, stmt := range lambda.Body {
+		if i == len(lambda.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(lambda.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return nil\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genLambdaSelect generates code for arr.select -> (x) { condition }
+func (g *Generator) genLambdaSelect(iterable ast.Expression, lambda *ast.LambdaExpr) {
+	g.needsRuntime = true
+	varName := "_v"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	elemType := g.inferArrayElementGoType(iterable)
+
+	g.buf.WriteString("runtime.Select(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(elemType)
+	g.buf.WriteString(") bool {\n")
+
+	g.indent++
+	for i, stmt := range lambda.Body {
+		if i == len(lambda.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(lambda.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return false\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genLambdaReject generates code for arr.reject -> (x) { condition }
+func (g *Generator) genLambdaReject(iterable ast.Expression, lambda *ast.LambdaExpr) {
+	g.needsRuntime = true
+	varName := "_v"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	elemType := g.inferArrayElementGoType(iterable)
+
+	g.buf.WriteString("runtime.Reject(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(elemType)
+	g.buf.WriteString(") bool {\n")
+
+	g.indent++
+	for i, stmt := range lambda.Body {
+		if i == len(lambda.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(lambda.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return false\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genLambdaFind generates code for arr.find -> (x) { condition }
+func (g *Generator) genLambdaFind(iterable ast.Expression, lambda *ast.LambdaExpr) {
+	g.needsRuntime = true
+	varName := "_v"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	elemType := g.inferArrayElementGoType(iterable)
+
+	g.buf.WriteString("runtime.FindPtr(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(elemType)
+	g.buf.WriteString(") bool {\n")
+
+	g.indent++
+	for i, stmt := range lambda.Body {
+		if i == len(lambda.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(lambda.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return false\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genLambdaAny generates code for arr.any? -> (x) { condition }
+func (g *Generator) genLambdaAny(iterable ast.Expression, lambda *ast.LambdaExpr) {
+	g.needsRuntime = true
+	varName := "_v"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	elemType := g.inferArrayElementGoType(iterable)
+
+	g.buf.WriteString("runtime.Any(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(elemType)
+	g.buf.WriteString(") bool {\n")
+
+	g.indent++
+	for i, stmt := range lambda.Body {
+		if i == len(lambda.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(lambda.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return false\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genLambdaAll generates code for arr.all? -> (x) { condition }
+func (g *Generator) genLambdaAll(iterable ast.Expression, lambda *ast.LambdaExpr) {
+	g.needsRuntime = true
+	varName := "_v"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	elemType := g.inferArrayElementGoType(iterable)
+
+	g.buf.WriteString("runtime.All(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(elemType)
+	g.buf.WriteString(") bool {\n")
+
+	g.indent++
+	for i, stmt := range lambda.Body {
+		if i == len(lambda.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(lambda.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return true\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genLambdaNone generates code for arr.none? -> (x) { condition }
+func (g *Generator) genLambdaNone(iterable ast.Expression, lambda *ast.LambdaExpr) {
+	g.needsRuntime = true
+	varName := "_v"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	elemType := g.inferArrayElementGoType(iterable)
+
+	g.buf.WriteString("runtime.None(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(elemType)
+	g.buf.WriteString(") bool {\n")
+
+	g.indent++
+	for i, stmt := range lambda.Body {
+		if i == len(lambda.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(lambda.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return false\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genLambdaReduce generates code for arr.reduce(init) -> (acc, x) { expr }
+func (g *Generator) genLambdaReduce(iterable ast.Expression, lambda *ast.LambdaExpr, initial ast.Expression) {
+	g.needsRuntime = true
+	accName := "_acc"
+	varName := "_v"
+	if len(lambda.Params) > 0 {
+		accName = lambda.Params[0].Name
+	}
+	if len(lambda.Params) > 1 {
+		varName = lambda.Params[1].Name
+	}
+
+	elemType := g.inferArrayElementGoType(iterable)
+	// For reduce, the accumulator type is inferred from the initial value
+	accType := g.inferExprGoType(initial)
+
+	g.buf.WriteString("runtime.Reduce(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", ")
+	g.genExpr(initial)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(accName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(accType)
+	g.buf.WriteString(", ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(elemType)
+	g.buf.WriteString(") ")
+	g.buf.WriteString(accType)
+	g.buf.WriteString(" {\n")
+
+	g.indent++
+	for i, stmt := range lambda.Body {
+		if i == len(lambda.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(lambda.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return ")
+		g.buf.WriteString(accName)
+		g.buf.WriteString("\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genLambdaTimes generates code for n.times -> (i) { body }
+func (g *Generator) genLambdaTimes(count ast.Expression, lambda *ast.LambdaExpr) {
+	varName := "_i"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	g.buf.WriteString("for ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := 0; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" < ")
+	g.genExpr(count)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString("++ {\n")
+
+	g.scopedVar(varName, "int", func() {
+		g.indent++
+		for _, stmt := range lambda.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	})
+
+	g.writeIndent()
+	g.buf.WriteString("}")
+}
+
+// genLambdaUpto generates code for start.upto(end) -> (i) { body }
+func (g *Generator) genLambdaUpto(start ast.Expression, lambda *ast.LambdaExpr, end ast.Expression) {
+	varName := "_i"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	g.buf.WriteString("for ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.genExpr(start)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" <= ")
+	g.genExpr(end)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString("++ {\n")
+
+	g.scopedVar(varName, "int", func() {
+		g.indent++
+		for _, stmt := range lambda.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+	})
+
+	g.writeIndent()
+	g.buf.WriteString("}")
+}
+
+// genLambdaDownto generates code for start.downto(end) -> (i) { body }
+func (g *Generator) genLambdaDownto(start ast.Expression, lambda *ast.LambdaExpr, end ast.Expression) {
+	varName := "_i"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	g.buf.WriteString("for ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.genExpr(start)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" >= ")
+	g.genExpr(end)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString("-- {\n")
+
+	g.scopedVar(varName, "int", func() {
+		g.indent++
+		for _, stmt := range lambda.Body {
 			g.genStatement(stmt)
 		}
 		g.indent--
