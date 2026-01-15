@@ -557,10 +557,8 @@ func (l *Lexer) readHeredoc(allowIndentedEnd bool, stripIndent bool, literal boo
 
 	result := content.String()
 
-	// Remove trailing newline
-	if len(result) > 0 && result[len(result)-1] == '\n' {
-		result = result[:len(result)-1]
-	}
+	// Note: Heredocs preserve the trailing newline before the closing delimiter
+	// per Ruby behavior and spec Section 4.5
 
 	// Strip common leading whitespace for <<~ heredocs
 	if stripIndent && len(result) > 0 {
