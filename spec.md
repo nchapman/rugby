@@ -160,11 +160,13 @@ See Section 10.6 for full lambda documentation.
 "interpolation: #{name}"  # compiles to fmt.Sprintf
 'single quotes'           # literal string (no interpolation)
 'literal: #{name}'        # "literal: #{name}" (not interpolated)
+'it\'s fine'              # escaped single quote: "it's fine"
+'path\\to\\file'          # escaped backslash: "path\to\file"
 ```
 
 **Double quotes vs single quotes:**
 - Double quotes (`"..."`) support interpolation with `#{}`
-- Single quotes (`'...'`) are literal—no interpolation, no escape sequences except `\'` and `\\`
+- Single quotes (`'...'`) are literal—no interpolation, only `\'` and `\\` escape sequences
 
 String interpolation rules:
 * Any expression is allowed inside `#{}`
@@ -200,8 +202,26 @@ end
 | `<<DELIM` | Closing delimiter must be at line start |
 | `<<-DELIM` | Closing delimiter can be indented |
 | `<<~DELIM` | Strips common leading whitespace from content |
+| `<<'DELIM'` | Single-quoted delimiter: no interpolation (literal) |
 
-String interpolation (`#{}`) works within heredocs. The delimiter can be any identifier (`END`, `SQL`, `HTML`, etc.).
+String interpolation (`#{}`) works within heredocs by default. To create a literal heredoc without interpolation, use a single-quoted delimiter:
+
+```ruby
+# Interpolation (default)
+name = "World"
+greeting = <<MSG
+Hello #{name}!
+MSG
+# greeting = "Hello World!\n"
+
+# Literal (no interpolation)
+template = <<'MSG'
+Hello #{name}!
+MSG
+# template = "Hello #{name}!\n"
+```
+
+The delimiter can be any identifier (`END`, `SQL`, `HTML`, etc.).
 
 ### 4.6 Symbols
 
@@ -252,6 +272,8 @@ Flags: `i` (case-insensitive), `m` (multiline), `x` (extended/verbose)
 Rugby is statically typed with inference.
 
 **Type naming:** All type names use `PascalCase`, including built-in types. Lowercase forms like `string`, `int`, `bool` are not valid—use `String`, `Int`, `Bool`.
+
+**Exceptions:** `any` and `error` use lowercase to match Go's conventions.
 
 ### 5.1 Primitive Types
 
@@ -2244,6 +2266,8 @@ resp = http.`Get`(url)  # use backticks for exact Go name
 | `any` | `interface{}` |
 | `error` | `error` |
 
+**Imported Go types:** When importing Go packages, types and interfaces retain their original Go naming (e.g., `io.Reader`, `http.ResponseWriter`). Rugby's PascalCase rule applies only to Rugby-defined types.
+
 ### 18.4 Working with Go Types
 
 ```ruby
@@ -2817,7 +2841,7 @@ This grammar is illustrative, showing the major language constructs. Some produc
 ```ebnf
 program        = { import | declaration | statement } ;
 
-import         = "import" package_path [ "as" ident ] ;
+import         = "import" STRING [ "as" ident ] ;
 
 declaration    = const_decl | type_decl | func_decl | class_decl
                | struct_decl | interface_decl | module_decl | enum_decl ;
@@ -2868,6 +2892,8 @@ lambda_body    = "do" { statement } "end"
 
 lambda_expr    = "->" [ "(" [ params ] ")" ] [ "->" type ] lambda_body ;
 ```
+
+**Note:** Symbol-to-proc syntax (`&:method`) is syntactic sugar that desugars to `-> (x) { x.method }` during parsing and is not shown in the grammar above.
 
 ---
 
