@@ -2009,7 +2009,7 @@ data = await(t)!                  # parentheses required for !
 Scoped concurrency that ensures cleanup when the block exits:
 
 ```ruby
-concurrently do |scope|
+concurrently -> (scope) do
   a = scope.spawn { fetch_a() }
   b = scope.spawn { fetch_b() }
 
@@ -2028,7 +2028,7 @@ end
 **With errors:**
 
 ```ruby
-result, err = concurrently do |scope|
+result, err = concurrently -> (scope) do
   a = scope.spawn { fetch_a() }
   b = scope.spawn { fetch_b() }
 
@@ -2100,7 +2100,7 @@ end
 **Simple parallel fetch:**
 ```ruby
 def fetch_both(url1 : String, url2 : String) -> (String, String, error)
-  concurrently do |scope|
+  concurrently -> (scope) do
     t1 = scope.spawn { http.get(url1) }
     t2 = scope.spawn { http.get(url2) }
 

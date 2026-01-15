@@ -37,15 +37,15 @@ resp = http.get(url)      # calls http.Get
 body = io.read_all(resp)  # calls io.ReadAll
 ```
 
-## Embrace Blocks
+## Embrace Lambdas
 
-Blocks are Rugby's bread and butter. Prefer them over manual loops:
+Lambdas are Rugby's bread and butter for transformation. Prefer them over manual loops:
 
 ```ruby
 # Good - expressive and clear
-names = users.map { |u| u.name }
-active = users.select(&:active?)
-total = orders.reduce(0) { |sum, o| sum + o.amount }
+names = users.map -> (u) { u.name }
+active = users.select -> (u) { u.active? }
+total = orders.reduce(0) -> (sum, o) { sum + o.amount }
 
 # Avoid - verbose and imperative
 names = []
@@ -54,53 +54,35 @@ for u in users
 end
 ```
 
-Use `do...end` for multi-line blocks, braces for single-line:
+Use `do...end` for multi-line lambdas, braces for single-line:
 
 ```ruby
 # Single line - braces
-squares = nums.map { |n| n * n }
+squares = nums.map -> (n) { n * n }
 
 # Multi-line - do...end
-results = items.map do |item|
+results = items.map -> (item) do
   processed = transform(item)
   validate(processed)
 end
 ```
 
-The symbol-to-proc shorthand keeps things concise:
+### Lambdas vs For Loops
+
+Lambdas are for data transformation. `return` inside a lambda returns from the lambda, not the enclosing function. Use `for` loops when you need control flow:
 
 ```ruby
-names.map(&:upcase)           # same as: names.map { |n| n.upcase }
-users.select(&:active?)       # same as: users.select { |u| u.active? }
-values.reject(&:empty?)
-```
+# Lambdas for transformation
+active = users.select -> (u) { u.active? }
+admin = users.find -> (u) { u.admin? }
 
-### Blocks Are Functional
-
-Rugby blocks are purely functional - `return`, `break`, and `next` are all banned inside blocks. This enforces a clear separation: blocks are for data transformation, loops are for control flow.
-
-```ruby
-# DON'T: control flow statements are compile errors in blocks
-users.each do |u|
-  return u if u.admin?    # Error: return not allowed inside block
-  next if u.guest?        # Error: next not allowed inside block
-  break if u.banned?      # Error: break not allowed inside block
-end
-
-# DO: use the right tool for the job
-def find_first_admin(users : Array[User]) -> User?
-  users.find { |u| u.admin? }
-end
-
-# DO: use select/reject for filtering
-active = users.select { |u| u.active? }
-guests = users.reject { |u| u.admin? }
-
-# DO: use for loops when you need break/next
-for user in users
-  next if user.guest?     # OK in loops
-  break if user.banned?   # OK in loops
-  process(user)
+# For loops when you need break/next/return
+def find_first_problem(items : Array<Item>) -> Item?
+  for item in items
+    next if item.ok?
+    return item  # returns from function
+  end
+  nil
 end
 ```
 
@@ -173,21 +155,21 @@ When you need fine-grained control:
 ```ruby
 data, err = file.read(path)
 if err != nil
-  if error_is?(err, os.ErrNotExist)
+  if errors.is?(err, os.ErrNotExist)
     return create_default
   end
   return nil, err
 end
 ```
 
-## Command Syntax
+## Calling Convention
 
-Use parentheses when calling with arguments, drop them for no-arg calls:
+Parentheses are optional. Use them with arguments, drop them for no-arg calls:
 
 ```ruby
 # With arguments - use parens
 process(item)
-users.each { |u| send_email(u) }
+users.each -> (u) { send_email(u) }
 notify_subscribers(event)
 
 # No arguments - drop parens
@@ -204,11 +186,11 @@ log.info "server started"
 
 This keeps code unambiguous while staying clean.
 
-Map literals need parens to avoid block ambiguity:
+Map literals need parens to distinguish from lambdas:
 
 ```ruby
-send_request({method: "POST", body: data})  # correct
-send_request {method: "POST"}               # wrong - parsed as block
+send_request({method: "POST", body: data})  # map argument
+send_request -> { do_something() }          # lambda argument
 ```
 
 ## Statement Modifiers
@@ -256,7 +238,7 @@ result = await task
 ### Parallel operations with cleanup
 
 ```ruby
-concurrently do |scope|
+concurrently -> (scope) do
   user_task = scope.spawn { fetch_user(id) }
   orders_task = scope.spawn { fetch_orders(id) }
 
@@ -271,11 +253,13 @@ end
 ### Channels for communication
 
 ```ruby
-ch = Chan[Event].new(100)
+ch = Chan<Event>.new(100)
 
 # Producer
 go do
-  events.each { |e| ch << e }
+  for e in events
+    ch << e
+  end
   ch.close
 end
 
@@ -351,7 +335,7 @@ Use `pub` to export classes and methods:
 pub class User              # exported (Go: User)
   pub getter name : String  # exported accessor
 
-  def internal_method       # private (Go: internalMethod)
+  def internal_method       # package-private (Go: internalMethod)
     # ...
   end
 end
@@ -361,8 +345,8 @@ end
 
 ```ruby
 class Admin < User                    # single inheritance
-  def initialize(@name : String, @permissions : Array[String])
-    super(@name)                      # call parent initializer
+  def initialize(name : String, @permissions : Array<String>)
+    super(name)                       # call parent initializer
   end
 
   def display_name                    # override parent method
@@ -401,28 +385,6 @@ class Counter
 end
 ```
 
-## Using the Standard Library
-
-Import what you need explicitly:
-
-```ruby
-import rugby/http
-import rugby/json
-import rugby/file
-
-# HTTP requests
-resp = http.get("https://api.example.com/users")!
-users = resp.json!
-
-# File operations
-content = file.read("config.json")!
-file.write("output.txt", result)
-
-# JSON
-data = json.parse(input)!
-output = json.encode(user)
-```
-
 ## Putting It Together
 
 Here's a complete example showing idiomatic Rugby:
@@ -436,11 +398,11 @@ class ApiClient
   def initialize(@base_url : String, @timeout : Int = 30)
   end
 
-  def fetch_users -> (Array[User], error)
+  def fetch_users -> (Array<User>, error)
     resp = http.get("#{@base_url}/users")!
     data = resp.json!
 
-    data.map do |raw|
+    data.map -> (raw) do
       User.new(
         name: raw["name"].as(String),
         email: raw["email"].as(String)
@@ -457,10 +419,10 @@ def main
     load_cached_users
   end
 
-  active = users.select(&:active?)
+  active = users.select -> (u) { u.active? }
 
   puts "Found #{active.length} active users:"
-  active.each { |u| puts "  - #{u.name}" }
+  active.each -> (u) { puts "  - #{u.name}" }
 end
 ```
 
@@ -469,11 +431,9 @@ end
 Idiomatic Rugby:
 
 - Uses `snake_case` for functions, methods, and variables
-- Uses parentheses with arguments (except `puts`, `print`, `log.*`)
-- Embraces blocks and iterators over manual loops
+- Embraces lambdas for transformation, `for` loops for control flow
 - Leverages `??` and `&.` for optional handling
 - Uses `!` and `rescue` for clean error handling
 - Prefers string interpolation
 - Takes advantage of statement modifiers
-- Uses the stdlib for common tasks
 - Keeps concurrency simple with `spawn`/`await` and `concurrently`
