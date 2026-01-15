@@ -5,7 +5,7 @@
 #
 # WaitGroup is available via sync package for explicit concurrency control.
 
-import sync
+import "sync"
 
 wg = sync.WaitGroup.new
 

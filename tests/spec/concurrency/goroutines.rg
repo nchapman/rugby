@@ -3,7 +3,7 @@
 #
 # Test goroutines with go keyword
 
-import sync
+import "sync"
 
 # Use a WaitGroup to wait for goroutines
 wg = sync.WaitGroup.new

@@ -3,7 +3,7 @@
 #
 # Test regex module from rugby/regex
 
-import rugby/regex
+import "rugby/regex"
 
 # Match - check if pattern exists
 puts regex.Match("\\d+", "abc123")
