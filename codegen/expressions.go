@@ -1350,33 +1350,40 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		if recvTypeForSet == "Set" || strings.HasPrefix(recvTypeForSet, "Set[") {
 			switch fn.Sel {
 			case "include?":
+				if len(call.Args) != 1 {
+					g.addError(fmt.Errorf("include? requires exactly 1 argument"))
+					g.buf.WriteString("false")
+					return
+				}
 				g.needsRuntime = true
 				g.buf.WriteString("runtime.SetContains(")
 				g.genExpr(fn.X)
-				if len(call.Args) > 0 {
-					g.buf.WriteString(", ")
-					g.genExpr(call.Args[0])
-				}
+				g.buf.WriteString(", ")
+				g.genExpr(call.Args[0])
 				g.buf.WriteString(")")
 				return
 			case "add":
+				if len(call.Args) != 1 {
+					g.addError(fmt.Errorf("add requires exactly 1 argument"))
+					return
+				}
 				g.needsRuntime = true
 				g.buf.WriteString("runtime.SetAdd(")
 				g.genExpr(fn.X)
-				if len(call.Args) > 0 {
-					g.buf.WriteString(", ")
-					g.genExpr(call.Args[0])
-				}
+				g.buf.WriteString(", ")
+				g.genExpr(call.Args[0])
 				g.buf.WriteString(")")
 				return
 			case "delete":
+				if len(call.Args) != 1 {
+					g.addError(fmt.Errorf("delete requires exactly 1 argument"))
+					return
+				}
 				g.needsRuntime = true
 				g.buf.WriteString("runtime.SetDelete(")
 				g.genExpr(fn.X)
-				if len(call.Args) > 0 {
-					g.buf.WriteString(", ")
-					g.genExpr(call.Args[0])
-				}
+				g.buf.WriteString(", ")
+				g.genExpr(call.Args[0])
 				g.buf.WriteString(")")
 				return
 			case "size", "length", "count":
@@ -1711,6 +1718,47 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	goType := g.typeInfo.GetGoType(iterable)
 	if goType == "" {
 		goType = g.inferTypeFromExpr(iterable)
+	}
+
+	// Check for set iteration (single parameter iterating over keys)
+	// Sets are map[T]struct{}, so we iterate with `for k := range` not `for _, v := range`
+	rugbyType := g.inferTypeFromExpr(iterable)
+	isSetIteration := rugbyType == "Set" || strings.HasPrefix(rugbyType, "Set[")
+
+	if isSetIteration {
+		varName := "_"
+		if len(block.Params) > 0 {
+			varName = block.Params[0]
+		}
+
+		// For sets, iterate over keys: for k := range set
+		g.buf.WriteString("for ")
+		g.buf.WriteString(varName)
+		g.buf.WriteString(" := range ")
+		g.genExpr(iterable)
+		g.buf.WriteString(" {\n")
+
+		// Infer element type from the set's Go type (map[T]struct{} -> T)
+		elemType := "any"
+		if strings.HasPrefix(goType, "map[") {
+			// Extract key type from map[T]struct{}
+			keyEnd := strings.Index(goType, "]")
+			if keyEnd > 4 {
+				elemType = goType[4:keyEnd]
+			}
+		}
+
+		g.scopedVar(varName, elemType, func() {
+			g.indent++
+			for _, stmt := range block.Body {
+				g.genStatement(stmt)
+			}
+			g.indent--
+		})
+
+		g.writeIndent()
+		g.buf.WriteString("}")
+		return
 	}
 
 	// Check for map iteration with two parameters

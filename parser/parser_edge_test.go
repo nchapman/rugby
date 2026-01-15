@@ -387,6 +387,61 @@ end`
 	}
 }
 
+func TestSetLiteral(t *testing.T) {
+	input := `def main
+  s = Set{1, 2, 3}
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assign, ok := decl.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", decl.Body[0])
+	}
+	setLit, ok := assign.Value.(*ast.SetLit)
+	if !ok {
+		t.Fatalf("expected SetLit, got %T", assign.Value)
+	}
+	if len(setLit.Elements) != 3 {
+		t.Errorf("expected 3 elements, got %d", len(setLit.Elements))
+	}
+}
+
+func TestSetLiteralWithTypeHint(t *testing.T) {
+	input := `def main
+  s = Set<String>{"a", "b"}
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assign, ok := decl.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", decl.Body[0])
+	}
+	setLit, ok := assign.Value.(*ast.SetLit)
+	if !ok {
+		t.Fatalf("expected SetLit, got %T", assign.Value)
+	}
+	if setLit.TypeHint != "String" {
+		t.Errorf("expected type hint 'String', got %q", setLit.TypeHint)
+	}
+	if len(setLit.Elements) != 2 {
+		t.Errorf("expected 2 elements, got %d", len(setLit.Elements))
+	}
+}
+
 func TestForInRange(t *testing.T) {
 	input := `def main
   for i in 0..10

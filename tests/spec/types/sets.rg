@@ -44,6 +44,13 @@ def main
   # Test difference (-)
   diff = Set{1, 2, 3} - Set{2}
   puts diff.size
+
+  # Test each iteration
+  sum = 0
+  Set{10, 20, 30}.each do |x|
+    sum = sum + x
+  end
+  puts sum
 end
 
 #@ expect:
@@ -59,3 +66,4 @@ end
 # 3
 # 2
 # 2
+# 60
