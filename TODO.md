@@ -18,11 +18,25 @@ This file tracks the implementation of `spec.md`. The spec tests in `tests/spec/
 
 ### Running Tests
 
+**IMPORTANT:** Always use make targets for spec tests. They rebuild the compiler and clear caches to avoid stale binaries/generated code.
+
 ```bash
-make test-spec                    # Run all spec tests
-go test ./tests/... -run TestSpecs/types -v   # Run one category
-go test ./tests/... -run "TestSpecs/types/composite_array" -v  # Run one test
+# Spec tests (end-to-end language tests)
+make test-spec                            # Run all spec tests
+make test-spec NAME=interfaces/any_type   # Run a single spec test
+make test-spec NAME=blocks                # Run all tests in a category
+make test-spec-bless                      # Update golden files
+
+# Unit tests (parser, lexer, codegen)
+make test                                 # Run all unit tests
+make test PKG=codegen                     # Run all tests in a package
+make test PKG=codegen TEST=TestClass      # Run a specific test
+
+# Before committing
+make check                                # Run all tests + linters
 ```
+
+**DO NOT run `go test` directly** for spec tests - it won't rebuild the compiler or clear caches, leading to confusing failures from stale code.
 
 ### Test Directives
 
@@ -650,10 +664,10 @@ Run tests to see current status:
 make test-spec 2>&1 | grep -oE "(PASS|FAIL|SKIP):" | sort | uniq -c
 
 # Run a specific category
-go test ./tests/... -run "TestSpecs/types" -v
+make test-spec NAME=types
 
 # Run a specific test
-go test ./tests/... -run "TestSpecs/types/composite_array" -v
+make test-spec NAME=types/composite_array
 ```
 
 When a phase is complete, all tests in that phase should PASS.

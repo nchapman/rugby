@@ -39,20 +39,28 @@ make build-rugby FILE=main.rg OUTPUT=myapp
 
 # Clean build artifacts
 make clean
+
+# Clear all .rugby cache directories
+make clean-cache
 ```
 
-Direct commands (without make):
+### Running Single Tests
+
+**IMPORTANT:** Always use make targets for spec tests. They rebuild the compiler and clear caches to avoid stale binaries/generated code.
 
 ```bash
-# Run a Rugby file directly
-go run . examples/hello.rg
+# Spec tests - always use make (rebuilds compiler, clears caches)
+make test-spec                            # all spec tests
+make test-spec NAME=interfaces/any_type   # single test
+make test-spec NAME=blocks                # category
 
-# Run a single test file
-go test ./parser -run TestFunctionCall
-
-# Run tests with coverage
-go test -cover ./...
+# Unit tests
+make test                                 # all unit tests
+make test PKG=codegen                     # package
+make test PKG=codegen TEST=TestClass      # specific test
 ```
+
+**DO NOT run `go test` directly for spec tests** - it won't rebuild the compiler or clear caches, leading to confusing failures from stale code.
 
 ## Architecture
 
