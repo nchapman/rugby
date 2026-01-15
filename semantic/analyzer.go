@@ -1864,6 +1864,28 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		}
 		typ = NewTupleType(elemTypes...)
 
+	case *ast.SetLit:
+		var elemType *Type
+		for _, elem := range e.Elements {
+			et := a.analyzeExpr(elem)
+			if elemType == nil {
+				elemType = et
+			} else if elemType.Kind != TypeUnknown && et.Kind != TypeUnknown {
+				// Validate element types are compatible
+				if !a.isAssignable(elemType, et) && !a.isAssignable(et, elemType) {
+					a.addError(&TypeMismatchError{
+						Expected: elemType,
+						Got:      et,
+						Line:     e.Line,
+					})
+				}
+			}
+		}
+		if elemType == nil {
+			elemType = &Type{Kind: TypeAny}
+		}
+		typ = NewSetType(elemType)
+
 	case *ast.BinaryExpr:
 		leftType := a.analyzeExpr(e.Left)
 		rightType := a.analyzeExpr(e.Right)
@@ -2735,13 +2757,40 @@ func (a *Analyzer) checkBinaryExpr(op string, left, right *Type) *Type {
 		a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
 		return TypeUnknownVal
 
-	case "-", "*", "/", "%":
+	case "-":
+		// Arithmetic subtraction or set difference
+		if left.Kind == TypeSet && right.Kind == TypeSet {
+			return left // Set difference returns same set type
+		}
+		if !a.isNumeric(left) || !a.isNumeric(right) {
+			a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
+			return TypeUnknownVal
+		}
+		return a.inferBinaryType(op, left, right)
+
+	case "*", "/", "%":
 		// Arithmetic: both must be numeric
 		if !a.isNumeric(left) || !a.isNumeric(right) {
 			a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
 			return TypeUnknownVal
 		}
 		return a.inferBinaryType(op, left, right)
+
+	case "|":
+		// Set union
+		if left.Kind == TypeSet && right.Kind == TypeSet {
+			return left // Union returns same set type
+		}
+		a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
+		return TypeUnknownVal
+
+	case "&":
+		// Set intersection
+		if left.Kind == TypeSet && right.Kind == TypeSet {
+			return left // Intersection returns same set type
+		}
+		a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
+		return TypeUnknownVal
 
 	default:
 		return TypeUnknownVal

@@ -548,6 +548,8 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		return "Array"
 	case *ast.MapLit:
 		return "Map"
+	case *ast.SetLit:
+		return "Set"
 	}
 	return "" // unknown - semantic analysis should have provided the type
 }

@@ -50,6 +50,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genRangeLit(e)
 	case *ast.TupleLit:
 		g.genTupleLit(e)
+	case *ast.SetLit:
+		g.genSetLit(e)
 
 	// Identifiers
 	case *ast.Ident:
@@ -338,6 +340,37 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 	if e.Op == "!~" {
 		g.genRegexMatch(e.Left, e.Right, true)
 		return
+	}
+
+	// Handle set operators: | (union), & (intersection), - (difference)
+	leftType := g.inferTypeFromExpr(e.Left)
+	if leftType == "Set" || strings.HasPrefix(leftType, "Set[") {
+		switch e.Op {
+		case "|":
+			g.needsRuntime = true
+			g.buf.WriteString("runtime.SetUnion(")
+			g.genExpr(e.Left)
+			g.buf.WriteString(", ")
+			g.genExpr(e.Right)
+			g.buf.WriteString(")")
+			return
+		case "&":
+			g.needsRuntime = true
+			g.buf.WriteString("runtime.SetIntersection(")
+			g.genExpr(e.Left)
+			g.buf.WriteString(", ")
+			g.genExpr(e.Right)
+			g.buf.WriteString(")")
+			return
+		case "-":
+			g.needsRuntime = true
+			g.buf.WriteString("runtime.SetDifference(")
+			g.genExpr(e.Left)
+			g.buf.WriteString(", ")
+			g.genExpr(e.Right)
+			g.buf.WriteString(")")
+			return
+		}
 	}
 
 	// Check if we can use direct comparison instead of runtime.Equal
@@ -759,6 +792,34 @@ func (g *Generator) genTupleLit(t *ast.TupleLit) {
 		}
 		g.genExpr(elem)
 	}
+}
+
+// genSetLit generates Go code for a set literal: Set{1, 2, 3} -> map[int]struct{}{1: {}, 2: {}, 3: {}}
+func (g *Generator) genSetLit(s *ast.SetLit) {
+	// Determine element type from type hint or first element
+	elemType := "any"
+	if s.TypeHint != "" {
+		elemType = mapType(s.TypeHint)
+	} else if len(s.Elements) > 0 {
+		// Infer type from first element
+		if inferred := g.inferTypeFromExpr(s.Elements[0]); inferred != "" {
+			elemType = mapType(inferred)
+		}
+	}
+
+	g.buf.WriteString("map[")
+	g.buf.WriteString(elemType)
+	g.buf.WriteString("]struct{}{")
+
+	for i, elem := range s.Elements {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.genExpr(elem)
+		g.buf.WriteString(": {}")
+	}
+
+	g.buf.WriteString("}")
 }
 
 func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
@@ -1280,6 +1341,71 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				g.buf.WriteString("len(")
 				g.genExpr(fn.X)
 				g.buf.WriteString(")")
+				return
+			}
+		}
+
+		// Handle set method calls: s.include?(x), s.add(x), s.delete(x), s.size, s.to_a, s.clear
+		recvTypeForSet := g.inferTypeFromExpr(fn.X)
+		if recvTypeForSet == "Set" || strings.HasPrefix(recvTypeForSet, "Set[") {
+			switch fn.Sel {
+			case "include?":
+				g.needsRuntime = true
+				g.buf.WriteString("runtime.SetContains(")
+				g.genExpr(fn.X)
+				if len(call.Args) > 0 {
+					g.buf.WriteString(", ")
+					g.genExpr(call.Args[0])
+				}
+				g.buf.WriteString(")")
+				return
+			case "add":
+				g.needsRuntime = true
+				g.buf.WriteString("runtime.SetAdd(")
+				g.genExpr(fn.X)
+				if len(call.Args) > 0 {
+					g.buf.WriteString(", ")
+					g.genExpr(call.Args[0])
+				}
+				g.buf.WriteString(")")
+				return
+			case "delete":
+				g.needsRuntime = true
+				g.buf.WriteString("runtime.SetDelete(")
+				g.genExpr(fn.X)
+				if len(call.Args) > 0 {
+					g.buf.WriteString(", ")
+					g.genExpr(call.Args[0])
+				}
+				g.buf.WriteString(")")
+				return
+			case "size", "length", "count":
+				g.needsRuntime = true
+				g.buf.WriteString("runtime.SetSize(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			case "to_a":
+				g.needsRuntime = true
+				g.buf.WriteString("runtime.SetToArray(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			case "clear":
+				g.needsRuntime = true
+				g.buf.WriteString("runtime.SetClear(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			case "empty?":
+				g.buf.WriteString("(len(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(") == 0)")
+				return
+			case "any?":
+				g.buf.WriteString("(len(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(") > 0)")
 				return
 			}
 		}

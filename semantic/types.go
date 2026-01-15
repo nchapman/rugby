@@ -21,6 +21,7 @@ const (
 	TypeAny
 	TypeError
 	TypeArray
+	TypeSet
 	TypeMap
 	TypeRange
 	TypeChan
@@ -70,6 +71,11 @@ var (
 // NewArrayType creates an array type with the given element type.
 func NewArrayType(elem *Type) *Type {
 	return &Type{Kind: TypeArray, Elem: elem}
+}
+
+// NewSetType creates a set type with the given element type.
+func NewSetType(elem *Type) *Type {
+	return &Type{Kind: TypeSet, Elem: elem}
 }
 
 // NewMapType creates a map type with the given key and value types.
@@ -143,6 +149,11 @@ func (t *Type) String() string {
 			return fmt.Sprintf("Array[%s]", t.Elem)
 		}
 		return "Array[any]"
+	case TypeSet:
+		if t.Elem != nil {
+			return fmt.Sprintf("Set[%s]", t.Elem)
+		}
+		return "Set[any]"
 	case TypeMap:
 		if t.KeyType != nil && t.ValueType != nil {
 			return fmt.Sprintf("Map[%s, %s]", t.KeyType, t.ValueType)
@@ -208,7 +219,7 @@ func (t *Type) Equals(other *Type) bool {
 		return false
 	}
 	switch t.Kind {
-	case TypeArray, TypeChan, TypeTask, TypeOptional:
+	case TypeArray, TypeSet, TypeChan, TypeTask, TypeOptional:
 		if t.Elem == nil || other.Elem == nil {
 			return t.Elem == other.Elem
 		}
@@ -303,6 +314,14 @@ func (t *Type) GoType() string {
 			}
 		}
 		return "[]any"
+	case TypeSet:
+		if t.Elem != nil {
+			elemType := t.Elem.GoType()
+			if elemType != "" {
+				return "map[" + elemType + "]struct{}"
+			}
+		}
+		return "map[any]struct{}"
 	case TypeMap:
 		keyType := "any"
 		valType := "any"

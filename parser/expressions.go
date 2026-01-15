@@ -102,7 +102,8 @@ infixLoop:
 		case token.PLUS, token.MINUS, token.STAR, token.SLASH, token.PERCENT,
 			token.EQ, token.NE, token.LT, token.GT, token.LE, token.GE,
 			token.MATCH, token.NOTMATCH,
-			token.AND, token.OR, token.SHOVELLEFT:
+			token.AND, token.OR, token.SHOVELLEFT,
+			token.PIPE, token.AMP: // set union (|), intersection (&)
 			p.nextToken()
 			left = p.parseInfixExpr(left)
 		case token.QUESTION:
@@ -168,11 +169,102 @@ infixLoop:
 
 // parseIdent parses an identifier.
 func (p *Parser) parseIdent() ast.Expression {
+	// Check for set literal: Set{1, 2, 3} or Set<Int>{1, 2}
+	if p.curToken.Literal == "Set" && (p.peekTokenIs(token.LBRACE) || p.peekTokenIs(token.LT)) {
+		return p.parseSetLiteral()
+	}
+
 	return &ast.Ident{
 		Name:   p.curToken.Literal,
 		Line:   p.curToken.Line,
 		Column: p.curToken.Column,
 	}
+}
+
+// parseSetLiteral parses: Set{1, 2, 3} or Set<Int>{1, 2}
+func (p *Parser) parseSetLiteral() ast.Expression {
+	line := p.curToken.Line
+	p.nextToken() // consume 'Set'
+
+	var typeHint string
+
+	// Check for type hint: Set<Int>{...}
+	if p.curTokenIs(token.LT) {
+		p.nextToken() // consume '<'
+		typeHint = p.parseTypeName()
+		if !p.curTokenIs(token.GT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '>' after set type")
+			return nil
+		}
+		p.nextToken() // consume '>'
+	}
+
+	// Expect '{'
+	if !p.curTokenIs(token.LBRACE) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '{' in set literal")
+		return nil
+	}
+	p.nextToken() // consume '{'
+
+	setLit := &ast.SetLit{TypeHint: typeHint, Line: line}
+
+	// Skip newlines after opening brace
+	p.skipNewlines()
+
+	// Handle empty set
+	if p.curTokenIs(token.RBRACE) {
+		return setLit
+	}
+
+	// Parse first element
+	elem := p.parseExpression(lowest)
+	if elem == nil {
+		return nil
+	}
+	setLit.Elements = append(setLit.Elements, elem)
+
+	// Parse remaining elements
+	for {
+		// Skip any newlines after element
+		for p.peekTokenIs(token.NEWLINE) {
+			p.nextToken()
+		}
+
+		// Check for end of set
+		if p.peekTokenIs(token.RBRACE) {
+			p.nextToken() // move to '}'
+			return setLit
+		}
+
+		// Expect comma between elements
+		if !p.peekTokenIs(token.COMMA) {
+			break
+		}
+
+		p.nextToken() // move to ','
+		p.nextToken() // move past ','
+
+		// Skip newlines after comma
+		p.skipNewlines()
+
+		// Check for trailing comma
+		if p.curTokenIs(token.RBRACE) {
+			return setLit
+		}
+
+		elem := p.parseExpression(lowest)
+		if elem == nil {
+			return nil
+		}
+		setLit.Elements = append(setLit.Elements, elem)
+	}
+
+	p.nextToken() // move to '}'
+	if !p.curTokenIs(token.RBRACE) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '}' after set elements")
+		return nil
+	}
+	return setLit
 }
 
 // parseCallExprWithParens parses a function call with parentheses: f(a, b, c).

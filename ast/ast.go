@@ -324,6 +324,16 @@ type TupleLit struct {
 func (t *TupleLit) node()     {}
 func (t *TupleLit) exprNode() {}
 
+// SetLit represents a set literal: Set{1, 2, 3} or Set[Int]{1, 2, 3}
+type SetLit struct {
+	Elements []Expression
+	TypeHint string // optional element type, e.g., "Int", "String"
+	Line     int
+}
+
+func (s *SetLit) node()     {}
+func (s *SetLit) exprNode() {}
+
 // BinaryExpr represents a binary operation
 type BinaryExpr struct {
 	Left  Expression
