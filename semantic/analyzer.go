@@ -1040,7 +1040,22 @@ func (a *Analyzer) analyzeMethodDecl(m *ast.MethodDecl) {
 }
 
 func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
-	valueType := a.analyzeExpr(s.Value)
+	// Check if this is a new variable with Array<Any> type annotation
+	// In this case, we need to analyze the array literal allowing heterogeneous elements
+	var valueType *Type
+	if s.Type != "" {
+		declaredType := ParseType(s.Type)
+		if declaredType.Kind == TypeArray && declaredType.Elem != nil && declaredType.Elem.Kind == TypeAny {
+			if arr, ok := s.Value.(*ast.ArrayLit); ok {
+				// Analyze array literal allowing heterogeneous elements
+				valueType = a.analyzeArrayLitWithExpectedType(arr, TypeAnyVal)
+			}
+		}
+	}
+	// Default: analyze without expected type context
+	if valueType == nil {
+		valueType = a.analyzeExpr(s.Value)
+	}
 
 	// Handle blank identifier specially - always use = not :=
 	if s.Name == "_" {
@@ -1768,6 +1783,24 @@ func (a *Analyzer) analyzeAfter(s *ast.AfterStmt) {
 		a.analyzeStatement(stmt)
 	}
 	a.popScope()
+}
+
+// analyzeArrayLitWithExpectedType analyzes an array literal when the expected element type
+// is known (e.g., from a type annotation like `Array<Any>`). When expectedElemType is Any,
+// heterogeneous elements are allowed without type mismatch errors.
+func (a *Analyzer) analyzeArrayLitWithExpectedType(arr *ast.ArrayLit, expectedElemType *Type) *Type {
+	for _, elem := range arr.Elements {
+		// Analyze each element to check for errors, but don't validate type compatibility
+		// when expected element type is Any
+		if _, isSplat := elem.(*ast.SplatExpr); isSplat {
+			a.analyzeExpr(elem)
+			continue
+		}
+		a.analyzeExpr(elem)
+	}
+	typ := NewArrayType(expectedElemType)
+	a.setNodeType(arr, typ)
+	return typ
 }
 
 // analyzeExpr analyzes an expression and returns its type.
@@ -3031,16 +3064,14 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 		return true
 	}
 
-	// Empty array (Array[any]) is assignable to any typed array
-	// This handles cases like: nums : Array[Int] = []
+	// Empty array (Array<Any>) is assignable to any typed array
+	// This handles cases like: nums : Array<Int> = []
 	if to.Kind == TypeArray && from.Kind == TypeArray {
 		if from.Elem != nil && from.Elem.Kind == TypeAny {
 			return true
 		}
-		// Array<Any> accepts any array type
-		if to.Elem != nil && to.Elem.Kind == TypeAny {
-			return true
-		}
+		// Note: Array<Int> is NOT assignable to Array<Any> because Go arrays
+		// are invariant ([]int cannot be assigned to []any without copying)
 	}
 
 	// Empty map (Map[any, any]) is assignable to any typed map
