@@ -772,15 +772,21 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 	switch p.curToken.Type {
 	case token.IDENT:
 		methodName = p.curToken.Literal
+		p.nextToken()
+		// Check for setter method (name=)
+		if p.curTokenIs(token.ASSIGN) {
+			methodName += "="
+			p.nextToken() // consume '='
+		}
 	case token.EQ:
 		methodName = "=="
+		p.nextToken()
 	default:
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected method name after def")
 		return nil
 	}
 
 	method := &ast.MethodDecl{Name: methodName, Line: line, Doc: doc, IsClassMethod: isClassMethod}
-	p.nextToken()
 
 	// Parse optional parameter list
 	if p.curTokenIs(token.LPAREN) {
