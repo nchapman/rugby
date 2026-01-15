@@ -156,9 +156,15 @@ See Section 10.6 for full lambda documentation.
 ### 4.4 Strings
 
 ```ruby
-"normal string"
+"double quotes"           # normal string
 "interpolation: #{name}"  # compiles to fmt.Sprintf
+'single quotes'           # literal string (no interpolation)
+'literal: #{name}'        # "literal: #{name}" (not interpolated)
 ```
+
+**Double quotes vs single quotes:**
+- Double quotes (`"..."`) support interpolation with `#{}`
+- Single quotes (`'...'`) are literal—no interpolation, no escape sequences except `\'` and `\\`
 
 String interpolation rules:
 * Any expression is allowed inside `#{}`
@@ -244,6 +250,8 @@ Flags: `i` (case-insensitive), `m` (multiline), `x` (extended/verbose)
 ## 5. Types
 
 Rugby is statically typed with inference.
+
+**Type naming:** All type names use `PascalCase`, including built-in types. Lowercase forms like `string`, `int`, `bool` are not valid—use `String`, `Int`, `Bool`.
 
 ### 5.1 Primitive Types
 
@@ -2197,9 +2205,9 @@ end
 ### 18.1 Imports
 
 ```ruby
-import net/http
-import encoding/json as json
-import github.com/user/package
+import "net/http"
+import "encoding/json" as json
+import "github.com/user/package"
 
 http.Get(url)              # call Go functions
 io.read_all(r)             # snake_case -> ReadAll
@@ -2239,7 +2247,7 @@ resp = http.`Get`(url)  # use backticks for exact Go name
 ### 18.4 Working with Go Types
 
 ```ruby
-import net/http
+import "net/http"
 
 def fetch(url : String) -> (String, error)
   resp, err = http.Get(url)

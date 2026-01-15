@@ -30,7 +30,7 @@ total_count = items.length
 When calling Go interop, Rugby automatically maps `snake_case` to Go's `CamelCase`:
 
 ```ruby
-import net/http
+import "net/http"
 
 # These are equivalent - use snake_case
 resp = http.get(url)      # calls http.Get
@@ -398,9 +398,9 @@ end
 Here's a complete example showing idiomatic Rugby:
 
 ```ruby
-import rugby/http
-import rugby/json
-import rugby/file
+import "rugby/http"
+import "rugby/json"
+import "rugby/file"
 
 class ApiClient
   def initialize(@base_url : String, @timeout : Int = 30)
