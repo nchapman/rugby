@@ -71,7 +71,7 @@ func ParseType(s string) *Type {
 		return TypeStringVal
 	case "Bytes":
 		return TypeBytesVal
-	case "any":
+	case "Any", "any":
 		return TypeAnyVal
 	case "Error", "error":
 		return TypeErrorVal

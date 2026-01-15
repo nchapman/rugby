@@ -100,7 +100,7 @@ func mapType(rubyType string) string {
 	case "Map":
 		return "map[any]any"
 	// Special types
-	case "any":
+	case "Any", "any":
 		return "any"
 	case "Error", "error":
 		return "error"

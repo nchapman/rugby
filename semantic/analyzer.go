@@ -3037,6 +3037,10 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 		if from.Elem != nil && from.Elem.Kind == TypeAny {
 			return true
 		}
+		// Array<Any> accepts any array type
+		if to.Elem != nil && to.Elem.Kind == TypeAny {
+			return true
+		}
 	}
 
 	// Empty map (Map[any, any]) is assignable to any typed map
