@@ -129,7 +129,7 @@ Rugby offers three patterns. Choose based on context:
 When errors should bubble up to the caller:
 
 ```ruby
-def load_config(path : String) -> (Config, error)
+def load_config(path : String) -> (Config, Error)
   data = file.read(path)!
   json.parse(data)!
 end
@@ -406,7 +406,7 @@ class ApiClient
   def initialize(@base_url : String, @timeout : Int = 30)
   end
 
-  def fetch_users -> (Array<User>, error)
+  def fetch_users -> (Array<User>, Error)
     resp = http.get("#{@base_url}/users")!
     data = resp.json!
 

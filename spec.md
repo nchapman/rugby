@@ -273,8 +273,6 @@ Rugby is statically typed with inference.
 
 **Type naming:** All type names use `PascalCase`, including built-in types. Lowercase forms like `string`, `int`, `bool` are not valid—use `String`, `Int`, `Bool`.
 
-**Exceptions:** `any` and `error` use lowercase to match Go's conventions.
-
 ### 5.1 Primitive Types
 
 | Rugby    | Go        | Notes |
@@ -367,8 +365,8 @@ Word arrays support any delimiter: `%w{...}`, `%w(...)`, `%w[...]`, `%w<...>`, `
 ```ruby
 [1, 2, 3]           # Array<Int>
 ["a", "b"]          # Array<String>
-[1, "two", 3.0]     # Error: mixed types require explicit Array<any>
-[1, "two"] : Array<any>  # OK: explicit any
+[1, "two", 3.0]     # Error: mixed types require explicit Array<Any>
+[1, "two"] : Array<Any>  # OK: explicit any
 ```
 
 ### 5.6 Indexing
@@ -623,7 +621,7 @@ Color.values        # [Color::Red, Color::Green, Color::Blue]
 Color.from_string("Red")  # Color::Red (returns Color?)
 ```
 
-**Note:** Rugby does not support data-carrying enum variants (sum types). Use `T?` for optional values and `(T, error)` for fallible operations—these patterns cover most use cases and map directly to idiomatic Go.
+**Note:** Rugby does not support data-carrying enum variants (sum types). Use `T?` for optional values and `(T, Error)` for fallible operations—these patterns cover most use cases and map directly to idiomatic Go.
 
 ---
 
@@ -728,7 +726,7 @@ Variables bound in `if let` are scoped to the `if` block and do not affect outer
 
 ### 8.4 The `nil` Keyword
 
-`nil` is valid only for `T?` (optional) and `error` types:
+`nil` is valid only for `T?` (optional) and `Error` types:
 
 ```ruby
 def find_user(id : Int) -> User?
@@ -1021,7 +1019,7 @@ end
 
 log(:info, "Starting", "Loading config", "Ready")
 
-def format(template : String, *args : any) -> String
+def format(template : String, *args : Any) -> String
   sprintf(template, *args)
 end
 
@@ -1164,7 +1162,7 @@ This is purely syntactic sugar—`&:name` compiles to `-> (x) { x.name }`.
 type Predicate<T> = (T) -> Bool
 type Transform<T, R> = (T) -> R
 type Callback = () -> Void
-type Handler = (Request) -> (Response, error)
+type Handler = (Request) -> (Response, Error)
 
 def filter<T>(items : Array<T>, pred : Predicate<T>) -> Array<T>
   result = Array<T>{}
@@ -1480,11 +1478,11 @@ Use classes for: entities with identity, objects with behavior, mutable state.
 
 ```ruby
 interface Reader
-  def read(buf : Bytes) -> (Int, error)
+  def read(buf : Bytes) -> (Int, Error)
 end
 
 interface Writer
-  def write(data : Bytes) -> (Int, error)
+  def write(data : Bytes) -> (Int, Error)
 end
 
 # Interface composition
@@ -1492,7 +1490,7 @@ interface ReadWriter < Reader, Writer
 end
 
 interface Closer
-  def close -> error
+  def close -> Error
 end
 
 interface ReadWriteCloser < Reader, Writer, Closer
@@ -1534,11 +1532,11 @@ Use `implements` for compile-time verification:
 
 ```ruby
 class FileReader implements Reader, Closer
-  def read(buf : Bytes) -> (Int, error)
+  def read(buf : Bytes) -> (Int, Error)
     # ...
   end
 
-  def close -> error
+  def close -> Error
     # ...
   end
 end
@@ -1569,27 +1567,27 @@ else
 end
 ```
 
-### 13.5 The `any` Type
+### 13.5 The `Any` Type
 
-`any` represents Go's empty interface `any` (or `interface{}`):
+`Any` represents Go's empty interface `any` (or `interface{}`):
 
 ```ruby
-def debug(value : any)
+def debug(value : Any)
   p value
 end
 
-items : Array<any> = [1, "two", 3.0]
+items : Array<Any> = [1, "two", 3.0]
 ```
 
 **Rules:**
-- Any type can be assigned to `any`
+- Any type can be assigned to `Any`
 - Must use type assertion (`as`) to recover concrete type
-- Avoid `any` when possible—prefer generics or interfaces
+- Avoid `Any` when possible—prefer generics or interfaces
 
-**`any` vs generics:**
+**`Any` vs generics:**
 - Use generics (`<T>`) when all elements have the same type: `Array<T>`, `Map<K, V>`
-- Use `any` only for truly heterogeneous collections or interop with untyped Go APIs
-- `Array<any>` loses type safety; `Array<T>` preserves it
+- Use `Any` only for truly heterogeneous collections or interop with untyped Go APIs
+- `Array<Any>` loses type safety; `Array<T>` preserves it
 
 ---
 
@@ -1792,16 +1790,16 @@ Rugby follows Go's philosophy: **errors are values**, returned explicitly and ha
 ### 16.1 Error Signatures
 
 ```ruby
-def read_file(path : String) -> (Bytes, error)
+def read_file(path : String) -> (Bytes, Error)
   os.read_file(path)
 end
 
-def write_file(path : String, data : Bytes) -> error
+def write_file(path : String, data : Bytes) -> Error
   os.write_file(path, data)
 end
 ```
 
-**The `error` type:** Rugby uses lowercase `error` to match Go's `error` interface. Any type with an `error -> String` method satisfies this interface.
+**The `Error` type:** Rugby uses `Error` (PascalCase) which compiles to Go's `error` interface. Any type with an `error -> String` method satisfies this interface.
 
 ### 16.2 Creating Errors
 
@@ -1829,7 +1827,7 @@ class ValidationError
 end
 
 class NotFoundError
-  def initialize(@resource : String, @id : any)
+  def initialize(@resource : String, @id : Any)
   end
 
   def error -> String
@@ -1837,7 +1835,7 @@ class NotFoundError
   end
 end
 
-def find_user(id : Int) -> (User, error)
+def find_user(id : Int) -> (User, Error)
   user = db.find(id)
   return nil, NotFoundError.new("User", id) if user.nil?
   user, nil
@@ -1851,7 +1849,7 @@ Any type with an `error -> String` method satisfies the `error` interface.
 Propagates errors to the caller (like Rust's `?`):
 
 ```ruby
-def load_config(path : String) -> (Config, error)
+def load_config(path : String) -> (Config, Error)
   data = os.read_file(path)!
   config = parse_json(data)!
   config, nil
@@ -1860,7 +1858,7 @@ end
 
 **Rules:**
 - Enclosing function must return `error`
-- `(T, error)` -> `call!` evaluates to `T`
+- `(T, Error)` -> `call!` evaluates to `T`
 - `error` -> `call!` is control-flow only
 - Binds tighter than all operators except member access/calls
 - In `main` or scripts, prints error and exits (see 16.5)
@@ -1922,7 +1920,7 @@ end
 ### 16.8 Error Wrapping
 
 ```ruby
-def load_user(id : Int) -> (User, error)
+def load_user(id : Int) -> (User, Error)
   data, err = db.query(sql, id)
   if err != nil
     return nil, fmt.errorf("load_user(%d): %w", id, err)
@@ -1960,7 +1958,7 @@ Use `panic` only for invariants/bugs. Use `error` for expected failures.
 
 ```ruby
 # Retry with fallback
-def fetch_config -> (Config, error)
+def fetch_config -> (Config, Error)
   data = http.get(primary_url) rescue => err do
     log.warn("primary failed: #{err}")
     http.get(backup_url)!
@@ -1969,7 +1967,7 @@ def fetch_config -> (Config, error)
 end
 
 # Wrap and propagate
-def load_user(id : Int) -> (User, error)
+def load_user(id : Int) -> (User, Error)
   row = db.query_row(sql, id) rescue => err do
     return nil, fmt.errorf("load_user(%d): %w", id, err)
   end
@@ -1977,7 +1975,7 @@ def load_user(id : Int) -> (User, error)
 end
 
 # Cleanup with defer
-def process_file(path : String) -> error
+def process_file(path : String) -> Error
   f = os.open(path)!
   defer f.close()
 
@@ -2048,7 +2046,7 @@ t = spawn { expensive_work() }  # Task<T>, runs immediately
 result = await t                # blocks until complete
 
 # With errors
-t = spawn { os.read_file(path) }  # Task<(Bytes, error)>
+t = spawn { os.read_file(path) }  # Task<(Bytes, Error)>
 data = await(t)!                  # parentheses required for !
 ```
 
@@ -2151,7 +2149,7 @@ end
 
 **Simple parallel fetch:**
 ```ruby
-def fetch_both(url1 : String, url2 : String) -> (String, String, error)
+def fetch_both(url1 : String, url2 : String) -> (String, String, Error)
   concurrently -> (scope) do
     t1 = scope.spawn { http.get(url1) }
     t2 = scope.spawn { http.get(url2) }
@@ -2263,8 +2261,8 @@ resp = http.`Get`(url)  # use backticks for exact Go name
 | `Array<T>` | `[]T` |
 | `Map<K, V>` | `map[K]V` |
 | `Bytes` | `[]byte` |
-| `any` | `interface{}` |
-| `error` | `error` |
+| `Any` | `interface{}` |
+| `Error` | `error` |
 
 **Imported Go types:** When importing Go packages, types and interfaces retain their original Go naming (e.g., `io.Reader`, `http.ResponseWriter`). Rugby's PascalCase rule applies only to Rugby-defined types.
 
@@ -2273,7 +2271,7 @@ resp = http.`Get`(url)  # use backticks for exact Go name
 ```ruby
 import "net/http"
 
-def fetch(url : String) -> (String, error)
+def fetch(url : String) -> (String, Error)
   resp, err = http.Get(url)
   return "", err if err != nil
   defer resp.Body.Close()
@@ -2286,7 +2284,7 @@ end
 ### 18.5 Defer
 
 ```ruby
-def process_file(path : String) -> error
+def process_file(path : String) -> Error
   f = os.open(path)!
   defer f.close()
 
@@ -2312,7 +2310,7 @@ class MyReader
   def initialize(@inner : io.Reader)
   end
 
-  def read(p : Bytes) -> (Int, error)
+  def read(p : Bytes) -> (Int, Error)
     @inner.read(p)
   end
 end
@@ -2438,8 +2436,8 @@ arr = arr << item     # reassign to capture result
 * `bytes` -> `[]byte(s)` (inlined)
 
 **Conversion:**
-* `to_i` -> `runtime.StringToInt(s)` -> `(Int, error)`
-* `to_f` -> `runtime.StringToFloat(s)` -> `(Float, error)`
+* `to_i` -> `runtime.StringToInt(s)` -> `(Int, Error)`
+* `to_f` -> `runtime.StringToFloat(s)` -> `(Float, Error)`
 * `to_sym` -> Symbol (returns self, type conversion)
 
 ### 19.4 Integer Methods
@@ -2956,7 +2954,7 @@ func (c *Counter) Value() int {
 
 ```ruby
 # Rugby
-def load_config(path : String) -> (Config, error)
+def load_config(path : String) -> (Config, Error)
   data = os.read_file(path)!
   config = parse_json(data)!
   config, nil
@@ -2965,7 +2963,7 @@ end
 
 ```go
 // Go
-func loadConfig(path string) (Config, error) {
+func loadConfig(path string) (Config, Error) {
     data, err := os.ReadFile(path)
     if err != nil {
         return Config{}, err
