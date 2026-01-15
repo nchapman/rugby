@@ -388,3 +388,51 @@ end
 		}
 	})
 }
+
+func TestGenPath(t *testing.T) {
+	project := &Project{
+		Root:   "/project",
+		GenDir: "/project/.rugby/gen",
+	}
+
+	tests := []struct {
+		name     string
+		rgFile   string
+		expected string
+	}{
+		{
+			name:     "simple file",
+			rgFile:   "/project/main.rg",
+			expected: "/project/.rugby/gen/main.go",
+		},
+		{
+			name:     "nested file",
+			rgFile:   "/project/src/foo.rg",
+			expected: "/project/.rugby/gen/src/foo.go",
+		},
+		{
+			name:     "test file gets underscore suffix",
+			rgFile:   "/project/foo_test.rg",
+			expected: "/project/.rugby/gen/foo_test_.go",
+		},
+		{
+			name:     "nested test file",
+			rgFile:   "/project/tests/bar_test.rg",
+			expected: "/project/.rugby/gen/tests/bar_test_.go",
+		},
+		{
+			name:     "file with test in middle is unchanged",
+			rgFile:   "/project/test_utils.rg",
+			expected: "/project/.rugby/gen/test_utils.go",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := project.GenPath(tt.rgFile)
+			if got != tt.expected {
+				t.Errorf("GenPath(%q) = %q, want %q", tt.rgFile, got, tt.expected)
+			}
+		})
+	}
+}

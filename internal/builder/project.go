@@ -91,6 +91,7 @@ func (p *Project) EnsureDirs() error {
 
 // GenPath maps a .rg source file to its generated .go path in .rugby/gen/.
 // Example: src/main.rg -> .rugby/gen/src/main.go
+// Note: Files ending in _test.rg become _test_.go to avoid Go treating them as test files.
 func (p *Project) GenPath(rgFile string) string {
 	// Get path relative to project root
 	relPath, err := filepath.Rel(p.Root, rgFile)
@@ -100,9 +101,15 @@ func (p *Project) GenPath(rgFile string) string {
 	}
 
 	// Change extension from .rg to .go
-	goFile := strings.TrimSuffix(relPath, ".rg") + ".go"
+	baseName := strings.TrimSuffix(relPath, ".rg")
 
-	return filepath.Join(p.GenDir, goFile)
+	// Avoid generating *_test.go files - Go treats these as test files
+	// and excludes them from regular builds
+	if strings.HasSuffix(baseName, "_test") {
+		baseName = baseName + "_"
+	}
+
+	return filepath.Join(p.GenDir, baseName+".go")
 }
 
 // BinPath returns the path for a binary in .rugby/bin/.
