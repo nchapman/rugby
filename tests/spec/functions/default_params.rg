@@ -1,4 +1,5 @@
-#@ compile-fail
+#@ run-pass
+#@ check-output
 #@ skip: Default parameters not yet implemented (Section 10.3)
 #
 # Test: Section 10.3 - Default parameters
@@ -11,3 +12,8 @@ end
 connect("localhost")
 connect("localhost", 3000)
 connect("localhost", 3000, 60)
+
+#@ expect:
+# localhost:8080 timeout=30
+# localhost:3000 timeout=30
+# localhost:3000 timeout=60

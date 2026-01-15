@@ -1,4 +1,5 @@
-#@ compile-fail
+#@ run-pass
+#@ check-output
 #@ skip: Named parameters not yet implemented (Section 10.4)
 #
 # Test: Section 10.4 - Named parameters
@@ -12,3 +13,12 @@ end
 fetch("https://example.com")
 fetch("https://example.com", timeout: 60)
 fetch("https://example.com", retry: false, timeout: 120)
+
+# Named params can be passed in any order
+fetch("https://example.com", headers: {"Auth" => "token"}, retry: true)
+
+#@ expect:
+# https://example.com
+# https://example.com
+# https://example.com
+# https://example.com

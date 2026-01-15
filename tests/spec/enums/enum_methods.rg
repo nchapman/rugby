@@ -1,4 +1,5 @@
-#@ compile-fail
+#@ run-pass
+#@ check-output
 #@ skip: Enums not yet implemented (Section 7.3)
 #
 # Test: Section 7.3 - Enum methods
@@ -12,3 +13,14 @@ end
 
 puts Color::Red.to_s
 puts Color.values.length
+
+# from_string returns Color?
+color = Color.from_string("Red")
+if let c = color
+  puts c.to_s
+end
+
+#@ expect:
+# Red
+# 3
+# Red
