@@ -20,8 +20,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseFloatLiteral()
 	case token.STRING, token.HEREDOC:
 		left = p.parseStringLiteral()
-	case token.HEREDOCLITERAL:
-		// Literal heredocs have no interpolation
+	case token.STRINGLITERAL, token.HEREDOCLITERAL:
+		// Literal strings (single-quoted and literal heredocs) have no interpolation
 		left = &ast.StringLit{Value: p.curToken.Literal}
 	case token.TRUE, token.FALSE:
 		left = p.parseBoolLiteral()
@@ -680,7 +680,8 @@ func (p *Parser) canStartCommandArg() bool {
 
 	switch t {
 	// Literals and identifiers
-	case token.IDENT, token.INT, token.FLOAT, token.STRING, token.HEREDOC, token.HEREDOCLITERAL,
+	case token.IDENT, token.INT, token.FLOAT, token.STRING, token.STRINGLITERAL,
+		token.HEREDOC, token.HEREDOCLITERAL,
 		token.SYMBOL, token.TRUE, token.FALSE, token.NIL, token.SELF, token.REGEX:
 		return true
 	// Grouping and collection literals (not LBRACE - that's handled as a block)

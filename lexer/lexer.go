@@ -144,7 +144,7 @@ func (l *Lexer) NextToken() token.Token {
 		l.prevTokenType = tok.Type
 		return tok
 	case '\'':
-		tok.Type = token.STRING
+		tok.Type = token.STRINGLITERAL
 		tok.Literal = l.readSingleQuoteString()
 		tok.Line = l.line
 		tok.Column = l.column

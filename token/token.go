@@ -11,7 +11,8 @@ const (
 
 	// Literals
 	IDENT          TokenType = "IDENT"
-	STRING         TokenType = "STRING"
+	STRING         TokenType = "STRING"         // "..." double-quoted string with interpolation
+	STRINGLITERAL  TokenType = "STRINGLITERAL"  // '...' single-quoted string (no interpolation)
 	HEREDOC        TokenType = "HEREDOC"        // <<END...END multi-line string
 	HEREDOCLITERAL TokenType = "HEREDOCLITERAL" // <<'END'...END literal heredoc (no interpolation)
 	INT            TokenType = "INT"
