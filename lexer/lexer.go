@@ -289,15 +289,21 @@ func (l *Lexer) NextToken() token.Token {
 			tok = l.newToken(token.LE, "<=")
 		} else if l.peekChar() == '<' {
 			l.readChar()
-			// Check for heredoc: <<IDENT, <<-IDENT, or <<~IDENT
+			// Check for heredoc: <<IDENT, <<-IDENT, <<~IDENT, or <<'IDENT'
 			nextChar := l.peekChar()
 			if isLetter(nextChar) || nextChar == '_' {
-				return l.readHeredoc(false, false)
+				return l.readHeredoc(false, false, false)
+			} else if nextChar == '\'' {
+				// Single-quoted heredoc: <<'DELIM' - no interpolation
+				return l.readHeredoc(false, false, true)
 			} else if nextChar == '-' || nextChar == '~' {
 				stripIndent := nextChar == '~'
 				l.readChar() // consume - or ~
 				if isLetter(l.peekChar()) || l.peekChar() == '_' {
-					return l.readHeredoc(true, stripIndent)
+					return l.readHeredoc(true, stripIndent, false)
+				} else if l.peekChar() == '\'' {
+					// <<-'DELIM' or <<~'DELIM'
+					return l.readHeredoc(true, stripIndent, true)
 				}
 				// Not a heredoc, was just <<- or <<~ without identifier
 				// This is an error case, but we'll let parser handle it
@@ -435,9 +441,15 @@ func (l *Lexer) readSingleQuoteString() string {
 // readHeredoc reads a heredoc string literal.
 // allowIndentedEnd: true for <<- and <<~ syntax (closing delimiter can be indented)
 // stripIndent: true for <<~ syntax (strips common leading whitespace from content)
-func (l *Lexer) readHeredoc(allowIndentedEnd bool, stripIndent bool) token.Token {
+// literal: true for <<'DELIM' syntax (no interpolation)
+func (l *Lexer) readHeredoc(allowIndentedEnd bool, stripIndent bool, literal bool) token.Token {
 	line := l.line
 	col := l.column
+
+	// For literal heredocs, skip the opening quote
+	if literal {
+		l.readChar() // skip opening '
+	}
 
 	// Read the delimiter identifier
 	l.readChar() // move to start of identifier
@@ -446,6 +458,11 @@ func (l *Lexer) readHeredoc(allowIndentedEnd bool, stripIndent bool) token.Token
 		l.readChar()
 	}
 	delimiter := l.input[delimStart:l.pos]
+
+	// For literal heredocs, skip the closing quote
+	if literal && l.ch == '\'' {
+		l.readChar()
+	}
 
 	// Skip to end of current line (heredoc content starts on next line)
 	for l.ch != '\n' && l.ch != 0 {
@@ -523,8 +540,14 @@ func (l *Lexer) readHeredoc(allowIndentedEnd bool, stripIndent bool) token.Token
 		result = stripLeadingWhitespace(result)
 	}
 
+	// Use HEREDOCLITERAL for single-quoted heredocs (no interpolation)
+	tokType := token.HEREDOC
+	if literal {
+		tokType = token.HEREDOCLITERAL
+	}
+
 	return token.Token{
-		Type:    token.HEREDOC,
+		Type:    tokType,
 		Literal: result,
 		Line:    line,
 		Column:  col,

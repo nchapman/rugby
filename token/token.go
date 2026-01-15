@@ -10,14 +10,15 @@ const (
 	ILLEGAL TokenType = "ILLEGAL"
 
 	// Literals
-	IDENT        TokenType = "IDENT"
-	STRING       TokenType = "STRING"
-	HEREDOC      TokenType = "HEREDOC" // <<END...END multi-line string
-	INT          TokenType = "INT"
-	FLOAT        TokenType = "FLOAT"
-	SYMBOL       TokenType = "SYMBOL"
-	WORDARRAY    TokenType = "WORDARRAY"    // %w{...} word array literal
-	INTERPWARRAY TokenType = "INTERPWARRAY" // %W{...} interpolated word array
+	IDENT          TokenType = "IDENT"
+	STRING         TokenType = "STRING"
+	HEREDOC        TokenType = "HEREDOC"        // <<END...END multi-line string
+	HEREDOCLITERAL TokenType = "HEREDOCLITERAL" // <<'END'...END literal heredoc (no interpolation)
+	INT            TokenType = "INT"
+	FLOAT          TokenType = "FLOAT"
+	SYMBOL         TokenType = "SYMBOL"
+	WORDARRAY      TokenType = "WORDARRAY"    // %w{...} word array literal
+	INTERPWARRAY   TokenType = "INTERPWARRAY" // %W{...} interpolated word array
 
 	// Operators
 	PLUS       TokenType = "+"

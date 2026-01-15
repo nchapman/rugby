@@ -23,6 +23,19 @@ DONE
 puts "empty length:"
 puts empty.length
 
+# Interpolation in regular heredoc
+name = "Rugby"
+greeting = <<END
+Hello #{name}!
+END
+puts greeting
+
+# Literal heredoc - no interpolation
+template = <<'END'
+Hello #{name}!
+END
+puts template
+
 #@ expect:
 # Hello
 # World
@@ -30,3 +43,5 @@ puts empty.length
 # Line two
 # empty length:
 # 0
+# Hello Rugby!
+# Hello #{name}!
