@@ -4,4 +4,4 @@
 # Empty typed array literals with inline annotation syntax fail
 
 # This should work but doesn't
-empty_strs = [] : Array[String]  #~ undefined: 'Array'
+empty_strs = [] : Array<String>  #~ ERROR: inline type annotation

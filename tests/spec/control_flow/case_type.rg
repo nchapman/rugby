@@ -1,18 +1,18 @@
 #@ run-pass
 #@ check-output
 #
-# Test case_type statements for type matching
+# Test: Section 9.6 - case_type for type matching
 # TODO: case_type should implicitly return values (Ruby expression semantics)
 #       Currently requires explicit `return` in each branch
 
-def describe_value(x : any) -> String
+def describe_value(x : Any) -> String
   case_type x
-  when String
-    return "a string: #{x}"
-  when Int
-    return "an integer: #{x}"
-  when Bool
-    if x
+  when s : String
+    return "a string: #{s}"
+  when n : Int
+    return "an integer: #{n}"
+  when b : Bool
+    if b
       return "true boolean"
     else
       return "false boolean"

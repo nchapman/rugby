@@ -7,7 +7,7 @@ import sync
 
 # Use a WaitGroup to wait for goroutines
 wg = sync.WaitGroup.new
-ch = Chan[String].new(3)
+ch = Chan<String>.new(3)
 
 wg.Add(3)
 
@@ -29,7 +29,7 @@ end
 wg.Wait
 
 # Collect results (order may vary, so we collect and sort)
-results : Array[String] = []
+results : Array<String> = []
 results = results << ch.receive
 results = results << ch.receive
 results = results << ch.receive

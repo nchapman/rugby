@@ -1,7 +1,7 @@
 #@ run-pass
 #@ check-output
 #
-# Test that map literals with symbol shorthand work in method bodies
+# Test: Section 5.8 - Map literals with symbol shorthand
 
 class Todo
   getter id : Int
@@ -10,7 +10,7 @@ class Todo
   def initialize(@id : Int, @title : String)
   end
 
-  def to_map -> Map[String, any]
+  def to_map -> Map<String, Any>
     {
       id: @id,
       title: @title

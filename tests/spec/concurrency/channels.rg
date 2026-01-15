@@ -6,7 +6,7 @@
 # goroutines to avoid deadlock and are demonstrated in goroutines.rg
 
 # Create a buffered channel
-ch = Chan[Int].new(3)
+ch = Chan<Int>.new(3)
 
 # Send values
 ch << 1
@@ -19,7 +19,7 @@ puts ch.receive
 puts ch.receive
 
 # Test with strings
-strCh = Chan[String].new(2)
+strCh = Chan<String>.new(2)
 strCh << "hello"
 strCh << "world"
 puts strCh.receive

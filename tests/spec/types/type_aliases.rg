@@ -8,7 +8,7 @@ type UserID = Int64
 type Name = String
 
 # Alias for complex types
-type Strings = Array[String]
+type Strings = Array<String>
 
 # Chained aliases
 type ID = UserID

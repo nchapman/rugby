@@ -1,14 +1,14 @@
 #@ run-pass
 #@ check-output
 #
-# Test rescue expressions for error handling
+# Test: Section 16.5 - rescue expressions for error handling
 
-import errors
+import "errors"
 
-# Function that returns (value, error)
-def parse(input : String) -> (Int, error)
+# Function that returns (value, Error)
+def parse(input : String) -> (Int, Error)
   if input == "bad"
-    return 0, errors.New("invalid input")
+    return 0, errors.new("invalid input")
   end
   return 42, nil
 end
