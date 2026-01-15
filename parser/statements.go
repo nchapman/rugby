@@ -104,6 +104,23 @@ func (p *Parser) parseStatement() ast.Statement {
 			}
 		}
 
+		// Check for tuple literal: expr, expr, ...
+		// This handles implicit multi-value returns like: 1, "hello"
+		if p.peekTokenIs(token.COMMA) {
+			elements := []ast.Expression{expr}
+			for p.peekTokenIs(token.COMMA) {
+				p.nextToken() // move to ','
+				p.nextToken() // move past ','
+				nextExpr := p.parseExpression(lowest)
+				if nextExpr == nil {
+					p.errorAt(p.curToken.Line, p.curToken.Column, "expected expression after ','")
+					break
+				}
+				elements = append(elements, nextExpr)
+			}
+			expr = &ast.TupleLit{Elements: elements, Line: line}
+		}
+
 		p.nextToken() // move past expression
 
 		// Check for loop modifier (e.g., "puts x while cond" or "puts x until done")

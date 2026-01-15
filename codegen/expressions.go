@@ -48,6 +48,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genMapLit(e)
 	case *ast.RangeLit:
 		g.genRangeLit(e)
+	case *ast.TupleLit:
+		g.genTupleLit(e)
 
 	// Identifiers
 	case *ast.Ident:
@@ -745,6 +747,18 @@ func (g *Generator) genArrayLitWithSplat(arr *ast.ArrayLit) {
 	g.indent--
 	g.writeIndent()
 	g.buf.WriteString("}()")
+}
+
+// genTupleLit generates comma-separated values for tuple literals.
+// Tuples in Rugby are used for multi-value returns and compile to Go's
+// multiple return value syntax when used in a return context.
+func (g *Generator) genTupleLit(t *ast.TupleLit) {
+	for i, elem := range t.Elements {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.genExpr(elem)
+	}
 }
 
 func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {

@@ -314,6 +314,16 @@ type RangeLit struct {
 func (r *RangeLit) node()     {}
 func (r *RangeLit) exprNode() {}
 
+// TupleLit represents a tuple literal: 1, "hello" or (1, "hello")
+// Used for implicit multi-value returns
+type TupleLit struct {
+	Elements []Expression
+	Line     int
+}
+
+func (t *TupleLit) node()     {}
+func (t *TupleLit) exprNode() {}
+
 // BinaryExpr represents a binary operation
 type BinaryExpr struct {
 	Left  Expression

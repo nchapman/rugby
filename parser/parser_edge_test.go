@@ -347,6 +347,46 @@ end`
 	}
 }
 
+func TestTupleLiteralReturn(t *testing.T) {
+	input := `def pair -> (Int, String)
+  42, "hello"
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	stmt, ok := decl.Body[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", decl.Body[0])
+	}
+	tuple, ok := stmt.Expr.(*ast.TupleLit)
+	if !ok {
+		t.Fatalf("expected TupleLit, got %T", stmt.Expr)
+	}
+	if len(tuple.Elements) != 2 {
+		t.Errorf("expected 2 elements, got %d", len(tuple.Elements))
+	}
+	intLit, ok := tuple.Elements[0].(*ast.IntLit)
+	if !ok {
+		t.Fatalf("expected IntLit, got %T", tuple.Elements[0])
+	}
+	if intLit.Value != 42 {
+		t.Errorf("expected 42, got %d", intLit.Value)
+	}
+	strLit, ok := tuple.Elements[1].(*ast.StringLit)
+	if !ok {
+		t.Fatalf("expected StringLit, got %T", tuple.Elements[1])
+	}
+	if strLit.Value != "hello" {
+		t.Errorf("expected \"hello\", got %q", strLit.Value)
+	}
+}
+
 func TestForInRange(t *testing.T) {
 	input := `def main
   for i in 0..10

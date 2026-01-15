@@ -1857,6 +1857,13 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		a.analyzeExpr(e.End)
 		typ = TypeRangeVal
 
+	case *ast.TupleLit:
+		elemTypes := make([]*Type, len(e.Elements))
+		for i, elem := range e.Elements {
+			elemTypes[i] = a.analyzeExpr(elem)
+		}
+		typ = NewTupleType(elemTypes...)
+
 	case *ast.BinaryExpr:
 		leftType := a.analyzeExpr(e.Left)
 		rightType := a.analyzeExpr(e.Right)
