@@ -43,21 +43,21 @@ The new spec uses angle bracket syntax for generic types. This must be implement
 
 Update the parser to recognize angle bracket type parameters:
 
-- [ ] `Array<T>` - was `Array[T]`
-- [ ] `Map<K, V>` - was `Map[K, V]`
-- [ ] `Set<T>` - was `Set[T]`
-- [ ] `Chan<T>` - was `Chan[T]`
-- [ ] `Task<T>` - was `Task[T]`
-- [ ] Nested types: `Array<Map<String, Int>>`
-- [ ] Optional generic: `Array<Int>?`
+- [x] `Array<T>` - was `Array[T]`
+- [x] `Map<K, V>` - was `Map[K, V]`
+- [x] `Set<T>` - was `Set[T]`
+- [x] `Chan<T>` - was `Chan[T]`
+- [x] `Task<T>` - was `Task[T]`
+- [x] Nested types: `Array<Map<String, Int>>`
+- [x] Optional generic: `Array<Int>?`
 
 **Tests:** `tests/spec/types/composite_*.rg`
 
 ### 1.2 Type Annotations
 
-- [ ] Variable type annotations: `x : Array<Int> = []`
-- [ ] Function parameter types: `def foo(arr : Array<String>)`
-- [ ] Return type annotations: `def foo -> Map<String, Int>`
+- [x] Variable type annotations: `x : Array<Int> = []`
+- [x] Function parameter types: `def foo(arr : Array<String>)`
+- [x] Return type annotations: `def foo -> Map<String, Int>`
 
 **Tests:** `tests/spec/types/*.rg`
 
@@ -80,7 +80,7 @@ Update the parser to recognize angle bracket type parameters:
 ### 2.2 String Literals
 
 - [x] Double-quoted strings with interpolation
-- [ ] Single-quoted strings (no interpolation, only `\'` and `\\` escapes)
+- [x] Single-quoted strings (no interpolation, only `\'` and `\\` escapes)
 - [x] String interpolation `#{expr}`
 - [x] Escape sequences
 
@@ -90,8 +90,8 @@ Update the parser to recognize angle bracket type parameters:
 
 - [x] Basic heredoc `<<DELIM`
 - [x] Indented delimiter `<<-DELIM`
-- [ ] Squiggly heredoc `<<~DELIM` (strips leading whitespace)
-- [ ] Literal heredoc `<<'DELIM'` (no interpolation)
+- [x] Squiggly heredoc `<<~DELIM` (strips leading whitespace)
+- [x] Literal heredoc `<<'DELIM'` (no interpolation)
 
 **Tests:** `tests/spec/literals/heredoc_*.rg`
 
@@ -240,14 +240,14 @@ Update the parser to recognize angle bracket type parameters:
 - [x] `setter name : Type`
 - [x] `property name : Type`
 - [ ] `pub getter`, `pub setter`, `pub property`
-- [x] Custom setters `def name=(value)`
+- [x] Custom setters `def name=(value : Type)`
 
 **Tests:** `tests/spec/classes/accessors*.rg`, `custom_accessors.rg`
 
 ### 5.3 Class Methods
 
 - [x] `def self.method_name`
-- [x] Class variables `@@var`
+- [ ] Class variables `@@var` (needs full implementation)
 
 **Tests:** `tests/spec/classes/class_methods*.rg`
 
@@ -520,9 +520,9 @@ Update the parser to recognize angle bracket type parameters:
 - [x] `reduce`, `sum`, `min`, `max`
 - [x] `first`, `last`, `take`, `drop`
 - [x] `length`, `size`, `empty?`
-- [ ] `include?`, `contains?`
-- [ ] `compact`, `uniq`, `flatten`
-- [ ] `sorted`, `reversed`
+- [x] `include?`, `contains?`
+- [x] `compact`, `uniq`, `flatten`
+- [x] `sorted`, `reversed`
 
 **Tests:** `tests/spec/runtime/array_*.rg`, `tests/spec/blocks/*.rg`
 
@@ -568,7 +568,7 @@ Update the parser to recognize angle bracket type parameters:
 
 ### 13.6 Global Functions
 
-- [x] `puts`, `print`, `p`
+- [x] `puts`, `print`, `p` (with Ruby-like formatting)
 - [ ] `gets`
 - [ ] `exit`, `sleep`, `rand`
 
@@ -647,7 +647,7 @@ Run tests to see current status:
 
 ```bash
 # Summary of pass/fail/skip counts
-make test-spec 2>&1 | grep -E "^\s+--- (PASS|FAIL|SKIP)" | awk '{print $2}' | cut -d: -f1 | sort | uniq -c
+make test-spec 2>&1 | grep -oE "(PASS|FAIL|SKIP):" | sort | uniq -c
 
 # Run a specific category
 go test ./tests/... -run "TestSpecs/types" -v
@@ -657,3 +657,35 @@ go test ./tests/... -run "TestSpecs/types/composite_array" -v
 ```
 
 When a phase is complete, all tests in that phase should PASS.
+
+---
+
+## Recent Progress (2026-01-15)
+
+**Test Status:** 97 PASSING / 63 FAILING / 27 SKIPPED
+
+### Completed Overnight
+- ✅ **Phase 1 Complete:** Angle bracket syntax migration (Array<T>, Map<K,V>, etc.)
+- ✅ **Phase 2.2 Complete:** Single-quoted strings without interpolation
+- ✅ **Phase 2.3 Complete:** Squiggly `<<~` and literal `<<'` heredocs
+- ✅ **Phase 13.1 Complete:** All array methods (compact, take, drop, etc.)
+- ✅ **Boolean operators:** Added `&&` and `||` as aliases for `and`/`or`
+- ✅ **Array mutation:** `arr << value` works as statement with mutation semantics
+- ✅ **Parser fixes:** Custom setters with types, test keywords as method names, grouped expression commands
+- ✅ **Runtime improvements:** Ruby-like `p` formatting, nil coalescing in command arguments
+
+### Next Priorities
+1. `const` keyword implementation (currently not recognized)
+2. Class variables `@@` (needs full stack: lexer → parser → AST → semantic → codegen)
+3. `Any` type semantics (Int/String should be assignable to Any parameters/collections)
+4. Module instance variables and state
+5. Optional methods (`ok?`, `nil?`, `unwrap`, `unwrap_or`)
+6. Type aliases with function types
+7. `case_type` for type switching
+8. Loop modifiers (`expr while/until condition`)
+
+### Key Insights
+- Heredoc behavior matches Ruby: content includes newlines, delimiter line doesn't
+- Command call argument parsing needs ternaryPrec to support rich expressions (??., ternary)
+- StdLib method lookup requires normalizing Go types (`[]int` → "Array") for proper dispatch
+- Single `!` vs postfix `!`: context-dependent based on SpaceBefore
