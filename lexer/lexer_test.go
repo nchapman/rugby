@@ -1436,9 +1436,10 @@ func TestAmpersandTokens(t *testing.T) {
 
 func TestHeredoc(t *testing.T) {
 	tests := []struct {
-		name     string
-		input    string
-		expected string
+		name      string
+		input     string
+		expected  string
+		tokenType token.TokenType
 	}{
 		{
 			name: "basic heredoc",
@@ -1446,7 +1447,8 @@ func TestHeredoc(t *testing.T) {
 hello
 world
 END`,
-			expected: "hello\nworld",
+			expected:  "hello\nworld",
+			tokenType: token.HEREDOC,
 		},
 		{
 			name: "heredoc with indented content",
@@ -1454,7 +1456,8 @@ END`,
   hello
     world
 END`,
-			expected: "  hello\n    world",
+			expected:  "  hello\n    world",
+			tokenType: token.HEREDOC,
 		},
 		{
 			name: "heredoc with dashes allows indented end",
@@ -1462,7 +1465,8 @@ END`,
 hello
 world
   END`,
-			expected: "hello\nworld",
+			expected:  "hello\nworld",
+			tokenType: token.HEREDOC,
 		},
 		{
 			name: "squiggly heredoc strips leading whitespace",
@@ -1470,7 +1474,8 @@ world
     hello
     world
   END`,
-			expected: "hello\nworld",
+			expected:  "hello\nworld",
+			tokenType: token.HEREDOC,
 		},
 		{
 			name: "squiggly heredoc with varying indent",
@@ -1479,7 +1484,8 @@ world
       second
     third
   END`,
-			expected: "first\n  second\nthird",
+			expected:  "first\n  second\nthird",
+			tokenType: token.HEREDOC,
 		},
 		{
 			name: "heredoc with empty lines",
@@ -1488,20 +1494,49 @@ hello
 
 world
 END`,
-			expected: "hello\n\nworld",
+			expected:  "hello\n\nworld",
+			tokenType: token.HEREDOC,
 		},
 		{
 			name: "heredoc with underscore delimiter",
 			input: `x = <<END_TEXT
 content
 END_TEXT`,
-			expected: "content",
+			expected:  "content",
+			tokenType: token.HEREDOC,
 		},
 		{
 			name: "empty heredoc",
 			input: `x = <<END
 END`,
-			expected: "",
+			expected:  "",
+			tokenType: token.HEREDOC,
+		},
+		// Literal heredocs (single-quoted delimiter, no interpolation)
+		{
+			name: "literal heredoc",
+			input: `x = <<'END'
+Hello #{name}
+END`,
+			expected:  "Hello #{name}",
+			tokenType: token.HEREDOCLITERAL,
+		},
+		{
+			name: "literal heredoc with dash",
+			input: `x = <<-'END'
+content
+  END`,
+			expected:  "content",
+			tokenType: token.HEREDOCLITERAL,
+		},
+		{
+			name: "literal squiggly heredoc",
+			input: `x = <<~'END'
+    Hello #{name}
+    World
+  END`,
+			expected:  "Hello #{name}\nWorld",
+			tokenType: token.HEREDOCLITERAL,
 		},
 	}
 
@@ -1509,10 +1544,18 @@ END`,
 		t.Run(tt.name, func(t *testing.T) {
 			l := New(tt.input)
 
-			// Skip to HEREDOC token
+			// Skip to HEREDOC or HEREDOCLITERAL token
+			expectedType := tt.tokenType
+			if expectedType == "" {
+				expectedType = token.HEREDOC
+			}
 			for {
 				tok := l.NextToken()
-				if tok.Type == token.HEREDOC {
+				if tok.Type == token.HEREDOC || tok.Type == token.HEREDOCLITERAL {
+					if tok.Type != expectedType {
+						t.Errorf("wrong token type.\nexpected: %s\ngot: %s",
+							expectedType, tok.Type)
+					}
 					if tok.Literal != tt.expected {
 						t.Errorf("heredoc literal wrong.\nexpected:\n%q\ngot:\n%q",
 							tt.expected, tok.Literal)
@@ -1520,7 +1563,7 @@ END`,
 					return
 				}
 				if tok.Type == token.EOF {
-					t.Fatalf("did not find HEREDOC token")
+					t.Fatalf("did not find heredoc token")
 				}
 			}
 		})
