@@ -32,10 +32,18 @@ func deref(v any) any {
 
 // Puts prints values to stdout, each followed by a newline.
 // Automatically dereferences pointers (from first/last/etc) for clean output.
+// Like Ruby's puts, doesn't add a newline if the string already ends with one.
 // Ruby: puts
 func Puts(args ...any) {
 	for _, arg := range args {
-		fmt.Println(deref(arg))
+		val := deref(arg)
+		str := fmt.Sprint(val)
+		// If string already ends with newline, don't add another (Ruby behavior)
+		if len(str) > 0 && str[len(str)-1] == '\n' {
+			fmt.Print(str)
+		} else {
+			fmt.Println(val)
+		}
 	}
 }
 
