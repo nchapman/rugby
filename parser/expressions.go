@@ -102,7 +102,7 @@ infixLoop:
 		case token.PLUS, token.MINUS, token.STAR, token.SLASH, token.PERCENT,
 			token.EQ, token.NE, token.LT, token.GT, token.LE, token.GE,
 			token.MATCH, token.NOTMATCH,
-			token.AND, token.OR, token.SHOVELLEFT,
+			token.AND, token.OR, token.AMPAMP, token.PIPEPIPE, token.SHOVELLEFT,
 			token.PIPE, token.AMP: // set union (|), intersection (&)
 			p.nextToken()
 			left = p.parseInfixExpr(left)
@@ -155,7 +155,7 @@ infixLoop:
 		// like `and`/`or`. This allows `puts x and y` → `(puts(x)) and y`
 		for !p.peekTokenIs(token.NEWLINE) && !p.peekTokenIs(token.EOF) && precedence < p.peekPrecedence() {
 			switch p.peekToken.Type {
-			case token.AND, token.OR:
+			case token.AND, token.OR, token.AMPAMP, token.PIPEPIPE:
 				p.nextToken()
 				left = p.parseInfixExpr(left)
 			default:
@@ -694,9 +694,10 @@ func (p *Parser) canStartCommandArg() bool {
 		return true
 	// Prefix operators - only if followed immediately by their operand (no space after)
 	// This handles `foo -1` (command with unary minus) vs `foo - 1` (binary)
-	case token.MINUS, token.NOT:
+	case token.MINUS, token.NOT, token.BANG:
 		// For command syntax, treat prefix operators as arg starters
 		// The SpaceBefore check above ensures there's space before the operator
+		// For BANG, this handles `puts !false` (logical NOT, not error unwrap)
 		return true
 	}
 	return false
@@ -715,10 +716,12 @@ func (p *Parser) looksLikeCommandArg() bool {
 	}
 
 	switch p.peekToken.Type {
-	case token.MINUS, token.NOT:
-		// For `-` or `not`: command syntax if space before but no space after operand
+	case token.MINUS, token.NOT, token.BANG:
+		// For `-`, `not`, or `!`: command syntax if space before but no space after operand
 		// `foo -1` → command (space before -, no space after)
 		// `foo - 1` → binary (space on both sides)
+		// `foo !false` → command (space before !, logical NOT)
+		// `foo! bar` → postfix bang (no space before !, error unwrap)
 		// Use lexer lookahead to check the token after the operator
 		state := p.l.SaveState()
 		savedCur := p.curToken

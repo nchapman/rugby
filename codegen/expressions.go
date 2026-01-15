@@ -416,10 +416,19 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 		return
 	}
 
+	// Translate Rugby operators to Go operators
+	op := e.Op
+	switch op {
+	case "and":
+		op = "&&"
+	case "or":
+		op = "||"
+	}
+
 	g.buf.WriteString("(")
 	g.genExpr(e.Left)
 	g.buf.WriteString(" ")
-	g.buf.WriteString(e.Op)
+	g.buf.WriteString(op)
 	g.buf.WriteString(" ")
 	g.genExpr(e.Right)
 	g.buf.WriteString(")")

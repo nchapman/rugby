@@ -52,7 +52,9 @@ const (
 	QUESTION         TokenType = "?"
 	QUESTIONQUESTION TokenType = "??"
 	AMP              TokenType = "&"
+	AMPAMP           TokenType = "&&"
 	AMPDOT           TokenType = "&."
+	PIPEPIPE         TokenType = "||"
 
 	// Delimiters
 	LPAREN     TokenType = "("

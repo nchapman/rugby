@@ -34,7 +34,9 @@ var precedences = map[token.TokenType]int{
 	token.TRIPLEDOT:        rangePrec,
 	token.QUESTIONQUESTION: nilCoalesce, // ?? (nil coalescing)
 	token.OR:               orPrec,
+	token.PIPEPIPE:         orPrec, // || (same as or keyword)
 	token.AND:              andPrec,
+	token.AMPAMP:           andPrec, // && (same as and keyword)
 	token.EQ:               equals,
 	token.NE:               equals,
 	token.MATCH:            equals, // =~ (regex match)

@@ -232,22 +232,16 @@ func (l *Lexer) NextToken() token.Token {
 	case '}':
 		tok = l.newToken(token.RBRACE, "}")
 	case '|':
-		// Check for ||= (or-assignment operator)
+		// Check for ||= (or-assignment) or || (logical or)
 		if l.peekChar() == '|' {
-			// Peek two ahead to check for =
-			savedPos := l.pos
-			savedReadPos := l.readPos
 			l.readChar() // consume second |
+			// Check for ||=
 			if l.peekChar() == '=' {
 				l.readChar() // consume =
 				tok = l.newToken(token.ORASSIGN, "||=")
 			} else {
-				// Not ||=, restore and return single PIPE
-				// This preserves || as two separate PIPE tokens for block params
-				l.pos = savedPos
-				l.readPos = savedReadPos
-				l.ch = '|'
-				tok = l.newToken(token.PIPE, "|")
+				// It's || (logical or)
+				tok = l.newToken(token.PIPEPIPE, "||")
 			}
 		} else {
 			tok = l.newToken(token.PIPE, "|")
@@ -276,6 +270,9 @@ func (l *Lexer) NextToken() token.Token {
 		if l.peekChar() == '.' {
 			l.readChar()
 			tok = l.newToken(token.AMPDOT, "&.")
+		} else if l.peekChar() == '&' {
+			l.readChar()
+			tok = l.newToken(token.AMPAMP, "&&")
 		} else {
 			tok = l.newToken(token.AMP, "&")
 		}
