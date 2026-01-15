@@ -53,22 +53,48 @@ func mapType(rubyType string) string {
 	}
 
 	switch rubyType {
+	// Integer types
 	case "Int":
 		return "int"
+	case "Int8":
+		return "int8"
+	case "Int16":
+		return "int16"
+	case "Int32":
+		return "int32"
 	case "Int64":
 		return "int64"
+	case "UInt":
+		return "uint"
+	case "UInt8", "Byte":
+		return "uint8"
+	case "UInt16":
+		return "uint16"
+	case "UInt32":
+		return "uint32"
+	case "UInt64":
+		return "uint64"
+	// Float types
 	case "Float":
 		return "float64"
+	case "Float32":
+		return "float32"
+	// String types
 	case "String":
 		return "string"
+	case "Rune":
+		return "rune"
+	// Other primitives
 	case "Bool":
 		return "bool"
 	case "Bytes":
 		return "[]byte"
+	// Container types
 	case "Array":
 		return "[]any"
 	case "Map":
 		return "map[any]any"
+	// Special types
 	case "any":
 		return "any"
 	case "error":

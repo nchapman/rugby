@@ -152,8 +152,11 @@ var uniqueMethods = make(map[string]MethodDef)
 
 // Value types that need runtime.OptionalT wrapper for optional types
 var valueTypes = map[string]bool{
-	"Int": true, "Int64": true, "Float": true,
-	"Bool": true, "String": true,
+	"Int": true, "Int8": true, "Int16": true, "Int32": true, "Int64": true,
+	"UInt": true, "UInt8": true, "UInt16": true, "UInt32": true, "UInt64": true,
+	"Byte":  true, // alias for UInt8
+	"Float": true, "Float32": true,
+	"Bool": true, "String": true, "Rune": true,
 }
 
 func init() {
