@@ -562,11 +562,11 @@ func TestParseType(t *testing.T) {
 		{"error", TypeErrorVal},
 		{"Int?", NewOptionalType(TypeIntVal)},
 		{"String?", NewOptionalType(TypeStringVal)},
-		{"Array[Int]", NewArrayType(TypeIntVal)},
-		{"Array[String]", NewArrayType(TypeStringVal)},
-		{"Map[String, Int]", NewMapType(TypeStringVal, TypeIntVal)},
-		{"Chan[Int]", NewChanType(TypeIntVal)},
-		{"Task[String]", NewTaskType(TypeStringVal)},
+		{"Array<Int>", NewArrayType(TypeIntVal)},
+		{"Array<String>", NewArrayType(TypeStringVal)},
+		{"Map<String, Int>", NewMapType(TypeStringVal, TypeIntVal)},
+		{"Chan<Int>", NewChanType(TypeIntVal)},
+		{"Task<String>", NewTaskType(TypeStringVal)},
 		{"(Int, Bool)", NewTupleType(TypeIntVal, TypeBoolVal)},
 		{"(String, error)", NewTupleType(TypeStringVal, TypeErrorVal)},
 		{"User", NewClassType("User")},
@@ -1200,14 +1200,14 @@ end`,
 		},
 		{
 			name: "return array of correct type",
-			input: `def getNumbers -> Array[Int]
+			input: `def getNumbers -> Array<Int>
   return [1, 2, 3]
 end`,
 			wantErr: false,
 		},
 		{
 			name: "return array of wrong element type",
-			input: `def getNumbers -> Array[Int]
+			input: `def getNumbers -> Array<Int>
   return ["a", "b"]
 end`,
 			wantErr: true,
@@ -1287,7 +1287,7 @@ compute(1, "two")`,
 		},
 		{
 			name: "array argument with correct element type",
-			input: `def sumAll(nums : Array[Int]) -> Int
+			input: `def sumAll(nums : Array<Int>) -> Int
   return 0
 end
 
@@ -1296,7 +1296,7 @@ sumAll([1, 2, 3])`,
 		},
 		{
 			name: "array argument with wrong element type",
-			input: `def sumAll(nums : Array[Int]) -> Int
+			input: `def sumAll(nums : Array<Int>) -> Int
   return 0
 end
 
@@ -3009,7 +3009,7 @@ len = s&.length
 		{
 			name: "safe nav on array method returns optional",
 			input: `
-def get_array -> Array[Int]?
+def get_array -> Array<Int>?
   [1, 2, 3]
 end
 arr = get_array

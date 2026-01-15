@@ -30,12 +30,12 @@ end`
 func TestReferenceTypeOrAssign(t *testing.T) {
 	// Arrays in Rugby are value types initialized to nil slice
 	input := `def main
-  x : Array[Int] = []
+  x : Array<Int> = []
   x ||= [1, 2, 3]
 end`
 	output := compile(t, input)
 
-	// Array[Int] -> []int
+	// Array<Int> -> []int
 	// x ||= ... -> if x == nil { x = ... }
 	assertContains(t, output, `var x []int`)
 	assertContains(t, output, `if x == nil {`)

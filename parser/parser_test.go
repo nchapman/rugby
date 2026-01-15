@@ -5037,8 +5037,8 @@ func TestCommandSyntaxArrayVsIndex(t *testing.T) {
 }
 
 func TestCommandSyntaxWithAndOr(t *testing.T) {
-	// `puts x and y` should be (puts(x)) and y, not puts(x and y)
-	t.Run("and_terminates", func(t *testing.T) {
+	// `puts x and y` parses as `puts(x and y)` - and/or are part of the argument
+	t.Run("and_in_argument", func(t *testing.T) {
 		input := `puts x and y`
 		l := lexer.New(input)
 		p := New(l)
@@ -5046,27 +5046,27 @@ func TestCommandSyntaxWithAndOr(t *testing.T) {
 		checkParserErrors(t, p)
 
 		exprStmt := program.Declarations[0].(*ast.ExprStmt)
-		binary, ok := exprStmt.Expr.(*ast.BinaryExpr)
+		call, ok := exprStmt.Expr.(*ast.CallExpr)
 		if !ok {
-			t.Fatalf("expected BinaryExpr, got %T", exprStmt.Expr)
-		}
-
-		if binary.Op != "&&" {
-			t.Errorf("expected '&&' operator, got %q", binary.Op)
-		}
-
-		// Left side should be CallExpr(puts, [x])
-		call, ok := binary.Left.(*ast.CallExpr)
-		if !ok {
-			t.Fatalf("expected CallExpr on left, got %T", binary.Left)
+			t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
 		}
 
 		if len(call.Args) != 1 {
 			t.Errorf("expected 1 arg in call, got %d", len(call.Args))
 		}
+
+		// Argument should be BinaryExpr(x && y)
+		binary, ok := call.Args[0].(*ast.BinaryExpr)
+		if !ok {
+			t.Fatalf("expected BinaryExpr arg, got %T", call.Args[0])
+		}
+
+		if binary.Op != "&&" {
+			t.Errorf("expected '&&' operator, got %q", binary.Op)
+		}
 	})
 
-	t.Run("or_terminates", func(t *testing.T) {
+	t.Run("or_in_argument", func(t *testing.T) {
 		input := `puts x or y`
 		l := lexer.New(input)
 		p := New(l)
@@ -5074,9 +5074,15 @@ func TestCommandSyntaxWithAndOr(t *testing.T) {
 		checkParserErrors(t, p)
 
 		exprStmt := program.Declarations[0].(*ast.ExprStmt)
-		binary, ok := exprStmt.Expr.(*ast.BinaryExpr)
+		call, ok := exprStmt.Expr.(*ast.CallExpr)
 		if !ok {
-			t.Fatalf("expected BinaryExpr, got %T", exprStmt.Expr)
+			t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+		}
+
+		// Argument should be BinaryExpr(x || y)
+		binary, ok := call.Args[0].(*ast.BinaryExpr)
+		if !ok {
+			t.Fatalf("expected BinaryExpr arg, got %T", call.Args[0])
 		}
 
 		if binary.Op != "||" {
@@ -5571,7 +5577,7 @@ end`
 
 func TestModuleWithField(t *testing.T) {
 	input := `module Cacheable
-  @data : Map[String, any]
+  @data : Map<String, any>
 end`
 
 	l := lexer.New(input)
@@ -6134,16 +6140,16 @@ func TestTypeNameParsing_GenericTypes(t *testing.T) {
 		expected string
 	}{
 		{
-			input:    "class Foo\n  @items : Array[String]\nend",
-			expected: "Array[String]",
+			input:    "class Foo\n  @items : Array<String>\nend",
+			expected: "Array<String>",
 		},
 		{
-			input:    "class Foo\n  @map : Map[String, Int]\nend",
-			expected: "Map[String, Int]",
+			input:    "class Foo\n  @map : Map<String, Int>\nend",
+			expected: "Map<String, Int>",
 		},
 		{
-			input:    "class Foo\n  @nested : Array[Map[String, Int]]\nend",
-			expected: "Array[Map[String, Int]]",
+			input:    "class Foo\n  @nested : Array<Map<String, Int>>\nend",
+			expected: "Array<Map<String, Int>>",
 		},
 	}
 

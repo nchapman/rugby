@@ -317,32 +317,18 @@ func compileFailTest(t *testing.T, rugbyBin, specPath string, d *Directives) {
 	}
 }
 
-// findRugbyBinary locates or builds the rugby compiler
+// findRugbyBinary builds and returns the path to a fresh rugby compiler binary.
+// Always rebuilds to avoid stale binary issues during development.
 func findRugbyBinary() (string, error) {
-	// Try relative path from tests directory
-	candidates := []string{
-		"../rugby",
-		"rugby",
-		"./rugby",
+	binPath := "../rugby"
+
+	// Always rebuild to ensure we're testing the current source
+	cmd := exec.Command("go", "build", "-o", binPath, "..")
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("failed to build rugby: %w\n%s", err, output)
 	}
 
-	for _, path := range candidates {
-		if _, err := os.Stat(path); err == nil {
-			abs, absErr := filepath.Abs(path)
-			if absErr != nil {
-				return "", fmt.Errorf("failed to get absolute path for %s: %w", path, absErr)
-			}
-			return abs, nil
-		}
-	}
-
-	// Try to build it
-	cmd := exec.Command("go", "build", "-o", "../rugby", "..")
-	if err := cmd.Run(); err != nil {
-		return "", err
-	}
-
-	abs, absErr := filepath.Abs("../rugby")
+	abs, absErr := filepath.Abs(binPath)
 	if absErr != nil {
 		return "", fmt.Errorf("failed to get absolute path: %w", absErr)
 	}

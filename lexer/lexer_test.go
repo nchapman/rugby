@@ -886,9 +886,9 @@ func TestOrAssignVsBlockPipes(t *testing.T) {
 			expected: []token.TokenType{token.IDENT, token.SLASHASSIGN, token.INT, token.EOF},
 		},
 		{
-			name:     "block pipes",
+			name:     "block pipes (|| is now PIPEPIPE operator)",
 			input:    "do || end",
-			expected: []token.TokenType{token.DO, token.PIPE, token.PIPE, token.END, token.EOF},
+			expected: []token.TokenType{token.DO, token.PIPEPIPE, token.END, token.EOF},
 		},
 		{
 			name:     "block with params",
@@ -1447,7 +1447,7 @@ func TestHeredoc(t *testing.T) {
 hello
 world
 END`,
-			expected:  "hello\nworld",
+			expected:  "hello\nworld\n",
 			tokenType: token.HEREDOC,
 		},
 		{
@@ -1456,7 +1456,7 @@ END`,
   hello
     world
 END`,
-			expected:  "  hello\n    world",
+			expected:  "  hello\n    world\n",
 			tokenType: token.HEREDOC,
 		},
 		{
@@ -1465,7 +1465,7 @@ END`,
 hello
 world
   END`,
-			expected:  "hello\nworld",
+			expected:  "hello\nworld\n",
 			tokenType: token.HEREDOC,
 		},
 		{
@@ -1474,7 +1474,7 @@ world
     hello
     world
   END`,
-			expected:  "hello\nworld",
+			expected:  "hello\nworld\n",
 			tokenType: token.HEREDOC,
 		},
 		{
@@ -1484,7 +1484,7 @@ world
       second
     third
   END`,
-			expected:  "first\n  second\nthird",
+			expected:  "first\n  second\nthird\n",
 			tokenType: token.HEREDOC,
 		},
 		{
@@ -1494,7 +1494,7 @@ hello
 
 world
 END`,
-			expected:  "hello\n\nworld",
+			expected:  "hello\n\nworld\n",
 			tokenType: token.HEREDOC,
 		},
 		{
@@ -1502,7 +1502,7 @@ END`,
 			input: `x = <<END_TEXT
 content
 END_TEXT`,
-			expected:  "content",
+			expected:  "content\n",
 			tokenType: token.HEREDOC,
 		},
 		{
@@ -1518,7 +1518,7 @@ END`,
 			input: `x = <<'END'
 Hello #{name}
 END`,
-			expected:  "Hello #{name}",
+			expected:  "Hello #{name}\n",
 			tokenType: token.HEREDOCLITERAL,
 		},
 		{
@@ -1526,7 +1526,7 @@ END`,
 			input: `x = <<-'END'
 content
   END`,
-			expected:  "content",
+			expected:  "content\n",
 			tokenType: token.HEREDOCLITERAL,
 		},
 		{
@@ -1535,7 +1535,7 @@ content
     Hello #{name}
     World
   END`,
-			expected:  "Hello #{name}\nWorld",
+			expected:  "Hello #{name}\nWorld\n",
 			tokenType: token.HEREDOCLITERAL,
 		},
 	}
@@ -1643,8 +1643,8 @@ func TestSingleQuotedStrings(t *testing.T) {
 	for _, tt := range tests {
 		l := New(tt.input)
 		tok := l.NextToken()
-		if tok.Type != token.STRING {
-			t.Errorf("input %q: expected STRING, got %q", tt.input, tok.Type)
+		if tok.Type != token.STRINGLITERAL {
+			t.Errorf("input %q: expected STRINGLITERAL, got %q", tt.input, tok.Type)
 			continue
 		}
 		if tok.Literal != tt.expected {

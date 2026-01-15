@@ -25,12 +25,12 @@ def find_user(id : Int) -> String?
 end
 
 # Function with array parameter - use blocks for transformation
-def sum_all(nums : Array[Int]) -> Int
+def sum_all(nums : Array<Int>) -> Int
   nums.sum  # idiomatic: use built-in method
 end
 
 # Or use reduce for custom aggregation
-def product_all(nums : Array[Int]) -> Int
+def product_all(nums : Array<Int>) -> Int
   nums.reduce(1) { |acc, n| acc * n }
 end
 

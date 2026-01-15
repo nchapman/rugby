@@ -1949,7 +1949,7 @@ end`, "/", "total"},
 // ====================
 
 func TestGenericTypeAnnotation(t *testing.T) {
-	input := `def process(items : Array[String]) -> Array[Int]
+	input := `def process(items : Array<String>) -> Array<Int>
   items.map { |s| s.size }
 end`
 	l := lexer.New(input)
@@ -1964,8 +1964,8 @@ end`
 	if len(decl.Params) != 1 {
 		t.Fatalf("expected 1 param, got %d", len(decl.Params))
 	}
-	if decl.Params[0].Type != "Array[String]" {
-		t.Errorf("expected param type 'Array[String]', got %q", decl.Params[0].Type)
+	if decl.Params[0].Type != "Array<String>" {
+		t.Errorf("expected param type 'Array<String>', got %q", decl.Params[0].Type)
 	}
 }
 
@@ -1992,8 +1992,8 @@ end`
 
 func TestInlineTypeAnnotation(t *testing.T) {
 	input := `def main
-  empty_nums = [] : Array[Int]
-  empty_map = {} : Map[String, Int]
+  empty_nums = [] : Array<Int>
+  empty_map = {} : Map<String, Int>
 end`
 	l := lexer.New(input)
 	p := New(l)
@@ -2016,8 +2016,8 @@ end`
 	if assign1.Name != "empty_nums" {
 		t.Errorf("expected name 'empty_nums', got %q", assign1.Name)
 	}
-	if assign1.Type != "Array[Int]" {
-		t.Errorf("expected type 'Array[Int]', got %q", assign1.Type)
+	if assign1.Type != "Array<Int>" {
+		t.Errorf("expected type 'Array<Int>', got %q", assign1.Type)
 	}
 
 	// Check second assignment has inline type annotation for map
@@ -2028,8 +2028,8 @@ end`
 	if assign2.Name != "empty_map" {
 		t.Errorf("expected name 'empty_map', got %q", assign2.Name)
 	}
-	if assign2.Type != "Map[String, Int]" {
-		t.Errorf("expected type 'Map[String, Int]', got %q", assign2.Type)
+	if assign2.Type != "Map<String, Int>" {
+		t.Errorf("expected type 'Map<String, Int>', got %q", assign2.Type)
 	}
 }
 

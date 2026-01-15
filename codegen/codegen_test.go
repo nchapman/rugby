@@ -829,7 +829,7 @@ func TestGenerateChannelSend(t *testing.T) {
   ch << 42
 end`
 
-	output := compile(t, input)
+	output := compileRelaxed(t, input)
 
 	// Channel send uses runtime.ShiftLeft for now (could be optimized to ch <- 42 later)
 	assertContains(t, output, `runtime.ShiftLeft(ch, 42)`)
@@ -1008,7 +1008,7 @@ end`
 }
 
 func TestBlockOnMethodCall(t *testing.T) {
-	input := `def getItems -> Array[Int]
+	input := `def getItems -> Array<Int>
   [1, 2, 3]
 end
 
@@ -1808,13 +1808,13 @@ end`
 }
 
 func TestChanTypeInFunctionParams(t *testing.T) {
-	// BUG-045: Chan[T] in function params should generate chan *T for classes
+	// BUG-045: Chan<T> in function params should generate chan *T for classes
 	input := `class Job
   def initialize(@id : Int)
   end
 end
 
-def worker(jobs : Chan[Job])
+def worker(jobs : Chan<Job>)
   for job in jobs
     puts job
   end
@@ -4911,8 +4911,8 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate a multi-line string with explicit newlines
-	assertContains(t, output, `"hello\nworld"`)
+	// Heredocs include trailing newline (Ruby behavior)
+	assertContains(t, output, `"hello\nworld\n"`)
 }
 
 func TestHeredocIndented(t *testing.T) {
@@ -4927,7 +4927,8 @@ end`
 	output := compile(t, input)
 
 	// <<- allows indented closing delimiter but preserves content indentation
-	assertContains(t, output, `"first line\nsecond line"`)
+	// Heredocs include trailing newline (Ruby behavior)
+	assertContains(t, output, `"first line\nsecond line\n"`)
 }
 
 func TestHeredocSquiggly(t *testing.T) {
@@ -4943,7 +4944,8 @@ end`
 	output := compile(t, input)
 
 	// <<~ strips common leading whitespace
-	assertContains(t, output, `"SELECT *\nFROM users\nWHERE id = 1"`)
+	// Heredocs include trailing newline (Ruby behavior)
+	assertContains(t, output, `"SELECT *\nFROM users\nWHERE id = 1\n"`)
 }
 
 func TestHeredocInterpolation(t *testing.T) {

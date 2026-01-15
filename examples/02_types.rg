@@ -15,8 +15,8 @@ def main
   ratio : Float = 2.5
 
   # Empty typed arrays
-  empty_nums : Array[Int] = []
-  empty_strs = [] : Array[String]  # inline annotation syntax
+  empty_nums : Array<Int> = []
+  empty_strs = [] : Array<String>  # inline annotation syntax
 
   # Symbols - compile to strings, great for status values
   status = :active

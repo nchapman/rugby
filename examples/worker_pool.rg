@@ -27,7 +27,7 @@ def process_job(job : Job, worker_id : Int) -> Result
   Result.new(job.id, output, worker_id)
 end
 
-def worker(id : Int, jobs : Chan[Job], results : Chan[Result])
+def worker(id : Int, jobs : Chan<Job>, results : Chan<Result>)
   for job in jobs
     result = process_job(job, id)
     results << result

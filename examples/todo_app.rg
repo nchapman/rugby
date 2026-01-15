@@ -22,7 +22,7 @@ class Todo
     @completed = true
   end
 
-  def to_map -> Map[String, any]
+  def to_map -> Map<String, any>
     {
       id: @id,
       title: @title,
@@ -34,7 +34,7 @@ end
 
 class TodoList
   def initialize
-    @todos = [] : Array[Todo]
+    @todos = [] : Array<Todo>
     @next_id = 1
   end
 
@@ -64,15 +64,15 @@ class TodoList
     @todos.length < original_length
   end
 
-  def pending -> Array[Todo]
+  def pending -> Array<Todo>
     @todos.reject(&:completed)
   end
 
-  def completed -> Array[Todo]
+  def completed -> Array<Todo>
     @todos.select(&:completed)
   end
 
-  def all -> Array[Todo]
+  def all -> Array<Todo>
     @todos
   end
 
@@ -89,7 +89,7 @@ class TodoList
   end
 end
 
-def print_todos(todos : Array[Todo], label : String)
+def print_todos(todos : Array<Todo>, label : String)
   puts "\n#{label}:"
   return puts "  (none)" if todos.empty?
 
