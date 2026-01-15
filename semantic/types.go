@@ -146,31 +146,31 @@ func (t *Type) String() string {
 		return "error"
 	case TypeArray:
 		if t.Elem != nil {
-			return fmt.Sprintf("Array[%s]", t.Elem)
+			return fmt.Sprintf("Array<%s>", t.Elem)
 		}
-		return "Array[any]"
+		return "Array<any>"
 	case TypeSet:
 		if t.Elem != nil {
-			return fmt.Sprintf("Set[%s]", t.Elem)
+			return fmt.Sprintf("Set<%s>", t.Elem)
 		}
-		return "Set[any]"
+		return "Set<any>"
 	case TypeMap:
 		if t.KeyType != nil && t.ValueType != nil {
-			return fmt.Sprintf("Map[%s, %s]", t.KeyType, t.ValueType)
+			return fmt.Sprintf("Map<%s, %s>", t.KeyType, t.ValueType)
 		}
-		return "Map[any, any]"
+		return "Map<any, any>"
 	case TypeRange:
 		return "Range"
 	case TypeChan:
 		if t.Elem != nil {
-			return fmt.Sprintf("Chan[%s]", t.Elem)
+			return fmt.Sprintf("Chan<%s>", t.Elem)
 		}
-		return "Chan[any]"
+		return "Chan<any>"
 	case TypeTask:
 		if t.Elem != nil {
-			return fmt.Sprintf("Task[%s]", t.Elem)
+			return fmt.Sprintf("Task<%s>", t.Elem)
 		}
-		return "Task[any]"
+		return "Task<any>"
 	case TypeOptional:
 		if t.Elem != nil {
 			return fmt.Sprintf("%s?", t.Elem)

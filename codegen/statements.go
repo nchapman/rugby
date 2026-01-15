@@ -1183,9 +1183,9 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 
 	g.writeIndent()
 	// Check if iterating over a channel - channels only allow one iteration variable
-	// Note: type might be in Rugby format (Chan[T]) or Go format (chan T)
+	// Note: type might be in Rugby format (Chan<T>) or Go format (chan T)
 	iterType := g.inferTypeFromExpr(s.Iterable)
-	if strings.HasPrefix(iterType, "chan ") || strings.HasPrefix(iterType, "Chan[") {
+	if strings.HasPrefix(iterType, "chan ") || strings.HasPrefix(iterType, "Chan<") {
 		g.buf.WriteString("for ")
 		g.buf.WriteString(s.Var)
 		g.buf.WriteString(" := range ")

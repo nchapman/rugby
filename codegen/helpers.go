@@ -16,18 +16,18 @@ func receiverName(className string) string {
 
 // mapType converts Rugby type names to Go type names
 func mapType(rubyType string) string {
-	// Handle Array[T]
-	if strings.HasPrefix(rubyType, "Array[") && strings.HasSuffix(rubyType, "]") {
+	// Handle Array<T>
+	if strings.HasPrefix(rubyType, "Array<") && strings.HasSuffix(rubyType, ">") {
 		inner := rubyType[6 : len(rubyType)-1]
 		return "[]" + mapType(inner)
 	}
-	// Handle Chan[T]
-	if strings.HasPrefix(rubyType, "Chan[") && strings.HasSuffix(rubyType, "]") {
+	// Handle Chan<T>
+	if strings.HasPrefix(rubyType, "Chan<") && strings.HasSuffix(rubyType, ">") {
 		inner := rubyType[5 : len(rubyType)-1]
 		return "chan " + mapType(inner)
 	}
-	// Handle Map[K, V]
-	if strings.HasPrefix(rubyType, "Map[") && strings.HasSuffix(rubyType, "]") {
+	// Handle Map<K, V>
+	if strings.HasPrefix(rubyType, "Map<") && strings.HasSuffix(rubyType, ">") {
 		content := rubyType[4 : len(rubyType)-1]
 		// Simple comma split for now (assuming no nested generic commas for MVP)
 		parts := strings.Split(content, ",")

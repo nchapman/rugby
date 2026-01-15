@@ -8,20 +8,20 @@ import (
 )
 
 // mapParamType converts Rugby types to Go types, making class types pointers.
-// This handles nested generic types like Chan[Job] -> chan *Job and Array[Job] -> []*Job.
+// This handles nested generic types like Chan<Job> -> chan *Job and Array<Job> -> []*Job.
 func (g *Generator) mapParamType(rubyType string) string {
-	// Handle Array[T] - recursively convert element type
-	if strings.HasPrefix(rubyType, "Array[") && strings.HasSuffix(rubyType, "]") {
+	// Handle Array<T> - recursively convert element type
+	if strings.HasPrefix(rubyType, "Array<") && strings.HasSuffix(rubyType, ">") {
 		inner := rubyType[6 : len(rubyType)-1]
 		return "[]" + g.mapParamType(inner)
 	}
-	// Handle Chan[T] - recursively convert element type
-	if strings.HasPrefix(rubyType, "Chan[") && strings.HasSuffix(rubyType, "]") {
+	// Handle Chan<T> - recursively convert element type
+	if strings.HasPrefix(rubyType, "Chan<") && strings.HasSuffix(rubyType, ">") {
 		inner := rubyType[5 : len(rubyType)-1]
 		return "chan " + g.mapParamType(inner)
 	}
-	// Handle Map[K, V] - recursively convert key and value types
-	if strings.HasPrefix(rubyType, "Map[") && strings.HasSuffix(rubyType, "]") {
+	// Handle Map<K, V> - recursively convert key and value types
+	if strings.HasPrefix(rubyType, "Map<") && strings.HasSuffix(rubyType, ">") {
 		content := rubyType[4 : len(rubyType)-1]
 		parts := strings.Split(content, ",")
 		if len(parts) == 2 {

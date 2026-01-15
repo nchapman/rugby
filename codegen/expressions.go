@@ -344,7 +344,7 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 
 	// Handle set operators: | (union), & (intersection), - (difference)
 	leftType := g.inferTypeFromExpr(e.Left)
-	if leftType == "Set" || strings.HasPrefix(leftType, "Set[") {
+	if leftType == "Set" || strings.HasPrefix(leftType, "Set<") {
 		switch e.Op {
 		case "|":
 			g.needsRuntime = true
@@ -1231,7 +1231,7 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 
 		// Handle array/slice method calls FIRST, before stdLib lookup
 		recvTypeForArray := g.inferTypeFromExpr(fn.X)
-		if strings.HasPrefix(recvTypeForArray, "[]") || recvTypeForArray == "Array" || strings.HasPrefix(recvTypeForArray, "Array[") {
+		if strings.HasPrefix(recvTypeForArray, "[]") || recvTypeForArray == "Array" || strings.HasPrefix(recvTypeForArray, "Array<") {
 			elemType := g.inferArrayElementGoType(fn.X)
 			switch fn.Sel {
 			case "any?":
@@ -1347,7 +1347,7 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 
 		// Handle set method calls: s.include?(x), s.add(x), s.delete(x), s.size, s.to_a, s.clear
 		recvTypeForSet := g.inferTypeFromExpr(fn.X)
-		if recvTypeForSet == "Set" || strings.HasPrefix(recvTypeForSet, "Set[") {
+		if recvTypeForSet == "Set" || strings.HasPrefix(recvTypeForSet, "Set<") {
 			switch fn.Sel {
 			case "include?":
 				if len(call.Args) != 1 {
@@ -1723,7 +1723,7 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 	// Check for set iteration (single parameter iterating over keys)
 	// Sets are map[T]struct{}, so we iterate with `for k := range` not `for _, v := range`
 	rugbyType := g.inferTypeFromExpr(iterable)
-	isSetIteration := rugbyType == "Set" || strings.HasPrefix(rugbyType, "Set[")
+	isSetIteration := rugbyType == "Set" || strings.HasPrefix(rugbyType, "Set<")
 
 	if isSetIteration {
 		varName := "_"
@@ -3114,7 +3114,7 @@ func (g *Generator) genArrayPropertyMethod(sel *ast.SelectorExpr) bool {
 	elemType := g.inferArrayElementGoType(sel.X)
 
 	// Handle array property methods
-	if strings.HasPrefix(receiverType, "[]") || receiverType == "Array" || strings.HasPrefix(receiverType, "Array[") {
+	if strings.HasPrefix(receiverType, "[]") || receiverType == "Array" || strings.HasPrefix(receiverType, "Array<") {
 		switch sel.Sel {
 		case "sum":
 			g.needsRuntime = true

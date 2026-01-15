@@ -65,7 +65,7 @@ type TypeInfo interface {
 	GetGoType(node ast.Node) string
 
 	// GetRugbyType returns the Rugby type string for an AST node.
-	// For example: "Int", "String", "String?", "Array[Int]".
+	// For example: "Int", "String", "String?", "Array<Int>".
 	// Returns empty string if no type info is available.
 	GetRugbyType(node ast.Node) string
 
@@ -75,12 +75,12 @@ type TypeInfo interface {
 	GetSelectorKind(node ast.Node) ast.SelectorKind
 
 	// GetElementType returns the element type for arrays, channels, optionals, etc.
-	// For Array[Int], returns "Int". For String?, returns "String".
+	// For Array<Int>, returns "Int". For String?, returns "String".
 	// Returns empty string if not a composite type or unknown.
 	GetElementType(node ast.Node) string
 
 	// GetKeyValueTypes returns the key and value types for maps.
-	// For Map[String, Int], returns ("String", "Int").
+	// For Map<String, Int>, returns ("String", "Int").
 	// Returns empty strings if not a map or unknown.
 	GetKeyValueTypes(node ast.Node) (keyType, valueType string)
 
@@ -521,7 +521,7 @@ func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {
 // literal type detection for robustness.
 func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 	// Primary: use semantic type info
-	// GetRugbyType returns the full type including generics (e.g., "Array[Int]", "String?")
+	// GetRugbyType returns the full type including generics (e.g., "Array<Int>", "String?")
 	// Note: "any" is a valid type that should be returned
 	if rugbyType := g.typeInfo.GetRugbyType(expr); rugbyType != "" && rugbyType != "unknown" {
 		return rugbyType

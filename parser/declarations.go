@@ -121,15 +121,15 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 
 // parseTypeName parses a type name (e.g., "Int", "String?")
 // The ? suffix is already included in the identifier by the lexer for simple types (Int?).
-// For generics (Array[Int]), brackets are tokens.
+// For generics (Array<Int>), angle brackets are tokens.
 func (p *Parser) parseTypeName() string {
 	typeName := p.curToken.Literal
 	p.nextToken() // consume type name
 
-	// Check for generics: Type[T] or Type[K, V]
-	if p.curTokenIs(token.LBRACKET) {
-		typeName += "["
-		p.nextToken() // consume '['
+	// Check for generics: Type<T> or Type<K, V>
+	if p.curTokenIs(token.LT) {
+		typeName += "<"
+		p.nextToken() // consume '<'
 
 		typeName += p.parseTypeName()
 
@@ -139,16 +139,16 @@ func (p *Parser) parseTypeName() string {
 			typeName += p.parseTypeName()
 		}
 
-		if p.curTokenIs(token.RBRACKET) {
-			typeName += "]"
-			p.nextToken() // consume ']'
+		if p.curTokenIs(token.GT) {
+			typeName += ">"
+			p.nextToken() // consume '>'
 		} else {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ']' after generic types")
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '>' after generic types")
 			return typeName // Return what we have so far
 		}
 	}
 
-	// Check for optional suffix '?' (for generic types like Array[Int]?)
+	// Check for optional suffix '?' (for generic types like Array<Int>?)
 	if p.curTokenIs(token.QUESTION) {
 		typeName += "?"
 		p.nextToken()

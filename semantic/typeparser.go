@@ -5,7 +5,7 @@ import (
 )
 
 // ParseType parses a Rugby type string into a Type.
-// Examples: "Int", "String?", "Array[Int]", "Map[String, Int]", "(Int, Bool)"
+// Examples: "Int", "String?", "Array<Int>", "Map<String, Int>", "(Int, Bool)"
 func ParseType(s string) *Type {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -32,8 +32,8 @@ func ParseType(s string) *Type {
 		return NewTupleType(elems...)
 	}
 
-	// Check for generic types: Array[T], Map[K, V], Chan[T], Task[T]
-	if idx := strings.Index(s, "["); idx != -1 && strings.HasSuffix(s, "]") {
+	// Check for generic types: Array<T>, Map<K, V>, Chan<T>, Task<T>
+	if idx := strings.Index(s, "<"); idx != -1 && strings.HasSuffix(s, ">") {
 		base := s[:idx]
 		inner := s[idx+1 : len(s)-1]
 
@@ -96,10 +96,10 @@ func splitTopLevel(s string, delim rune) []string {
 
 	for _, c := range s {
 		switch c {
-		case '[', '(':
+		case '<', '(':
 			depth++
 			current.WriteRune(c)
-		case ']', ')':
+		case '>', ')':
 			depth--
 			current.WriteRune(c)
 		case delim:
