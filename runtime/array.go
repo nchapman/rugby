@@ -215,6 +215,30 @@ func IndexOpt[T any](slice []T, i int) (T, bool) {
 	return slice[i], true
 }
 
+// Take returns a new slice with the first n elements.
+// Ruby: arr.take(n)
+func Take[T any](slice []T, n int) []T {
+	if n < 0 {
+		n = 0
+	}
+	if n > len(slice) {
+		n = len(slice)
+	}
+	return slice[:n]
+}
+
+// Drop returns a new slice with the first n elements removed.
+// Ruby: arr.drop(n)
+func Drop[T any](slice []T, n int) []T {
+	if n < 0 {
+		n = 0
+	}
+	if n > len(slice) {
+		return []T{}
+	}
+	return slice[n:]
+}
+
 // Reverse reverses the slice in-place.
 // Ruby: arr.reverse!
 func Reverse[T any](slice []T) {

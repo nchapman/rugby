@@ -71,6 +71,8 @@ var stdLib = map[string]map[string]MethodDef{
 		"flatten":   {RuntimeFunc: "runtime.Flatten", ReturnType: "Array"},
 		"uniq":      {RuntimeFunc: "runtime.Uniq", ReturnType: "Array"},
 		"compact":   {RuntimeFunc: "runtime.Compact", ReturnType: "Array"},
+		"take":      {RuntimeFunc: "runtime.Take", ReturnType: "Array"},
+		"drop":      {RuntimeFunc: "runtime.Drop", ReturnType: "Array"},
 		"sort":      {RuntimeFunc: "runtime.Sort", ReturnType: "Array"},
 		"sorted":    {RuntimeFunc: "runtime.Sort", ReturnType: "Array"},
 		"shuffle":   {RuntimeFunc: "runtime.Shuffle", ReturnType: "Array"},

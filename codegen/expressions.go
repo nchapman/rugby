@@ -1428,6 +1428,13 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		case "string":
 			lookupType = "String"
 		}
+		// Also normalize array/map types
+		if strings.HasPrefix(recvType, "[]") || strings.HasPrefix(recvType, "Array") {
+			lookupType = "Array"
+		}
+		if strings.HasPrefix(recvType, "map[") || strings.HasPrefix(recvType, "Map") {
+			lookupType = "Map"
+		}
 
 		var methodDef MethodDef
 		found := false
