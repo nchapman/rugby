@@ -247,7 +247,7 @@ Update the parser to recognize angle bracket type parameters:
 ### 5.3 Class Methods
 
 - [x] `def self.method_name`
-- [ ] Class variables `@@var` (needs full implementation)
+- [x] Class variables `@@var`
 
 **Tests:** `tests/spec/classes/class_methods*.rg`
 
@@ -667,6 +667,7 @@ When a phase is complete, all tests in that phase should PASS.
 ### Completed Today
 - ✅ **`const` keyword:** Full implementation (token, AST, parser, semantic, codegen)
 - ✅ **Spec test fix:** `findRugbyBinary` now always rebuilds to avoid stale binary issues
+- ✅ **Class variables `@@`:** Full stack implementation (token, lexer, AST, parser, semantic, codegen)
 
 ### Completed Overnight
 - ✅ **Phase 1 Complete:** Angle bracket syntax migration (Array<T>, Map<K,V>, etc.)
@@ -679,13 +680,12 @@ When a phase is complete, all tests in that phase should PASS.
 - ✅ **Runtime improvements:** Ruby-like `p` formatting, nil coalescing in command arguments
 
 ### Next Priorities
-1. Class variables `@@` (needs full stack: lexer → parser → AST → semantic → codegen)
-2. `Any` type semantics (Int/String should be assignable to Any parameters/collections)
-3. Module instance variables and state
-4. Optional methods (`ok?`, `nil?`, `unwrap`, `unwrap_or`)
-5. Type aliases with function types
-6. `case_type` for type switching
-7. Loop modifiers (`expr while/until condition`)
+1. `Any` type semantics (Int/String should be assignable to Any parameters/collections)
+2. Module instance variables and state
+3. Optional methods (`ok?`, `nil?`, `unwrap`, `unwrap_or`)
+4. Type aliases with function types
+5. `case_type` for type switching
+6. Loop modifiers (`expr while/until condition`)
 
 ### Key Insights
 - Heredoc behavior matches Ruby: content includes newlines, delimiter line doesn't
