@@ -70,6 +70,7 @@ var stdLib = map[string]map[string]MethodDef{
 		"join":      {RuntimeFunc: "runtime.Join", ReturnType: "String"},
 		"flatten":   {RuntimeFunc: "runtime.Flatten", ReturnType: "Array"},
 		"uniq":      {RuntimeFunc: "runtime.Uniq", ReturnType: "Array"},
+		"compact":   {RuntimeFunc: "runtime.Compact", ReturnType: "Array"},
 		"sort":      {RuntimeFunc: "runtime.Sort", ReturnType: "Array"},
 		"sorted":    {RuntimeFunc: "runtime.Sort", ReturnType: "Array"},
 		"shuffle":   {RuntimeFunc: "runtime.Shuffle", ReturnType: "Array"},
@@ -77,6 +78,7 @@ var stdLib = map[string]map[string]MethodDef{
 		"first":     {RuntimeFunc: "runtime.First", ReturnType: ""},  // T
 		"last":      {RuntimeFunc: "runtime.Last", ReturnType: ""},   // T
 		"reverse":   {RuntimeFunc: "runtime.Reversed", ReturnType: "Array"},
+		"reversed":  {RuntimeFunc: "runtime.Reversed", ReturnType: "Array"},
 		"rotate":    {RuntimeFunc: "runtime.Rotate", ReturnType: "Array"},
 		"include?":  {RuntimeFunc: "runtime.Contains", ReturnType: "Bool"},
 		"contains?": {RuntimeFunc: "runtime.Contains", ReturnType: "Bool"},

@@ -379,6 +379,19 @@ func Flatten(slice any) []any {
 	return result
 }
 
+// Compact filters out nil and zero values from a slice.
+// Ruby: arr.compact
+func Compact[T comparable](slice []T) []T {
+	var zero T
+	result := make([]T, 0, len(slice))
+	for _, v := range slice {
+		if v != zero {
+			result = append(result, v)
+		}
+	}
+	return result
+}
+
 // Uniq returns a new slice with unique elements.
 // Ruby: arr.uniq
 func Uniq[T comparable](slice []T) []T {
