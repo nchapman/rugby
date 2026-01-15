@@ -67,6 +67,14 @@ results = items.map -> (item) do
 end
 ```
 
+The symbol-to-proc shorthand keeps things concise:
+
+```ruby
+names = users.map(&:name)           # same as: users.map -> (u) { u.name }
+active = users.select(&:active?)    # same as: users.select -> (u) { u.active? }
+emails = users.reject(&:empty?)
+```
+
 ### Lambdas vs For Loops
 
 Lambdas are for data transformation. `return` inside a lambda returns from the lambda, not the enclosing function. Use `for` loops when you need control flow:
@@ -419,10 +427,10 @@ def main
     load_cached_users
   end
 
-  active = users.select -> (u) { u.active? }
+  active = users.select(&:active?)
 
   puts "Found #{active.length} active users:"
-  active.each -> (u) { puts "  - #{u.name}" }
+  active.each -> (u) { puts "  - #{u.name}" }  # can't use &: here (needs arg)
 end
 ```
 
@@ -431,7 +439,8 @@ end
 Idiomatic Rugby:
 
 - Uses `snake_case` for functions, methods, and variables
-- Embraces lambdas for transformation, `for` loops for control flow
+- Embraces lambdas and `&:method` for transformation
+- Uses `for` loops when you need `break`, `next`, or `return`
 - Leverages `??` and `&.` for optional handling
 - Uses `!` and `rescue` for clean error handling
 - Prefers string interpolation

@@ -1106,7 +1106,29 @@ for i in 0..3
 end
 ```
 
-### 10.8 Function Types
+### 10.8 Symbol-to-Proc
+
+The `&:method` syntax creates a lambda that calls the named method on its argument:
+
+```ruby
+# These are equivalent
+names = users.map(&:name)
+names = users.map -> (u) { u.name }
+
+# Works with any method
+active = users.select(&:active?)
+emails = users.map(&:email).select(&:present?)
+lengths = strings.map(&:length)
+```
+
+This is purely syntactic sugar—`&:name` compiles to `-> (x) { x.name }`.
+
+**Rules:**
+- The method must exist on the element type
+- No arguments can be passed (use a full lambda for that)
+- Works with predicates: `&:empty?`, `&:valid?`
+
+### 10.9 Function Types
 
 ```ruby
 type Predicate<T> = (T) -> Bool
@@ -1123,7 +1145,7 @@ def filter<T>(items : Array<T>, pred : Predicate<T>) -> Array<T>
 end
 ```
 
-### 10.9 Calling Convention
+### 10.10 Calling Convention
 
 Parentheses are optional (command syntax):
 
