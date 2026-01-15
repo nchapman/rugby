@@ -502,6 +502,8 @@ func (a *Analyzer) collectDeclaration(stmt ast.Statement) {
 		a.collectInterface(s)
 	case *ast.ModuleDecl:
 		a.collectModule(s)
+	case *ast.ConstDecl:
+		a.collectConst(s)
 		// TypeAliasDecl is collected in pre-pass, skip here
 	}
 }
@@ -729,6 +731,39 @@ func (a *Analyzer) collectTypeAlias(t *ast.TypeAliasDecl) {
 	// For now, Go will catch any naming conflicts at compile time.
 
 	a.typeAliases[t.Name] = typeAliasInfo{Type: t.Type, Line: t.Line}
+}
+
+// collectConst registers a constant declaration in the global scope.
+func (a *Analyzer) collectConst(c *ast.ConstDecl) {
+	// Analyze the constant value to determine its type
+	valueType := a.analyzeExpr(c.Value)
+
+	// If type annotation provided, use it; otherwise use inferred type
+	var typ *Type
+	if c.Type != "" {
+		typ = ParseType(c.Type)
+		// Check that value is assignable to declared type
+		if valueType.Kind != TypeUnknown && !a.isAssignable(typ, valueType) {
+			a.addError(&TypeMismatchError{
+				Expected: typ,
+				Got:      valueType,
+				Line:     c.Line,
+				Context:  "constant declaration",
+			})
+		}
+	} else {
+		typ = valueType
+	}
+
+	// Create constant symbol and add to global scope
+	constSym := NewConstant(c.Name, typ)
+	constSym.Line = c.Line
+	if err := a.globalScope.Define(constSym); err != nil {
+		a.addError(&Error{
+			Message: "constant '" + c.Name + "' already defined",
+			Line:    c.Line,
+		})
+	}
 }
 
 // resolveTypeAlias returns the underlying type name if the given name is a type alias,
@@ -1010,6 +1045,14 @@ func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
 	// Check if variable already exists
 	existing := a.scope.Lookup(s.Name)
 	if existing != nil {
+		// Check if trying to reassign a constant
+		if existing.Kind == SymConstant {
+			a.addError(&Error{
+				Message: "cannot assign to constant '" + s.Name + "'",
+				Line:    s.Line,
+			})
+			return
+		}
 		// Assignment to existing variable - check type compatibility
 		a.declarations[s] = false // not a declaration, it's a reassignment
 		if existing.Type.Kind != TypeUnknown && valueType.Kind != TypeUnknown {
@@ -1149,6 +1192,15 @@ func (a *Analyzer) analyzeCompoundAssign(s *ast.CompoundAssignStmt) {
 		return
 	}
 
+	// Check if trying to reassign a constant
+	if existing.Kind == SymConstant {
+		a.addError(&Error{
+			Message: "cannot assign to constant '" + s.Name + "'",
+			Line:    s.Line,
+		})
+		return
+	}
+
 	valueType := a.analyzeExpr(s.Value)
 	varType := existing.Type
 
@@ -1195,6 +1247,14 @@ func (a *Analyzer) analyzeOrAssign(s *ast.OrAssignStmt) {
 		v := NewVariable(s.Name, valueType)
 		_ = a.scope.DefineOrShadow(v)
 	} else {
+		// Check if trying to reassign a constant
+		if existing.Kind == SymConstant {
+			a.addError(&Error{
+				Message: "cannot assign to constant '" + s.Name + "'",
+				Line:    s.Line,
+			})
+			return
+		}
 		// Variable already exists - this is a reassignment (nil check)
 		a.declarations[s] = false
 	}

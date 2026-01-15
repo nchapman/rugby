@@ -5073,3 +5073,52 @@ end`
 	assertContains(t, output, `_count int`)
 	assertNotContains(t, output, `_count any`)
 }
+
+// TestConstDeclaration tests constant declaration code generation
+func TestConstDeclaration(t *testing.T) {
+	input := `const MAX = 100
+const PI = 3.14
+const NAME = "test"
+
+def main
+  puts(MAX)
+end`
+
+	output := compile(t, input)
+
+	// Should generate Go const declarations
+	assertContains(t, output, `const MAX = 100`)
+	assertContains(t, output, `const PI = 3.14`)
+	assertContains(t, output, `const NAME = "test"`)
+}
+
+// TestConstWithTypeAnnotation tests constant declaration with explicit type
+func TestConstWithTypeAnnotation(t *testing.T) {
+	input := `const TIMEOUT : Int64 = 30
+const RATE : Float = 0.15
+
+def main
+end`
+
+	output := compile(t, input)
+
+	// Should generate typed const declarations
+	assertContains(t, output, `const TIMEOUT int64 = 30`)
+	assertContains(t, output, `const RATE float64 = 0.15`)
+}
+
+// TestConstUsedInExpression tests using constants in expressions
+func TestConstUsedInExpression(t *testing.T) {
+	input := `const MAX_SIZE = 1024
+
+def main
+  buffer_size = MAX_SIZE * 2
+  puts(buffer_size)
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `const MAX_SIZE = 1024`)
+	// Variable names use snake_case in generated Go code
+	assertContains(t, output, `buffer_size := (MAX_SIZE * 2)`)
+}

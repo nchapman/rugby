@@ -21,6 +21,8 @@ func getStatementLine(stmt ast.Statement) int {
 		return s.Line
 	case *ast.TypeAliasDecl:
 		return s.Line
+	case *ast.ConstDecl:
+		return s.Line
 	case *ast.MethodDecl:
 		return s.Line
 	case *ast.AccessorDecl:
@@ -127,6 +129,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genModuleDecl(s)
 	case *ast.TypeAliasDecl:
 		g.genTypeAliasDecl(s)
+	case *ast.ConstDecl:
+		g.genConstDecl(s)
 
 	// Assignments
 	case *ast.AssignStmt:

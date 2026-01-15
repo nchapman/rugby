@@ -950,6 +950,62 @@ func (p *Parser) parseModuleDeclWithDoc(doc *ast.CommentGroup) *ast.ModuleDecl {
 	return mod
 }
 
+// parseConstDecl parses a constant declaration: const MAX_SIZE = 1024
+func (p *Parser) parseConstDecl() *ast.ConstDecl {
+	doc := p.leadingComments(p.curToken.Line)
+	return p.parseConstDeclWithDoc(doc)
+}
+
+// parseConstDeclWithDoc parses a constant declaration with pre-collected doc comment
+func (p *Parser) parseConstDeclWithDoc(doc *ast.CommentGroup) *ast.ConstDecl {
+	line := p.curToken.Line
+	p.nextToken() // consume 'const'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected constant name after 'const'")
+		return nil
+	}
+
+	name := p.curToken.Literal
+	p.nextToken() // consume name
+
+	// Parse optional type annotation: const NAME : Type = value
+	var constType string
+	if p.curTokenIs(token.COLON) {
+		p.nextToken() // consume ':'
+		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
+			return nil
+		}
+		constType = p.parseTypeName()
+	}
+
+	if !p.curTokenIs(token.ASSIGN) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '=' after constant name")
+		return nil
+	}
+	p.nextToken() // consume '='
+
+	// Parse the constant value expression
+	value := p.parseExpression(lowest)
+	if value == nil {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected expression after '='")
+		return nil
+	}
+
+	// Move past the expression to the next statement
+	p.nextToken()
+	p.skipNewlines()
+
+	return &ast.ConstDecl{
+		Name:  name,
+		Type:  constType,
+		Value: value,
+		Line:  line,
+		Doc:   doc,
+	}
+}
+
 // parseTypeAliasDecl parses a type alias declaration: type UserID = Int64
 func (p *Parser) parseTypeAliasDecl() *ast.TypeAliasDecl {
 	doc := p.leadingComments(p.curToken.Line)

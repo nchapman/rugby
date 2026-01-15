@@ -6738,3 +6738,95 @@ end`
 		t.Errorf("expected Column 1, got %d", ident.Column)
 	}
 }
+
+func TestConstDeclaration(t *testing.T) {
+	tests := []struct {
+		input         string
+		expectedName  string
+		expectedType  string
+		expectedValue interface{}
+	}{
+		{"const MAX_SIZE = 1024", "MAX_SIZE", "", int64(1024)},
+		{"const PI = 3.14", "PI", "", 3.14},
+		{`const NAME = "hello"`, "NAME", "", "hello"},
+		{"const TIMEOUT : Int64 = 30", "TIMEOUT", "Int64", int64(30)},
+		{"const BUFFER_SIZE = 1024 * 2", "BUFFER_SIZE", "", nil}, // computed value
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		if len(program.Declarations) != 1 {
+			t.Fatalf("%s: expected 1 declaration, got %d", tt.input, len(program.Declarations))
+		}
+
+		constDecl, ok := program.Declarations[0].(*ast.ConstDecl)
+		if !ok {
+			t.Fatalf("%s: expected ConstDecl, got %T", tt.input, program.Declarations[0])
+		}
+
+		if constDecl.Name != tt.expectedName {
+			t.Errorf("%s: expected name %q, got %q", tt.input, tt.expectedName, constDecl.Name)
+		}
+
+		if constDecl.Type != tt.expectedType {
+			t.Errorf("%s: expected type %q, got %q", tt.input, tt.expectedType, constDecl.Type)
+		}
+
+		// Check value for simple literals
+		if tt.expectedValue != nil {
+			switch expected := tt.expectedValue.(type) {
+			case int64:
+				intLit, ok := constDecl.Value.(*ast.IntLit)
+				if !ok {
+					t.Errorf("%s: expected IntLit, got %T", tt.input, constDecl.Value)
+				} else if intLit.Value != expected {
+					t.Errorf("%s: expected value %d, got %d", tt.input, expected, intLit.Value)
+				}
+			case float64:
+				floatLit, ok := constDecl.Value.(*ast.FloatLit)
+				if !ok {
+					t.Errorf("%s: expected FloatLit, got %T", tt.input, constDecl.Value)
+				} else if floatLit.Value != expected {
+					t.Errorf("%s: expected value %f, got %f", tt.input, expected, floatLit.Value)
+				}
+			case string:
+				strLit, ok := constDecl.Value.(*ast.StringLit)
+				if !ok {
+					t.Errorf("%s: expected StringLit, got %T", tt.input, constDecl.Value)
+				} else if strLit.Value != expected {
+					t.Errorf("%s: expected value %q, got %q", tt.input, expected, strLit.Value)
+				}
+			}
+		}
+	}
+}
+
+func TestConstDeclaration_MultipleConsts(t *testing.T) {
+	input := `const A = 1
+const B = 2
+const C = 3`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 3 {
+		t.Fatalf("expected 3 declarations, got %d", len(program.Declarations))
+	}
+
+	names := []string{"A", "B", "C"}
+	for i, name := range names {
+		constDecl, ok := program.Declarations[i].(*ast.ConstDecl)
+		if !ok {
+			t.Fatalf("declaration %d: expected ConstDecl, got %T", i, program.Declarations[i])
+		}
+		if constDecl.Name != name {
+			t.Errorf("declaration %d: expected name %q, got %q", i, name, constDecl.Name)
+		}
+	}
+}

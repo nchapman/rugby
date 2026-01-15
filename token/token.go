@@ -122,6 +122,7 @@ const (
 	IMPLEMENTS   TokenType = "IMPLEMENTS"
 	ANY          TokenType = "ANY"
 	PUB          TokenType = "PUB"
+	CONST        TokenType = "CONST"
 	TYPE         TokenType = "TYPE"
 
 	// Testing keywords
@@ -188,6 +189,7 @@ var keywords = map[string]TokenType{
 	"implements":   IMPLEMENTS,
 	"any":          ANY,
 	"pub":          PUB,
+	"const":        CONST,
 	"type":         TYPE,
 	// Testing keywords
 	"describe": DESCRIBE,

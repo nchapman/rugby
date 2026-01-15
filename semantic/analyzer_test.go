@@ -3309,3 +3309,82 @@ x = s.length.abs
 		})
 	}
 }
+
+func TestAnalyzeConstantReassignment(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name: "constant reassignment with = is error",
+			input: `const MAX = 100
+def main
+  MAX = 200
+end`,
+			wantErr: true,
+			errMsg:  "cannot assign to constant 'MAX'",
+		},
+		{
+			name: "constant reassignment with += is error",
+			input: `const COUNT = 10
+def main
+  COUNT += 1
+end`,
+			wantErr: true,
+			errMsg:  "cannot assign to constant 'COUNT'",
+		},
+		{
+			name: "constant reassignment with ||= is error",
+			input: `const VALUE = 5
+def main
+  VALUE ||= 10
+end`,
+			wantErr: true,
+			errMsg:  "cannot assign to constant 'VALUE'",
+		},
+		{
+			name: "constant usage is allowed",
+			input: `const MAX = 100
+def main
+  x = MAX * 2
+end`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			p := parse(t, tt.input)
+			program := p.ParseProgram()
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parse errors: %v", p.Errors())
+			}
+
+			a := NewAnalyzer()
+			errs := a.Analyze(program)
+
+			if tt.wantErr {
+				if len(errs) == 0 {
+					t.Errorf("expected error, got none")
+					return
+				}
+				if tt.errMsg != "" {
+					found := false
+					for _, err := range errs {
+						if strings.Contains(err.Error(), tt.errMsg) {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected error containing %q, got: %v", tt.errMsg, errs)
+					}
+				}
+			} else if len(errs) > 0 {
+				t.Errorf("expected no errors, got: %v", errs)
+			}
+		})
+	}
+}

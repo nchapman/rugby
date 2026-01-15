@@ -9,6 +9,7 @@ type SymbolKind int
 
 const (
 	SymVariable SymbolKind = iota
+	SymConstant
 	SymFunction
 	SymMethod
 	SymClass
@@ -73,6 +74,11 @@ func NewSymbol(name string, kind SymbolKind, typ *Type) *Symbol {
 // NewVariable creates a variable symbol.
 func NewVariable(name string, typ *Type) *Symbol {
 	return NewSymbol(name, SymVariable, typ)
+}
+
+// NewConstant creates a constant symbol.
+func NewConstant(name string, typ *Type) *Symbol {
+	return NewSymbol(name, SymConstant, typ)
 }
 
 // NewParam creates a parameter symbol.

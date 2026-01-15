@@ -966,3 +966,21 @@ func (g *Generator) genTypeAliasDecl(typeAlias *ast.TypeAliasDecl) {
 	goType := mapType(typeAlias.Type)
 	g.buf.WriteString(fmt.Sprintf("type %s = %s\n\n", typeAlias.Name, goType))
 }
+
+// genConstDecl generates a Go const declaration from a Rugby const declaration
+// e.g., const MAX_SIZE = 1024 becomes const MAX_SIZE = 1024
+func (g *Generator) genConstDecl(constDecl *ast.ConstDecl) {
+	g.writeIndent()
+	g.buf.WriteString("const ")
+	g.buf.WriteString(constDecl.Name)
+
+	// Add type annotation if specified
+	if constDecl.Type != "" {
+		g.buf.WriteString(" ")
+		g.buf.WriteString(mapType(constDecl.Type))
+	}
+
+	g.buf.WriteString(" = ")
+	g.genExpr(constDecl.Value)
+	g.buf.WriteString("\n")
+}

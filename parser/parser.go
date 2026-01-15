@@ -324,6 +324,10 @@ func (p *Parser) ParseProgram() *ast.Program {
 			if typeAlias := p.parseTypeAliasDecl(); typeAlias != nil {
 				program.Declarations = append(program.Declarations, typeAlias)
 			}
+		case token.CONST:
+			if constDecl := p.parseConstDecl(); constDecl != nil {
+				program.Declarations = append(program.Declarations, constDecl)
+			}
 		case token.DESCRIBE:
 			if desc := p.parseDescribeStmt(); desc != nil {
 				program.Declarations = append(program.Declarations, desc)

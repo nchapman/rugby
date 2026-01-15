@@ -741,6 +741,19 @@ type TypeAliasDecl struct {
 func (t *TypeAliasDecl) node()     {}
 func (t *TypeAliasDecl) stmtNode() {}
 
+// ConstDecl represents a constant declaration: const MAX_SIZE = 1024
+type ConstDecl struct {
+	Name    string        // constant name (e.g., "MAX_SIZE")
+	Type    string        // optional type annotation, empty if inferred
+	Value   Expression    // constant value expression
+	Line    int           // source line number (1-indexed)
+	Doc     *CommentGroup // leading comments
+	Comment *CommentGroup // trailing comment on same line
+}
+
+func (c *ConstDecl) node()     {}
+func (c *ConstDecl) stmtNode() {}
+
 // DescribeStmt represents a describe block for grouping tests
 // describe "name" do ... end
 type DescribeStmt struct {
