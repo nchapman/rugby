@@ -561,6 +561,17 @@ type UntilStmt struct {
 func (u *UntilStmt) node()     {}
 func (u *UntilStmt) stmtNode() {}
 
+// LoopStmt represents an infinite loop (loop do ... end)
+type LoopStmt struct {
+	Body    []Statement
+	Line    int           // source line number (1-indexed)
+	Doc     *CommentGroup // leading comments
+	Comment *CommentGroup // trailing comment on same line
+}
+
+func (l *LoopStmt) node()     {}
+func (l *LoopStmt) stmtNode() {}
+
 // ForStmt represents a for...in loop: for item in items ... end
 // For maps: for key, value in map ... end
 type ForStmt struct {

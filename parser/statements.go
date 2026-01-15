@@ -23,6 +23,8 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseUntilStmt()
 	case token.FOR:
 		return p.parseForStmt()
+	case token.LOOP:
+		return p.parseLoopStmt()
 	case token.BREAK:
 		return p.parseBreakStmt()
 	case token.NEXT:
@@ -620,6 +622,42 @@ func (p *Parser) parseUntilStmt() *ast.UntilStmt {
 
 	if !p.curTokenIs(token.END) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close until")
+		return nil
+	}
+	p.nextToken() // consume 'end'
+	p.skipNewlines()
+
+	return stmt
+}
+
+func (p *Parser) parseLoopStmt() *ast.LoopStmt {
+	line := p.curToken.Line
+	p.nextToken() // consume 'loop'
+
+	// Expect 'do' after 'loop'
+	if !p.curTokenIs(token.DO) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after 'loop'")
+		return nil
+	}
+	p.nextToken() // consume 'do'
+	p.skipNewlines()
+
+	stmt := &ast.LoopStmt{Line: line}
+
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.END) {
+			break
+		}
+		if s := p.parseStatement(); s != nil {
+			stmt.Body = append(stmt.Body, s)
+		} else {
+			p.nextToken() // error recovery: always advance
+		}
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close loop")
 		return nil
 	}
 	p.nextToken() // consume 'end'

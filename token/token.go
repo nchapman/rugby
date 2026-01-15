@@ -101,6 +101,7 @@ const (
 	WHILE        TokenType = "WHILE"
 	UNTIL        TokenType = "UNTIL"
 	FOR          TokenType = "FOR"
+	LOOP         TokenType = "LOOP"
 	IN           TokenType = "IN"
 	BREAK        TokenType = "BREAK"
 	NEXT         TokenType = "NEXT"
@@ -168,6 +169,7 @@ var keywords = map[string]TokenType{
 	"while":        WHILE,
 	"until":        UNTIL,
 	"for":          FOR,
+	"loop":         LOOP,
 	"in":           IN,
 	"break":        BREAK,
 	"next":         NEXT,

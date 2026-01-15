@@ -103,6 +103,12 @@ func (f *Formatter) preMarkStatementComments(stmt ast.Statement) {
 		for _, bodyStmt := range s.Body {
 			f.preMarkStatementComments(bodyStmt)
 		}
+	case *ast.LoopStmt:
+		f.markCommentGroupEmitted(s.Doc)
+		f.markCommentGroupEmitted(s.Comment)
+		for _, bodyStmt := range s.Body {
+			f.preMarkStatementComments(bodyStmt)
+		}
 	case *ast.CaseStmt:
 		f.markCommentGroupEmitted(s.Doc)
 		f.markCommentGroupEmitted(s.Comment)
@@ -140,6 +146,8 @@ func (f *Formatter) getStatementLine(stmt ast.Statement) int {
 	case *ast.WhileStmt:
 		return s.Line
 	case *ast.ForStmt:
+		return s.Line
+	case *ast.LoopStmt:
 		return s.Line
 	case *ast.CaseStmt:
 		return s.Line
@@ -184,6 +192,8 @@ func (f *Formatter) formatStatement(stmt ast.Statement) {
 		f.formatWhileStmt(s)
 	case *ast.ForStmt:
 		f.formatForStmt(s)
+	case *ast.LoopStmt:
+		f.formatLoopStmt(s)
 	case *ast.CaseStmt:
 		f.formatCaseStmt(s)
 	case *ast.AssignStmt:
@@ -470,6 +480,22 @@ func (f *Formatter) formatForStmt(s *ast.ForStmt) {
 	f.write(s.Var)
 	f.write(" in ")
 	f.formatExpr(s.Iterable)
+	f.formatTrailingComment(s.Comment)
+	f.write("\n")
+
+	f.indent++
+	f.formatBody(s.Body)
+	f.indent--
+
+	f.writeIndent()
+	f.writeLine("end")
+}
+
+// formatLoopStmt formats an infinite loop statement.
+func (f *Formatter) formatLoopStmt(s *ast.LoopStmt) {
+	f.formatCommentGroup(s.Doc)
+	f.writeIndent()
+	f.write("loop do")
 	f.formatTrailingComment(s.Comment)
 	f.write("\n")
 

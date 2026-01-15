@@ -177,6 +177,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genUntilStmt(s)
 	case *ast.ForStmt:
 		g.genForStmt(s)
+	case *ast.LoopStmt:
+		g.genLoopStmt(s)
 
 	// Jump statements
 	case *ast.BreakStmt:
@@ -1204,6 +1206,22 @@ func (g *Generator) genUntilStmt(s *ast.UntilStmt) {
 		g.buf.WriteString(")")
 	}
 	g.buf.WriteString(" {\n")
+
+	g.enterLoop()
+	g.indent++
+	for _, stmt := range s.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+	g.exitLoop()
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+func (g *Generator) genLoopStmt(s *ast.LoopStmt) {
+	g.writeIndent()
+	g.buf.WriteString("for {\n")
 
 	g.enterLoop()
 	g.indent++

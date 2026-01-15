@@ -110,11 +110,16 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 		return nil
 	}
 	p.nextToken() // consume ':'
-	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+	var paramType string
+	if p.curTokenIs(token.LPAREN) {
+		// Function type: (Int) -> Int
+		paramType = p.parseFunctionType()
+	} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
+		paramType = p.parseTypeName()
+	} else {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 		return nil
 	}
-	paramType := p.parseTypeName()
 
 	return &ast.Param{Name: name, Type: paramType}
 }
@@ -1112,12 +1117,16 @@ func (p *Parser) parseTypeAliasDeclWithDoc(doc *ast.CommentGroup) *ast.TypeAlias
 	p.nextToken() // consume '='
 
 	// Parse the underlying type using the full type parser (handles generics like Array[T])
-	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+	// Also handle function types like (Int) -> Int
+	var typeName string
+	if p.curTokenIs(token.LPAREN) {
+		typeName = p.parseFunctionType()
+	} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
+		typeName = p.parseTypeName()
+	} else {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after '='")
 		return nil
 	}
-
-	typeName := p.parseTypeName()
 
 	return &ast.TypeAliasDecl{
 		Name: name,

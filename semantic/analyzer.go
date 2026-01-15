@@ -867,6 +867,8 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 		a.analyzeUntil(s)
 	case *ast.ForStmt:
 		a.analyzeFor(s)
+	case *ast.LoopStmt:
+		a.analyzeLoop(s)
 	case *ast.ReturnStmt:
 		a.analyzeReturn(s)
 	case *ast.BreakStmt:
@@ -1392,6 +1394,14 @@ func (a *Analyzer) analyzeWhile(s *ast.WhileStmt) {
 func (a *Analyzer) analyzeUntil(s *ast.UntilStmt) {
 	a.checkCondition(s.Cond, "until", s.Line)
 
+	a.pushLoopScope()
+	for _, stmt := range s.Body {
+		a.analyzeStatement(stmt)
+	}
+	a.popScope()
+}
+
+func (a *Analyzer) analyzeLoop(s *ast.LoopStmt) {
 	a.pushLoopScope()
 	for _, stmt := range s.Body {
 		a.analyzeStatement(stmt)
