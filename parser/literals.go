@@ -147,6 +147,27 @@ func (p *Parser) parseSymbolLiteral() ast.Expression {
 	}
 }
 
+// parseRegexLiteral parses a regex literal /pattern/flags.
+// The lexer stores pattern and flags separated by \x00 in the token literal.
+func (p *Parser) parseRegexLiteral() ast.Expression {
+	literal := p.curToken.Literal
+	pattern := literal
+	flags := ""
+
+	// Check for flags (separated by \x00)
+	if idx := strings.Index(literal, "\x00"); idx != -1 {
+		pattern = literal[:idx]
+		flags = literal[idx+1:]
+	}
+
+	return &ast.RegexLit{
+		Pattern: pattern,
+		Flags:   flags,
+		Line:    p.curToken.Line,
+		Column:  p.curToken.Column,
+	}
+}
+
 // parseWordArray parses a %w{...} or %W{...} word array literal.
 // The lexer stores words separated by \x00 in the token literal.
 // If isInterpolated is true, each word may contain #{} interpolation.

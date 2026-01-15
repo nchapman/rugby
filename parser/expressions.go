@@ -29,6 +29,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseNilLiteral()
 	case token.SYMBOL:
 		left = p.parseSymbolLiteral()
+	case token.REGEX:
+		left = p.parseRegexLiteral()
 	case token.WORDARRAY:
 		left = p.parseWordArray(false)
 	case token.INTERPWARRAY:
@@ -99,6 +101,7 @@ infixLoop:
 		switch p.peekToken.Type {
 		case token.PLUS, token.MINUS, token.STAR, token.SLASH, token.PERCENT,
 			token.EQ, token.NE, token.LT, token.GT, token.LE, token.GE,
+			token.MATCH, token.NOTMATCH,
 			token.AND, token.OR, token.SHOVELLEFT:
 			p.nextToken()
 			left = p.parseInfixExpr(left)

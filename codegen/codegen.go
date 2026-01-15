@@ -155,6 +155,7 @@ type Generator struct {
 	needsRuntime                 bool                         // track if rugby/runtime import is needed
 	needsFmt                     bool                         // track if fmt import is needed (string interpolation)
 	needsErrors                  bool                         // track if errors import is needed (error_is?, error_as)
+	needsRegexp                  bool                         // track if regexp import is needed (regex literals)
 	needsTestingImport           bool                         // track if testing import is needed
 	needsTestImport              bool                         // track if rugby/test import is needed
 	currentClass                 string                       // current class being generated (for instance vars)
@@ -652,9 +653,10 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	needsRuntimeImport := g.needsRuntime && !userImports[runtimeImport]
 	needsFmtImport := g.needsFmt && !userImports["fmt"]
 	needsErrorsImport := g.needsErrors && !userImports["errors"]
+	needsRegexpImport := g.needsRegexp && !userImports["regexp"]
 	needsTestingImport := g.needsTestingImport && !userImports["testing"]
 	needsTestImport := g.needsTestImport && !userImports[testImport]
-	hasImports := len(program.Imports) > 0 || needsRuntimeImport || needsFmtImport || needsErrorsImport || needsTestingImport || needsTestImport
+	hasImports := len(program.Imports) > 0 || needsRuntimeImport || needsFmtImport || needsErrorsImport || needsRegexpImport || needsTestingImport || needsTestImport
 	if hasImports {
 		out.WriteString("import (\n")
 		// User-specified imports
@@ -672,6 +674,9 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 		}
 		if needsFmtImport {
 			out.WriteString("\t\"fmt\"\n")
+		}
+		if needsRegexpImport {
+			out.WriteString("\t\"regexp\"\n")
 		}
 		if needsTestingImport {
 			out.WriteString("\t\"testing\"\n")

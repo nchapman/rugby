@@ -239,6 +239,17 @@ type SymbolLit struct {
 func (s *SymbolLit) node()     {}
 func (s *SymbolLit) exprNode() {}
 
+// RegexLit represents a regular expression literal /pattern/flags
+type RegexLit struct {
+	Pattern string // the regex pattern
+	Flags   string // optional flags (i, m, x)
+	Line    int    // 1-indexed line number
+	Column  int    // 1-indexed column number
+}
+
+func (r *RegexLit) node()     {}
+func (r *RegexLit) exprNode() {}
+
 // ArrayLit represents an array literal
 type ArrayLit struct {
 	Elements []Expression

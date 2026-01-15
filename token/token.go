@@ -19,6 +19,7 @@ const (
 	SYMBOL         TokenType = "SYMBOL"
 	WORDARRAY      TokenType = "WORDARRAY"    // %w{...} word array literal
 	INTERPWARRAY   TokenType = "INTERPWARRAY" // %W{...} interpolated word array
+	REGEX          TokenType = "REGEX"        // /pattern/flags regex literal
 
 	// Operators
 	PLUS       TokenType = "+"
@@ -30,12 +31,14 @@ const (
 	BANG       TokenType = "!"
 
 	// Comparison
-	EQ TokenType = "=="
-	NE TokenType = "!="
-	LT TokenType = "<"
-	GT TokenType = ">"
-	LE TokenType = "<="
-	GE TokenType = ">="
+	EQ       TokenType = "=="
+	NE       TokenType = "!="
+	LT       TokenType = "<"
+	GT       TokenType = ">"
+	LE       TokenType = "<="
+	GE       TokenType = ">="
+	MATCH    TokenType = "=~" // regex match
+	NOTMATCH TokenType = "!~" // regex not match
 
 	// Assignment
 	ASSIGN      TokenType = "="

@@ -37,6 +37,8 @@ var precedences = map[token.TokenType]int{
 	token.AND:              andPrec,
 	token.EQ:               equals,
 	token.NE:               equals,
+	token.MATCH:            equals, // =~ (regex match)
+	token.NOTMATCH:         equals, // !~ (regex not match)
 	token.LT:               lessGreater,
 	token.GT:               lessGreater,
 	token.LE:               lessGreater,

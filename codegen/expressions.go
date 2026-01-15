@@ -38,6 +38,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.buf.WriteString("nil")
 	case *ast.SymbolLit:
 		g.buf.WriteString(fmt.Sprintf("%q", e.Value))
+	case *ast.RegexLit:
+		g.genRegexLit(e)
 
 	// Literals: composite values
 	case *ast.ArrayLit:
@@ -326,6 +328,16 @@ func (g *Generator) genRangeMethodCall(rangeExpr ast.Expression, method string, 
 }
 
 func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
+	// Handle regex match operators
+	if e.Op == "=~" {
+		g.genRegexMatch(e.Left, e.Right, false)
+		return
+	}
+	if e.Op == "!~" {
+		g.genRegexMatch(e.Left, e.Right, true)
+		return
+	}
+
 	// Check if we can use direct comparison instead of runtime.Equal
 	canUseDirectEqual := g.canUseDirectComparison(e.Left, e.Right)
 
@@ -597,6 +609,46 @@ func (g *Generator) genInterpolatedString(s *ast.InterpolatedString) {
 		}
 	}
 	g.buf.WriteString(")")
+}
+
+// genRegexMatch generates code for =~ and !~ operators.
+// For `string =~ regex`, generates `regex.MatchString(string)`.
+// For `string !~ regex`, generates `!regex.MatchString(string)`.
+func (g *Generator) genRegexMatch(left, right ast.Expression, negate bool) {
+	if negate {
+		g.buf.WriteString("!")
+	}
+	g.buf.WriteString("(")
+	g.genExpr(right)
+	g.buf.WriteString(").MatchString(")
+	g.genExpr(left)
+	g.buf.WriteString(")")
+}
+
+// genRegexLit generates a compiled regex: regexp.MustCompile("pattern")
+// Flags are prepended to the pattern as (?flags).
+func (g *Generator) genRegexLit(r *ast.RegexLit) {
+	g.needsRegexp = true
+
+	pattern := r.Pattern
+	if r.Flags != "" {
+		// Prepend flags as (?flags) to the pattern
+		// Go supports: i (case insensitive), m (multiline), s (. matches \n)
+		// Map Rugby flags: i -> i, m -> m, s -> s, x is not supported in Go
+		goFlags := ""
+		for _, f := range r.Flags {
+			switch f {
+			case 'i', 'm', 's':
+				goFlags += string(f)
+				// 'x' (extended/verbose) is not supported in Go regexp, skip it
+			}
+		}
+		if goFlags != "" {
+			pattern = "(?" + goFlags + ")" + pattern
+		}
+	}
+
+	g.buf.WriteString(fmt.Sprintf("regexp.MustCompile(%q)", pattern))
 }
 
 func (g *Generator) genArrayLit(arr *ast.ArrayLit) {

@@ -16,34 +16,37 @@ type Comment struct {
 }
 
 type Lexer struct {
-	input    string
-	pos      int  // current position in input
-	readPos  int  // next position to read
-	ch       byte // current char
-	line     int
-	column   int
-	Comments []Comment // collected comments during lexing
+	input         string
+	pos           int  // current position in input
+	readPos       int  // next position to read
+	ch            byte // current char
+	line          int
+	column        int
+	Comments      []Comment       // collected comments during lexing
+	prevTokenType token.TokenType // previous token type for context-sensitive lexing
 }
 
 // LexerState holds lexer state for save/restore
 type LexerState struct {
-	pos         int
-	readPos     int
-	ch          byte
-	line        int
-	column      int
-	commentsLen int
+	pos           int
+	readPos       int
+	ch            byte
+	line          int
+	column        int
+	commentsLen   int
+	prevTokenType token.TokenType
 }
 
 // SaveState returns the current lexer state
 func (l *Lexer) SaveState() LexerState {
 	return LexerState{
-		pos:         l.pos,
-		readPos:     l.readPos,
-		ch:          l.ch,
-		line:        l.line,
-		column:      l.column,
-		commentsLen: len(l.Comments),
+		pos:           l.pos,
+		readPos:       l.readPos,
+		ch:            l.ch,
+		line:          l.line,
+		column:        l.column,
+		commentsLen:   len(l.Comments),
+		prevTokenType: l.prevTokenType,
 	}
 }
 
@@ -54,6 +57,7 @@ func (l *Lexer) RestoreState(s LexerState) {
 	l.ch = s.ch
 	l.line = s.line
 	l.column = s.column
+	l.prevTokenType = s.prevTokenType
 	// Truncate comments that might have been added during the speculative execution
 	if len(l.Comments) > s.commentsLen {
 		l.Comments = l.Comments[:s.commentsLen]
@@ -137,6 +141,7 @@ func (l *Lexer) NextToken() token.Token {
 		tok.Line = l.line
 		tok.Column = l.column
 		tok.SpaceBefore = spaceBefore
+		l.prevTokenType = tok.Type
 		return tok
 	case '\'':
 		tok.Type = token.STRING
@@ -144,6 +149,7 @@ func (l *Lexer) NextToken() token.Token {
 		tok.Line = l.line
 		tok.Column = l.column
 		tok.SpaceBefore = spaceBefore
+		l.prevTokenType = tok.Type
 		return tok
 	case '#':
 		l.readComment()
@@ -179,6 +185,11 @@ func (l *Lexer) NextToken() token.Token {
 		if l.peekChar() == '=' {
 			l.readChar()
 			tok = l.newToken(token.SLASHASSIGN, "/=")
+		} else if l.isRegexContext() && l.looksLikeRegex() {
+			tok = l.readRegex()
+			tok.SpaceBefore = spaceBefore
+			l.prevTokenType = tok.Type
+			return tok
 		} else {
 			tok = l.newToken(token.SLASH, "/")
 		}
@@ -190,6 +201,7 @@ func (l *Lexer) NextToken() token.Token {
 			l.readChar() // consume delimiter opening
 			tok = l.readWordArray(isInterpolated)
 			tok.SpaceBefore = spaceBefore
+			l.prevTokenType = tok.Type
 			return tok
 		}
 		tok = l.newToken(token.PERCENT, "%")
@@ -249,6 +261,7 @@ func (l *Lexer) NextToken() token.Token {
 			tok.Type = token.SYMBOL
 			tok.Literal = l.readIdentifier()
 			tok.SpaceBefore = spaceBefore
+			l.prevTokenType = tok.Type
 			return tok
 		}
 		tok = l.newToken(token.COLON, ":")
@@ -273,6 +286,9 @@ func (l *Lexer) NextToken() token.Token {
 		} else if l.peekChar() == '>' {
 			l.readChar()
 			tok = l.newToken(token.HASHROCKET, "=>")
+		} else if l.peekChar() == '~' {
+			l.readChar()
+			tok = l.newToken(token.MATCH, "=~")
 		} else {
 			tok = l.newToken(token.ASSIGN, "=")
 		}
@@ -280,6 +296,9 @@ func (l *Lexer) NextToken() token.Token {
 		if l.peekChar() == '=' {
 			l.readChar()
 			tok = l.newToken(token.NE, "!=")
+		} else if l.peekChar() == '~' {
+			l.readChar()
+			tok = l.newToken(token.NOTMATCH, "!~")
 		} else {
 			tok = l.newToken(token.BANG, "!")
 		}
@@ -292,18 +311,26 @@ func (l *Lexer) NextToken() token.Token {
 			// Check for heredoc: <<IDENT, <<-IDENT, <<~IDENT, or <<'IDENT'
 			nextChar := l.peekChar()
 			if isLetter(nextChar) || nextChar == '_' {
-				return l.readHeredoc(false, false, false)
+				tok = l.readHeredoc(false, false, false)
+				l.prevTokenType = tok.Type
+				return tok
 			} else if nextChar == '\'' {
 				// Single-quoted heredoc: <<'DELIM' - no interpolation
-				return l.readHeredoc(false, false, true)
+				tok = l.readHeredoc(false, false, true)
+				l.prevTokenType = tok.Type
+				return tok
 			} else if nextChar == '-' || nextChar == '~' {
 				stripIndent := nextChar == '~'
 				l.readChar() // consume - or ~
 				if isLetter(l.peekChar()) || l.peekChar() == '_' {
-					return l.readHeredoc(true, stripIndent, false)
+					tok = l.readHeredoc(true, stripIndent, false)
+					l.prevTokenType = tok.Type
+					return tok
 				} else if l.peekChar() == '\'' {
 					// <<-'DELIM' or <<~'DELIM'
-					return l.readHeredoc(true, stripIndent, true)
+					tok = l.readHeredoc(true, stripIndent, true)
+					l.prevTokenType = tok.Type
+					return tok
 				}
 				// Not a heredoc, was just <<- or <<~ without identifier
 				// This is an error case, but we'll let parser handle it
@@ -329,11 +356,13 @@ func (l *Lexer) NextToken() token.Token {
 			tok.Literal = l.readIdentifier()
 			tok.Type = token.LookupIdent(tok.Literal)
 			tok.SpaceBefore = spaceBefore
+			l.prevTokenType = tok.Type
 			return tok
 		}
 		if isDigit(l.ch) {
 			tok = l.readNumber()
 			tok.SpaceBefore = spaceBefore
+			l.prevTokenType = tok.Type
 			return tok
 		}
 		tok = l.newToken(token.ILLEGAL, string(l.ch))
@@ -341,6 +370,7 @@ func (l *Lexer) NextToken() token.Token {
 
 	l.readChar()
 	tok.SpaceBefore = spaceBefore
+	l.prevTokenType = tok.Type
 	return tok
 }
 
@@ -686,6 +716,107 @@ func (l *Lexer) CollectComments() []*ast.CommentGroup {
 	}
 
 	return groups
+}
+
+// looksLikeRegex returns true if the character after '/' looks like
+// the start of a regex pattern (not whitespace, newline, or EOF).
+func (l *Lexer) looksLikeRegex() bool {
+	next := l.peekChar()
+	// If followed by whitespace, newline, or EOF, it's not a regex
+	return next != ' ' && next != '\t' && next != '\n' && next != '\r' && next != 0
+}
+
+// isRegexContext returns true if the previous token indicates that
+// a following '/' should be interpreted as a regex delimiter rather than division.
+func (l *Lexer) isRegexContext() bool {
+	switch l.prevTokenType {
+	// After operators, '/' starts a regex
+	case token.PLUS, token.MINUS, token.STAR, token.SLASH, token.PERCENT,
+		token.DOUBLESTAR, token.ASSIGN, token.PLUSASSIGN, token.MINUSASSIGN,
+		token.STARASSIGN, token.SLASHASSIGN, token.ORASSIGN,
+		token.EQ, token.NE, token.LT, token.GT, token.LE, token.GE,
+		token.MATCH, token.NOTMATCH,
+		token.BANG, token.QUESTION, token.QUESTIONQUESTION,
+		token.COMMA, token.COLON, token.HASHROCKET,
+		token.ARROW, token.DOTDOT, token.TRIPLEDOT:
+		return true
+	// After open delimiters, '/' starts a regex
+	case token.LPAREN, token.LBRACKET, token.LBRACE, token.PIPE:
+		return true
+	// After certain keywords, '/' starts a regex
+	// Note: IN is deliberately excluded because import paths like "gopkg.in/yaml"
+	// would incorrectly trigger regex parsing.
+	case token.IF, token.ELSIF, token.ELSE, token.UNLESS,
+		token.WHILE, token.UNTIL, token.WHEN, token.RETURN,
+		token.CASE, token.AND, token.OR, token.NOT,
+		token.DO:
+		return true
+	// At the start of a statement (after newline or at beginning)
+	case token.NEWLINE, "":
+		return true
+	default:
+		return false
+	}
+}
+
+// readRegex reads a regex literal: /pattern/flags
+// Returns the token (REGEX on success, or falls back to SLASH).
+func (l *Lexer) readRegex() token.Token {
+	startLine := l.line
+	startCol := l.column
+
+	l.readChar() // consume opening '/'
+
+	var pattern strings.Builder
+	for l.ch != '/' && l.ch != 0 && l.ch != '\n' {
+		if l.ch == '\\' {
+			// Escape sequence - include both backslash and next char
+			pattern.WriteByte(l.ch)
+			l.readChar()
+			if l.ch != 0 && l.ch != '\n' {
+				pattern.WriteByte(l.ch)
+				l.readChar()
+			}
+		} else {
+			pattern.WriteByte(l.ch)
+			l.readChar()
+		}
+	}
+
+	// Must end with '/'
+	if l.ch != '/' {
+		// Not a valid regex, but we've consumed characters.
+		// Return as ILLEGAL or handle differently.
+		return token.Token{
+			Type:    token.ILLEGAL,
+			Literal: "unterminated regex literal",
+			Line:    startLine,
+			Column:  startCol,
+		}
+	}
+
+	l.readChar() // consume closing '/'
+
+	// Read optional flags: i (case-insensitive), m (multiline), s (single-line), x (extended)
+	var flags strings.Builder
+	for l.ch == 'i' || l.ch == 'm' || l.ch == 's' || l.ch == 'x' {
+		flags.WriteByte(l.ch)
+		l.readChar()
+	}
+
+	// Combine pattern and flags in the literal
+	// Format: pattern + "\x00" + flags (null separator)
+	literal := pattern.String()
+	if flags.Len() > 0 {
+		literal += "\x00" + flags.String()
+	}
+
+	return token.Token{
+		Type:    token.REGEX,
+		Literal: literal,
+		Line:    startLine,
+		Column:  startCol,
+	}
 }
 
 func isLetter(ch byte) bool {

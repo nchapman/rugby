@@ -1707,3 +1707,161 @@ func TestBlankIdentifier(t *testing.T) {
 		t.Errorf("expected literal '_', got %q", tok.Literal)
 	}
 }
+
+func TestMatchOperators(t *testing.T) {
+	tests := []struct {
+		input           string
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{"=~", token.MATCH, "=~"},
+		{"!~", token.NOTMATCH, "!~"},
+		// Make sure we don't confuse with other operators
+		{"==", token.EQ, "=="},
+		{"!=", token.NE, "!="},
+		{"=", token.ASSIGN, "="},
+		{"!", token.BANG, "!"},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		tok := l.NextToken()
+		if tok.Type != tt.expectedType {
+			t.Errorf("input %q: expected type %q, got %q", tt.input, tt.expectedType, tok.Type)
+		}
+		if tok.Literal != tt.expectedLiteral {
+			t.Errorf("input %q: expected literal %q, got %q", tt.input, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}
+
+func TestRegexLiteral(t *testing.T) {
+	tests := []struct {
+		name            string
+		input           string
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{
+			name:            "simple regex",
+			input:           "/hello/",
+			expectedType:    token.REGEX,
+			expectedLiteral: "hello",
+		},
+		{
+			name:            "regex with flags",
+			input:           "/hello/i",
+			expectedType:    token.REGEX,
+			expectedLiteral: "hello\x00i",
+		},
+		{
+			name:            "regex with multiple flags",
+			input:           "/hello/im",
+			expectedType:    token.REGEX,
+			expectedLiteral: "hello\x00im",
+		},
+		{
+			name:            "regex with escaped slash",
+			input:           `/a\/b/`,
+			expectedType:    token.REGEX,
+			expectedLiteral: `a\/b`,
+		},
+		{
+			name:            "regex with special chars",
+			input:           `/\d+/`,
+			expectedType:    token.REGEX,
+			expectedLiteral: `\d+`,
+		},
+		{
+			name:            "empty regex",
+			input:           "//",
+			expectedType:    token.REGEX,
+			expectedLiteral: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := New(tt.input)
+			tok := l.NextToken()
+			if tok.Type != tt.expectedType {
+				t.Errorf("expected type %q, got %q", tt.expectedType, tok.Type)
+			}
+			if tok.Literal != tt.expectedLiteral {
+				t.Errorf("expected literal %q, got %q", tt.expectedLiteral, tok.Literal)
+			}
+		})
+	}
+}
+
+func TestRegexVsDivision(t *testing.T) {
+	// Test that / is correctly interpreted based on context
+	tests := []struct {
+		name     string
+		input    string
+		expected []token.TokenType
+	}{
+		{
+			name:     "regex at start",
+			input:    `/hello/`,
+			expected: []token.TokenType{token.REGEX},
+		},
+		{
+			name:     "division after number",
+			input:    `10 / 2`,
+			expected: []token.TokenType{token.INT, token.SLASH, token.INT},
+		},
+		{
+			name:     "division after ident",
+			input:    `a / b`,
+			expected: []token.TokenType{token.IDENT, token.SLASH, token.IDENT},
+		},
+		{
+			name:     "regex after assign",
+			input:    `x = /hello/`,
+			expected: []token.TokenType{token.IDENT, token.ASSIGN, token.REGEX},
+		},
+		{
+			name:     "regex after match op",
+			input:    `x =~ /hello/`,
+			expected: []token.TokenType{token.IDENT, token.MATCH, token.REGEX},
+		},
+		{
+			name:     "regex after lparen",
+			input:    `(/hello/)`,
+			expected: []token.TokenType{token.LPAREN, token.REGEX, token.RPAREN},
+		},
+		{
+			name:     "division after rparen",
+			input:    `(a) / b`,
+			expected: []token.TokenType{token.LPAREN, token.IDENT, token.RPAREN, token.SLASH, token.IDENT},
+		},
+		{
+			name:     "regex after if",
+			input:    `if /hello/`,
+			expected: []token.TokenType{token.IF, token.REGEX},
+		},
+		{
+			name:     "regex after comma",
+			input:    `foo(a, /hello/)`,
+			expected: []token.TokenType{token.IDENT, token.LPAREN, token.IDENT, token.COMMA, token.REGEX, token.RPAREN},
+		},
+		{
+			name:     "regex after newline",
+			input:    "x\n/hello/",
+			expected: []token.TokenType{token.IDENT, token.NEWLINE, token.REGEX},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := New(tt.input)
+			for i, exp := range tt.expected {
+				tok := l.NextToken()
+				if tok.Type != exp {
+					t.Errorf("token[%d]: expected %q, got %q", i, exp, tok.Type)
+				}
+			}
+		})
+	}
+}
