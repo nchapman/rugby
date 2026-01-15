@@ -2126,6 +2126,43 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		a.analyzeBlock(e)
 		typ = TypeUnknownVal
 
+	case *ast.LambdaExpr:
+		// Create a new scope for the lambda
+		lambdaScope := NewScope(ScopeBlock, a.scope)
+		prevScope := a.scope
+		a.scope = lambdaScope
+
+		// Add parameters to scope
+		for _, param := range e.Params {
+			paramType := TypeUnknownVal
+			if param.Type != "" {
+				paramType = ParseType(param.Type)
+			}
+			mustDefine(lambdaScope, NewSymbol(param.Name, SymParam, paramType))
+		}
+
+		// Analyze body
+		for _, stmt := range e.Body {
+			a.analyzeStatement(stmt)
+		}
+
+		a.scope = prevScope
+
+		// Build function type: (ParamTypes) -> ReturnType
+		var paramTypes []*Type
+		for _, param := range e.Params {
+			if param.Type != "" {
+				paramTypes = append(paramTypes, ParseType(param.Type))
+			} else {
+				paramTypes = append(paramTypes, TypeAnyVal)
+			}
+		}
+		returnType := TypeAnyVal
+		if e.ReturnType != "" {
+			returnType = ParseType(e.ReturnType)
+		}
+		typ = NewFuncType(paramTypes, []*Type{returnType})
+
 	case *ast.InterpolatedString:
 		for _, part := range e.Parts {
 			if partExpr, ok := part.(ast.Expression); ok {

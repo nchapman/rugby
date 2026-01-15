@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -135,6 +136,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genSuperExpr(e)
 	case *ast.SymbolToProcExpr:
 		g.genSymbolToProcExpr(e)
+	case *ast.LambdaExpr:
+		g.genLambdaExpr(e)
 	}
 }
 
@@ -214,6 +217,82 @@ func (g *Generator) genRangeLit(r *ast.RangeLit) {
 	} else {
 		g.buf.WriteString("false")
 	}
+	g.buf.WriteString("}")
+}
+
+// genLambdaExpr generates code for arrow lambda expressions: -> (params) { body }
+// Lambdas compile to Go anonymous functions (closures).
+func (g *Generator) genLambdaExpr(e *ast.LambdaExpr) {
+	g.buf.WriteString("func(")
+
+	// Generate parameters
+	for i, param := range e.Params {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.buf.WriteString(param.Name)
+		if param.Type != "" {
+			g.buf.WriteString(" ")
+			g.buf.WriteString(mapType(param.Type))
+		} else {
+			// Default to any if no type annotation
+			g.buf.WriteString(" any")
+		}
+	}
+
+	g.buf.WriteString(")")
+
+	// Generate return type
+	if e.ReturnType != "" {
+		g.buf.WriteString(" ")
+		g.buf.WriteString(mapType(e.ReturnType))
+	} else if len(e.Body) > 0 {
+		// If no return type but body has statements, use 'any' as return type
+		// to allow implicit returns
+		g.buf.WriteString(" any")
+	}
+
+	g.buf.WriteString(" {\n")
+	g.indent++
+
+	// Save variable scope
+	savedVars := maps.Clone(g.vars)
+
+	// Add parameters to scope
+	for _, param := range e.Params {
+		goType := "any"
+		if param.Type != "" {
+			goType = mapType(param.Type)
+		}
+		g.vars[param.Name] = goType
+	}
+
+	// Generate body
+	if len(e.Body) > 0 {
+		// Check if last statement is an expression that should be returned
+		lastIdx := len(e.Body) - 1
+		for i, stmt := range e.Body {
+			if i == lastIdx {
+				// For the last statement, if it's an expression statement, add return
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+				} else {
+					g.genStatement(stmt)
+				}
+			} else {
+				g.genStatement(stmt)
+			}
+		}
+	}
+
+	// Restore variable scope
+	g.vars = savedVars
+
+	g.indent--
+	g.writeIndent()
 	g.buf.WriteString("}")
 }
 

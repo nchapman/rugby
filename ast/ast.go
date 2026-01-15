@@ -113,6 +113,18 @@ type BlockExpr struct {
 func (b *BlockExpr) node()     {}
 func (b *BlockExpr) exprNode() {}
 
+// LambdaExpr represents an arrow lambda: -> (params) { body } or -> (params) do body end
+// Lambdas are first-class values that can be assigned to variables and passed as arguments.
+type LambdaExpr struct {
+	Params     []*Param    // parameter list with optional types
+	ReturnType string      // optional return type annotation
+	Body       []Statement // the statements in the lambda
+	Line       int         // source line number
+}
+
+func (l *LambdaExpr) node()     {}
+func (l *LambdaExpr) exprNode() {}
+
 // CallExpr represents a function call, optionally with a block
 type CallExpr struct {
 	Func  Expression // function being called

@@ -52,6 +52,8 @@ func (p *Parser) parseExpression(precedence int) ast.Expression {
 		left = p.parseConcurrentlyExpr()
 	case token.AMP:
 		left = p.parseSymbolToProc()
+	case token.ARROW:
+		left = p.parseLambdaExpr()
 	default:
 		return nil
 	}
@@ -110,8 +112,14 @@ infixLoop:
 			p.nextToken()
 			left = p.parseRangeLit(left)
 		case token.DOT:
-			p.nextToken()
-			left = p.parseSelectorExpr(left)
+			p.nextToken() // curToken is now DOT
+			// Check for lambda call syntax: lambda.()
+			if p.peekTokenIs(token.LPAREN) {
+				p.nextToken() // curToken is now LPAREN
+				left = p.parseLambdaCall(left)
+			} else {
+				left = p.parseSelectorExpr(left)
+			}
 		case token.LPAREN:
 			p.nextToken()
 			left = p.parseCallExprWithParens(left)
@@ -655,4 +663,143 @@ func (p *Parser) parseCommandCall(fn ast.Expression) *ast.CallExpr {
 	}
 
 	return call
+}
+
+// parseLambdaCall parses lambda call syntax: lambda.(args)
+// This is equivalent to lambda.call(args) and compiles to a direct function call.
+func (p *Parser) parseLambdaCall(lambda ast.Expression) ast.Expression {
+	// curToken is '('
+	call := &ast.CallExpr{Func: lambda}
+
+	p.nextToken() // consume '('
+
+	// Parse arguments
+	if !p.curTokenIs(token.RPAREN) {
+		arg := p.parseExpression(lowest)
+		if arg != nil {
+			call.Args = append(call.Args, arg)
+		}
+
+		for p.peekTokenIs(token.COMMA) {
+			p.nextToken() // move to ','
+			p.nextToken() // move to next arg
+			arg := p.parseExpression(lowest)
+			if arg != nil {
+				call.Args = append(call.Args, arg)
+			}
+		}
+
+		p.nextToken() // move to ')'
+	}
+
+	if !p.curTokenIs(token.RPAREN) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected ')' after arguments")
+		return nil
+	}
+
+	return call
+}
+
+// parseLambdaExpr parses arrow lambda expressions:
+//
+//	-> { expr }                    # no params
+//	-> (x) { x * 2 }               # one param
+//	-> (x, y) { x + y }            # multiple params
+//	-> (x : Int) -> Int { x * 2 }  # with type annotations
+//	-> (x) do ... end              # multiline form
+func (p *Parser) parseLambdaExpr() ast.Expression {
+	line := p.curToken.Line
+	p.nextToken() // consume '->'
+
+	lambda := &ast.LambdaExpr{Line: line}
+
+	// Parse optional parameter list
+	if p.curTokenIs(token.LPAREN) {
+		p.nextToken() // consume '('
+
+		// Parse parameters until ')'
+		for !p.curTokenIs(token.RPAREN) && !p.curTokenIs(token.EOF) {
+			if !p.curTokenIs(token.IDENT) {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected parameter name")
+				return nil
+			}
+
+			param := &ast.Param{Name: p.curToken.Literal}
+			p.nextToken()
+
+			// Optional type annotation
+			if p.curTokenIs(token.COLON) {
+				p.nextToken() // consume ':'
+				param.Type = p.parseTypeName()
+			}
+
+			lambda.Params = append(lambda.Params, param)
+
+			// Handle comma or end of params
+			if p.curTokenIs(token.COMMA) {
+				p.nextToken() // consume ','
+			} else if !p.curTokenIs(token.RPAREN) {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected ',' or ')' after parameter")
+				return nil
+			}
+		}
+
+		if !p.curTokenIs(token.RPAREN) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ')' after parameters")
+			return nil
+		}
+		p.nextToken() // consume ')'
+	}
+
+	// Parse optional return type: -> Type
+	if p.curTokenIs(token.ARROW) {
+		p.nextToken() // consume '->'
+		lambda.ReturnType = p.parseTypeName()
+	}
+
+	// Parse body: { ... } or do ... end
+	if p.curTokenIs(token.LBRACE) {
+		p.nextToken() // consume '{'
+
+		// Skip any leading newlines
+		p.skipNewlines()
+
+		// Parse body statements
+		for !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
+			stmt := p.parseStatement()
+			if stmt != nil {
+				lambda.Body = append(lambda.Body, stmt)
+			}
+			p.skipNewlines()
+		}
+
+		if !p.curTokenIs(token.RBRACE) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '}' to close lambda body")
+			return nil
+		}
+		// Don't advance past '}' - let the caller handle it
+	} else if p.curTokenIs(token.DO) {
+		p.nextToken() // consume 'do'
+		p.skipNewlines()
+
+		// Parse body statements until 'end'
+		for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+			stmt := p.parseStatement()
+			if stmt != nil {
+				lambda.Body = append(lambda.Body, stmt)
+			}
+			p.skipNewlines()
+		}
+
+		if !p.curTokenIs(token.END) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close lambda body")
+			return nil
+		}
+		// Don't advance past 'end' - let the caller handle it
+	} else {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '{' or 'do' for lambda body")
+		return nil
+	}
+
+	return lambda
 }
