@@ -93,6 +93,27 @@ func MapHasKey[K comparable, V any](m map[K]V, key K) bool {
 	return ok
 }
 
+// MapLength returns the number of key-value pairs in the map.
+// Ruby: hash.length, hash.size
+func MapLength[K comparable, V any](m map[K]V) int {
+	return len(m)
+}
+
+// MapEmpty returns true if the map has no entries.
+// Ruby: hash.empty?
+func MapEmpty[K comparable, V any](m map[K]V) bool {
+	return len(m) == 0
+}
+
+// MapGet returns the value for the key as an optional (nil if not found).
+// Ruby: hash.get(key) - returns optional unlike hash[key] which panics on missing
+func MapGet[K comparable, V any](m map[K]V, key K) *V {
+	if v, ok := m[key]; ok {
+		return &v
+	}
+	return nil
+}
+
 // MapClear removes all entries from the map.
 // Ruby: hash.clear
 func MapClear[K comparable, V any](m map[K]V) {

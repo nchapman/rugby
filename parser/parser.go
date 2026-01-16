@@ -183,9 +183,25 @@ func (p *Parser) isFunctionTypeAhead() bool {
 func (p *Parser) parseBlocksAndChaining(expr ast.Expression) ast.Expression {
 	for {
 		// Check for block: expr do |params| ... end  OR  expr {|params| ... }
+		// Only attach blocks to method calls (CallExpr or SelectorExpr), not plain identifiers
+		// This prevents `puts {}` from treating {} as a block - it should be a map literal
 		if p.peekTokenIs(token.DO) || p.peekTokenIs(token.LBRACE) {
-			expr = p.parseBlockCall(expr)
-			continue
+			switch e := expr.(type) {
+			case *ast.CallExpr:
+				expr = p.parseBlockCall(expr)
+				continue
+			case *ast.SelectorExpr:
+				// Check for Go struct literal pattern: pkg.Type{} where pkg is lowercase
+				// and Type is PascalCase. Empty {} is a Go zero-value initializer, not a block.
+				if p.peekTokenIs(token.LBRACE) && p.looksLikeGoStructLiteral(e) {
+					expr = p.parseGoStructLiteral(e)
+					continue
+				}
+				expr = p.parseBlockCall(expr)
+				continue
+			}
+			// Not a valid block target - break to let caller handle LBRACE as map literal
+			break
 		}
 		// Check for trailing lambda: expr -> (params) { ... }
 		if p.peekTokenIs(token.ARROW) {
@@ -222,6 +238,74 @@ func (p *Parser) parseBlocksAndChaining(expr ast.Expression) ast.Expression {
 		break
 	}
 	return expr
+}
+
+// looksLikeGoStructLiteral checks if a selector expression looks like a Go type constructor
+// (e.g., sync.WaitGroup, bytes.Buffer, etc.) where the package is lowercase and type is PascalCase.
+// This is a heuristic to distinguish Go struct literals from Ruby blocks.
+func (p *Parser) looksLikeGoStructLiteral(sel *ast.SelectorExpr) bool {
+	// Check if we have pkg.Type pattern
+	ident, ok := sel.X.(*ast.Ident)
+	if !ok {
+		return false
+	}
+
+	// Package should be lowercase (Go convention)
+	pkgName := ident.Name
+	if len(pkgName) == 0 || pkgName[0] < 'a' || pkgName[0] > 'z' {
+		return false
+	}
+
+	// Type should be PascalCase (Go exported type)
+	typeName := sel.Sel
+	if len(typeName) == 0 || typeName[0] < 'A' || typeName[0] > 'Z' {
+		return false
+	}
+
+	// Check if {} is empty by looking ahead
+	// Save lexer state for lookahead
+	state := p.l.SaveState()
+	savedCur := p.curToken
+	savedPeek := p.peekToken
+
+	p.nextToken() // move to '{'
+	p.nextToken() // move past '{'
+
+	isEmpty := p.curTokenIs(token.RBRACE)
+
+	// Restore state
+	p.l.RestoreState(state)
+	p.curToken = savedCur
+	p.peekToken = savedPeek
+
+	return isEmpty
+}
+
+// parseGoStructLiteral parses a Go struct literal like sync.WaitGroup{}
+// Returns a GoStructLit AST node.
+func (p *Parser) parseGoStructLiteral(sel *ast.SelectorExpr) ast.Expression {
+	ident, ok := sel.X.(*ast.Ident)
+	if !ok {
+		// Should never happen since looksLikeGoStructLiteral already checked
+		return sel
+	}
+	line := ident.Line
+	col := ident.Column
+
+	p.nextToken() // move to '{'
+	p.nextToken() // consume '{'
+
+	if !p.curTokenIs(token.RBRACE) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '}' in Go struct literal")
+		return sel
+	}
+
+	return &ast.GoStructLit{
+		Package: ident.Name,
+		Type:    sel.Sel,
+		Line:    line,
+		Column:  col,
+	}
 }
 
 // leadingComments returns a group of consecutive comments that end immediately

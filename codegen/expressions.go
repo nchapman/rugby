@@ -65,6 +65,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genTupleLit(e)
 	case *ast.SetLit:
 		g.genSetLit(e)
+	case *ast.GoStructLit:
+		g.genGoStructLit(e)
 
 	// Identifiers
 	case *ast.Ident:
@@ -966,6 +968,18 @@ func (g *Generator) genSetLit(s *ast.SetLit) {
 	}
 
 	g.buf.WriteString("}")
+}
+
+// genGoStructLit generates Go code for a Go struct literal: sync.WaitGroup{} -> &sync.WaitGroup{}
+func (g *Generator) genGoStructLit(s *ast.GoStructLit) {
+	// Mark this import as used
+	g.imports[s.Package] = true
+	// Generate pointer to struct for consistent behavior with Go types
+	g.buf.WriteString("&")
+	g.buf.WriteString(s.Package)
+	g.buf.WriteString(".")
+	g.buf.WriteString(s.Type)
+	g.buf.WriteString("{}")
 }
 
 func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
@@ -3271,8 +3285,14 @@ func (g *Generator) isGoInterop(expr ast.Expression) bool {
 }
 
 // isGoInteropTypeConstructor checks if an expression is a Go type constructor like sync.WaitGroup.new
+// or a Go struct literal like sync.WaitGroup{}.
 // Returns true if the expression creates an instance of a Go type.
 func (g *Generator) isGoInteropTypeConstructor(expr ast.Expression) bool {
+	// Check for GoStructLit (sync.WaitGroup{})
+	if goStruct, ok := expr.(*ast.GoStructLit); ok {
+		return g.imports[goStruct.Package]
+	}
+
 	// First check for CallExpr (sync.WaitGroup.new())
 	if call, ok := expr.(*ast.CallExpr); ok {
 		sel, ok := call.Func.(*ast.SelectorExpr)

@@ -150,7 +150,7 @@ infixLoop:
 	// This enables `puts "hello"` instead of `puts("hello")`
 	// We check here because command arguments (like STRING) have no operator precedence,
 	// so the infix loop exits before we can handle them.
-	if p.isCallableExpr(left) && p.canStartCommandArg() {
+	if p.isCallableExpr(left) && p.canStartCommandArg(left) {
 		left = p.parseCommandCall(left)
 
 		// After command syntax, continue checking for low-precedence operators
@@ -555,11 +555,12 @@ func (p *Parser) parseSelectorExpr(x ast.Expression) ast.Expression {
 	p.nextToken() // move past '.' to the selector
 
 	// Allow certain keywords as method names (obj.as(Type), arr.select { |x| ... }, scope.spawn { })
-	// Also allow test keywords as method names
+	// Also allow test keywords and Go method keywords as method names
 	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.AS) && !p.curTokenIs(token.SELECT) &&
 		!p.curTokenIs(token.SPAWN) && !p.curTokenIs(token.AWAIT) &&
 		!p.curTokenIs(token.DESCRIBE) && !p.curTokenIs(token.IT) &&
-		!p.curTokenIs(token.BEFORE) && !p.curTokenIs(token.AFTER) {
+		!p.curTokenIs(token.BEFORE) && !p.curTokenIs(token.AFTER) &&
+		!p.curTokenIs(token.DO) { // For Go's sync.Once.Do
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '.'")
 		return nil
 	}
@@ -684,32 +685,51 @@ func (p *Parser) parseSymbolToProc() ast.Expression {
 	return &ast.SymbolToProcExpr{Method: p.curToken.Literal}
 }
 
-// parseConcurrentlyExpr parses: concurrently do |scope| ... end (in expression context)
+// parseConcurrentlyExpr parses two forms:
+// 1. concurrently do |scope| ... end
+// 2. concurrently -> (scope) do ... end (lambda form)
 func (p *Parser) parseConcurrentlyExpr() ast.Expression {
 	line := p.curToken.Line
 	p.nextToken() // consume 'concurrently'
 
-	// Expect 'do' keyword
-	if !p.curTokenIs(token.DO) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after 'concurrently'")
-		return nil
-	}
-
-	// Use parseBlock which handles the block parsing properly
-	block := p.parseBlock(token.END)
-	if block == nil {
-		return nil
-	}
-
-	// Extract scope variable from block params (first param is the scope)
 	var scopeVar string
-	if len(block.Params) > 0 {
-		scopeVar = block.Params[0]
+	var body []ast.Statement
+
+	// Check for lambda form: concurrently -> (scope) do ... end
+	if p.curTokenIs(token.ARROW) {
+		lambda := p.parseLambdaExpr()
+		if lambda == nil {
+			return nil
+		}
+		lambdaExpr, ok := lambda.(*ast.LambdaExpr)
+		if !ok {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected lambda expression after 'concurrently ->'")
+			return nil
+		}
+		// Extract scope variable from lambda params
+		if len(lambdaExpr.Params) > 0 {
+			scopeVar = lambdaExpr.Params[0].Name
+		}
+		body = lambdaExpr.Body
+	} else if p.curTokenIs(token.DO) {
+		// Block form: concurrently do |scope| ... end
+		block := p.parseBlock(token.END)
+		if block == nil {
+			return nil
+		}
+		// Extract scope variable from block params
+		if len(block.Params) > 0 {
+			scopeVar = block.Params[0]
+		}
+		body = block.Body
+	} else {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' or '->' after 'concurrently'")
+		return nil
 	}
 
 	return &ast.ConcurrentlyExpr{
 		ScopeVar: scopeVar,
-		Body:     block.Body,
+		Body:     body,
 		Line:     line,
 	}
 }
@@ -726,7 +746,9 @@ func (p *Parser) isCallableExpr(expr ast.Expression) bool {
 
 // canStartCommandArg returns true if the peek token can begin a command argument.
 // This is used to detect command syntax (calls without parentheses).
-func (p *Parser) canStartCommandArg() bool {
+// The expr parameter is the callable expression being checked - this affects
+// whether LBRACE can be a command argument (map literal) or should be treated as a block.
+func (p *Parser) canStartCommandArg(expr ast.Expression) bool {
 	t := p.peekToken.Type
 
 	// Must have space before the argument
@@ -740,9 +762,15 @@ func (p *Parser) canStartCommandArg() bool {
 		token.HEREDOC, token.HEREDOCLITERAL,
 		token.SYMBOL, token.TRUE, token.FALSE, token.NIL, token.SELF, token.REGEX:
 		return true
-	// Grouping and collection literals (not LBRACE - that's handled as a block)
+	// Grouping and collection literals (arrays always OK)
 	case token.LPAREN, token.LBRACKET:
 		return true
+	// LBRACE for map literals - only for plain identifiers like `puts {}`
+	// For method calls (SelectorExpr), LBRACE should be treated as a block, not a map
+	// e.g., `arr.each {}` is a block, not `arr.each` called with empty map argument
+	case token.LBRACE:
+		_, isIdent := expr.(*ast.Ident)
+		return isIdent
 	// Lambda expression (arrow syntax)
 	case token.ARROW:
 		return true

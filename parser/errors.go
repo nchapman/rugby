@@ -31,16 +31,6 @@ func (e ParseError) String() string {
 	return e.Error()
 }
 
-// error adds a parse error at the current token position.
-func (p *Parser) error(msg string) {
-	p.errors = append(p.errors, ParseError{
-		Line:    p.curToken.Line,
-		Column:  p.curToken.Column,
-		Message: msg,
-		Token:   p.curToken,
-	})
-}
-
 // errorAt adds a parse error at a specific position.
 func (p *Parser) errorAt(line, col int, msg string) {
 	p.errors = append(p.errors, ParseError{

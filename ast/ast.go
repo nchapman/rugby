@@ -303,6 +303,18 @@ type MapLit struct {
 func (m *MapLit) node()     {}
 func (m *MapLit) exprNode() {}
 
+// GoStructLit represents a Go struct literal like sync.WaitGroup{} or bytes.Buffer{}
+// Used for Go interop when creating Go types directly.
+type GoStructLit struct {
+	Package string // Go package name (e.g., "sync")
+	Type    string // Go type name (e.g., "WaitGroup")
+	Line    int    // source line number (1-indexed)
+	Column  int    // source column number (1-indexed)
+}
+
+func (g *GoStructLit) node()     {}
+func (g *GoStructLit) exprNode() {}
+
 // RangeLit represents a range literal like 1..10 or 0...n
 type RangeLit struct {
 	Start     Expression // start of range

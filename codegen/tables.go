@@ -89,12 +89,17 @@ var stdLib = map[string]map[string]MethodDef{
 		"keys":      {RuntimeFunc: "runtime.Keys", ReturnType: "Array"},
 		"values":    {RuntimeFunc: "runtime.Values", ReturnType: "Array"},
 		"has_key?":  {RuntimeFunc: "runtime.MapHasKey", ReturnType: "Bool"},
+		"key?":      {RuntimeFunc: "runtime.MapHasKey", ReturnType: "Bool"},
 		"contains?": {RuntimeFunc: "runtime.MapHasKey", ReturnType: "Bool"},
 		"delete":    {RuntimeFunc: "runtime.MapDelete", ReturnType: ""}, // V
 		"clear":     {RuntimeFunc: "runtime.MapClear", ReturnType: ""},
 		"invert":    {RuntimeFunc: "runtime.MapInvert", ReturnType: "Map"},
 		"merge":     {RuntimeFunc: "runtime.Merge", ReturnType: "Map"},
-		"fetch":     {RuntimeFunc: "runtime.Fetch", ReturnType: ""}, // V
+		"fetch":     {RuntimeFunc: "runtime.Fetch", ReturnType: ""},  // V
+		"get":       {RuntimeFunc: "runtime.MapGet", ReturnType: ""}, // V? (optional)
+		"length":    {RuntimeFunc: "runtime.MapLength", ReturnType: "Int"},
+		"size":      {RuntimeFunc: "runtime.MapLength", ReturnType: "Int"},
+		"empty?":    {RuntimeFunc: "runtime.MapEmpty", ReturnType: "Bool"},
 	},
 	"String": {
 		"split":       {RuntimeFunc: "runtime.Split", ReturnType: "Array"},
@@ -164,16 +169,22 @@ var valueTypes = map[string]bool{
 }
 
 func init() {
-	// Populate uniqueMethods
+	// Populate uniqueMethods (methods that only appear in one type)
 	counts := make(map[string]int)
 	for _, methods := range stdLib {
 		for name := range methods {
 			counts[name]++
 		}
 	}
+	// Exclude size/length from uniqueMethods since they apply to many types
+	// (arrays, maps, ranges, strings) and need type-specific handling
+	excludeFromUnique := map[string]bool{
+		"size":   true,
+		"length": true,
+	}
 	for _, methods := range stdLib {
 		for name, def := range methods {
-			if counts[name] == 1 {
+			if counts[name] == 1 && !excludeFromUnique[name] {
 				uniqueMethods[name] = def
 			}
 		}
