@@ -148,6 +148,58 @@ func TestScopeClassContext(t *testing.T) {
 	}
 }
 
+func TestScopeBuiltinShadowing(t *testing.T) {
+	global := NewGlobalScope()
+
+	// Define a builtin function (like Ruby's 'p')
+	builtin := NewFunction("p", nil, nil)
+	builtin.Builtin = true
+	if err := global.Define(builtin); err != nil {
+		t.Fatalf("Define(p) failed: %v", err)
+	}
+
+	// Shadowing a builtin in the SAME scope should succeed
+	variable := NewVariable("p", TypeIntVal)
+	if err := global.DefineOrShadow(variable); err != nil {
+		t.Fatalf("DefineOrShadow should allow shadowing builtin: %v", err)
+	}
+
+	// The variable should now be found, not the builtin
+	found := global.Lookup("p")
+	if found == nil {
+		t.Fatal("Lookup(p) returned nil")
+	}
+	if found.Kind != SymVariable {
+		t.Errorf("Expected SymVariable, got %v", found.Kind)
+	}
+	if !found.Type.Equals(TypeIntVal) {
+		t.Errorf("Expected Int type, got %v", found.Type)
+	}
+}
+
+func TestScopeBuiltinNonShadowingRedefinition(t *testing.T) {
+	global := NewGlobalScope()
+
+	// Define a non-builtin function
+	fn := NewFunction("myFunc", nil, nil)
+	fn.Builtin = false
+	if err := global.Define(fn); err != nil {
+		t.Fatalf("Define(myFunc) failed: %v", err)
+	}
+
+	// Trying to shadow a non-builtin in the SAME scope should fail
+	variable := NewVariable("myFunc", TypeIntVal)
+	err := global.DefineOrShadow(variable)
+	if err == nil {
+		t.Fatal("DefineOrShadow should NOT allow shadowing non-builtin in same scope")
+	}
+
+	_, ok := err.(*RedefinitionError)
+	if !ok {
+		t.Fatalf("expected RedefinitionError, got %T", err)
+	}
+}
+
 func TestScopeFunctionScope(t *testing.T) {
 	global := NewGlobalScope()
 	fnScope := NewScope(ScopeFunction, global)

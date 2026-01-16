@@ -66,15 +66,18 @@ func (s *Scope) Define(sym *Symbol) error {
 }
 
 // DefineOrShadow adds a symbol to this scope, allowing shadowing of parent scopes.
-// Returns an error only if the symbol is already defined in THIS scope.
+// Returns an error only if the symbol is already defined in THIS scope (unless it's a builtin).
 func (s *Scope) DefineOrShadow(sym *Symbol) error {
 	if existing := s.symbols[sym.Name]; existing != nil {
-		return &RedefinitionError{
-			Name:       sym.Name,
-			PrevLine:   existing.Line,
-			PrevColumn: existing.Column,
-			NewLine:    sym.Line,
-			NewColumn:  sym.Column,
+		// Allow shadowing builtins (like Ruby allows: p = 5 even though p is a builtin method)
+		if !existing.Builtin {
+			return &RedefinitionError{
+				Name:       sym.Name,
+				PrevLine:   existing.Line,
+				PrevColumn: existing.Column,
+				NewLine:    sym.Line,
+				NewColumn:  sym.Column,
+			}
 		}
 	}
 	s.symbols[sym.Name] = sym

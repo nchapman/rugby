@@ -473,10 +473,13 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 	for _, method := range cls.Methods {
 		if method.Name == "initialize" {
 			inferredFields := extractFields(method)
-			// Add inferred fields that weren't explicitly declared
+			// Add inferred fields that weren't explicitly declared or have accessors
 			explicitNames := make(map[string]bool)
 			for _, field := range cls.Fields {
 				explicitNames[field.Name] = true
+			}
+			for _, acc := range cls.Accessors {
+				explicitNames[acc.Name] = true
 			}
 			for _, inferred := range inferredFields {
 				if !explicitNames[inferred.Name] {
@@ -491,6 +494,10 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 	knownFields := make(map[string]bool)
 	for _, field := range cls.Fields {
 		knownFields[field.Name] = true
+	}
+	// Accessor fields are also known fields
+	for _, acc := range cls.Accessors {
+		knownFields[acc.Name] = true
 	}
 	for _, method := range cls.Methods {
 		if method.Name != "initialize" {
