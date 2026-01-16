@@ -1078,10 +1078,12 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	if len(topLevelStmts) > 0 && !hasMainFunc {
 		g.buf.WriteString("func main() {\n")
 		g.indent++
-		clear(g.vars) // Reset variable tracking for implicit main scope
+		g.inMainFunc = true // Enable main-specific features like bang operator
+		clear(g.vars)       // Reset variable tracking for implicit main scope
 		for _, stmt := range topLevelStmts {
 			g.genStatement(stmt)
 		}
+		g.inMainFunc = false
 		g.indent--
 		g.buf.WriteString("}\n")
 	}
