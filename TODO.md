@@ -599,12 +599,13 @@ These features are in the spec but marked as `skip` in tests. Implement after co
 
 - [x] Generic functions `def identity<T>(x : T) -> T`
 - [x] Generic classes `class Box<T>`
-- [ ] Generic interfaces `interface Container<T>`
-- [ ] Type constraints `T : Comparable`
-- [ ] Built-in constraints: `Numeric`, `Ordered`, `Equatable`, `Hashable`
-- [ ] Type inference for generics
+- [x] Generic interfaces `interface Container<T>`
+- [x] Type constraints `T : Comparable`
+- [x] Built-in constraints: `Numeric`, `Ordered`, `Equatable`, `Hashable`
+- [x] Type inference for generics
+- [ ] Type-level methods like `T.zero` (for Numeric default values)
 
-**Tests:** `tests/spec/generics/*.rg` (3 passing, 4 skipped)
+**Tests:** `tests/spec/generics/*.rg` (6 passing, 1 skipped)
 
 ### 14.2 Enums (Section 7)
 
@@ -711,8 +712,16 @@ All core language features now pass! Only Phase 14 features (generics, enums, st
 - ✅ **pub accessor support:** `pub getter`, `pub setter`, `pub property`
 - ✅ **Phase 1-13 Complete:** All core language features
 
+### Completed - Generics (Phase 14.1)
+- ✅ Generic functions with type inference
+- ✅ Generic classes with type parameters
+- ✅ Generic interfaces with type parameters
+- ✅ Type constraints (`T : Ordered`, `T : Numeric`, etc.)
+- ✅ Constraint checking in semantic analyzer (`isOrdered`, `isNumeric`, `areTypesComparable`)
+- ✅ golang.org/x/exp/constraints auto-added to generated go.mod
+
 ### Next Priorities
-1. **Generics (Phase 14.1)** - Generic functions, classes, interfaces, type constraints
+1. **Enums (Phase 14.2)** - Basic enums, explicit values, enum methods
 
 ### Key Insights
 - Module-scoped classes use `Module_Class` naming in generated Go code
