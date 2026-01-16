@@ -38,8 +38,8 @@ def main
   num_workers = 3
   num_jobs = 10
 
-  jobs = Chan[Job].new(num_jobs)
-  results = Chan[Result].new(num_jobs)
+  jobs = Chan<Job>.new(num_jobs)
+  results = Chan<Result>.new(num_jobs)
 
   # Start workers
   puts "Starting #{num_workers} workers..."

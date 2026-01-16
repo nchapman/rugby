@@ -825,7 +825,7 @@ end`
 
 func TestGenerateChannelSend(t *testing.T) {
 	input := `def main
-  ch = Chan[Int].new
+  ch = Chan<Int>.new
   ch << 42
 end`
 
@@ -1822,7 +1822,7 @@ def worker(jobs : Chan<Job>)
 end
 
 def main
-  ch = Chan[Job].new(10)
+  ch = Chan<Job>.new(10)
   worker(ch)
 end`
 

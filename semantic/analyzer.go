@@ -2173,7 +2173,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		}
 
 	case *ast.IndexExpr:
-		// Special case: Chan[Type] is a channel type constructor, not an index expression
+		// Special case: Chan<Type> is a channel type constructor, not an index expression
 		if ident, ok := e.Left.(*ast.Ident); ok && ident.Name == "Chan" {
 			// Parse the element type from the index
 			elemType := a.parseTypeFromExpr(e.Index)
@@ -2410,7 +2410,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		if taskType.Kind == TypeTask && taskType.Elem != nil && taskType.Elem.Kind != TypeUnknown {
 			typ = taskType.Elem
 		} else {
-			// Await on Task[Unknown] returns any (interface{})
+			// Await on Task<Unknown> returns any (interface{})
 			typ = TypeAnyVal
 		}
 
@@ -2608,7 +2608,7 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 					return NewClassType(classIdent.Name)
 				}
 			}
-			// Handle Chan[Type].new(size) constructor
+			// Handle Chan<Type>.new(size) constructor
 			if receiverType.Kind == TypeChan {
 				return receiverType
 			}
@@ -4012,7 +4012,7 @@ func (a *Analyzer) optionalMethod(name string, innerType *Type) *Symbol {
 }
 
 // parseTypeFromExpr converts an AST expression to a Type.
-// This is used for generic type parameters like Chan[Int] where Int is an identifier.
+// This is used for generic type parameters like Chan<Int> where Int is an identifier.
 func (a *Analyzer) parseTypeFromExpr(expr ast.Expression) *Type {
 	switch e := expr.(type) {
 	case *ast.Ident:

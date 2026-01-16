@@ -961,7 +961,7 @@ func (i *IncludeStmt) node()     {}
 func (i *IncludeStmt) stmtNode() {}
 
 // SpawnExpr represents spawning a concurrent task: spawn { expr }
-// Returns Task[T] where T is the block's return type
+// Returns Task<T> where T is the block's return type
 type SpawnExpr struct {
 	Block *BlockExpr // the block to execute concurrently
 	Line  int        // source line number
@@ -973,7 +973,7 @@ func (s *SpawnExpr) exprNode() {}
 // AwaitExpr represents awaiting a task: await t or await(t)
 // Blocks until the task completes and returns its value
 type AwaitExpr struct {
-	Task Expression // the Task[T] to await
+	Task Expression // the Task<T> to await
 	Line int        // source line number
 }
 

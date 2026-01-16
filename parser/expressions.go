@@ -190,7 +190,7 @@ func (p *Parser) parseIdent() ast.Expression {
 }
 
 // parseGenericTypeExpr parses Chan<T> or Task<T> as an index expression
-// This allows Chan<Int>.new(3) to work like Chan[Int].new(3)
+// This handles syntax like Chan<Int>.new(3) for generic type constructors
 func (p *Parser) parseGenericTypeExpr() ast.Expression {
 	line := p.curToken.Line
 	col := p.curToken.Column
@@ -210,7 +210,7 @@ func (p *Parser) parseGenericTypeExpr() ast.Expression {
 	// for operators, so when we return with curToken='>' and peekToken='.', the DOT case
 	// will call nextToken() which advances past the '>'. This is how Pratt parsers work.
 
-	// Return as an index expression: Chan[Int] represented as IndexExpr
+	// Return as an index expression: Chan<Int> represented as IndexExpr
 	return &ast.IndexExpr{
 		Left: &ast.Ident{
 			Name:   typeName,

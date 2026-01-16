@@ -3065,7 +3065,7 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 		g.buf.WriteString(")")
 		return
 	case "new":
-		// Chan[T].new -> make(chan T)
+		// Chan<T>.new -> make(chan T)
 		if indexExpr, ok := sel.X.(*ast.IndexExpr); ok {
 			if chanIdent, ok := indexExpr.Left.(*ast.Ident); ok && chanIdent.Name == "Chan" {
 				var chanType string

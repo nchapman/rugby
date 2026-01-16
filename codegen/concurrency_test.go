@@ -137,12 +137,12 @@ func TestChannelCreation(t *testing.T) {
 		desc     string
 	}{
 		{
-			input:    `ch = Chan[Int].new(10)`,
+			input:    `ch = Chan<Int>.new(10)`,
 			expected: "make(chan int, 10)",
 			desc:     "buffered channel",
 		},
 		{
-			input:    `ch = Chan[String].new`,
+			input:    `ch = Chan<String>.new`,
 			expected: "make(chan string)",
 			desc:     "unbuffered channel",
 		},
@@ -254,11 +254,11 @@ func TestChannelTypeMapping(t *testing.T) {
 		expected string
 		desc     string
 	}{
-		{`ch = Chan[Int].new`, "make(chan int)", "Int to int"},
-		{`ch = Chan[Int64].new`, "make(chan int64)", "Int64 to int64"},
-		{`ch = Chan[Float].new`, "make(chan float64)", "Float to float64"},
-		{`ch = Chan[Bool].new`, "make(chan bool)", "Bool to bool"},
-		{`ch = Chan[String].new`, "make(chan string)", "String to string"},
+		{`ch = Chan<Int>.new`, "make(chan int)", "Int to int"},
+		{`ch = Chan<Int64>.new`, "make(chan int64)", "Int64 to int64"},
+		{`ch = Chan<Float>.new`, "make(chan float64)", "Float to float64"},
+		{`ch = Chan<Bool>.new`, "make(chan bool)", "Bool to bool"},
+		{`ch = Chan<String>.new`, "make(chan string)", "String to string"},
 	}
 
 	for _, tt := range tests {
@@ -441,10 +441,10 @@ func TestBufferedChannelCreation(t *testing.T) {
 		expected string
 		desc     string
 	}{
-		{`ch = Chan[Int].new(0)`, "make(chan int, 0)", "zero buffer"},
-		{`ch = Chan[Int].new(1)`, "make(chan int, 1)", "buffer 1"},
-		{`ch = Chan[Int].new(100)`, "make(chan int, 100)", "buffer 100"},
-		{`ch = Chan[Int].new(size)`, "make(chan int, size)", "variable buffer"},
+		{`ch = Chan<Int>.new(0)`, "make(chan int, 0)", "zero buffer"},
+		{`ch = Chan<Int>.new(1)`, "make(chan int, 1)", "buffer 1"},
+		{`ch = Chan<Int>.new(100)`, "make(chan int, 100)", "buffer 100"},
+		{`ch = Chan<Int>.new(size)`, "make(chan int, size)", "variable buffer"},
 	}
 
 	for _, tt := range tests {
@@ -469,7 +469,7 @@ func TestGoWithArgumentCapture(t *testing.T) {
 
 func TestChannelSendWithTypeInfo(t *testing.T) {
 	// When channel is properly declared, send should use native Go syntax
-	input := `ch = Chan[Int].new(1)
+	input := `ch = Chan<Int>.new(1)
 ch << 42`
 	code := compile(t, input)
 
@@ -483,7 +483,7 @@ ch << 42`
 }
 
 func TestChannelAngleBracketSyntax(t *testing.T) {
-	// Test angle bracket syntax: Chan<Int> instead of Chan[Int]
+	// Test angle bracket syntax: Chan<Int>
 	input := `ch = Chan<Int>.new(3)
 ch << 100`
 	code := compile(t, input)

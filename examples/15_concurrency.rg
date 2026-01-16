@@ -56,7 +56,7 @@ end
 
 # Channels for communication
 def channel_demo
-  ch = Chan[Int].new(3)
+  ch = Chan<Int>.new(3)
 
   # Send values
   ch << 10
@@ -100,8 +100,8 @@ end
 
 # select - wait for first ready channel
 def select_demo
-  ch1 = Chan[String].new(1)
-  ch2 = Chan[String].new(1)
+  ch1 = Chan<String>.new(1)
+  ch2 = Chan<String>.new(1)
 
   go do
     time.sleep(10 * time.Millisecond)

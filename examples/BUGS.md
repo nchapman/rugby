@@ -43,8 +43,8 @@ This document tracks bugs found when testing idiomatic Rugby code from the spec 
 
 Empty typed array literals with inline annotation syntax fail:
 ```ruby
-empty_nums : Array[Int] = []        # type mismatch: expected Array[Int], got Array[any]
-empty_strs = [] : Array[String]     # undefined: 'Array'
+empty_nums : Array<Int> = []        # type mismatch: expected Array<Int>, got Array<any>
+empty_strs = [] : Array<String>     # undefined: 'Array'
 ```
 
 ### BUG-038: Method chaining with newlines
@@ -107,7 +107,7 @@ Safe navigation (`&.`) on properties defined with `getter` now works correctly. 
 Methods that return `self` for chaining now work correctly. The codegen detects when a method's last expression is `self` and generates the appropriate return type and return statement.
 
 ### ~~BUG-050: Getter access on channel receive results~~ FIXED
-The semantic analyzer now properly tracks the return type of `Chan[T].new(size)` constructors. When receiving from a channel, the element type is correctly propagated to the receiving variable, enabling getter methods to be recognized and called correctly.
+The semantic analyzer now properly tracks the return type of `Chan<T>.new(size)` constructors. When receiving from a channel, the element type is correctly propagated to the receiving variable, enabling getter methods to be recognized and called correctly.
 
 ### ~~BUG-049: Unused module methods (lint)~~ FIXED
 Modules now generate Go interfaces and classes that include them have interface compliance checks (`var _ ModuleName = (*ClassName)(nil)`). This suppresses "unused method" lint warnings while providing compile-time verification that included methods are implemented correctly.
@@ -206,7 +206,7 @@ Range methods (`size`, `length`, `include?`, `contains?`, `to_a`) now work on Ra
 Methods from included modules are now properly recognized as class methods. The semantic analyzer adds module methods to `cls.Methods` so that `GetMethod` finds them and generates proper method calls instead of method value references.
 
 ### ~~BUG-024: Chan generic syntax~~ FIXED
-Generic channel syntax `Chan[Int].new(3)` now works. The codegen handles `Chan[Type].new(capacity)` and generates `make(chan type, capacity)`.
+Generic channel syntax `Chan<Int>.new(3)` now works. The codegen handles `Chan<Type>.new(capacity)` and generates `make(chan type, capacity)`.
 
 ### ~~BUG-025: sync.WaitGroup.new syntax~~ FIXED
 Go package type `.new` syntax like `sync.WaitGroup.new` now works, generating zero-value initialization `&sync.WaitGroup{}`.
@@ -233,7 +233,7 @@ WaitGroup and other Go type methods now map snake_case to PascalCase. The codege
 Calling `errors.new(...)` now correctly generates `errors.New(...)`. The codegen was treating `errors` as a Rugby class name and generating `newerrors(...)`. Fixed by checking if the identifier is a Go import before applying the Rugby class constructor pattern.
 
 ### ~~BUG-045: Chan type in function parameters~~ FIXED
-`Chan[T]` in function parameters, return types, and channel creation now works correctly. The `mapParamType` function recursively converts class types to pointers in generic types. For loop iteration over channels now correctly generates single-variable syntax (`for x := range ch` instead of `for _, x := range ch`).
+`Chan<T>` in function parameters, return types, and channel creation now works correctly. The `mapParamType` function recursively converts class types to pointers in generic types. For loop iteration over channels now correctly generates single-variable syntax (`for x := range ch` instead of `for _, x := range ch`).
 
 ---
 

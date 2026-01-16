@@ -271,8 +271,8 @@ func TestParseChannelOperations(t *testing.T) {
 		input string
 		desc  string
 	}{
-		{`ch = Chan[Int].new(10)`, "buffered channel creation"},
-		{`ch = Chan[String].new`, "unbuffered channel creation"},
+		{`ch = Chan<Int>.new(10)`, "buffered channel creation"},
+		{`ch = Chan<String>.new`, "unbuffered channel creation"},
 		{`ch << 42`, "channel send"},
 		{`val = ch.receive`, "channel receive"},
 		{`val = ch.try_receive`, "non-blocking receive"},
@@ -498,14 +498,14 @@ func TestParseChannelTypesVariety(t *testing.T) {
 		input string
 		desc  string
 	}{
-		{`ch = Chan[Int].new`, "Int channel"},
-		{`ch = Chan[String].new`, "String channel"},
-		{`ch = Chan[Bool].new`, "Bool channel"},
-		{`ch = Chan[Float].new`, "Float channel"},
-		{`ch = Chan[User].new`, "Custom type channel"},
-		{`ch = Chan[Int].new(0)`, "zero buffer"},
-		{`ch = Chan[Int].new(1)`, "buffer 1"},
-		{`ch = Chan[Int].new(100)`, "buffer 100"},
+		{`ch = Chan<Int>.new`, "Int channel"},
+		{`ch = Chan<String>.new`, "String channel"},
+		{`ch = Chan<Bool>.new`, "Bool channel"},
+		{`ch = Chan<Float>.new`, "Float channel"},
+		{`ch = Chan<User>.new`, "Custom type channel"},
+		{`ch = Chan<Int>.new(0)`, "zero buffer"},
+		{`ch = Chan<Int>.new(1)`, "buffer 1"},
+		{`ch = Chan<Int>.new(100)`, "buffer 100"},
 	}
 
 	for _, tt := range tests {
