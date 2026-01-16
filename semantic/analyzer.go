@@ -1425,6 +1425,9 @@ func (a *Analyzer) analyzeMapDestructuring(s *ast.MapDestructuringStmt) {
 	// Define variables for each key-variable pair
 	for _, pair := range s.Pairs {
 		name := pair.Variable
+		if name == "_" {
+			continue // skip blank identifier
+		}
 		existing := a.scope.LookupLocal(name)
 		if existing == nil {
 			// Map values are dynamically typed - use any

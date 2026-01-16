@@ -313,6 +313,12 @@ func (p *Parser) parseMapDestructuringStmt() *ast.MapDestructuringStmt {
 		}
 	}
 
+	// Validate that we have at least one pair
+	if len(pairs) == 0 {
+		p.errorAt(line, p.curToken.Column, "map destructuring requires at least one key")
+		return nil
+	}
+
 	if !p.curTokenIs(token.RBRACE) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '}' after map destructuring pattern")
 		return nil

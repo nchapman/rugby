@@ -420,7 +420,13 @@ func (g *Generator) genSplatDestructuring(s *ast.MultiAssignStmt) {
 		}
 		g.writeIndent()
 		g.buf.WriteString(name)
-		g.buf.WriteString(" := ")
+		// Use = for existing variables, := for new ones
+		if _, exists := g.vars[name]; exists {
+			g.buf.WriteString(" = ")
+		} else {
+			g.buf.WriteString(" := ")
+			g.vars[name] = "any"
+		}
 		g.buf.WriteString(fmt.Sprintf("%s[%d]", tempVar, i))
 		g.buf.WriteString("\n")
 	}
@@ -430,7 +436,13 @@ func (g *Generator) genSplatDestructuring(s *ast.MultiAssignStmt) {
 	if splatName != "_" {
 		g.writeIndent()
 		g.buf.WriteString(splatName)
-		g.buf.WriteString(" := ")
+		// Use = for existing variables, := for new ones
+		if _, exists := g.vars[splatName]; exists {
+			g.buf.WriteString(" = ")
+		} else {
+			g.buf.WriteString(" := ")
+			g.vars[splatName] = "any"
+		}
 		if numAfter == 0 {
 			// Simple case: rest := _arr[numBefore:]
 			g.buf.WriteString(fmt.Sprintf("%s[%d:]", tempVar, numBefore))
@@ -449,7 +461,13 @@ func (g *Generator) genSplatDestructuring(s *ast.MultiAssignStmt) {
 		}
 		g.writeIndent()
 		g.buf.WriteString(name)
-		g.buf.WriteString(" := ")
+		// Use = for existing variables, := for new ones
+		if _, exists := g.vars[name]; exists {
+			g.buf.WriteString(" = ")
+		} else {
+			g.buf.WriteString(" := ")
+			g.vars[name] = "any"
+		}
 		if numAfter == 1 {
 			// Simple case: last := _arr[len(_arr)-1]
 			g.buf.WriteString(fmt.Sprintf("%s[len(%s)-1]", tempVar, tempVar))
@@ -483,9 +501,18 @@ func (g *Generator) genMapDestructuringStmt(s *ast.MapDestructuringStmt) {
 
 	// Generate assignment for each key-variable pair
 	for _, pair := range s.Pairs {
+		if pair.Variable == "_" {
+			continue // skip blank identifier
+		}
 		g.writeIndent()
 		g.buf.WriteString(pair.Variable)
-		g.buf.WriteString(" := ")
+		// Use = for existing variables, := for new ones
+		if _, exists := g.vars[pair.Variable]; exists {
+			g.buf.WriteString(" = ")
+		} else {
+			g.buf.WriteString(" := ")
+			g.vars[pair.Variable] = "any"
+		}
 		g.buf.WriteString(tempVar)
 		g.buf.WriteString("[\"")
 		g.buf.WriteString(pair.Key)
