@@ -20,11 +20,14 @@ func Equal(a, b any) bool {
 		return eq.Equal(b)
 	}
 
-	// Handle nil cases
-	if a == nil && b == nil {
+	// Handle nil cases - need to check both interface nil and nil pointers
+	// When a nil pointer is passed as any, the interface is not nil (has type info)
+	aIsNil := isNilValue(a)
+	bIsNil := isNilValue(b)
+	if aIsNil && bIsNil {
 		return true
 	}
-	if a == nil || b == nil {
+	if aIsNil || bIsNil {
 		return false
 	}
 
@@ -85,4 +88,17 @@ func mapEqual(a, b reflect.Value) bool {
 		}
 	}
 	return true
+}
+
+// isNilValue checks if a value is nil (either interface nil or nil pointer/slice/map/etc.)
+func isNilValue(v any) bool {
+	if v == nil {
+		return true
+	}
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.Ptr, reflect.Slice, reflect.Map, reflect.Chan, reflect.Func, reflect.Interface:
+		return rv.IsNil()
+	}
+	return false
 }

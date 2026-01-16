@@ -677,12 +677,19 @@ When a phase is complete, all tests in that phase should PASS.
 
 ## Recent Progress (2026-01-15)
 
-**Test Status:** 122 PASSING / 37 FAILING / 28 SKIPPED
+**Test Status:** 131 PASSING / 28 FAILING / 28 SKIPPED
 
 ### Completed Today
+- ✅ **Nil comparison for optionals:** `runtime.Equal` now correctly handles nil pointer comparison (`*string(nil) == nil`)
+- ✅ **Float literal codegen:** Float literals like `0.0` now generate `0.0` instead of `0` (Go recognizes as float)
+- ✅ **Predicate method naming:** Methods ending in `?` now get `Is`/`is` prefix to avoid collision with property getters (`active?` → `isActive()`, not `active()`)
+- ✅ **Custom error classes:** Classes with `def error -> String` or `def message -> String` can be returned as `Error` type
+- ✅ **Variable shadowing:** Variables can shadow built-in functions like `p`, `puts`, etc.
 - ✅ **Lambda type inference:** `type Handler = (Int) -> Int; h : Handler = -> (x) { x * 2 }` now infers parameter and return types
-- ✅ **Function type parsing:** `ParseType` now handles function type syntax like `(Int) -> Int`
 - ✅ **Generic type constructors:** `Chan<Int>.new()` and `Task<T>` now work with angle bracket syntax
+
+### Completed Previously
+- ✅ **Function type parsing:** `ParseType` now handles function type syntax like `(Int) -> Int`
 - ✅ **Channel send optimization:** `ch << 42` now generates native Go `ch <- 42` instead of `runtime.ShiftLeft`
 - ✅ **case_type binding variables:** Support `when var : Type` syntax for type narrowing
 - ✅ **Case range matching:** Support `when 400..499` in case expressions
@@ -691,8 +698,6 @@ When a phase is complete, all tests in that phase should PASS.
 - ✅ **||= for optionals:** Now works correctly with semantic and runtime support
 - ✅ **private def modifier:** Class methods can be marked private with underscore prefix
 - ✅ **pub accessor support:** `pub getter`, `pub setter`, `pub property` work correctly
-
-### Completed Previously
 - ✅ **Optional methods:** `unwrap_or(default)` for optionals (`ok?`, `nil?`, `unwrap` already worked)
 - ✅ **`const` keyword:** Full implementation (token, AST, parser, semantic, codegen)
 - ✅ **Class variables `@@`:** Full stack implementation
@@ -702,12 +707,12 @@ When a phase is complete, all tests in that phase should PASS.
 - ✅ **Loop modifiers:** `expr while/until condition` work correctly
 
 ### Next Priorities
-1. Custom error classes implementing `error` interface
-2. Variable shadowing of built-in functions
+1. Fix heredoc trailing newlines (heredoc_basic, heredoc_interpolation, heredoc_squiggly)
+2. Fix accessor output issues (accessors_detailed, multilevel_inheritance)
 
 ### Key Insights
-- `runtime.Equal` handles pointer vs value comparison for optional types
-- Case ranges require `switch true` pattern with `runtime.RangeContains` checks
-- Semantic analyzer needs special handling for Range in case when clauses
+- `runtime.Equal` handles nil pointer detection via `isNilValue()` helper using reflection
+- Predicate methods (`?` suffix) get `Is`/`is` prefix, but Go interop calls don't (errors.is? → errors.Is)
+- Float literals need explicit `.0` suffix when `%g` format produces integer-looking output
 - Channel send (`<<`) uses native Go `<-` when type info is available; falls back to `runtime.ShiftLeft` otherwise
 - Parser handles `Chan<Int>` by converting it to an IndexExpr representation internally

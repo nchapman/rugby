@@ -1742,8 +1742,9 @@ end`
 
 	output := compile(t, input)
 
-	// Method name should have ? stripped and be camelCased (lowercase first letter)
-	assertContains(t, output, `func (u *User) valid() bool`)
+	// Predicate methods get "is" prefix to avoid collision with property getters
+	// valid? -> isValid() in camelCase
+	assertContains(t, output, `func (u *User) isValid() bool`)
 }
 
 func TestRugbyMethodCallCasing(t *testing.T) {
@@ -3039,13 +3040,14 @@ end`
 
 func TestPredicateMethodReturnsBool(t *testing.T) {
 	// Methods ending in ? must return Bool - this should compile
+	// Non-pub predicate methods get "is" prefix: valid? -> isValid (camelCase)
 	input := `def valid? -> Bool
   true
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, "func valid() bool")
+	assertContains(t, output, "func isValid() bool")
 	assertContains(t, output, "return true")
 }
 
@@ -3085,6 +3087,7 @@ end`
 
 func TestClassPredicateMethodReturnsBool(t *testing.T) {
 	// Class methods ending in ? must return Bool - this should compile
+	// Predicate methods get "is" prefix: empty? -> isEmpty (for class methods)
 	input := `class Container
   def empty? -> Bool
     true
@@ -3093,7 +3096,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, "func (c *Container) empty() bool")
+	assertContains(t, output, "func (c *Container) isEmpty() bool")
 }
 
 func TestClassPredicateMethodRejectsNonBoolReturn(t *testing.T) {

@@ -155,3 +155,31 @@ func TestEqualWithSlicesContainingCustomTypes(t *testing.T) {
 		t.Error("Equal for slices of custom types with different content should be false")
 	}
 }
+
+func TestEqualWithNilPointer(t *testing.T) {
+	// When a nil *string is passed as any, it should compare equal to nil
+	// This tests the edge case where a typed nil pointer has a non-nil interface
+	// (because the interface carries type info even when the value is nil)
+	var nilStr *string = nil
+
+	if !Equal(nilStr, nil) {
+		t.Error("Equal((*string)(nil), nil) should be true")
+	}
+
+	if !Equal(nil, nilStr) {
+		t.Error("Equal(nil, (*string)(nil)) should be true")
+	}
+
+	// Two typed nil pointers of the same type should be equal
+	var nilStr2 *string = nil
+	if !Equal(nilStr, nilStr2) {
+		t.Error("Equal((*string)(nil), (*string)(nil)) should be true")
+	}
+
+	// Non-nil pointer should not equal nil
+	s := "hello"
+	nonNilStr := &s
+	if Equal(nonNilStr, nil) {
+		t.Error("Equal(non-nil *string, nil) should be false")
+	}
+}

@@ -27,7 +27,20 @@ func (g *Generator) genExpr(expr ast.Expression) {
 	case *ast.IntLit:
 		g.buf.WriteString(fmt.Sprintf("%d", e.Value))
 	case *ast.FloatLit:
-		g.buf.WriteString(fmt.Sprintf("%g", e.Value))
+		// Use %g format but ensure it looks like a float (has decimal or exponent)
+		s := fmt.Sprintf("%g", e.Value)
+		// Check if result needs decimal point to be recognized as float
+		hasDecimalOrExp := false
+		for _, c := range s {
+			if c == '.' || c == 'e' || c == 'E' {
+				hasDecimalOrExp = true
+				break
+			}
+		}
+		if !hasDecimalOrExp {
+			s += ".0"
+		}
+		g.buf.WriteString(s)
 	case *ast.BoolLit:
 		if e.Value {
 			g.buf.WriteString("true")
@@ -3195,7 +3208,8 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 	if g.isGoInterop(sel.X) {
 		g.genExpr(sel.X)
 		g.buf.WriteString(".")
-		g.buf.WriteString(snakeToPascalWithAcronyms(sel.Sel))
+		// For Go interop, don't add "Is" prefix to predicate methods
+		g.buf.WriteString(snakeToPascalWithAcronyms(sel.Sel, true))
 		return
 	}
 

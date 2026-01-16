@@ -341,3 +341,71 @@ func (t *testTypeInfoAdapter) GetConstructorParamCount(className string) int {
 func (t *testTypeInfoAdapter) GetConstructorParams(className string) [][2]string {
 	return t.analyzer.GetConstructorParams(className)
 }
+
+// --- Snake Case Conversion Tests ---
+
+func TestSnakeToPascalWithAcronyms(t *testing.T) {
+	tests := []struct {
+		input     string
+		goInterop bool
+		expected  string
+	}{
+		// Basic predicate methods - get "Is" prefix
+		{"active?", false, "IsActive"},
+		{"valid?", false, "IsValid"},
+		{"empty?", false, "IsEmpty"},
+
+		// Go interop - no "Is" prefix (errors.is? -> errors.Is)
+		{"is?", true, "Is"},
+		{"active?", true, "Active"},
+
+		// Regular methods - no change
+		{"user_id", false, "UserID"},
+		{"http_url", false, "HTTPURL"},
+		{"parse_json", false, "ParseJSON"},
+
+		// Mutation suffix stripped
+		{"clear!", false, "Clear"},
+
+		// Single words
+		{"active", false, "Active"},
+		{"id", false, "ID"},
+	}
+
+	for _, tt := range tests {
+		result := snakeToPascalWithAcronyms(tt.input, tt.goInterop)
+		if result != tt.expected {
+			t.Errorf("snakeToPascalWithAcronyms(%q, %v) = %q; want %q",
+				tt.input, tt.goInterop, result, tt.expected)
+		}
+	}
+}
+
+func TestSnakeToCamelWithAcronyms(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		// Predicate methods - get "is" prefix
+		{"active?", "isActive"},
+		{"valid?", "isValid"},
+		{"empty?", "isEmpty"},
+
+		// Regular methods - no change
+		{"user_id", "userID"},
+		{"http_url", "httpURL"},
+		{"parse_json", "parseJSON"},
+
+		// Single words
+		{"active", "active"},
+		{"get", "get"},
+	}
+
+	for _, tt := range tests {
+		result := snakeToCamelWithAcronyms(tt.input)
+		if result != tt.expected {
+			t.Errorf("snakeToCamelWithAcronyms(%q) = %q; want %q",
+				tt.input, result, tt.expected)
+		}
+	}
+}

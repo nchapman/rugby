@@ -207,90 +207,120 @@ var acronyms = map[string]string{
 
 // snakeToPascalWithAcronyms converts snake_case to PascalCase with acronym handling
 // Examples: user_id -> UserID, parse_json -> ParseJSON, read_http_url -> ReadHTTPURL
-func snakeToPascalWithAcronyms(s string) string {
+// Predicate methods (ending in ?) get "Is" prefix: active? -> IsActive
+// For Go interop (goInterop=true), predicate suffix is just stripped without adding "Is"
+func snakeToPascalWithAcronyms(s string, goInterop ...bool) string {
 	if s == "" {
 		return s
 	}
 
-	// Strip Ruby-style suffixes (! for mutation, ? for predicates)
+	// Check if this is a Go interop call (don't add "Is" prefix)
+	isGoInterop := len(goInterop) > 0 && goInterop[0]
+
+	// Strip Ruby-style ! suffix for mutation methods
 	s = strings.TrimSuffix(s, "!")
+
+	// Handle predicate methods (?) with "Is" prefix (unless Go interop)
+	isPredicate := strings.HasSuffix(s, "?") && !isGoInterop
 	s = strings.TrimSuffix(s, "?")
+
+	// Compute the base result
+	var baseResult string
 
 	// If no underscore, check for single-word acronym or capitalize first letter
 	if !strings.Contains(s, "_") {
 		if upper, ok := acronyms[strings.ToLower(s)]; ok {
-			return upper
-		}
-		// Capitalize first letter only
-		if len(s) > 0 {
-			return strings.ToUpper(s[:1]) + s[1:]
-		}
-		return s
-	}
-
-	// Split by underscore and process each part
-	parts := strings.Split(s, "_")
-	var result strings.Builder
-
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-		if upper, ok := acronyms[strings.ToLower(part)]; ok {
-			result.WriteString(upper)
+			baseResult = upper
+		} else if len(s) > 0 {
+			// Capitalize first letter only
+			baseResult = strings.ToUpper(s[:1]) + s[1:]
 		} else {
-			// Capitalize first letter
-			result.WriteString(strings.ToUpper(part[:1]))
-			if len(part) > 1 {
-				result.WriteString(part[1:])
+			baseResult = s
+		}
+	} else {
+		// Split by underscore and process each part
+		parts := strings.Split(s, "_")
+		var result strings.Builder
+
+		for _, part := range parts {
+			if part == "" {
+				continue
 			}
-		}
-	}
-
-	return result.String()
-}
-
-// snakeToCamelWithAcronyms converts snake_case to camelCase with acronym handling
-// Examples: user_id -> userID, parse_json -> parseJSON, http_request -> httpRequest
-// Note: first-part acronyms stay lowercase in camelCase
-func snakeToCamelWithAcronyms(s string) string {
-	if s == "" {
-		return s
-	}
-
-	// Strip Ruby-style ? suffix for predicate methods
-	s = strings.TrimSuffix(s, "?")
-
-	// If no underscore, return as-is (already camelCase or single word)
-	if !strings.Contains(s, "_") {
-		return s
-	}
-
-	// Split by underscore and process each part
-	parts := strings.Split(s, "_")
-	var result strings.Builder
-
-	for i, part := range parts {
-		if part == "" {
-			continue
-		}
-		if i == 0 {
-			// First part: lowercase, even if it's an acronym
-			result.WriteString(strings.ToLower(part))
-		} else {
-			// Subsequent parts: uppercase acronyms, capitalize others
 			if upper, ok := acronyms[strings.ToLower(part)]; ok {
 				result.WriteString(upper)
 			} else {
+				// Capitalize first letter
 				result.WriteString(strings.ToUpper(part[:1]))
 				if len(part) > 1 {
 					result.WriteString(part[1:])
 				}
 			}
 		}
+		baseResult = result.String()
 	}
 
-	return result.String()
+	// Add "Is" prefix for predicate methods to avoid collision with property getters
+	if isPredicate {
+		return "Is" + baseResult
+	}
+	return baseResult
+}
+
+// snakeToCamelWithAcronyms converts snake_case to camelCase with acronym handling
+// Examples: user_id -> userID, parse_json -> parseJSON, http_request -> httpRequest
+// Predicate methods (ending in ?) get "is" prefix: active? -> isActive
+// Note: first-part acronyms stay lowercase in camelCase
+func snakeToCamelWithAcronyms(s string) string {
+	if s == "" {
+		return s
+	}
+
+	// Handle predicate methods (?) with "is" prefix
+	isPredicate := strings.HasSuffix(s, "?")
+	s = strings.TrimSuffix(s, "?")
+
+	// Compute the base result
+	var baseResult string
+
+	// If no underscore, return as-is (already camelCase or single word)
+	if !strings.Contains(s, "_") {
+		baseResult = s
+	} else {
+		// Split by underscore and process each part
+		parts := strings.Split(s, "_")
+		var result strings.Builder
+
+		for i, part := range parts {
+			if part == "" {
+				continue
+			}
+			if i == 0 {
+				// First part: lowercase, even if it's an acronym
+				result.WriteString(strings.ToLower(part))
+			} else {
+				// Subsequent parts: uppercase acronyms, capitalize others
+				if upper, ok := acronyms[strings.ToLower(part)]; ok {
+					result.WriteString(upper)
+				} else {
+					result.WriteString(strings.ToUpper(part[:1]))
+					if len(part) > 1 {
+						result.WriteString(part[1:])
+					}
+				}
+			}
+		}
+		baseResult = result.String()
+	}
+
+	// Add "is" prefix for predicate methods to avoid collision with property getters
+	if isPredicate {
+		// Capitalize the first letter of baseResult to follow camelCase after "is"
+		if len(baseResult) > 0 {
+			return "is" + strings.ToUpper(baseResult[:1]) + baseResult[1:]
+		}
+		return "is"
+	}
+	return baseResult
 }
 
 // zeroValue returns the Go zero value for a Rugby type.
