@@ -1548,6 +1548,10 @@ func (a *Analyzer) analyzeCase(s *ast.CaseStmt) {
 			// Validate when value type matches subject type
 			if subjectType != nil && subjectType.Kind != TypeUnknown && subjectType.Kind != TypeAny &&
 				valType.Kind != TypeUnknown && valType.Kind != TypeAny {
+				// Allow Range values when subject is numeric (for "in range" matching)
+				if valType.Kind == TypeRange && a.isNumeric(subjectType) {
+					continue // Range matching is valid for numeric subjects
+				}
 				if !a.areTypesComparable(subjectType, valType) {
 					a.addError(&TypeMismatchError{
 						Expected: subjectType,

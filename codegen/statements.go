@@ -1056,11 +1056,32 @@ func (g *Generator) genIfStmt(s *ast.IfStmt) {
 func (g *Generator) genCaseStmt(s *ast.CaseStmt) {
 	g.writeIndent()
 
+	// Check if any when clause contains a range (requires special handling)
+	hasRanges := false
+	for _, when := range s.WhenClauses {
+		for _, val := range when.Values {
+			if _, ok := val.(*ast.RangeLit); ok {
+				hasRanges = true
+				break
+			}
+		}
+		if hasRanges {
+			break
+		}
+	}
+
 	// Handle case with subject vs case without subject
-	if s.Subject != nil {
+	if s.Subject != nil && !hasRanges {
+		// Simple switch: switch subject { case value: ... }
 		g.buf.WriteString("switch ")
 		g.genExpr(s.Subject)
 		g.buf.WriteString(" {\n")
+	} else if s.Subject != nil && hasRanges {
+		// Has ranges: need to store subject and use switch true pattern
+		g.needsRuntime = true
+		g.buf.WriteString("switch _subj := ")
+		g.genExpr(s.Subject)
+		g.buf.WriteString("; true {\n")
 	} else {
 		// Case without subject - use switch true
 		g.buf.WriteString("switch {\n")
@@ -1070,14 +1091,33 @@ func (g *Generator) genCaseStmt(s *ast.CaseStmt) {
 	for _, whenClause := range s.WhenClauses {
 		g.writeIndent()
 
-		if s.Subject != nil {
-			// With subject: case value1, value2:
+		if s.Subject != nil && !hasRanges {
+			// With subject (no ranges): case value1, value2:
 			g.buf.WriteString("case ")
 			for i, val := range whenClause.Values {
 				if i > 0 {
 					g.buf.WriteString(", ")
 				}
 				g.genExpr(val)
+			}
+			g.buf.WriteString(":\n")
+		} else if s.Subject != nil && hasRanges {
+			// With subject and ranges: case _subj == value || runtime.RangeContains(range, _subj):
+			g.buf.WriteString("case ")
+			for i, val := range whenClause.Values {
+				if i > 0 {
+					g.buf.WriteString(" || ")
+				}
+				if rangeLit, ok := val.(*ast.RangeLit); ok {
+					// Generate runtime.RangeContains(range, _subj)
+					g.buf.WriteString("runtime.RangeContains(")
+					g.genExpr(rangeLit)
+					g.buf.WriteString(", _subj)")
+				} else {
+					// Generate _subj == value
+					g.buf.WriteString("_subj == ")
+					g.genExpr(val)
+				}
 			}
 			g.buf.WriteString(":\n")
 		} else {
