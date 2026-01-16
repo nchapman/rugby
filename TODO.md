@@ -460,7 +460,7 @@ Update the parser to recognize angle bracket type parameters:
 - [x] `Chan<T>.new(buffer_size)`
 - [x] `ch << value` send
 - [x] `ch.receive` blocking receive
-- [ ] `ch.try_receive` non-blocking
+- [x] `ch.try_receive` non-blocking
 - [x] `ch.close`
 - [x] `for msg in ch` iterate
 

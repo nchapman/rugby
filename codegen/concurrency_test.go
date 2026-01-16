@@ -179,7 +179,7 @@ func TestChannelOperations(t *testing.T) {
 		},
 		{
 			input:    `val = ch.try_receive`,
-			expected: "runtime.TryReceive(ch)",
+			expected: "runtime.TryReceivePtr(ch)",
 			desc:     "non-blocking receive",
 		},
 		{

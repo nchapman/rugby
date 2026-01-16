@@ -102,6 +102,21 @@ func TryReceive[T any](ch <-chan T) (T, bool) {
 	}
 }
 
+// TryReceivePtr attempts a non-blocking receive from a channel.
+// Returns a pointer to the value if received, or nil otherwise.
+// Used for optional semantics in Rugby: ch.try_receive returns T?
+func TryReceivePtr[T any](ch <-chan T) *T {
+	select {
+	case v, ok := <-ch:
+		if ok {
+			return &v
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
 // Add adds two any values, handling int and float64 types.
 // Returns the sum as any.
 func Add(a, b any) any {

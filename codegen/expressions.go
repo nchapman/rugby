@@ -1722,7 +1722,7 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		}
 		if fn.Sel == "try_receive" {
 			g.needsRuntime = true
-			g.buf.WriteString("runtime.TryReceive(")
+			g.buf.WriteString("runtime.TryReceivePtr(")
 			g.genExpr(fn.X)
 			g.buf.WriteString(")")
 			return
@@ -3534,9 +3534,9 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 		g.genExpr(sel.X)
 		return
 	case "try_receive":
-		// ch.try_receive -> runtime.TryReceive(ch)
+		// ch.try_receive -> runtime.TryReceivePtr(ch) (returns *T for optional semantics)
 		g.needsRuntime = true
-		g.buf.WriteString("runtime.TryReceive(")
+		g.buf.WriteString("runtime.TryReceivePtr(")
 		g.genExpr(sel.X)
 		g.buf.WriteString(")")
 		return
