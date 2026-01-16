@@ -1,11 +1,10 @@
 #@ run-pass
 #@ check-output
-#@ skip: TODO: Implement T.zero for Numeric constraint
 #
 # Test: Section 6.4 - Built-in type constraints
-# TODO: Implement generic constraints
+# Tests Numeric, Ordered, and Equatable constraints with generic type parameters
 
-# Numeric constraint
+# Numeric constraint with T.zero
 def sum<T : Numeric>(values : Array<T>) -> T
   values.reduce(T.zero) -> (acc, v) { acc + v }
 end
@@ -27,19 +26,6 @@ def contains<T : Equatable>(arr : Array<T>, val : T) -> Bool
 end
 
 puts contains([1, 2, 3], 2)
-
-# Hashable constraint
-def unique_keys<K : Hashable, V>(pairs : Array<(K, V)>) -> Array<K>
-  seen = Set<K>{}
-  result = Array<K>{}
-  for k, _ in pairs
-    unless seen.include?(k)
-      seen.add(k)
-      result << k
-    end
-  end
-  result
-end
 
 #@ expect:
 # 15

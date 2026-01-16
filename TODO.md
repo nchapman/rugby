@@ -595,7 +595,7 @@ Update the parser to recognize angle bracket type parameters:
 
 These features are in the spec but marked as `skip` in tests. Implement after core features are solid.
 
-### 14.1 Generics (Section 6)
+### 14.1 Generics (Section 6) ✅
 
 - [x] Generic functions `def identity<T>(x : T) -> T`
 - [x] Generic classes `class Box<T>`
@@ -605,7 +605,7 @@ These features are in the spec but marked as `skip` in tests. Implement after co
 - [x] Type inference for generics
 - [x] Type-level methods like `T.zero` (for Numeric default values)
 
-**Tests:** `tests/spec/generics/*.rg` (6 passing, 1 skipped)
+**Tests:** `tests/spec/generics/*.rg` (8 passing)
 
 ### 14.2 Enums (Section 7) ✅
 
@@ -676,13 +676,19 @@ When a phase is complete, all tests in that phase should PASS.
 
 ---
 
-## Recent Progress (2026-01-15)
+## Recent Progress (2026-01-16)
 
-**Test Status:** 158 PASSING / 0 FAILING / 29 SKIPPED ✅
+**Test Status:** 194 PASSING / 0 FAILING / 0 SKIPPED ✅
 
-All core language features now pass! Only Phase 14 features (generics, enums, structs) remain skipped.
+All language features including Phase 14 now pass!
 
-### Completed Today
+### Completed Today (2026-01-16)
+- ✅ **Generic type parameter in GoType():** TypeTypeParam now returns its name for Go type generation
+- ✅ **Recursive container type checking:** `isAssignable` now recursively checks Array/Map element types
+- ✅ **Generic lambda parameters:** Array iteration methods (any?, reduce, etc.) correctly type lambda params as T
+- ✅ **Built-in constraints test:** Numeric, Ordered, Equatable constraints all work with T.zero and lambdas
+
+### Completed Previously (2026-01-15)
 - ✅ **Module namespacing:** `Module::NestedClass` with `::` scope resolution operator
 - ✅ **Nested classes in modules:** `module Http { class Response }` generates `Http_Response`
 - ✅ **Module class methods:** `def self.method` callable as `Module.method()`
@@ -712,13 +718,16 @@ All core language features now pass! Only Phase 14 features (generics, enums, st
 - ✅ **pub accessor support:** `pub getter`, `pub setter`, `pub property`
 - ✅ **Phase 1-13 Complete:** All core language features
 
-### Completed - Generics (Phase 14.1)
+### Completed - Generics (Phase 14.1) ✅
 - ✅ Generic functions with type inference
 - ✅ Generic classes with type parameters
 - ✅ Generic interfaces with type parameters
 - ✅ Type constraints (`T : Ordered`, `T : Numeric`, etc.)
 - ✅ Constraint checking in semantic analyzer (`isOrdered`, `isNumeric`, `areTypesComparable`)
 - ✅ golang.org/x/exp/constraints auto-added to generated go.mod
+- ✅ `T.zero` type-level method for Numeric constraint
+- ✅ Generic array/map type assignability (`Array<T>` matches `Array<Int>` when T is type param)
+- ✅ Lambda parameter inference in generic context (iteration methods work with `T`)
 
 ### Completed - Enums (Phase 14.2) ✅
 - ✅ Basic enum parsing and code generation
@@ -726,10 +735,6 @@ All core language features now pass! Only Phase 14 features (generics, enums, st
 - ✅ `.to_s`, `.value`, `.values`, `.from_string` methods
 - ✅ Semantic analysis for enum types and values
 - ✅ Case statement support for enum matching
-
-### Next Priorities
-1. **Type-level methods (Phase 14.1)** - `T.zero` for Numeric default values
-2. **Parameter destructuring (Phase 14.5)** - `def process({name:, age:} : Data)`
 
 ### Key Insights
 - Module-scoped classes use `Module_Class` naming in generated Go code

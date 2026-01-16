@@ -377,6 +377,12 @@ func (t *Type) GoType() string {
 			return t.Name
 		}
 		return "any"
+	case TypeTypeParam:
+		// Return the type parameter name as-is for generic code generation
+		if t.Name != "" {
+			return t.Name
+		}
+		return "any"
 	case TypeFunc:
 		// Generate Go function type: func(params) returns
 		params := make([]string, len(t.Params))

@@ -3939,22 +3939,32 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 		return true
 	}
 
-	// Empty array (Array<Any>) is assignable to any typed array
-	// This handles cases like: nums : Array<Int> = []
+	// Array comparison should check element types recursively
+	// This allows Array<T> to match Array<Int> when T is a type parameter
 	if to.Kind == TypeArray && from.Kind == TypeArray {
+		// Empty array (Array<Any>) is assignable to any typed array
 		if from.Elem != nil && from.Elem.Kind == TypeAny {
 			return true
 		}
-		// Note: Array<Int> is NOT assignable to Array<Any> because Go arrays
-		// are invariant ([]int cannot be assigned to []any without copying)
+		// Recursively check element types for generic type parameter matching
+		if to.Elem != nil && from.Elem != nil {
+			return a.isAssignable(to.Elem, from.Elem)
+		}
 	}
 
-	// Empty map (Map[any, any]) is assignable to any typed map
-	// This handles cases like: data : Map[String, Int] = {}
+	// Map comparison should check key and value types recursively
+	// This allows Map<K, V> to match Map<String, Int> when K/V are type parameters
 	if to.Kind == TypeMap && from.Kind == TypeMap {
+		// Empty map (Map[any, any]) is assignable to any typed map
 		if from.KeyType != nil && from.KeyType.Kind == TypeAny &&
 			from.ValueType != nil && from.ValueType.Kind == TypeAny {
 			return true
+		}
+		// Recursively check key and value types for generic type parameter matching
+		if to.KeyType != nil && from.KeyType != nil &&
+			to.ValueType != nil && from.ValueType != nil {
+			return a.isAssignable(to.KeyType, from.KeyType) &&
+				a.isAssignable(to.ValueType, from.ValueType)
 		}
 	}
 
