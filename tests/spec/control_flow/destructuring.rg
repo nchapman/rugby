@@ -1,8 +1,7 @@
-#@ compile-fail
-#@ skip: Destructuring not yet fully implemented (Section 9.3)
+#@ run-pass
+#@ check-output
 #
 # Test: Section 9.3 - Destructuring assignment
-# TODO: Implement full destructuring
 
 # Tuple destructuring
 def get_pair -> (Int, String)
@@ -24,3 +23,11 @@ user_data = {name: "Alice", age: 30}
 {name:, age:} = user_data
 puts name
 puts age
+
+#@ expect:
+# 42
+# hello
+# 1
+# 4
+# Alice
+# 30
