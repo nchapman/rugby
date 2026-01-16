@@ -603,7 +603,7 @@ These features are in the spec but marked as `skip` in tests. Implement after co
 - [x] Type constraints `T : Comparable`
 - [x] Built-in constraints: `Numeric`, `Ordered`, `Equatable`, `Hashable`
 - [x] Type inference for generics
-- [ ] Type-level methods like `T.zero` (for Numeric default values)
+- [x] Type-level methods like `T.zero` (for Numeric default values)
 
 **Tests:** `tests/spec/generics/*.rg` (6 passing, 1 skipped)
 
@@ -651,7 +651,7 @@ These features are in the spec but marked as `skip` in tests. Implement after co
 - [x] Underscore ignore `_, second, _ = triple`
 - [x] Map destructuring `{name:, age:} = data`
 - [x] Map destructuring with rename `{name: n, age: a} = data`
-- [ ] Parameter destructuring `def process({name:, age:} : Data)`
+- [x] Parameter destructuring `def process({name:, age:} : Data)`
 
 **Tests:** `tests/spec/control_flow/destructuring*.rg` (5 test files)
 
