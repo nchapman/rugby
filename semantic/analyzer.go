@@ -3968,6 +3968,28 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 		}
 	}
 
+	// Function type comparison should check parameter and return types recursively
+	// This allows (Person) -> Bool to match (T) -> Bool when T is a type parameter
+	if to.Kind == TypeFunc && from.Kind == TypeFunc {
+		// Must have same number of parameters and returns
+		if len(to.Params) != len(from.Params) || len(to.Returns) != len(from.Returns) {
+			return false
+		}
+		// Check all parameter types (contravariant: from params must be assignable to to params)
+		for i := range to.Params {
+			if !a.isAssignable(to.Params[i], from.Params[i]) {
+				return false
+			}
+		}
+		// Check all return types (covariant: to returns must be assignable from from returns)
+		for i := range to.Returns {
+			if !a.isAssignable(to.Returns[i], from.Returns[i]) {
+				return false
+			}
+		}
+		return true
+	}
+
 	return to.Equals(from)
 }
 
