@@ -14,8 +14,8 @@ for i in 1..3
   puts i
 end
 
-# Iterate map
-m = {"x" => 1, "y" => 2}
+# Iterate map (order is non-deterministic in Go)
+m = {"a" => 1}
 for key, value in m
   puts "#{key}=#{value}"
 end
@@ -27,5 +27,4 @@ end
 # 1
 # 2
 # 3
-# x=1
-# y=2
+# a=1

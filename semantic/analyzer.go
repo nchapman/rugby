@@ -38,6 +38,9 @@ type Analyzer struct {
 	// Enums: maps enum name to enum info
 	enums map[string]*ast.EnumDecl
 
+	// Structs: track struct names (for immutability enforcement)
+	structs map[string]bool
+
 	// Track which symbols are used (read) vs just declared
 	usedSymbols map[*Symbol]bool
 
@@ -62,6 +65,7 @@ func NewAnalyzer() *Analyzer {
 		functions:     make(map[string]*Symbol),
 		typeAliases:   make(map[string]typeAliasInfo),
 		enums:         make(map[string]*ast.EnumDecl),
+		structs:       make(map[string]bool),
 		usedSymbols:   make(map[*Symbol]bool),
 		declaredAt:    make(map[ast.Node]map[string]*Symbol),
 		declarations:  make(map[ast.Node]bool),
@@ -514,6 +518,9 @@ func (a *Analyzer) collectDeclaration(stmt ast.Statement) {
 		a.collectModule(s)
 	case *ast.ConstDecl:
 		a.collectConst(s)
+	case *ast.StructDecl:
+		// Register struct for immutability enforcement
+		a.structs[s.Name] = true
 		// TypeAliasDecl is collected in pre-pass, skip here
 	}
 }
@@ -993,6 +1000,9 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 		a.analyzeFuncDecl(s)
 	case *ast.ClassDecl:
 		a.analyzeClassDecl(s)
+	case *ast.StructDecl:
+		// Struct registration handled in collectDeclaration
+		// No additional analysis needed here
 	case *ast.AssignStmt:
 		a.analyzeAssign(s)
 	case *ast.MultiAssignStmt:
@@ -1520,6 +1530,17 @@ func (a *Analyzer) analyzeOrAssign(s *ast.OrAssignStmt) {
 func (a *Analyzer) analyzeSelectorAssign(s *ast.SelectorAssignStmt) {
 	// Analyze the receiver object
 	receiverType := a.analyzeExpr(s.Object)
+
+	// Check if trying to assign to a struct field (structs are immutable)
+	if receiverType.Kind == TypeClass && receiverType.Name != "" {
+		if a.structs[receiverType.Name] {
+			a.addError(&Error{
+				Line:    s.Line,
+				Message: "cannot modify struct field '" + s.Field + "' (structs are immutable)",
+			})
+			return
+		}
+	}
 
 	// Analyze the value being assigned
 	valueType := a.analyzeExpr(s.Value)
@@ -2274,6 +2295,17 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			elemTypes[i] = a.analyzeExpr(elem)
 		}
 		typ = NewTupleType(elemTypes...)
+
+	case *ast.StructLit:
+		// Struct literal: Point{x: 10, y: 20}
+		// Analyze field values
+		for _, field := range e.Fields {
+			if field.Value != nil {
+				a.analyzeExpr(field.Value)
+			}
+		}
+		// Return type as struct (using TypeClass kind)
+		typ = &Type{Kind: TypeClass, Name: e.Name}
 
 	case *ast.SetLit:
 		var elemType *Type
