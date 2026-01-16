@@ -700,8 +700,16 @@ func (g *Generator) getShiftLeftTargetType(expr ast.Expression) string {
 	}
 
 	// Get the Go type of the left operand (the array/channel being appended to)
-	if goType := g.typeInfo.GetGoType(binExpr.Left); goType != "" && strings.HasPrefix(goType, "[]") {
-		return goType
+	goType := g.typeInfo.GetGoType(binExpr.Left)
+	if goType != "" {
+		// Handle slices
+		if strings.HasPrefix(goType, "[]") {
+			return goType
+		}
+		// Handle channels
+		if strings.HasPrefix(goType, "chan ") {
+			return goType
+		}
 	}
 
 	// Fall back to inferring element type from left operand
@@ -1526,8 +1534,16 @@ func (g *Generator) genExprStmt(s *ast.ExprStmt) {
 
 	// Handle BinaryExpr with << on Ident: arr << value becomes arr = arr << value
 	// This provides Ruby-like mutation semantics for array append
+	// For channels, just generate: ch <- value (no assignment wrapper needed)
 	if binExpr, ok := s.Expr.(*ast.BinaryExpr); ok {
 		if binExpr.Op == "<<" {
+			// Check if left operand is a channel - generate native send without assignment
+			if g.typeInfo.GetTypeKind(binExpr.Left) == TypeChannel {
+				g.writeIndent()
+				g.genExpr(s.Expr) // genExpr generates "ch <- value" for channels
+				g.buf.WriteString("\n")
+				return
+			}
 			if ident, ok := binExpr.Left.(*ast.Ident); ok {
 				// Generate: arr = runtime.ShiftLeft(arr, value).([]T)
 				g.writeIndent()

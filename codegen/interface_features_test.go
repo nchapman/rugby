@@ -42,6 +42,8 @@ func (t *testTypeInfo) GetTypeKind(node ast.Node) codegen.TypeKind {
 		return codegen.TypeClass
 	case semantic.TypeOptional:
 		return codegen.TypeOptional
+	case semantic.TypeChan:
+		return codegen.TypeChannel
 	case semantic.TypeAny:
 		return codegen.TypeAny
 	default:

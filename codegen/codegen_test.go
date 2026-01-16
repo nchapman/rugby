@@ -831,7 +831,8 @@ end`
 
 	output := compileRelaxed(t, input)
 
-	// Channel send uses runtime.ShiftLeft for now (could be optimized to ch <- 42 later)
+	// Without type info, channel send falls back to runtime.ShiftLeft
+	// With proper type info (see TestChannelSendWithTypeInfo), it uses native ch <- 42
 	assertContains(t, output, `runtime.ShiftLeft(ch, 42)`)
 }
 

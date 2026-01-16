@@ -696,3 +696,80 @@ func TestParseChannelMethodChain(t *testing.T) {
 		t.Errorf("expected selector 'receive', got '%s'", selExpr.Sel)
 	}
 }
+
+func TestParseChannelAngleBracketSyntax(t *testing.T) {
+	tests := []struct {
+		input    string
+		typeName string
+		typeArg  string
+		method   string
+		desc     string
+	}{
+		{`ch = Chan<Int>.new`, "Chan", "Int", "new", "unbuffered int channel"},
+		{`ch = Chan<Int>.new(3)`, "Chan", "Int", "new", "buffered int channel"},
+		{`ch = Chan<String>.new(1)`, "Chan", "String", "new", "string channel"},
+		{`t = Task<Bool>`, "Task", "Bool", "", "task type"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			l := lexer.New(tt.input)
+			p := New(l)
+			program := p.ParseProgram()
+
+			if len(p.Errors()) > 0 {
+				t.Fatalf("parser errors: %v", p.Errors())
+			}
+
+			if len(program.Declarations) != 1 {
+				t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+			}
+
+			assignStmt, ok := program.Declarations[0].(*ast.AssignStmt)
+			if !ok {
+				t.Fatalf("expected AssignStmt, got %T", program.Declarations[0])
+			}
+
+			// For Task<Bool> case, the value is directly an IndexExpr
+			// For Chan<Int>.new(), we need to look through SelectorExpr or CallExpr
+			var indexExpr *ast.IndexExpr
+			switch v := assignStmt.Value.(type) {
+			case *ast.IndexExpr:
+				indexExpr = v
+			case *ast.SelectorExpr:
+				idx, isIdx := v.X.(*ast.IndexExpr)
+				if isIdx {
+					indexExpr = idx
+				}
+			case *ast.CallExpr:
+				sel, isSel := v.Func.(*ast.SelectorExpr)
+				if isSel {
+					idx, isIdx := sel.X.(*ast.IndexExpr)
+					if isIdx {
+						indexExpr = idx
+					}
+				}
+			}
+
+			if indexExpr == nil {
+				t.Fatalf("expected IndexExpr for generic type, got %T", assignStmt.Value)
+			}
+
+			leftIdent, ok := indexExpr.Left.(*ast.Ident)
+			if !ok {
+				t.Fatalf("expected Ident for type name, got %T", indexExpr.Left)
+			}
+			if leftIdent.Name != tt.typeName {
+				t.Errorf("expected type name '%s', got '%s'", tt.typeName, leftIdent.Name)
+			}
+
+			argIdent, ok := indexExpr.Index.(*ast.Ident)
+			if !ok {
+				t.Fatalf("expected Ident for type arg, got %T", indexExpr.Index)
+			}
+			if argIdent.Name != tt.typeArg {
+				t.Errorf("expected type arg '%s', got '%s'", tt.typeArg, argIdent.Name)
+			}
+		})
+	}
+}

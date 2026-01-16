@@ -415,6 +415,14 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 	}
 
 	if e.Op == "<<" {
+		// Check if left operand is a channel - use native Go channel send
+		if g.typeInfo.GetTypeKind(e.Left) == TypeChannel {
+			g.genExpr(e.Left)
+			g.buf.WriteString(" <- ")
+			g.genExpr(e.Right)
+			return
+		}
+		// For arrays, use runtime.ShiftLeft
 		g.needsRuntime = true
 		g.buf.WriteString("runtime.ShiftLeft(")
 		g.genExpr(e.Left)

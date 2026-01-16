@@ -208,6 +208,8 @@ func (t *testTypeInfoAdapter) GetTypeKind(node ast.Node) TypeKind {
 		return TypeClass
 	case semantic.TypeOptional:
 		return TypeOptional
+	case semantic.TypeChan:
+		return TypeChannel
 	case semantic.TypeAny:
 		return TypeAny
 	default:

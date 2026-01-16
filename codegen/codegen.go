@@ -46,7 +46,8 @@ const (
 	TypeMap
 	TypeClass
 	TypeOptional
-	TypeAny // any/interface{} type, from spawn/await
+	TypeChannel // channel type for send/receive
+	TypeAny     // any/interface{} type, from spawn/await
 )
 
 // TypeInfo provides type information for AST nodes during code generation.

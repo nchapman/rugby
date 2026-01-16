@@ -680,6 +680,8 @@ When a phase is complete, all tests in that phase should PASS.
 **Test Status:** 122 PASSING / 37 FAILING / 28 SKIPPED
 
 ### Completed Today
+- ✅ **Generic type constructors:** `Chan<Int>.new()` and `Task<T>` now work with angle bracket syntax
+- ✅ **Channel send optimization:** `ch << 42` now generates native Go `ch <- 42` instead of `runtime.ShiftLeft`
 - ✅ **case_type binding variables:** Support `when var : Type` syntax for type narrowing
 - ✅ **Case range matching:** Support `when 400..499` in case expressions
 - ✅ **Optional comparison:** Allow comparing optionals with their underlying type (`String? == String`)
@@ -698,12 +700,13 @@ When a phase is complete, all tests in that phase should PASS.
 - ✅ **Loop modifiers:** `expr while/until condition` work correctly
 
 ### Next Priorities
-1. Generic type constructors (`Chan<Int>.new()` syntax)
-2. Lambda/closure return type inference
-3. Custom error classes implementing `error` interface
-4. Variable shadowing of built-in functions
+1. Lambda/closure return type inference
+2. Custom error classes implementing `error` interface
+3. Variable shadowing of built-in functions
 
 ### Key Insights
 - `runtime.Equal` handles pointer vs value comparison for optional types
 - Case ranges require `switch true` pattern with `runtime.RangeContains` checks
 - Semantic analyzer needs special handling for Range in case when clauses
+- Channel send (`<<`) uses native Go `<-` when type info is available; falls back to `runtime.ShiftLeft` otherwise
+- Parser handles `Chan<Int>` by treating it as equivalent to `Chan[Int]` (IndexExpr with angle brackets)

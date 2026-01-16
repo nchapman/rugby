@@ -176,10 +176,53 @@ func (p *Parser) parseIdent() ast.Expression {
 		return p.parseSetLiteral()
 	}
 
+	// Check for generic type constructors: Chan<T>.new, Task<T>
+	// Convert angle bracket syntax to square bracket syntax for uniform handling
+	if (p.curToken.Literal == "Chan" || p.curToken.Literal == "Task") && p.peekTokenIs(token.LT) {
+		return p.parseGenericTypeExpr()
+	}
+
 	return &ast.Ident{
 		Name:   p.curToken.Literal,
 		Line:   p.curToken.Line,
 		Column: p.curToken.Column,
+	}
+}
+
+// parseGenericTypeExpr parses Chan<T> or Task<T> as an index expression
+// This allows Chan<Int>.new(3) to work like Chan[Int].new(3)
+func (p *Parser) parseGenericTypeExpr() ast.Expression {
+	line := p.curToken.Line
+	col := p.curToken.Column
+	typeName := p.curToken.Literal
+	p.nextToken() // consume 'Chan' or 'Task'
+	p.nextToken() // consume '<'
+
+	// Parse the type parameter
+	typeParam := p.parseTypeName()
+
+	// Expect '>'
+	if !p.curTokenIs(token.GT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '>' after type parameter")
+		return nil
+	}
+	// Don't consume '>' - the infix loop in parseExpression checks peekToken (not curToken)
+	// for operators, so when we return with curToken='>' and peekToken='.', the DOT case
+	// will call nextToken() which advances past the '>'. This is how Pratt parsers work.
+
+	// Return as an index expression: Chan[Int] represented as IndexExpr
+	return &ast.IndexExpr{
+		Left: &ast.Ident{
+			Name:   typeName,
+			Line:   line,
+			Column: col,
+		},
+		Index: &ast.Ident{
+			Name:   typeParam,
+			Line:   line,
+			Column: col,
+		},
+		Line: line,
 	}
 }
 

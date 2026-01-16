@@ -158,6 +158,9 @@ func TestChannelCreation(t *testing.T) {
 	}
 }
 
+// TestChannelOperations tests channel operations with undefined variables.
+// Uses compileRelaxed which lacks type info for 'ch', so channel sends fall back
+// to runtime.ShiftLeft. For typed channel tests, see TestChannelSendWithTypeInfo.
 func TestChannelOperations(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -166,7 +169,7 @@ func TestChannelOperations(t *testing.T) {
 	}{
 		{
 			input:    `ch << 42`,
-			expected: "runtime.ShiftLeft(ch, 42)",
+			expected: "runtime.ShiftLeft(ch, 42)", // no type info, uses runtime fallback
 			desc:     "channel send",
 		},
 		{
@@ -461,5 +464,36 @@ func TestGoWithArgumentCapture(t *testing.T) {
 
 	if !strings.Contains(code, "go process(x, y, z)") {
 		t.Errorf("expected 'go process(x, y, z)', got:\n%s", code)
+	}
+}
+
+func TestChannelSendWithTypeInfo(t *testing.T) {
+	// When channel is properly declared, send should use native Go syntax
+	input := `ch = Chan[Int].new(1)
+ch << 42`
+	code := compile(t, input)
+
+	// Should use native Go channel send, not runtime.ShiftLeft
+	if !strings.Contains(code, "ch <- 42") {
+		t.Errorf("expected 'ch <- 42', got:\n%s", code)
+	}
+	if strings.Contains(code, "runtime.ShiftLeft") {
+		t.Errorf("should not use runtime.ShiftLeft for typed channels, got:\n%s", code)
+	}
+}
+
+func TestChannelAngleBracketSyntax(t *testing.T) {
+	// Test angle bracket syntax: Chan<Int> instead of Chan[Int]
+	input := `ch = Chan<Int>.new(3)
+ch << 100`
+	code := compile(t, input)
+
+	// Should create typed channel
+	if !strings.Contains(code, "make(chan int, 3)") {
+		t.Errorf("expected 'make(chan int, 3)', got:\n%s", code)
+	}
+	// Should use native Go channel send
+	if !strings.Contains(code, "ch <- 100") {
+		t.Errorf("expected 'ch <- 100', got:\n%s", code)
 	}
 }
