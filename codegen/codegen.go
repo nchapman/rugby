@@ -1038,6 +1038,21 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 		}
 	}
 
+	// Pre-pass: collect instance methods for structs
+	// Structs are value types with all methods always public (PascalCase)
+	for _, def := range definitions {
+		if structDecl, ok := def.(*ast.StructDecl); ok {
+			for _, method := range structDecl.Methods {
+				if g.instanceMethods[structDecl.Name] == nil {
+					g.instanceMethods[structDecl.Name] = make(map[string]string)
+				}
+				// Struct methods are always public (PascalCase)
+				goName := snakeToPascalWithAcronyms(method.Name)
+				g.instanceMethods[structDecl.Name][method.Name] = goName
+			}
+		}
+	}
+
 	// First pass: generate definitions to determine what imports we need
 	var bodyBuf strings.Builder
 	g.buf = bodyBuf

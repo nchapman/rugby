@@ -9,6 +9,11 @@ struct Point
   x : Int
   y : Int
 
+  # Zero-argument method (property-style call)
+  def sum -> Int
+    @x + @y
+  end
+
   def distance_to(other : Point) -> Float
     dx = (other.x - @x).to_f
     dy = (other.y - @y).to_f
@@ -22,11 +27,16 @@ end
 
 p1 = Point{x: 0, y: 0}
 p2 = Point{x: 3, y: 4}
+
+# Test zero-argument struct method (property-style call without parens)
+puts p2.sum
+
 puts p1.distance_to(p2)
 
 p3 = p1.translate(5, 10)
 puts p3
 
 #@ expect:
+# 7
 # 5
 # Point{x: 5, y: 10}
