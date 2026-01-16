@@ -87,7 +87,7 @@ Update the parser to recognize angle bracket type parameters:
 - [x] Bool
 - [x] String
 - [x] Bytes (verify `"str".bytes` works)
-- [ ] Rune
+- [x] Rune
 
 **Tests:** `tests/spec/types/primitive_*.rg`
 
@@ -406,7 +406,7 @@ Update the parser to recognize angle bracket type parameters:
 
 - [x] `expr!` propagates error to caller
 - [x] Enclosing function must return Error
-- [ ] In main/scripts, prints and exits
+- [x] In main/scripts, prints and exits
 
 **Tests:** `tests/spec/error_handling/bang_operator.rg`
 

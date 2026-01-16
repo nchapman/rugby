@@ -3916,6 +3916,12 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 		return true
 	}
 
+	// Rune is an alias for int32 in Go, so Int <-> Rune is allowed
+	if (from.Kind == TypeInt && to.Kind == TypeRune) ||
+		(from.Kind == TypeRune && to.Kind == TypeInt) {
+		return true
+	}
+
 	// Empty array (Array<Any>) is assignable to any typed array
 	// This handles cases like: nums : Array<Int> = []
 	if to.Kind == TypeArray && from.Kind == TypeArray {
@@ -4753,6 +4759,8 @@ func (a *Analyzer) parseTypeFromExpr(expr ast.Expression) *Type {
 			return TypeStringVal
 		case "Bytes":
 			return TypeBytesVal
+		case "Rune":
+			return TypeRuneVal
 		case "any":
 			return TypeAnyVal
 		case "Error", "error":

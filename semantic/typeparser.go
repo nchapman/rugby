@@ -103,6 +103,8 @@ func ParseTypeWithParams(s string, typeParams map[string]string) *Type {
 		return TypeStringVal
 	case "Bytes":
 		return TypeBytesVal
+	case "Rune":
+		return TypeRuneVal
 	case "Any", "any":
 		return TypeAnyVal
 	case "Error", "error":
@@ -210,6 +212,8 @@ func ParseType(s string) *Type {
 		return TypeStringVal
 	case "Bytes":
 		return TypeBytesVal
+	case "Rune":
+		return TypeRuneVal
 	case "Any", "any":
 		return TypeAnyVal
 	case "Error", "error":

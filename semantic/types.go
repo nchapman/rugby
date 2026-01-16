@@ -17,6 +17,7 @@ const (
 	TypeBool
 	TypeString
 	TypeBytes
+	TypeRune
 	TypeNil
 	TypeAny
 	TypeError
@@ -69,6 +70,7 @@ var (
 	TypeBoolVal    = &Type{Kind: TypeBool}
 	TypeStringVal  = &Type{Kind: TypeString}
 	TypeBytesVal   = &Type{Kind: TypeBytes}
+	TypeRuneVal    = &Type{Kind: TypeRune}
 	TypeNilVal     = &Type{Kind: TypeNil}
 	TypeAnyVal     = &Type{Kind: TypeAny}
 	TypeErrorVal   = &Type{Kind: TypeError}
@@ -155,6 +157,8 @@ func (t *Type) String() string {
 		return "String"
 	case TypeBytes:
 		return "Bytes"
+	case TypeRune:
+		return "Rune"
 	case TypeNil:
 		return "nil"
 	case TypeAny:
@@ -321,6 +325,8 @@ func (t *Type) GoType() string {
 		return "string"
 	case TypeBytes:
 		return "[]byte"
+	case TypeRune:
+		return "rune"
 	case TypeNil:
 		return "any" // nil can be any type
 	case TypeAny, TypeUnknown:
