@@ -71,10 +71,11 @@ func (i *ImportDecl) stmtNode() {}
 
 // Param represents a function parameter
 type Param struct {
-	Name         string
-	Type         string     // optional type annotation, empty if not specified
-	DefaultValue Expression // optional default value, nil if not specified
-	Variadic     bool       // true if this is a variadic parameter (*args)
+	Name             string
+	Type             string               // optional type annotation, empty if not specified
+	DefaultValue     Expression           // optional default value, nil if not specified
+	Variadic         bool                 // true if this is a variadic parameter (*args)
+	DestructurePairs []MapDestructurePair // for pattern params: {name:, age:} : Type
 }
 
 // TypeParam represents a generic type parameter

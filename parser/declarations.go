@@ -78,7 +78,13 @@ func (p *Parser) parseImport() *ast.ImportDecl {
 // Also supports parameter promotion: @name : Type
 // Also supports variadic parameters: *name : Type
 // Also supports default values: name : Type = value
+// Also supports destructuring: {name:, age:} : Type or {name: n, age: a} : Type
 func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
+	// Check for destructuring pattern: {name:, age:} : Type
+	if p.curTokenIs(token.LBRACE) {
+		return p.parseDestructuringParam(seen)
+	}
+
 	// Check for variadic parameter (*name : Type)
 	isVariadic := false
 	if p.curTokenIs(token.STAR) {
@@ -147,6 +153,88 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 		Type:         paramType,
 		DefaultValue: defaultValue,
 		Variadic:     isVariadic,
+	}
+}
+
+// parseDestructuringParam parses a destructuring parameter: {name:, age:} : Type
+// or with renaming: {name: n, age: a} : Type
+func (p *Parser) parseDestructuringParam(seen map[string]bool) *ast.Param {
+	p.nextToken() // consume '{'
+
+	var pairs []ast.MapDestructurePair
+
+	// Parse key-variable pairs
+	for !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
+		if !p.curTokenIs(token.IDENT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected key identifier in destructuring pattern")
+			return nil
+		}
+		key := p.curToken.Literal
+		p.nextToken() // consume key
+
+		if !p.curTokenIs(token.COLON) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ':' after key in destructuring pattern")
+			return nil
+		}
+		p.nextToken() // consume ':'
+
+		// Check for rename pattern (key: var) vs shorthand (key:,)
+		variable := key // default: shorthand, variable name = key
+		if p.curTokenIs(token.IDENT) {
+			variable = p.curToken.Literal
+			p.nextToken() // consume variable
+		}
+
+		// Check for duplicate variable names
+		if seen[variable] {
+			p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("duplicate parameter name %q", variable))
+			return nil
+		}
+		seen[variable] = true
+
+		pairs = append(pairs, ast.MapDestructurePair{Key: key, Variable: variable})
+
+		// Check for comma or end
+		if p.curTokenIs(token.COMMA) {
+			p.nextToken() // consume ','
+		}
+	}
+
+	// Validate that we have at least one pair
+	if len(pairs) == 0 {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "destructuring pattern requires at least one key")
+		return nil
+	}
+
+	if !p.curTokenIs(token.RBRACE) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '}' after destructuring pattern")
+		return nil
+	}
+	p.nextToken() // consume '}'
+
+	// Require type annotation for destructuring params
+	if !p.curTokenIs(token.COLON) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "type annotation required for destructuring parameter")
+		return nil
+	}
+	p.nextToken() // consume ':'
+
+	var paramType string
+	if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
+		paramType = p.parseTypeName()
+	} else {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
+		return nil
+	}
+
+	// Generate a synthetic name for the parameter (used in codegen)
+	// This will be replaced with something like _arg0 in codegen
+	name := "_destructure"
+
+	return &ast.Param{
+		Name:             name,
+		Type:             paramType,
+		DestructurePairs: pairs,
 	}
 }
 

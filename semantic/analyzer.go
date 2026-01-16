@@ -1110,6 +1110,28 @@ func (a *Analyzer) analyzeFuncDecl(f *ast.FuncDecl) {
 		} else {
 			typ = TypeUnknownVal
 		}
+
+		// Handle destructuring parameters: {name:, age:} : Type
+		if len(p.DestructurePairs) > 0 {
+			// Add each destructured variable to scope
+			// The type of each variable comes from the struct/class fields
+			for _, pair := range p.DestructurePairs {
+				// Try to get the field type from the struct/class type
+				fieldType := TypeUnknownVal
+				if typ != nil && typ.Kind == TypeClass {
+					if classInfo := a.classes[typ.Name]; classInfo != nil && classInfo.Fields != nil {
+						if field, ok := classInfo.Fields[pair.Key]; ok {
+							fieldType = field.Type
+						}
+					}
+				}
+				param := NewParam(pair.Variable, fieldType)
+				param.Line = f.Line
+				mustDefine(fnScope, param)
+			}
+			continue
+		}
+
 		param := NewParam(p.Name, typ)
 		param.Line = f.Line
 		mustDefine(fnScope, param)

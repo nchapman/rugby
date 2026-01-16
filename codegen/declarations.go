@@ -134,11 +134,32 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 		g.buf.WriteString("]")
 	}
 
+	// Track destructuring params for body generation
+	type destructureInfo struct {
+		paramName string
+		paramType string
+		pairs     []ast.MapDestructurePair
+	}
+	var destructureParams []destructureInfo
+
 	g.buf.WriteString("(")
 	for i, param := range fn.Params {
 		if i > 0 {
 			g.buf.WriteString(", ")
 		}
+
+		// Handle destructuring parameters: {name:, age:} : Type
+		if len(param.DestructurePairs) > 0 {
+			paramName := fmt.Sprintf("_arg%d", i)
+			destructureParams = append(destructureParams, destructureInfo{
+				paramName: paramName,
+				paramType: param.Type,
+				pairs:     param.DestructurePairs,
+			})
+			g.buf.WriteString(fmt.Sprintf("%s %s", paramName, g.mapParamType(param.Type)))
+			continue
+		}
+
 		if param.Type != "" {
 			if param.Variadic {
 				// Variadic parameter: *args : String -> ...string
@@ -175,6 +196,19 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	g.buf.WriteString(" {\n")
 
 	g.indent++
+
+	// Generate destructuring assignments at function start
+	for _, dp := range destructureParams {
+		for _, pair := range dp.pairs {
+			g.writeIndent()
+			// For structs: varname := _arg0.FieldName
+			fieldName := snakeToPascalWithAcronyms(pair.Key)
+			g.buf.WriteString(fmt.Sprintf("%s := %s.%s\n", pair.Variable, dp.paramName, fieldName))
+			// Track the variable as declared
+			g.vars[pair.Variable] = "" // Type unknown without deeper analysis
+		}
+	}
+
 	for i, stmt := range fn.Body {
 		isLast := i == len(fn.Body)-1
 		if isLast && len(fn.ReturnTypes) > 0 {

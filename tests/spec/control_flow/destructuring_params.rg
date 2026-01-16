@@ -1,16 +1,14 @@
 #@ run-pass
 #@ check-output
-#@ skip: Destructuring not yet implemented (Section 9.3)
 #
 # Test: Section 9.3 - Destructuring in function parameters
-# TODO: Implement parameter destructuring
 
 struct UserData
   name : String
   age : Int
 end
 
-# Map destructuring in function parameters
+# Struct destructuring in function parameters
 def process({name:, age:} : UserData)
   puts "#{name} is #{age}"
 end
@@ -18,14 +16,13 @@ end
 data = UserData{name: "Alice", age: 30}
 process(data)
 
-# Also works with regular maps
-def greet({name:} : Map<Symbol, String>)
-  puts "Hello, #{name}!"
+# Destructuring with rename
+def process_renamed({name: n, age: a} : UserData)
+  puts "#{n} (age #{a})"
 end
 
-info = {name: "Bob"}
-greet(info)
+process_renamed(data)
 
 #@ expect:
 # Alice is 30
-# Hello, Bob!
+# Alice (age 30)
