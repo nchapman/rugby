@@ -749,6 +749,11 @@ func (p *Parser) canStartCommandArg() bool {
 	// Instance variable and class variable
 	case token.AT, token.ATAT:
 		return true
+	// Keyword expressions that can be command arguments
+	// This handles `puts await task`, `puts spawn { 42 }`, etc.
+	// Note: CONCURRENTLY is included for completeness though it's rarely used inline
+	case token.AWAIT, token.SPAWN, token.CONCURRENTLY:
+		return true
 	// Prefix operators - only if followed immediately by their operand (no space after)
 	// This handles `foo -1` (command with unary minus) vs `foo - 1` (binary)
 	case token.MINUS, token.NOT, token.BANG:

@@ -585,6 +585,9 @@ func TestParseAwaitInExpression(t *testing.T) {
 		{`x = await(t)`, "await with parens"},
 		{`x = (await t) + 1`, "await in expression"},
 		{`puts(await t)`, "await as argument"},
+		{`puts await t`, "await as command arg"},
+		{`print spawn { 42 }`, "spawn as command arg"},
+		{`puts await spawn { 42 }`, "nested await spawn"},
 	}
 
 	for _, tt := range tests {
@@ -771,5 +774,47 @@ func TestParseChannelAngleBracketSyntax(t *testing.T) {
 				t.Errorf("expected type arg '%s', got '%s'", tt.typeArg, argIdent.Name)
 			}
 		})
+	}
+}
+
+func TestParseAwaitCommandSyntaxAST(t *testing.T) {
+	// Verify that `puts await t` produces a single CallExpr with AwaitExpr argument
+	input := `puts await t`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) != 0 {
+		t.Fatalf("parser errors: %v", p.Errors())
+	}
+
+	// Must be exactly one statement
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	exprStmt, ok := program.Declarations[0].(*ast.ExprStmt)
+	if !ok {
+		t.Fatalf("expected ExprStmt, got %T", program.Declarations[0])
+	}
+
+	callExpr, ok := exprStmt.Expr.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
+	}
+
+	// Verify it's puts(await(...))
+	fnIdent, ok := callExpr.Func.(*ast.Ident)
+	if !ok || fnIdent.Name != "puts" {
+		t.Fatalf("expected puts call, got %v", callExpr.Func)
+	}
+
+	if len(callExpr.Args) != 1 {
+		t.Fatalf("expected 1 argument, got %d", len(callExpr.Args))
+	}
+
+	_, ok = callExpr.Args[0].(*ast.AwaitExpr)
+	if !ok {
+		t.Fatalf("expected AwaitExpr argument, got %T", callExpr.Args[0])
 	}
 }
