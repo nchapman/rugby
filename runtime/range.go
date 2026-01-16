@@ -4,6 +4,7 @@ package runtime
 type Range struct {
 	Start, End int
 	Exclusive  bool // true for ... (exclusive), false for .. (inclusive)
+	OpenEnd    bool // true for open-ended ranges like start.. (end is ignored, goes to collection end)
 }
 
 // RangeEach iterates over each value in the range

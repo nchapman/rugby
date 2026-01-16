@@ -2503,9 +2503,19 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			mustDefine(lambdaScope, NewSymbol(param.Name, SymParam, paramType))
 		}
 
-		// Analyze body
+		// Analyze body and track the type of the last expression (implicit return)
+		var lastExprType *Type
 		for _, stmt := range e.Body {
 			a.analyzeStatement(stmt)
+			// Track type of last statement if it's an expression (implicit return)
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				lastExprType = a.GetType(exprStmt.Expr)
+			} else if returnStmt, ok := stmt.(*ast.ReturnStmt); ok {
+				// Explicit return - get type of first return value
+				if len(returnStmt.Values) > 0 {
+					lastExprType = a.GetType(returnStmt.Values[0])
+				}
+			}
 		}
 
 		a.scope = prevScope
@@ -2521,7 +2531,11 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		}
 		returnType := TypeAnyVal
 		if e.ReturnType != "" {
+			// Explicit return type annotation takes precedence
 			returnType = ParseType(e.ReturnType)
+		} else if lastExprType != nil && lastExprType.Kind != TypeUnknown {
+			// Infer return type from the last expression in the body
+			returnType = lastExprType
 		}
 		typ = NewFuncType(paramTypes, []*Type{returnType})
 
@@ -2627,11 +2641,47 @@ func (a *Analyzer) analyzeLambdaWithExpectedType(e *ast.LambdaExpr, expectedType
 }
 
 func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
+	// First, try to resolve the function to get expected parameter types for lambdas
+	var expectedParamTypes []*Type
+	if ident, ok := call.Func.(*ast.Ident); ok {
+		if fn := a.functions[ident.Name]; fn != nil {
+			for _, param := range fn.Params {
+				expectedParamTypes = append(expectedParamTypes, param.Type)
+			}
+		} else if a.scope.IsInsideClass() {
+			className := a.scope.ClassName
+			if cls := a.classes[className]; cls != nil {
+				if method := cls.GetMethod(ident.Name); method != nil {
+					for _, param := range method.Params {
+						expectedParamTypes = append(expectedParamTypes, param.Type)
+					}
+				}
+			}
+		}
+	}
+
 	// Analyze arguments and collect types, check for splat
+	// Use expected types for lambda arguments to enable type inference
 	hasSplat := false
 	var argTypes []*Type
-	for _, arg := range call.Args {
-		argType := a.analyzeExpr(arg)
+	for i, arg := range call.Args {
+		var argType *Type
+		// If this is a lambda and we have an expected type that's a function,
+		// use that to infer the lambda's parameter and return types
+		if lambda, ok := arg.(*ast.LambdaExpr); ok && i < len(expectedParamTypes) {
+			expectedType := expectedParamTypes[i]
+			// Resolve type aliases to get the underlying function type
+			if expectedType != nil {
+				expectedType = a.resolveTypeAliasType(expectedType)
+			}
+			if expectedType != nil && expectedType.Kind == TypeFunc {
+				argType = a.analyzeLambdaWithExpectedType(lambda, expectedType)
+			} else {
+				argType = a.analyzeExpr(arg)
+			}
+		} else {
+			argType = a.analyzeExpr(arg)
+		}
 		argTypes = append(argTypes, argType)
 		if _, ok := arg.(*ast.SplatExpr); ok {
 			hasSplat = true

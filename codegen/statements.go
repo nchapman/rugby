@@ -226,7 +226,15 @@ func (g *Generator) genInstanceVarAssign(s *ast.InstanceVarAssign) {
 		if g.isAccessorField(s.Name) {
 			goFieldName = "_" + s.Name
 		}
-		g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, goFieldName))
+
+		// Check if this field is from a parent class (not defined in current class)
+		// If so, navigate through the embedded struct hierarchy
+		fieldPath := g.getInheritedFieldPath(s.Name)
+		if fieldPath != "" {
+			g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, fieldPath))
+		} else {
+			g.buf.WriteString(fmt.Sprintf("%s.%s = ", recv, goFieldName))
+		}
 
 		// Check for optional wrapping - need to take address for value type optionals
 		// (e.g., @count : Int? with @count = 5 -> c.count = func() *int { v := 5; return &v }())
@@ -1684,6 +1692,22 @@ func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
 	}
 
 	g.writeIndent()
+	// In inlined lambdas (each/times loops), return acts like continue
+	// This matches Ruby semantics where return in a block skips to the next iteration
+	// The return value (if any) is discarded since each/times ignore block return values
+	if g.inInlinedLambda {
+		g.buf.WriteString("continue")
+		// Close the condition block if present
+		if s.Condition != nil {
+			g.buf.WriteString("\n")
+			g.indent--
+			g.writeIndent()
+			g.buf.WriteString("}\n")
+		} else {
+			g.buf.WriteString("\n")
+		}
+		return
+	}
 	g.buf.WriteString("return")
 	if len(s.Values) > 0 {
 		g.buf.WriteString(" ")

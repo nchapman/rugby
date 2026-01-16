@@ -171,6 +171,7 @@ type Generator struct {
 	emitLineDir                  bool                         // whether to emit //line directives
 	currentReturnTypes           []string                     // return types of the current function/method
 	loopDepth                    int                          // nesting depth of loops (for break/next)
+	inInlinedLambda              bool                         // true when inside an inlined lambda (each/times); return -> continue
 	inMainFunc                   bool                         // true when generating code inside main() function
 	errors                       []error                      // collected errors during generation
 	tempVarCounter               int                          // counter for generating unique temp variable names
@@ -185,6 +186,7 @@ type Generator struct {
 	privateMethods               map[string]map[string]bool   // track private methods per class: className -> methodName -> isPrivate
 	instanceMethods              map[string]map[string]string // track instance methods per class: className -> methodName -> goName
 	pubMethods                   map[string]map[string]bool   // track pub methods per class: className -> methodName -> isPub
+	classParent                  map[string]string            // track class inheritance: childClass -> parentClass
 }
 
 // addError records an error during code generation
@@ -262,6 +264,7 @@ func New(opts ...Option) *Generator {
 		privateMethods:               make(map[string]map[string]bool),
 		instanceMethods:              make(map[string]map[string]string),
 		pubMethods:                   make(map[string]map[string]bool),
+		classParent:                  make(map[string]string),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -349,6 +352,81 @@ func (g *Generator) isAccessorField(fieldName string) bool {
 		}
 	}
 	return false
+}
+
+// isParentAccessor checks if a field name is an accessor in any parent class
+// (but NOT in the current class). Used to skip field generation for inherited accessors.
+func (g *Generator) isParentAccessor(embeds []string, fieldName string) bool {
+	// Walk up the inheritance chain
+	for _, parentClass := range embeds {
+		if g.isAccessorInClassHierarchy(parentClass, fieldName) {
+			return true
+		}
+	}
+	return false
+}
+
+// isAccessorInClassHierarchy checks if a field is an accessor in the given class
+// or any of its parent classes.
+func (g *Generator) isAccessorInClassHierarchy(className, fieldName string) bool {
+	// Check current class
+	if g.typeInfo != nil && g.typeInfo.HasAccessor(className, fieldName) {
+		return true
+	}
+	// Also check baseClassAccessors (populated during pre-pass)
+	for _, accName := range g.baseClassAccessors[className] {
+		if accName == fieldName {
+			return true
+		}
+	}
+	// Check parent class
+	if parent := g.classParent[className]; parent != "" {
+		return g.isAccessorInClassHierarchy(parent, fieldName)
+	}
+	return false
+}
+
+// getInheritedFieldPath returns the path to an inherited field (e.g., "Parent._name")
+// if the field is from a parent class. Returns empty string if the field is local.
+func (g *Generator) getInheritedFieldPath(fieldName string) string {
+	// Check if this field is an accessor in a parent class
+	if !g.isParentAccessor(g.currentClassEmbeds, fieldName) {
+		return "" // Field is local, no path needed
+	}
+
+	// Find which parent class has this accessor and build the path
+	return g.findFieldPath(g.currentClassEmbeds, fieldName)
+}
+
+// findFieldPath recursively finds the path to a field in the class hierarchy
+func (g *Generator) findFieldPath(embeds []string, fieldName string) string {
+	for _, parentClass := range embeds {
+		// Check if this parent class has the accessor
+		hasAccessor := false
+		if g.typeInfo != nil && g.typeInfo.HasAccessor(parentClass, fieldName) {
+			hasAccessor = true
+		}
+		for _, accName := range g.baseClassAccessors[parentClass] {
+			if accName == fieldName {
+				hasAccessor = true
+				break
+			}
+		}
+
+		if hasAccessor {
+			// Found it in this parent class - return path with underscore prefix
+			return parentClass + "._" + fieldName
+		}
+
+		// Check this parent's parents (recursive)
+		if grandparent := g.classParent[parentClass]; grandparent != "" {
+			if path := g.findFieldPath([]string{grandparent}, fieldName); path != "" {
+				// Prepend the parent class name
+				return parentClass + "." + path
+			}
+		}
+	}
+	return ""
 }
 
 // getFieldType returns the Rugby type of a class field. Requires typeInfo from semantic analysis.
@@ -501,17 +579,18 @@ func (g *Generator) inferExprGoType(expr ast.Expression) string {
 // getSelectorKind returns the resolved selector kind for a SelectorExpr.
 // First checks the AST annotation, then falls back to TypeInfo, then to heuristics.
 func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {
-	// First check the AST annotation
-	if sel.ResolvedKind != ast.SelectorUnknown {
+	// First check the AST annotation - trust Getter/Method but verify Field
+	// SelectorField may be incorrect for inherited getters that semantic doesn't detect
+	if sel.ResolvedKind == ast.SelectorGetter || sel.ResolvedKind == ast.SelectorMethod || sel.ResolvedKind == ast.SelectorGoMethod {
 		return sel.ResolvedKind
 	}
 
-	// Then check TypeInfo
-	if kind := g.typeInfo.GetSelectorKind(sel); kind != ast.SelectorUnknown {
+	// Then check TypeInfo, but only trust it for Getter/Method kinds
+	if kind := g.typeInfo.GetSelectorKind(sel); kind == ast.SelectorGetter || kind == ast.SelectorMethod || kind == ast.SelectorGoMethod {
 		return kind
 	}
 
-	// Fall back to heuristics:
+	// Fall back to heuristics (also verify SelectorField annotations):
 	// - Interface methods need method call syntax
 	if g.isInterfaceMethod(sel.Sel) {
 		return ast.SelectorMethod
@@ -525,6 +604,12 @@ func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {
 	//   But NOT for direct package member access like io.EOF (which could be a variable)
 	if ident, ok := sel.X.(*ast.Ident); ok && g.goInteropVars[ident.Name] {
 		return ast.SelectorGoMethod
+	}
+	// - Instance methods/getters on known classes (including inherited)
+	if receiverClassName := g.getReceiverClassName(sel.X); receiverClassName != "" {
+		if g.isClassInstanceMethod(receiverClassName, sel.Sel) != "" {
+			return ast.SelectorGetter
+		}
 	}
 
 	return ast.SelectorUnknown
@@ -619,10 +704,15 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	// This is used to generate method reference assertions that suppress
 	// "unused method" lint warnings for methods in base classes that are
 	// shadowed by subclasses.
+	// Also track the inheritance hierarchy for method lookup.
 	for _, def := range definitions {
 		if cls, ok := def.(*ast.ClassDecl); ok {
 			for _, embed := range cls.Embeds {
 				g.baseClasses[embed] = true
+				// Track child -> parent relationship (only single inheritance)
+				if len(cls.Embeds) == 1 {
+					g.classParent[cls.Name] = embed
+				}
 			}
 		}
 	}
@@ -734,6 +824,24 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 						g.pubMethods[cls.Name] = make(map[string]bool)
 					}
 					g.pubMethods[cls.Name][method.Name] = true
+				}
+			}
+
+			// Also collect accessor getters as instance methods
+			// This allows genSelectorExpr to know when to add () for getter calls
+			for _, acc := range cls.Accessors {
+				if acc.Kind == "getter" || acc.Kind == "property" {
+					if g.instanceMethods[cls.Name] == nil {
+						g.instanceMethods[cls.Name] = make(map[string]string)
+					}
+					// Determine Go name based on visibility
+					var goName string
+					if acc.Pub || cls.Pub {
+						goName = snakeToPascalWithAcronyms(acc.Name)
+					} else {
+						goName = snakeToCamelWithAcronyms(acc.Name)
+					}
+					g.instanceMethods[cls.Name][acc.Name] = goName
 				}
 			}
 		}

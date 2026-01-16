@@ -351,6 +351,12 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			g.buf.WriteString("\n")
 		}
 		for _, field := range allFields {
+			// Skip fields that are already accessors in parent classes
+			// Child class should use inherited getter/setter instead of creating new field
+			if g.isParentAccessor(cls.Embeds, field.Name) {
+				continue
+			}
+
 			// Use underscore prefix for accessor fields to avoid conflict with getter/setter methods
 			goFieldName := field.Name
 			if g.isAccessorField(field.Name) {

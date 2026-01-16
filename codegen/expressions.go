@@ -87,8 +87,9 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			recv := receiverName(g.currentClass)
 			methodName := snakeToPascalWithAcronyms(e.Name)
 			g.buf.WriteString(fmt.Sprintf("%s.%s()", recv, methodName))
-		} else if g.currentClass != "" && g.instanceMethods[g.currentClass] != nil && g.instanceMethods[g.currentClass][e.Name] != "" {
+		} else if g.currentClass != "" && g.instanceMethods[g.currentClass] != nil && g.instanceMethods[g.currentClass][e.Name] != "" && g.vars[e.Name] == "" {
 			// Implicit method call within class - generate as self.method()
+			// Only if not a local variable (e.g., parameters shadow instance methods)
 			recv := receiverName(g.currentClass)
 			methodName := g.instanceMethods[g.currentClass][e.Name]
 			g.buf.WriteString(fmt.Sprintf("%s.%s()", recv, methodName))
@@ -1062,12 +1063,20 @@ func (g *Generator) genRangeSlice(collection ast.Expression, r *ast.RangeLit) {
 	g.buf.WriteString(", runtime.Range{Start: ")
 	g.genExpr(r.Start)
 	g.buf.WriteString(", End: ")
-	g.genExpr(r.End)
+	if r.End != nil {
+		g.genExpr(r.End)
+	} else {
+		// Open-ended range (arr[start..]) - End is ignored when OpenEnd is true
+		g.buf.WriteString("0")
+	}
 	g.buf.WriteString(", Exclusive: ")
 	if r.Exclusive {
 		g.buf.WriteString("true")
 	} else {
 		g.buf.WriteString("false")
+	}
+	if r.End == nil {
+		g.buf.WriteString(", OpenEnd: true")
 	}
 	g.buf.WriteString("})")
 }
@@ -2154,6 +2163,9 @@ func (g *Generator) genLambdaEach(iterable ast.Expression, lambda *ast.LambdaExp
 			g.buf.WriteString(" {\n")
 
 			// Use scopedVars to register both key and value variables
+			// Set inInlinedLambda so that bare return becomes continue
+			prevInInlinedLambda := g.inInlinedLambda
+			g.inInlinedLambda = true
 			g.scopedVars([]struct{ name, varType string }{{keyName, keyType}, {valueName, valueType}}, func() {
 				g.indent++
 				for _, stmt := range lambda.Body {
@@ -2161,6 +2173,7 @@ func (g *Generator) genLambdaEach(iterable ast.Expression, lambda *ast.LambdaExp
 				}
 				g.indent--
 			})
+			g.inInlinedLambda = prevInInlinedLambda
 
 			g.writeIndent()
 			g.buf.WriteString("}")
@@ -2183,6 +2196,9 @@ func (g *Generator) genLambdaEach(iterable ast.Expression, lambda *ast.LambdaExp
 	g.buf.WriteString(" {\n")
 
 	// Use scopedVar to register the loop variable with its type
+	// Set inInlinedLambda so that bare return becomes continue
+	prevInInlinedLambda := g.inInlinedLambda
+	g.inInlinedLambda = true
 	g.scopedVar(varName, elemType, func() {
 		g.indent++
 		for _, stmt := range lambda.Body {
@@ -2190,6 +2206,7 @@ func (g *Generator) genLambdaEach(iterable ast.Expression, lambda *ast.LambdaExp
 		}
 		g.indent--
 	})
+	g.inInlinedLambda = prevInInlinedLambda
 
 	g.writeIndent()
 	g.buf.WriteString("}")
@@ -2217,6 +2234,9 @@ func (g *Generator) genLambdaEachWithIndex(iterable ast.Expression, lambda *ast.
 	g.buf.WriteString(" {\n")
 
 	// Use scopedVars to register both index and element variables
+	// Set inInlinedLambda so that bare return becomes continue
+	prevInInlinedLambda := g.inInlinedLambda
+	g.inInlinedLambda = true
 	g.scopedVars([]struct{ name, varType string }{{idxName, "int"}, {varName, elemType}}, func() {
 		g.indent++
 		for _, stmt := range lambda.Body {
@@ -2224,6 +2244,7 @@ func (g *Generator) genLambdaEachWithIndex(iterable ast.Expression, lambda *ast.
 		}
 		g.indent--
 	})
+	g.inInlinedLambda = prevInInlinedLambda
 
 	g.writeIndent()
 	g.buf.WriteString("}")
@@ -2592,6 +2613,9 @@ func (g *Generator) genLambdaTimes(count ast.Expression, lambda *ast.LambdaExpr)
 	g.buf.WriteString(varName)
 	g.buf.WriteString("++ {\n")
 
+	// Set inInlinedLambda so that bare return becomes continue
+	prevInInlinedLambda := g.inInlinedLambda
+	g.inInlinedLambda = true
 	g.scopedVar(varName, "int", func() {
 		g.indent++
 		for _, stmt := range lambda.Body {
@@ -2599,6 +2623,7 @@ func (g *Generator) genLambdaTimes(count ast.Expression, lambda *ast.LambdaExpr)
 		}
 		g.indent--
 	})
+	g.inInlinedLambda = prevInInlinedLambda
 
 	g.writeIndent()
 	g.buf.WriteString("}")
@@ -2623,6 +2648,9 @@ func (g *Generator) genLambdaUpto(start ast.Expression, lambda *ast.LambdaExpr, 
 	g.buf.WriteString(varName)
 	g.buf.WriteString("++ {\n")
 
+	// Set inInlinedLambda so that bare return becomes continue
+	prevInInlinedLambda := g.inInlinedLambda
+	g.inInlinedLambda = true
 	g.scopedVar(varName, "int", func() {
 		g.indent++
 		for _, stmt := range lambda.Body {
@@ -2630,6 +2658,7 @@ func (g *Generator) genLambdaUpto(start ast.Expression, lambda *ast.LambdaExpr, 
 		}
 		g.indent--
 	})
+	g.inInlinedLambda = prevInInlinedLambda
 
 	g.writeIndent()
 	g.buf.WriteString("}")
@@ -2654,6 +2683,9 @@ func (g *Generator) genLambdaDownto(start ast.Expression, lambda *ast.LambdaExpr
 	g.buf.WriteString(varName)
 	g.buf.WriteString("-- {\n")
 
+	// Set inInlinedLambda so that bare return becomes continue
+	prevInInlinedLambda := g.inInlinedLambda
+	g.inInlinedLambda = true
 	g.scopedVar(varName, "int", func() {
 		g.indent++
 		for _, stmt := range lambda.Body {
@@ -2661,6 +2693,7 @@ func (g *Generator) genLambdaDownto(start ast.Expression, lambda *ast.LambdaExpr
 		}
 		g.indent--
 	})
+	g.inInlinedLambda = prevInInlinedLambda
 
 	g.writeIndent()
 	g.buf.WriteString("}")
@@ -2928,6 +2961,18 @@ func (g *Generator) genScopedSpawnBlock(scope ast.Expression, block *ast.BlockEx
 func (g *Generator) genSymbolToProcBlockCall(iterable ast.Expression, stp *ast.SymbolToProcExpr, method blockMethod) {
 	g.needsRuntime = true
 	elemType := g.inferArrayElementGoType(iterable)
+
+	// Extract base class name from element type (e.g., "*User" -> "User")
+	baseClass := strings.TrimPrefix(elemType, "*")
+
+	// Check if this is a user-defined class with the method
+	// If so, we can generate a direct method call (required for unexported methods)
+	// Otherwise, use runtime.CallMethod (required for primitives)
+	goMethodName := ""
+	if g.instanceMethods[baseClass] != nil {
+		goMethodName = g.instanceMethods[baseClass][stp.Method]
+	}
+
 	g.buf.WriteString(method.runtimeFunc)
 	g.buf.WriteString("(")
 	g.genExpr(iterable)
@@ -2935,16 +2980,25 @@ func (g *Generator) genSymbolToProcBlockCall(iterable ast.Expression, stp *ast.S
 	g.buf.WriteString(elemType)
 	g.buf.WriteString(") ")
 	g.buf.WriteString(method.returnType)
-	g.buf.WriteString(" { return runtime.CallMethod(x, \"")
-	g.buf.WriteString(stp.Method)
-	g.buf.WriteString("\")")
-	// Add type assertion for non-any return types
-	if method.returnType != "any" {
-		g.buf.WriteString(".(")
-		g.buf.WriteString(method.returnType)
-		g.buf.WriteString(")")
+
+	if goMethodName != "" {
+		// User-defined class with known method - generate direct call
+		g.buf.WriteString(" { return x.")
+		g.buf.WriteString(goMethodName)
+		g.buf.WriteString("() })")
+	} else {
+		// Primitive type or unknown method - use runtime.CallMethod
+		g.buf.WriteString(" { return runtime.CallMethod(x, \"")
+		g.buf.WriteString(stp.Method)
+		g.buf.WriteString("\")")
+		// Add type assertion for non-any return types
+		if method.returnType != "any" {
+			g.buf.WriteString(".(")
+			g.buf.WriteString(method.returnType)
+			g.buf.WriteString(")")
+		}
+		g.buf.WriteString(" })")
 	}
-	g.buf.WriteString(" })")
 }
 
 func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExpr, args []ast.Expression, method blockMethod) {
@@ -3399,6 +3453,23 @@ func (g *Generator) getReceiverClassName(expr ast.Expression) string {
 				return ident.Name
 			}
 		}
+	}
+	return ""
+}
+
+// isClassInstanceMethod checks if the given method name is an instance method
+// (including getters) on the given class or any of its parent classes.
+// Returns the Go method name if found, empty string otherwise.
+func (g *Generator) isClassInstanceMethod(className, methodName string) string {
+	// Walk up the inheritance chain
+	for className != "" {
+		if methods := g.instanceMethods[className]; methods != nil {
+			if goName, ok := methods[methodName]; ok {
+				return goName
+			}
+		}
+		// Move to parent class
+		className = g.classParent[className]
 	}
 	return ""
 }

@@ -43,7 +43,9 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseConcurrentlyStmt()
 	case token.IDENT:
 		// Check for multi-assignment: ident, ident = expr
-		if p.peekTokenIs(token.COMMA) {
+		// Must verify it's actually a multi-assignment (all idents followed by =)
+		// vs a tuple literal (ident, expr)
+		if p.peekTokenIs(token.COMMA) && p.isMultiAssignPattern() {
 			return p.parseMultiAssignStmt()
 		}
 		// Check for assignment: ident = expr or ident : Type = expr

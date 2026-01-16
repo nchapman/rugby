@@ -543,8 +543,17 @@ func (p *Parser) parseRangeLit(start ast.Expression) ast.Expression {
 	line := p.curToken.Line
 	exclusive := p.curToken.Type == token.TRIPLEDOT
 	precedence := p.curPrecedence()
-	p.nextToken()
-	end := p.parseExpression(precedence)
+
+	// Handle open-ended ranges like size.. (end is omitted)
+	// Check peek token to see if there's an end expression
+	var end ast.Expression
+	if !p.peekTokenIs(token.RBRACKET) && !p.peekTokenIs(token.NEWLINE) && !p.peekTokenIs(token.EOF) &&
+		!p.peekTokenIs(token.RPAREN) && !p.peekTokenIs(token.COMMA) {
+		p.nextToken() // consume '..' / '...'
+		end = p.parseExpression(precedence)
+	}
+	// Note: for open-ended ranges, we leave curToken on '..' / '...' so the caller
+	// can handle advancing past it
 
 	return &ast.RangeLit{Start: start, End: end, Exclusive: exclusive, Line: line}
 }

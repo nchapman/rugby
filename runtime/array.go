@@ -807,7 +807,7 @@ func Slice(collection any, r Range) any {
 		val := reflect.ValueOf(collection)
 		if val.Kind() == reflect.Slice {
 			length := val.Len()
-			start, end := normalizeRangeIndices(r.Start, r.End, length, r.Exclusive)
+			start, end := normalizeRangeIndices(r, length)
 			if start >= length || start > end || start < 0 {
 				// Return empty slice of same type
 				return reflect.MakeSlice(val.Type(), 0, 0).Interface()
@@ -821,7 +821,7 @@ func Slice(collection any, r Range) any {
 // sliceGeneric extracts a portion of a slice with negative index support.
 func sliceGeneric[T any](slice []T, r Range) []T {
 	length := len(slice)
-	start, end := normalizeRangeIndices(r.Start, r.End, length, r.Exclusive)
+	start, end := normalizeRangeIndices(r, length)
 	if start >= length || start > end || start < 0 {
 		return []T{}
 	}
@@ -832,7 +832,7 @@ func sliceGeneric[T any](slice []T, r Range) []T {
 func sliceString(s string, r Range) string {
 	runes := []rune(s)
 	length := len(runes)
-	start, end := normalizeRangeIndices(r.Start, r.End, length, r.Exclusive)
+	start, end := normalizeRangeIndices(r, length)
 	if start >= length || start > end || start < 0 {
 		return ""
 	}
@@ -841,18 +841,28 @@ func sliceString(s string, r Range) string {
 
 // normalizeRangeIndices converts Ruby-style indices to Go slice indices.
 // Returns start and end for Go slicing (end is exclusive in Go).
-func normalizeRangeIndices(start, end, length int, exclusive bool) (int, int) {
-	// Handle negative indices
+func normalizeRangeIndices(r Range, length int) (int, int) {
+	start := r.Start
+	end := r.End
+
+	// Handle negative start index
 	if start < 0 {
 		start = length + start
 	}
+
+	// Handle open-ended ranges (arr[start..])
+	if r.OpenEnd {
+		return start, length
+	}
+
+	// Handle negative end index
 	if end < 0 {
 		end = length + end
 	}
 
 	// For inclusive range, end should include the element
 	// Go slices are exclusive, so we add 1 to include the end element
-	if !exclusive {
+	if !r.Exclusive {
 		end = end + 1
 	}
 
@@ -916,11 +926,20 @@ func CallMethod(obj any, methodName string) any {
 	val := reflect.ValueOf(obj)
 
 	// Try to find the method on the value
-	method := val.MethodByName(toGoMethodName(methodName))
-	if !method.IsValid() {
+	// Try PascalCase first (pub methods), then camelCase (private/getter methods)
+	goNames := []string{toGoMethodName(methodName), toCamelCase(methodName)}
+	var method reflect.Value
+	for _, goName := range goNames {
+		method = val.MethodByName(goName)
+		if method.IsValid() {
+			break
+		}
 		// Try pointer receiver
 		if val.Kind() != reflect.Ptr && val.CanAddr() {
-			method = val.Addr().MethodByName(toGoMethodName(methodName))
+			method = val.Addr().MethodByName(goName)
+			if method.IsValid() {
+				break
+			}
 		}
 	}
 
@@ -968,6 +987,48 @@ func toGoMethodName(name string) string {
 
 	if isPredicate {
 		result.WriteString("_PRED")
+	}
+
+	return result.String()
+}
+
+// toCamelCase converts a Ruby-style method name to camelCase (for private/getter methods).
+// Examples: upcase -> upcase, to_string -> toString, user_name -> userName, active? -> isActive
+func toCamelCase(name string) string {
+	if len(name) == 0 {
+		return ""
+	}
+
+	// Handle predicate methods (ending in ?)
+	isPredicate := false
+	if name[len(name)-1] == '?' {
+		isPredicate = true
+		name = name[:len(name)-1]
+	}
+
+	// Convert snake_case to camelCase (first letter lowercase)
+	var result strings.Builder
+	capitalizeNext := false
+	for i, r := range name {
+		if r == '_' {
+			capitalizeNext = true
+		} else if capitalizeNext {
+			result.WriteRune(unicode.ToUpper(r))
+			capitalizeNext = false
+		} else if i == 0 {
+			result.WriteRune(unicode.ToLower(r))
+		} else {
+			result.WriteRune(r)
+		}
+	}
+
+	// Predicate methods get "is" prefix
+	if isPredicate {
+		s := result.String()
+		if len(s) == 0 {
+			return "is"
+		}
+		return "is" + strings.ToUpper(string(s[0])) + s[1:]
 	}
 
 	return result.String()

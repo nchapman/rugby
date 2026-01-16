@@ -174,6 +174,44 @@ func (p *Parser) isFunctionTypeAhead() bool {
 	return result
 }
 
+// isMultiAssignPattern checks if we have (ident, ident, ... = expr) pattern.
+// This is used to distinguish multi-assignment from tuple literals.
+// Must be called when curToken is IDENT and peekToken is COMMA.
+func (p *Parser) isMultiAssignPattern() bool {
+	// Save lexer state and parser tokens
+	lexerState := p.l.SaveState()
+	savedCur := p.curToken
+	savedPeek := p.peekToken
+
+	// Scan through comma-separated identifiers looking for '='
+	// ident, ident, ... = expr  -> true
+	// ident, expr               -> false
+	for p.curTokenIs(token.IDENT) {
+		p.nextToken() // move past ident
+
+		// After ident, we should see either COMMA or ASSIGN
+		if p.curTokenIs(token.ASSIGN) {
+			// Found the = sign, this is a multi-assignment
+			p.l.RestoreState(lexerState)
+			p.curToken = savedCur
+			p.peekToken = savedPeek
+			return true
+		}
+		if p.curTokenIs(token.COMMA) {
+			p.nextToken() // move past comma
+			continue
+		}
+		// Something else (not comma or assign) after ident - not a multi-assign
+		break
+	}
+
+	// Didn't find '=' after all identifiers
+	p.l.RestoreState(lexerState)
+	p.curToken = savedCur
+	p.peekToken = savedPeek
+	return false
+}
+
 // parseBlocksAndChaining handles blocks and method chaining after an expression.
 // This enables:
 //   - arr.select { |x| }.map { |x| } (inline chaining)
