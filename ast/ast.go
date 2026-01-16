@@ -826,6 +826,26 @@ type TypeAliasDecl struct {
 func (t *TypeAliasDecl) node()     {}
 func (t *TypeAliasDecl) stmtNode() {}
 
+// EnumDecl represents an enum declaration: enum Status ... end
+type EnumDecl struct {
+	Name    string        // enum name (e.g., "Status")
+	Values  []*EnumValue  // enum variants
+	Pub     bool          // true if exported (pub enum)
+	Line    int           // source line number (1-indexed)
+	Doc     *CommentGroup // leading comments
+	Comment *CommentGroup // trailing comment on same line
+}
+
+func (e *EnumDecl) node()     {}
+func (e *EnumDecl) stmtNode() {}
+
+// EnumValue represents a single enum variant
+type EnumValue struct {
+	Name  string     // variant name (e.g., "Pending", "Active")
+	Value Expression // explicit value (e.g., 200), nil if auto-assigned
+	Line  int        // source line number
+}
+
 // ConstDecl represents a constant declaration: const MAX_SIZE = 1024
 type ConstDecl struct {
 	Name    string        // constant name (e.g., "MAX_SIZE")

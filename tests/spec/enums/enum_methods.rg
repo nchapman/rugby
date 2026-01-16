@@ -1,6 +1,5 @@
 #@ run-pass
 #@ check-output
-#@ skip: Enums not yet implemented (Section 7.3)
 #
 # Test: Section 7.3 - Enum methods
 # TODO: Implement enum methods

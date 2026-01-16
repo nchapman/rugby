@@ -128,6 +128,7 @@ const (
 	PRIVATE      TokenType = "PRIVATE"
 	CONST        TokenType = "CONST"
 	TYPE         TokenType = "TYPE"
+	ENUM         TokenType = "ENUM"
 
 	// Testing keywords
 	DESCRIBE TokenType = "DESCRIBE"
@@ -197,6 +198,7 @@ var keywords = map[string]TokenType{
 	"private":      PRIVATE,
 	"const":        CONST,
 	"type":         TYPE,
+	"enum":         ENUM,
 	// Testing keywords
 	"describe": DESCRIBE,
 	"it":       IT,

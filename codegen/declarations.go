@@ -1297,6 +1297,105 @@ func (g *Generator) genTypeAliasDecl(typeAlias *ast.TypeAliasDecl) {
 	g.buf.WriteString(fmt.Sprintf("type %s = %s\n\n", typeAlias.Name, goType))
 }
 
+// genEnumDecl generates a Go enum from a Rugby enum declaration
+// e.g., enum Status { Pending, Active } becomes:
+//
+//	type Status int
+//	const (
+//	    StatusPending Status = iota
+//	    StatusActive
+//	)
+func (g *Generator) genEnumDecl(enumDecl *ast.EnumDecl) {
+	enumName := enumDecl.Name
+
+	// Track this as an enum for later reference
+	if g.enums == nil {
+		g.enums = make(map[string]*ast.EnumDecl)
+	}
+	g.enums[enumName] = enumDecl
+
+	// Generate type definition
+	g.buf.WriteString(fmt.Sprintf("type %s int\n\n", enumName))
+
+	// Check if any values have explicit assignments
+	hasExplicitValues := false
+	for _, v := range enumDecl.Values {
+		if v.Value != nil {
+			hasExplicitValues = true
+			break
+		}
+	}
+
+	// Generate constants
+	g.buf.WriteString("const (\n")
+	for i, v := range enumDecl.Values {
+		constName := enumName + v.Name
+
+		if hasExplicitValues {
+			// Explicit values - generate each one with type and value
+			g.buf.WriteString(fmt.Sprintf("\t%s %s", constName, enumName))
+			if v.Value != nil {
+				g.buf.WriteString(" = ")
+				g.genExpr(v.Value)
+			} else {
+				// No value specified - use previous + 1 (iota behavior)
+				g.buf.WriteString(" = iota")
+				if i > 0 {
+					g.buf.WriteString(fmt.Sprintf(" + %d", i))
+				}
+			}
+		} else {
+			// Auto-incrementing with iota
+			// In Go, only the first constant needs the type and = iota
+			if i == 0 {
+				g.buf.WriteString(fmt.Sprintf("\t%s %s = iota", constName, enumName))
+			} else {
+				g.buf.WriteString(fmt.Sprintf("\t%s", constName))
+			}
+		}
+		g.buf.WriteString("\n")
+	}
+	g.buf.WriteString(")\n\n")
+
+	// Generate String() method for .to_s
+	g.buf.WriteString(fmt.Sprintf("func (e %s) String() string {\n", enumName))
+	g.buf.WriteString("\tswitch e {\n")
+	for _, v := range enumDecl.Values {
+		constName := enumName + v.Name
+		g.buf.WriteString(fmt.Sprintf("\tcase %s:\n", constName))
+		g.buf.WriteString(fmt.Sprintf("\t\treturn %q\n", v.Name))
+	}
+	g.buf.WriteString("\t}\n")
+	g.buf.WriteString("\treturn \"\"\n")
+	g.buf.WriteString("}\n\n")
+
+	// Generate <EnumName>Values() function for .values
+	g.buf.WriteString(fmt.Sprintf("func %sValues() []%s {\n", enumName, enumName))
+	g.buf.WriteString(fmt.Sprintf("\treturn []%s{", enumName))
+	for i, v := range enumDecl.Values {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.buf.WriteString(enumName + v.Name)
+	}
+	g.buf.WriteString("}\n")
+	g.buf.WriteString("}\n\n")
+
+	// Generate <EnumName>FromString() function for .from_string
+	// Returns *EnumName (nil if not found) for optional semantics
+	g.buf.WriteString(fmt.Sprintf("func %sFromString(s string) *%s {\n", enumName, enumName))
+	g.buf.WriteString("\tswitch s {\n")
+	for _, v := range enumDecl.Values {
+		constName := enumName + v.Name
+		g.buf.WriteString(fmt.Sprintf("\tcase %q:\n", v.Name))
+		g.buf.WriteString(fmt.Sprintf("\t\tv := %s\n", constName))
+		g.buf.WriteString("\t\treturn &v\n")
+	}
+	g.buf.WriteString("\t}\n")
+	g.buf.WriteString("\treturn nil\n")
+	g.buf.WriteString("}\n\n")
+}
+
 // genConstDecl generates a Go const declaration from a Rugby const declaration
 // e.g., const MAX_SIZE = 1024 becomes const MAX_SIZE = 1024
 func (g *Generator) genConstDecl(constDecl *ast.ConstDecl) {

@@ -763,8 +763,9 @@ func (g *Generator) genSafeNavExpr(e *ast.SafeNavExpr) {
 	g.buf.WriteString(" } else { return nil } }()")
 }
 
-// genScopeExpr generates code for scope resolution expressions (Module::Class)
-// Converts to the namespaced form (Module_Class)
+// genScopeExpr generates code for scope resolution expressions (Module::Class or Enum::Value)
+// For enums: Status::Active -> StatusActive
+// For modules: Http::Response -> Http_Response
 func (g *Generator) genScopeExpr(e *ast.ScopeExpr) {
 	// Build the full namespaced name
 	var prefix string
@@ -786,7 +787,18 @@ func (g *Generator) genScopeExpr(e *ast.ScopeExpr) {
 		return
 	}
 
-	// Generate the namespaced name: Module_Class
+	// Check if this is an enum reference
+	if g.enums != nil {
+		if _, isEnum := g.enums[prefix]; isEnum {
+			// For enums, generate: EnumName + ValueName (no separator)
+			// Status::Active -> StatusActive
+			g.buf.WriteString(prefix)
+			g.buf.WriteString(e.Right)
+			return
+		}
+	}
+
+	// Generate the namespaced name for modules: Module_Class
 	g.buf.WriteString(prefix)
 	g.buf.WriteString("_")
 	g.buf.WriteString(e.Right)
@@ -1349,6 +1361,30 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			if ident.Name == "assert" || ident.Name == "require" {
 				g.genTestAssertion(call, ident.Name, sel.Sel)
 				return
+			}
+			// Handle enum type methods: Color.from_string("Red"), Color.values
+			if g.enums != nil {
+				if _, isEnum := g.enums[ident.Name]; isEnum {
+					switch sel.Sel {
+					case "from_string":
+						// Color.from_string("Red") -> ColorFromString("Red")
+						g.buf.WriteString(ident.Name)
+						g.buf.WriteString("FromString(")
+						for i, arg := range call.Args {
+							if i > 0 {
+								g.buf.WriteString(", ")
+							}
+							g.genExpr(arg)
+						}
+						g.buf.WriteString(")")
+						return
+					case "values":
+						// Color.values -> ColorValues()
+						g.buf.WriteString(ident.Name)
+						g.buf.WriteString("Values()")
+						return
+					}
+				}
 			}
 		}
 	}
@@ -1952,6 +1988,25 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				g.genExpr(call.Args[0])
 				g.buf.WriteString(")")
 				return
+			}
+		}
+
+		// Handle enum instance method calls (Color::Red.to_s, enum_var.value)
+		if g.enums != nil {
+			if _, isEnum := g.enums[receiverType]; isEnum {
+				switch fn.Sel {
+				case "to_s":
+					// enum.to_s -> enum.String()
+					g.genExpr(fn.X)
+					g.buf.WriteString(".String()")
+					return
+				case "value":
+					// enum.value -> int(enum)
+					g.buf.WriteString("int(")
+					g.genExpr(fn.X)
+					g.buf.WriteString(")")
+					return
+				}
 			}
 		}
 
@@ -3370,6 +3425,38 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 		}
 	}
 
+	// Handle enum methods (.value, .to_s, .values)
+	receiverType := g.inferTypeFromExpr(sel.X)
+	if g.enums != nil {
+		if _, isEnum := g.enums[receiverType]; isEnum {
+			switch sel.Sel {
+			case "value":
+				// enum.value -> int(enum)
+				g.buf.WriteString("int(")
+				g.genExpr(sel.X)
+				g.buf.WriteString(")")
+				return
+			case "to_s":
+				// enum.to_s -> enum.String()
+				g.genExpr(sel.X)
+				g.buf.WriteString(".String()")
+				return
+			}
+		}
+		// Handle enum type methods (Color.values)
+		if ident, ok := sel.X.(*ast.Ident); ok {
+			if _, isEnum := g.enums[ident.Name]; isEnum {
+				switch sel.Sel {
+				case "values":
+					// Color.values -> ColorValues()
+					g.buf.WriteString(ident.Name)
+					g.buf.WriteString("Values()")
+					return
+				}
+			}
+		}
+	}
+
 	// Handle .length and .size -> len()
 	if sel.Sel == "length" || sel.Sel == "size" {
 		g.buf.WriteString("len(")
@@ -3379,7 +3466,6 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 	}
 
 	// Check for methods on optional types (ok?, nil?, present?, absent?, unwrap)
-	receiverType := g.inferTypeFromExpr(sel.X)
 	if isOptionalType(receiverType) {
 		switch sel.Sel {
 		case "ok?", "present?":

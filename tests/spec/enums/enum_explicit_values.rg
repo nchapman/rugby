@@ -1,6 +1,5 @@
 #@ run-pass
 #@ check-output
-#@ skip: Enums not yet implemented (Section 7.2)
 #
 # Test: Section 7.2 - Enums with explicit values
 # TODO: Implement enum syntax with values

@@ -193,6 +193,7 @@ type Generator struct {
 	instanceMethods              map[string]map[string]string // track instance methods per class: className -> methodName -> goName
 	pubMethods                   map[string]map[string]bool   // track pub methods per class: className -> methodName -> isPub
 	classParent                  map[string]string            // track class inheritance: childClass -> parentClass
+	enums                        map[string]*ast.EnumDecl     // track enum definitions for expression translation
 }
 
 // addError records an error during code generation
@@ -702,6 +703,15 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 				return ident.Name
 			}
 		}
+	case *ast.ScopeExpr:
+		// Enum value reference: Status::Active -> "Status"
+		if ident, ok := e.Left.(*ast.Ident); ok {
+			if g.enums != nil {
+				if _, isEnum := g.enums[ident.Name]; isEnum {
+					return ident.Name
+				}
+			}
+		}
 	}
 	return "" // unknown - semantic analysis should have provided the type
 }
@@ -739,6 +749,8 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 		case *ast.TypeAliasDecl:
 			definitions = append(definitions, d)
 		case *ast.ConstDecl:
+			definitions = append(definitions, d)
+		case *ast.EnumDecl:
 			definitions = append(definitions, d)
 		// Test constructs are definitions, not top-level statements
 		case *ast.DescribeStmt, *ast.TestStmt, *ast.TableStmt:

@@ -1,6 +1,5 @@
 #@ run-pass
 #@ check-output
-#@ skip: Enums not yet implemented (Section 7.1)
 #
 # Test: Section 7.1 - Basic enums
 # TODO: Implement enum syntax

@@ -1292,3 +1292,79 @@ func (p *Parser) parseTypeAliasDeclWithDoc(doc *ast.CommentGroup) *ast.TypeAlias
 		Doc:  doc,
 	}
 }
+
+// parseEnumDecl parses an enum declaration: enum Status ... end
+func (p *Parser) parseEnumDecl() *ast.EnumDecl {
+	doc := p.leadingComments(p.curToken.Line)
+	return p.parseEnumDeclWithDoc(doc)
+}
+
+// parseEnumDeclWithDoc parses an enum with pre-collected doc comment
+func (p *Parser) parseEnumDeclWithDoc(doc *ast.CommentGroup) *ast.EnumDecl {
+	line := p.curToken.Line
+	p.nextToken() // consume 'enum'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected enum name after 'enum'")
+		return nil
+	}
+
+	name := p.curToken.Literal
+	p.nextToken() // consume name
+
+	// Skip newlines before body
+	p.skipNewlines()
+
+	// Parse enum values until 'end'
+	var values []*ast.EnumValue
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.END) {
+			break
+		}
+
+		if !p.curTokenIs(token.IDENT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected enum value name")
+			p.nextToken()
+			continue
+		}
+
+		valueLine := p.curToken.Line
+		valueName := p.curToken.Literal
+		p.nextToken() // consume value name
+
+		var valueExpr ast.Expression
+		// Check for explicit value: Name = 200
+		if p.curTokenIs(token.ASSIGN) {
+			p.nextToken() // consume '='
+			valueExpr = p.parseExpression(lowest)
+			// parseExpression leaves cursor on last token of expression
+			// Advance past it if we're not already at newline
+			if !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+				p.nextToken()
+			}
+		}
+
+		values = append(values, &ast.EnumValue{
+			Name:  valueName,
+			Value: valueExpr,
+			Line:  valueLine,
+		})
+
+		// Skip newlines and continue
+		p.skipNewlines()
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close enum")
+		return nil
+	}
+	p.nextToken() // consume 'end'
+
+	return &ast.EnumDecl{
+		Name:   name,
+		Values: values,
+		Line:   line,
+		Doc:    doc,
+	}
+}

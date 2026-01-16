@@ -1,6 +1,7 @@
 package semantic
 
 import (
+	"fmt"
 	"maps"
 	"strings"
 
@@ -34,6 +35,9 @@ type Analyzer struct {
 	// Type aliases: maps alias name to alias info (type and line)
 	typeAliases map[string]typeAliasInfo
 
+	// Enums: maps enum name to enum info
+	enums map[string]*ast.EnumDecl
+
 	// Track which symbols are used (read) vs just declared
 	usedSymbols map[*Symbol]bool
 
@@ -57,6 +61,7 @@ func NewAnalyzer() *Analyzer {
 		modules:       make(map[string]*Symbol),
 		functions:     make(map[string]*Symbol),
 		typeAliases:   make(map[string]typeAliasInfo),
+		enums:         make(map[string]*ast.EnumDecl),
 		usedSymbols:   make(map[*Symbol]bool),
 		declaredAt:    make(map[ast.Node]map[string]*Symbol),
 		declarations:  make(map[ast.Node]bool),
@@ -118,10 +123,13 @@ func (a *Analyzer) Analyze(program *ast.Program) []error {
 		mustDefine(a.globalScope, sym)
 	}
 
-	// Pre-pass: collect type aliases first so they're available when parsing other types
+	// Pre-pass: collect type aliases and enums first so they're available when parsing other types
 	for _, decl := range program.Declarations {
 		if typeAlias, ok := decl.(*ast.TypeAliasDecl); ok {
 			a.collectTypeAlias(typeAlias)
+		}
+		if enumDecl, ok := decl.(*ast.EnumDecl); ok {
+			a.collectEnum(enumDecl)
 		}
 	}
 
@@ -775,6 +783,61 @@ func (a *Analyzer) collectTypeAlias(t *ast.TypeAliasDecl) {
 	a.typeAliases[t.Name] = typeAliasInfo{Type: t.Type, Line: t.Line}
 }
 
+// collectEnum registers an enum declaration for later reference.
+// Enums are treated as integer types with named constants.
+func (a *Analyzer) collectEnum(e *ast.EnumDecl) {
+	// Check for duplicate enum
+	if existing, ok := a.enums[e.Name]; ok {
+		a.addError(&DuplicateTypeAliasError{Name: e.Name, Line: existing.Line})
+		return
+	}
+
+	// Store the enum for later reference
+	a.enums[e.Name] = e
+
+	// Define the enum type as an integer type alias
+	// This allows variables to be typed as the enum
+	a.typeAliases[e.Name] = typeAliasInfo{Type: "Int", Line: e.Line}
+
+	// Validate enum values
+	hasExplicit := false
+	hasImplicit := false
+	for _, v := range e.Values {
+		if v.Value != nil {
+			hasExplicit = true
+			// Validate that explicit values are integer literals
+			if _, ok := v.Value.(*ast.IntLit); !ok {
+				a.addError(&Error{
+					Message: fmt.Sprintf("enum '%s' value '%s' must be an integer literal", e.Name, v.Name),
+					Line:    v.Line,
+				})
+			}
+		} else {
+			hasImplicit = true
+		}
+	}
+	// Disallow mixing explicit and implicit values
+	if hasExplicit && hasImplicit {
+		a.addError(&Error{
+			Message: fmt.Sprintf("enum '%s' has mixed explicit and implicit values; all values must be explicit or all must be implicit", e.Name),
+			Line:    e.Line,
+		})
+	}
+
+	// Define each enum value as a constant in the global scope
+	for _, v := range e.Values {
+		constSym := &Symbol{
+			Name:   e.Name + "::" + v.Name, // Status::Active
+			Kind:   SymConstant,
+			Type:   &Type{Kind: TypeClass, Name: e.Name}, // Treat as the enum type
+			Line:   v.Line,
+			Public: true,
+		}
+		// Don't error on duplicates - will be caught elsewhere
+		_ = a.globalScope.Define(constSym)
+	}
+}
+
 // collectConst registers a constant declaration in the global scope.
 func (a *Analyzer) collectConst(c *ast.ConstDecl) {
 	// Analyze the constant value to determine its type
@@ -954,6 +1017,8 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 		a.analyzeAfter(s)
 	case *ast.TypeAliasDecl:
 		// Type aliases are collected in the pre-pass; no body analysis needed
+	case *ast.EnumDecl:
+		// Enums are collected in the pre-pass; no body analysis needed
 	}
 }
 
@@ -1996,6 +2061,13 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				}
 			}
 		}
+		// Check if this is an enum type reference (for static method calls like Color.values)
+		if sym == nil {
+			if _, isEnum := a.enums[e.Name]; isEnum {
+				typ = &Type{Kind: TypeClass, Name: e.Name}
+				break
+			}
+		}
 		if sym == nil {
 			a.addError(&UndefinedError{Name: e.Name, Line: e.Line, Column: e.Column, Candidates: a.findSimilar(e.Name)})
 			typ = TypeUnknownVal
@@ -2211,6 +2283,34 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			}
 		}
 
+		// Check for enum type static methods (Color.values)
+		if typ == nil {
+			if enumIdent, ok := e.X.(*ast.Ident); ok {
+				if _, isEnum := a.enums[enumIdent.Name]; isEnum {
+					switch e.Sel {
+					case "values":
+						// Enum.values returns Array<EnumType>
+						typ = NewArrayType(&Type{Kind: TypeClass, Name: enumIdent.Name})
+						selectorKind = ast.SelectorMethod
+					}
+				}
+			}
+		}
+
+		// Check for enum instance methods (Color::Red.to_s, Color::Red.value)
+		if typ == nil && receiverType.Kind == TypeClass && receiverType.Name != "" {
+			if _, isEnum := a.enums[receiverType.Name]; isEnum {
+				switch e.Sel {
+				case "to_s":
+					typ = TypeStringVal
+					selectorKind = ast.SelectorMethod
+				case "value":
+					typ = TypeIntVal
+					selectorKind = ast.SelectorMethod
+				}
+			}
+		}
+
 		// Check for class field access (with getter)
 		if typ == nil && receiverType.Kind == TypeClass && receiverType.Name != "" {
 			if cls := a.classes[receiverType.Name]; cls != nil {
@@ -2283,10 +2383,26 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		}
 
 	case *ast.ScopeExpr:
-		// Scope resolution: Module::Class resolves to the class type
-		// e.g., Http::Response resolves to the Response class type
+		// Scope resolution: Module::Class or Enum::Value
 		if modIdent, ok := e.Left.(*ast.Ident); ok {
-			if _, isModule := a.modules[modIdent.Name]; isModule {
+			// Check if it's an enum value reference: Status::Active
+			if enumDecl, isEnum := a.enums[modIdent.Name]; isEnum {
+				// Verify the value exists in the enum
+				found := false
+				for _, v := range enumDecl.Values {
+					if v.Name == e.Right {
+						found = true
+						break
+					}
+				}
+				if found {
+					// Return the enum type
+					typ = &Type{Kind: TypeClass, Name: modIdent.Name}
+				} else {
+					a.addError(&UndefinedError{Name: modIdent.Name + "::" + e.Right, Line: modIdent.Line})
+					typ = TypeUnknownVal
+				}
+			} else if _, isModule := a.modules[modIdent.Name]; isModule {
 				// Look up the class within the module
 				if cls, isClass := a.classes[e.Right]; isClass {
 					typ = NewClassType(cls.Name)
@@ -2823,6 +2939,20 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 						return NewTupleType(classMethod.ReturnTypes...)
 					}
 					return TypeUnknownVal
+				}
+			}
+		}
+
+		// Check for enum type method call: EnumName.from_string(str)
+		if enumIdent, ok := sel.X.(*ast.Ident); ok {
+			if _, isEnum := a.enums[enumIdent.Name]; isEnum {
+				switch sel.Sel {
+				case "from_string":
+					// Enum.from_string returns EnumType? (optional)
+					return NewOptionalType(&Type{Kind: TypeClass, Name: enumIdent.Name})
+				case "values":
+					// Enum.values returns Array<EnumType>
+					return NewArrayType(&Type{Kind: TypeClass, Name: enumIdent.Name})
 				}
 			}
 		}

@@ -452,8 +452,13 @@ func (p *Parser) ParseProgram() *ast.Program {
 					typeAlias.Pub = true
 					program.Declarations = append(program.Declarations, typeAlias)
 				}
+			case token.ENUM:
+				if enumDecl := p.parseEnumDeclWithDoc(doc); enumDecl != nil {
+					enumDecl.Pub = true
+					program.Declarations = append(program.Declarations, enumDecl)
+				}
 			default:
-				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' must be followed by 'def', 'class', 'interface', 'module', or 'type'")
+				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' must be followed by 'def', 'class', 'interface', 'module', 'type', or 'enum'")
 				p.nextToken()
 			}
 		case token.DEF:
@@ -475,6 +480,10 @@ func (p *Parser) ParseProgram() *ast.Program {
 		case token.TYPE:
 			if typeAlias := p.parseTypeAliasDecl(); typeAlias != nil {
 				program.Declarations = append(program.Declarations, typeAlias)
+			}
+		case token.ENUM:
+			if enumDecl := p.parseEnumDecl(); enumDecl != nil {
+				program.Declarations = append(program.Declarations, enumDecl)
 			}
 		case token.CONST:
 			if constDecl := p.parseConstDecl(); constDecl != nil {
