@@ -71,8 +71,10 @@ func (i *ImportDecl) stmtNode() {}
 
 // Param represents a function parameter
 type Param struct {
-	Name string
-	Type string // optional type annotation, empty if not specified
+	Name         string
+	Type         string     // optional type annotation, empty if not specified
+	DefaultValue Expression // optional default value, nil if not specified
+	Variadic     bool       // true if this is a variadic parameter (*args)
 }
 
 // TypeParam represents a generic type parameter
@@ -286,6 +288,15 @@ type DoubleSplatExpr struct {
 func (d *DoubleSplatExpr) node()     {}
 func (d *DoubleSplatExpr) exprNode() {}
 
+// KeywordArg represents a keyword argument in a function call: name: value
+type KeywordArg struct {
+	Name  string     // parameter name
+	Value Expression // argument value
+}
+
+func (k *KeywordArg) node()     {}
+func (k *KeywordArg) exprNode() {}
+
 // IndexExpr represents an index expression like arr[0]
 type IndexExpr struct {
 	Left  Expression // the expression being indexed
@@ -322,6 +333,22 @@ type GoStructLit struct {
 
 func (g *GoStructLit) node()     {}
 func (g *GoStructLit) exprNode() {}
+
+// StructLit represents a Rugby struct literal like Point{x: 10, y: 20}
+type StructLit struct {
+	Name   string            // struct type name (e.g., "Point")
+	Fields []*StructLitField // field initializers
+	Line   int               // source line number (1-indexed)
+}
+
+// StructLitField represents a field initializer in a struct literal
+type StructLitField struct {
+	Name  string     // field name (e.g., "x")
+	Value Expression // field value
+}
+
+func (s *StructLit) node()     {}
+func (s *StructLit) exprNode() {}
 
 // RangeLit represents a range literal like 1..10 or 0...n
 type RangeLit struct {
@@ -844,6 +871,28 @@ type EnumValue struct {
 	Name  string     // variant name (e.g., "Pending", "Active")
 	Value Expression // explicit value (e.g., 200), nil if auto-assigned
 	Line  int        // source line number
+}
+
+// StructDecl represents a struct declaration: struct Point ... end
+type StructDecl struct {
+	Name       string         // struct name (e.g., "Point")
+	TypeParams []*TypeParam   // generic type parameters (e.g., <T>)
+	Fields     []*StructField // struct fields with types
+	Methods    []*MethodDecl  // methods defined in struct
+	Pub        bool           // true if exported (pub struct)
+	Line       int            // source line number (1-indexed)
+	Doc        *CommentGroup  // leading comments
+	Comment    *CommentGroup  // trailing comment on same line
+}
+
+func (s *StructDecl) node()     {}
+func (s *StructDecl) stmtNode() {}
+
+// StructField represents a field in a struct declaration
+type StructField struct {
+	Name string // field name (e.g., "x", "y")
+	Type string // field type (e.g., "Int", "String")
+	Line int    // source line number
 }
 
 // ConstDecl represents a constant declaration: const MAX_SIZE = 1024

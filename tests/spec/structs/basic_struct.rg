@@ -1,8 +1,7 @@
-#@ compile-fail
-#@ skip: Structs not yet implemented (Section 12.1)
+#@ run-pass
+#@ check-output
 #
 # Test: Section 12.1 - Struct definition
-# TODO: Implement struct syntax
 
 struct Point
   x : Int
@@ -12,3 +11,7 @@ end
 p = Point{x: 10, y: 20}
 puts p.x
 puts p.y
+
+#@ expect:
+# 10
+# 20

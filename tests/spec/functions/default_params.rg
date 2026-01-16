@@ -1,6 +1,5 @@
 #@ run-pass
 #@ check-output
-#@ skip: Default parameters not yet implemented (Section 10.3)
 #
 # Test: Section 10.3 - Default parameters
 # TODO: Implement default parameter syntax

@@ -76,7 +76,16 @@ func (p *Parser) parseImport() *ast.ImportDecl {
 
 // parseTypedParam parses a parameter with optional type annotation: name or name : Type
 // Also supports parameter promotion: @name : Type
+// Also supports variadic parameters: *name : Type
+// Also supports default values: name : Type = value
 func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
+	// Check for variadic parameter (*name : Type)
+	isVariadic := false
+	if p.curTokenIs(token.STAR) {
+		isVariadic = true
+		p.nextToken() // consume '*'
+	}
+
 	// Check for parameter promotion (@name : Type)
 	isPromoted := false
 	if p.curTokenIs(token.AT) {
@@ -121,7 +130,24 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 		return nil
 	}
 
-	return &ast.Param{Name: name, Type: paramType}
+	// Check for default value: = expression
+	var defaultValue ast.Expression
+	if p.curTokenIs(token.ASSIGN) {
+		p.nextToken() // consume '='
+		defaultValue = p.parseExpression(lowest)
+		if defaultValue == nil {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected default value after '='")
+			return nil
+		}
+		p.nextToken() // move past expression
+	}
+
+	return &ast.Param{
+		Name:         name,
+		Type:         paramType,
+		DefaultValue: defaultValue,
+		Variadic:     isVariadic,
+	}
 }
 
 // parseFunctionType parses a function type like () -> Int or (Int, String) -> Bool.
@@ -1366,5 +1392,98 @@ func (p *Parser) parseEnumDeclWithDoc(doc *ast.CommentGroup) *ast.EnumDecl {
 		Values: values,
 		Line:   line,
 		Doc:    doc,
+	}
+}
+
+// parseStructDecl parses a struct declaration: struct Point ... end
+func (p *Parser) parseStructDecl() *ast.StructDecl {
+	doc := p.leadingComments(p.curToken.Line)
+	return p.parseStructDeclWithDoc(doc)
+}
+
+// parseStructDeclWithDoc parses a struct with pre-collected doc comment
+func (p *Parser) parseStructDeclWithDoc(doc *ast.CommentGroup) *ast.StructDecl {
+	line := p.curToken.Line
+	p.nextToken() // consume 'struct'
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected struct name after 'struct'")
+		return nil
+	}
+
+	name := p.curToken.Literal
+	p.nextToken() // consume name
+
+	// Parse optional type parameters: struct Box<T> ...
+	var typeParams []*ast.TypeParam
+	if p.curTokenIs(token.LT) {
+		typeParams = p.parseTypeParams()
+	}
+
+	// Skip newlines before body
+	p.skipNewlines()
+
+	// Parse struct body until 'end'
+	var fields []*ast.StructField
+	var methods []*ast.MethodDecl
+	for !p.curTokenIs(token.END) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.END) {
+			break
+		}
+
+		// Check for method definition
+		if p.curTokenIs(token.DEF) {
+			if method := p.parseMethodDecl(); method != nil {
+				methods = append(methods, method)
+			}
+			continue
+		}
+
+		// Parse field: name : Type
+		if !p.curTokenIs(token.IDENT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected field name or 'def'")
+			p.nextToken()
+			continue
+		}
+
+		fieldLine := p.curToken.Line
+		fieldName := p.curToken.Literal
+		p.nextToken() // consume field name
+
+		if !p.curTokenIs(token.COLON) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ':' after field name in struct")
+			continue
+		}
+		p.nextToken() // consume ':'
+
+		fieldType := p.parseTypeName()
+		if fieldType == "" {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
+			continue
+		}
+
+		fields = append(fields, &ast.StructField{
+			Name: fieldName,
+			Type: fieldType,
+			Line: fieldLine,
+		})
+
+		p.skipNewlines()
+	}
+
+	if !p.curTokenIs(token.END) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close struct")
+		return nil
+	}
+	p.nextToken() // consume 'end'
+
+	return &ast.StructDecl{
+		Name:       name,
+		TypeParams: typeParams,
+		Fields:     fields,
+		Methods:    methods,
+		Line:       line,
+		Doc:        doc,
 	}
 }

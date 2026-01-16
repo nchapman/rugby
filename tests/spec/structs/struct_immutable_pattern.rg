@@ -1,6 +1,5 @@
 #@ run-pass
 #@ check-output
-#@ skip: Structs not yet implemented (Section 12.4)
 #
 # Test: Section 12.4 - Correct pattern for "modifying" structs
 # TODO: Implement structs

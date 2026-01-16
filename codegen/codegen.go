@@ -194,6 +194,9 @@ type Generator struct {
 	pubMethods                   map[string]map[string]bool   // track pub methods per class: className -> methodName -> isPub
 	classParent                  map[string]string            // track class inheritance: childClass -> parentClass
 	enums                        map[string]*ast.EnumDecl     // track enum definitions for expression translation
+	structs                      map[string]*ast.StructDecl   // track struct definitions
+	currentStruct                *ast.StructDecl              // current struct being generated (for @field translation)
+	functions                    map[string]*ast.FuncDecl     // track function declarations for default parameter lookup
 }
 
 // addError records an error during code generation
@@ -272,6 +275,7 @@ func New(opts ...Option) *Generator {
 		instanceMethods:              make(map[string]map[string]string),
 		pubMethods:                   make(map[string]map[string]bool),
 		classParent:                  make(map[string]string),
+		functions:                    make(map[string]*ast.FuncDecl),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -698,9 +702,22 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 	case *ast.CallExpr:
 		// Constructor call: ClassName.new(...) -> ClassName
 		// Note: Doesn't handle chained calls or explicit type params yet
-		if sel, ok := e.Func.(*ast.SelectorExpr); ok && sel.Sel == "new" {
-			if ident, ok := sel.X.(*ast.Ident); ok {
-				return ident.Name
+		if sel, ok := e.Func.(*ast.SelectorExpr); ok {
+			if sel.Sel == "new" {
+				if ident, ok := sel.X.(*ast.Ident); ok {
+					return ident.Name
+				}
+			}
+			// Struct method call: p.moved(...) -> look up method return type
+			receiverType := g.inferTypeFromExpr(sel.X)
+			if g.structs != nil {
+				if structDecl, ok := g.structs[receiverType]; ok {
+					for _, method := range structDecl.Methods {
+						if method.Name == sel.Sel && len(method.ReturnTypes) > 0 {
+							return method.ReturnTypes[0]
+						}
+					}
+				}
 			}
 		}
 	case *ast.ScopeExpr:
@@ -709,6 +726,43 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 			if g.enums != nil {
 				if _, isEnum := g.enums[ident.Name]; isEnum {
 					return ident.Name
+				}
+			}
+		}
+	case *ast.StructLit:
+		// Struct literal: Point{x: 10, y: 20} -> "Point"
+		return e.Name
+	case *ast.Ident:
+		// Variable lookup - check vars map
+		if varType, ok := g.vars[e.Name]; ok && varType != "" {
+			return varType
+		}
+	case *ast.BinaryExpr:
+		// For arithmetic expressions, infer numeric type
+		leftType := g.inferTypeFromExpr(e.Left)
+		rightType := g.inferTypeFromExpr(e.Right)
+		switch e.Op {
+		case "+", "-", "*", "/", "%":
+			// If either is Float, result is Float
+			if leftType == "Float" || rightType == "Float" {
+				return "Float"
+			}
+			// If both are Int (or can be Int), result is Int
+			if leftType == "Int" || rightType == "Int" {
+				return "Int"
+			}
+		case "<", ">", "<=", ">=", "==", "!=", "&&", "||":
+			return "Bool"
+		}
+	case *ast.SelectorExpr:
+		// For struct field access, look up the field type
+		receiverType := g.inferTypeFromExpr(e.X)
+		if g.structs != nil {
+			if structDecl, ok := g.structs[receiverType]; ok {
+				for _, field := range structDecl.Fields {
+					if field.Name == e.Sel {
+						return field.Type
+					}
 				}
 			}
 		}
@@ -751,6 +805,8 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 		case *ast.ConstDecl:
 			definitions = append(definitions, d)
 		case *ast.EnumDecl:
+			definitions = append(definitions, d)
+		case *ast.StructDecl:
 			definitions = append(definitions, d)
 		// Test constructs are definitions, not top-level statements
 		case *ast.DescribeStmt, *ast.TestStmt, *ast.TableStmt:

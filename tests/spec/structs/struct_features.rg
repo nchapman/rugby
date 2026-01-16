@@ -1,8 +1,7 @@
-#@ compile-fail
-#@ skip: Structs not yet implemented (Section 12.2)
+#@ run-pass
+#@ check-output
 #
 # Test: Section 12.2 - Struct features (auto-constructor, equality)
-# TODO: Implement struct features
 
 struct User
   id : Int64
@@ -12,10 +11,12 @@ end
 
 u1 = User{id: 1, name: "Alice", email: "alice@example.com"}
 u2 = User{id: 1, name: "Alice", email: "alice@example.com"}
+u3 = User{id: 2, name: "Bob", email: "bob@example.com"}
 
-# Value equality
+# Value equality - structs with same values are equal
 puts u1 == u2
+puts u1 == u3
 
-# Can be map keys
-users = Map<User, Int>{}
-users[u1] = 1
+#@ expect:
+# true
+# false

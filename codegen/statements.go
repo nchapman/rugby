@@ -25,6 +25,8 @@ func getStatementLine(stmt ast.Statement) int {
 		return s.Line
 	case *ast.EnumDecl:
 		return s.Line
+	case *ast.StructDecl:
+		return s.Line
 	case *ast.MethodDecl:
 		return s.Line
 	case *ast.AccessorDecl:
@@ -139,6 +141,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genConstDecl(s)
 	case *ast.EnumDecl:
 		g.genEnumDecl(s)
+	case *ast.StructDecl:
+		g.genStructDecl(s)
 
 	// Assignments
 	case *ast.AssignStmt:

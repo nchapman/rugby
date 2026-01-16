@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"maps"
 	"strings"
 
 	"github.com/nchapman/rugby/ast"
@@ -79,6 +80,9 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	g.currentReturnTypes = fn.ReturnTypes
 	g.inMainFunc = fn.Name == "main"
 
+	// Store the function declaration for default parameter lookup at call sites
+	g.functions[fn.Name] = fn
+
 	// Validate: functions ending in ? must return Bool
 	if strings.HasSuffix(fn.Name, "?") {
 		if len(fn.ReturnTypes) != 1 || fn.ReturnTypes[0] != "Bool" {
@@ -128,9 +132,18 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 			g.buf.WriteString(", ")
 		}
 		if param.Type != "" {
-			g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, g.mapParamType(param.Type)))
+			if param.Variadic {
+				// Variadic parameter: *args : String -> ...string
+				g.buf.WriteString(fmt.Sprintf("%s ...%s", param.Name, g.mapParamType(param.Type)))
+			} else {
+				g.buf.WriteString(fmt.Sprintf("%s %s", param.Name, g.mapParamType(param.Type)))
+			}
 		} else {
-			g.buf.WriteString(fmt.Sprintf("%s any", param.Name))
+			if param.Variadic {
+				g.buf.WriteString(fmt.Sprintf("%s ...any", param.Name))
+			} else {
+				g.buf.WriteString(fmt.Sprintf("%s any", param.Name))
+			}
 		}
 	}
 	g.buf.WriteString(")")
@@ -1393,6 +1406,157 @@ func (g *Generator) genEnumDecl(enumDecl *ast.EnumDecl) {
 	}
 	g.buf.WriteString("\t}\n")
 	g.buf.WriteString("\treturn nil\n")
+	g.buf.WriteString("}\n\n")
+}
+
+// genStructDecl generates a Go struct from a Rugby struct declaration
+// Structs are value types with:
+// - Auto-generated field getters (via direct field access)
+// - Auto-generated String() method for printing
+// - Value semantics (copy on assignment)
+// - Immutability (no field assignment allowed - enforced by semantic analyzer)
+func (g *Generator) genStructDecl(structDecl *ast.StructDecl) {
+	structName := structDecl.Name
+
+	// Track this as a struct for later reference
+	if g.structs == nil {
+		g.structs = make(map[string]*ast.StructDecl)
+	}
+	g.structs[structName] = structDecl
+
+	// Generate type parameters if generic
+	typeParamStr := ""
+	if len(structDecl.TypeParams) > 0 {
+		var params []string
+		for _, tp := range structDecl.TypeParams {
+			if tp.Constraint != "" {
+				params = append(params, fmt.Sprintf("%s %s", tp.Name, g.mapConstraint(tp.Constraint)))
+			} else {
+				params = append(params, tp.Name+" any")
+			}
+		}
+		typeParamStr = "[" + strings.Join(params, ", ") + "]"
+	}
+
+	// Generate struct type definition
+	g.buf.WriteString(fmt.Sprintf("type %s%s struct {\n", structName, typeParamStr))
+	for _, field := range structDecl.Fields {
+		fieldName := snakeToPascalWithAcronyms(field.Name) // Public field for direct access
+		fieldType := mapType(field.Type)
+		g.buf.WriteString(fmt.Sprintf("\t%s %s\n", fieldName, fieldType))
+	}
+	g.buf.WriteString("}\n\n")
+
+	// Generate String() method for printing
+	g.needsFmt = true
+	g.buf.WriteString(fmt.Sprintf("func (s %s%s) String() string {\n", structName, typeParamStr))
+	g.buf.WriteString(fmt.Sprintf("\treturn fmt.Sprintf(\"%s{", structName))
+	for i, field := range structDecl.Fields {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		// Use %v for general formatting, %q for strings
+		if field.Type == "String" {
+			g.buf.WriteString(fmt.Sprintf("%s: %%q", field.Name))
+		} else {
+			g.buf.WriteString(fmt.Sprintf("%s: %%v", field.Name))
+		}
+	}
+	g.buf.WriteString("}\"")
+	for _, field := range structDecl.Fields {
+		fieldName := snakeToPascalWithAcronyms(field.Name)
+		g.buf.WriteString(fmt.Sprintf(", s.%s", fieldName))
+	}
+	g.buf.WriteString(")\n")
+	g.buf.WriteString("}\n\n")
+
+	// Generate methods if any
+	for _, method := range structDecl.Methods {
+		g.genStructMethod(structDecl, method)
+	}
+}
+
+// genStructMethod generates a method for a struct with value receiver
+func (g *Generator) genStructMethod(structDecl *ast.StructDecl, method *ast.MethodDecl) {
+	structName := structDecl.Name
+	methodName := snakeToPascalWithAcronyms(method.Name)
+
+	// Save old state
+	oldVars := g.vars
+	oldReturnTypes := g.currentReturnTypes
+	g.vars = maps.Clone(oldVars)
+
+	// Type parameters - for struct methods, we only need the type names (e.g., "[T]"), not the constraints
+	typeParamStr := ""
+	if len(structDecl.TypeParams) > 0 {
+		var names []string
+		for _, tp := range structDecl.TypeParams {
+			names = append(names, tp.Name)
+		}
+		typeParamStr = "[" + strings.Join(names, ", ") + "]"
+	}
+
+	// Method receiver (value receiver, not pointer)
+	g.buf.WriteString(fmt.Sprintf("func (s %s%s) %s(", structName, typeParamStr, methodName))
+
+	// Parameters - add to vars map
+	for i, param := range method.Params {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		paramName := param.Name
+		paramType := mapType(param.Type)
+		g.buf.WriteString(fmt.Sprintf("%s %s", paramName, paramType))
+		g.vars[paramName] = param.Type // Track parameter type (Rugby type, not Go type)
+	}
+	g.buf.WriteString(")")
+
+	// Return type
+	if len(method.ReturnTypes) > 0 {
+		g.buf.WriteString(" ")
+		if len(method.ReturnTypes) == 1 {
+			g.buf.WriteString(mapType(method.ReturnTypes[0]))
+		} else {
+			g.buf.WriteString("(")
+			for i, rt := range method.ReturnTypes {
+				if i > 0 {
+					g.buf.WriteString(", ")
+				}
+				g.buf.WriteString(mapType(rt))
+			}
+			g.buf.WriteString(")")
+		}
+	}
+
+	g.buf.WriteString(" {\n")
+	g.indent++
+
+	// Set up method context
+	g.currentStruct = structDecl
+	g.currentReturnTypes = method.ReturnTypes
+
+	// Generate method body with implicit return for last expression
+	hasReturnType := len(method.ReturnTypes) > 0
+	for i, stmt := range method.Body {
+		isLast := i == len(method.Body)-1
+		if isLast && hasReturnType {
+			// If last statement is an expression, add implicit return
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+
+	// Restore state
+	g.currentStruct = nil
+	g.currentReturnTypes = oldReturnTypes
+	g.vars = oldVars
+	g.indent--
 	g.buf.WriteString("}\n\n")
 }
 

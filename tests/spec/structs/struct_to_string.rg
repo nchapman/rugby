@@ -1,6 +1,5 @@
 #@ run-pass
 #@ check-output
-#@ skip: Structs not yet implemented (Section 12.2)
 #
 # Test: Section 12.2 - Struct string representation
 # TODO: Implement auto-generated String() method for structs

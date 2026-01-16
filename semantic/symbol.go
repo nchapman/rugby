@@ -31,9 +31,13 @@ type Symbol struct {
 	Column int
 
 	// For functions/methods
-	Params      []*Symbol // parameter symbols
-	ReturnTypes []*Type   // return types
-	Variadic    bool      // true if last param is variadic (accepts multiple args)
+	Params         []*Symbol // parameter symbols
+	ReturnTypes    []*Type   // return types
+	Variadic       bool      // true if last param is variadic (accepts multiple args)
+	RequiredParams int       // minimum number of required params (excluding those with defaults)
+
+	// For parameters
+	HasDefault bool // true if this parameter has a default value
 
 	// For classes/interfaces
 	Fields       map[string]*Symbol // field symbols

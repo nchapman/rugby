@@ -324,12 +324,12 @@ func (p *Parser) parseCallExprWithParens(fn ast.Expression) ast.Expression {
 
 	// Parse arguments
 	if !p.curTokenIs(token.RPAREN) {
-		call.Args = append(call.Args, p.parseExpression(lowest))
+		call.Args = append(call.Args, p.parseCallArg())
 
 		for p.peekTokenIs(token.COMMA) {
 			p.nextToken() // move to ','
 			p.nextToken() // move past ',' to next arg
-			call.Args = append(call.Args, p.parseExpression(lowest))
+			call.Args = append(call.Args, p.parseCallArg())
 		}
 
 		p.nextToken() // move past last arg to ')'
@@ -341,6 +341,34 @@ func (p *Parser) parseCallExprWithParens(fn ast.Expression) ast.Expression {
 	}
 
 	return call
+}
+
+// parseCallArg parses a single function call argument, which may be a splat or keyword arg.
+func (p *Parser) parseCallArg() ast.Expression {
+	// Check for splat: *expr (passes array as variadic args)
+	if p.curTokenIs(token.STAR) {
+		p.nextToken() // consume '*'
+		expr := p.parseExpression(lowest)
+		if expr == nil {
+			return nil
+		}
+		return &ast.SplatExpr{Expr: expr}
+	}
+
+	// Check for keyword argument: name: value
+	// Pattern: IDENT followed by COLON (without space, like Ruby symbol key syntax)
+	if p.curTokenIs(token.IDENT) && p.peekTokenIs(token.COLON) {
+		name := p.curToken.Literal
+		p.nextToken() // consume IDENT
+		p.nextToken() // consume COLON
+		value := p.parseExpression(lowest)
+		if value == nil {
+			return nil
+		}
+		return &ast.KeywordArg{Name: name, Value: value}
+	}
+
+	return p.parseExpression(lowest)
 }
 
 // parseIndexExpr parses array/map indexing: arr[i].

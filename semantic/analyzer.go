@@ -529,6 +529,8 @@ func (a *Analyzer) collectFunc(f *ast.FuncDecl) {
 	}
 
 	params := make([]*Symbol, len(f.Params))
+	requiredParams := 0
+	isVariadic := false
 	for i, p := range f.Params {
 		var typ *Type
 		if p.Type != "" {
@@ -537,6 +539,16 @@ func (a *Analyzer) collectFunc(f *ast.FuncDecl) {
 			typ = TypeUnknownVal
 		}
 		params[i] = NewParam(p.Name, typ)
+		if p.DefaultValue != nil {
+			params[i].HasDefault = true
+		} else if !p.Variadic {
+			// Variadic params don't count as required (they accept 0+ args)
+			requiredParams = i + 1 // All params up to this point are required
+		}
+		if p.Variadic {
+			params[i].Variadic = true
+			isVariadic = true
+		}
 	}
 
 	returnTypes := make([]*Type, len(f.ReturnTypes))
@@ -548,6 +560,8 @@ func (a *Analyzer) collectFunc(f *ast.FuncDecl) {
 	fn.Line = f.Line
 	fn.Public = f.Pub
 	fn.Node = f
+	fn.RequiredParams = requiredParams
+	fn.Variadic = isVariadic
 
 	if err := a.scope.Define(fn); err != nil {
 		a.addError(err)
@@ -605,6 +619,7 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 		}
 
 		params := make([]*Symbol, len(m.Params))
+		requiredParams := 0
 		for i, p := range m.Params {
 			var typ *Type
 			if p.Type != "" {
@@ -613,6 +628,14 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 				typ = TypeUnknownVal
 			}
 			params[i] = NewParam(p.Name, typ)
+			if p.DefaultValue != nil {
+				params[i].HasDefault = true
+			} else {
+				requiredParams = i + 1
+			}
+			if p.Variadic {
+				params[i].Variadic = true
+			}
 		}
 
 		returnTypes := make([]*Type, len(m.ReturnTypes))
@@ -653,6 +676,7 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 		method.Public = m.Pub
 		method.Private = m.Private
 		method.Node = m
+		method.RequiredParams = requiredParams
 
 		// Validate pub and private are mutually exclusive
 		if m.Pub && m.Private {
@@ -680,6 +704,7 @@ func (a *Analyzer) collectInterface(i *ast.InterfaceDecl) {
 
 	for _, m := range i.Methods {
 		params := make([]*Symbol, len(m.Params))
+		requiredParams := 0
 		for j, p := range m.Params {
 			var typ *Type
 			if p.Type != "" {
@@ -688,6 +713,14 @@ func (a *Analyzer) collectInterface(i *ast.InterfaceDecl) {
 				typ = TypeUnknownVal
 			}
 			params[j] = NewParam(p.Name, typ)
+			if p.DefaultValue != nil {
+				params[j].HasDefault = true
+			} else {
+				requiredParams = j + 1
+			}
+			if p.Variadic {
+				params[j].Variadic = true
+			}
 		}
 
 		returnTypes := make([]*Type, len(m.ReturnTypes))
@@ -696,6 +729,7 @@ func (a *Analyzer) collectInterface(i *ast.InterfaceDecl) {
 		}
 
 		method := NewMethod(m.Name, params, returnTypes)
+		method.RequiredParams = requiredParams
 		iface.AddMethod(method)
 	}
 
@@ -735,6 +769,7 @@ func (a *Analyzer) collectModule(m *ast.ModuleDecl) {
 	// Collect methods
 	for _, method := range m.Methods {
 		params := make([]*Symbol, len(method.Params))
+		requiredParams := 0
 		for i, p := range method.Params {
 			var typ *Type
 			if p.Type != "" {
@@ -743,6 +778,14 @@ func (a *Analyzer) collectModule(m *ast.ModuleDecl) {
 				typ = TypeUnknownVal
 			}
 			params[i] = NewParam(p.Name, typ)
+			if p.DefaultValue != nil {
+				params[i].HasDefault = true
+			} else {
+				requiredParams = i + 1
+			}
+			if p.Variadic {
+				params[i].Variadic = true
+			}
 		}
 
 		returnTypes := make([]*Type, len(method.ReturnTypes))
@@ -754,6 +797,7 @@ func (a *Analyzer) collectModule(m *ast.ModuleDecl) {
 		meth.Line = method.Line
 		meth.Public = method.Pub
 		meth.Node = method
+		meth.RequiredParams = requiredParams
 		mod.AddMethod(meth)
 	}
 
@@ -3149,16 +3193,32 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 
 // checkArity verifies the argument count matches the function's parameter count.
 func (a *Analyzer) checkArity(name string, fn *Symbol, call *ast.CallExpr) {
-	expected := len(fn.Params)
+	maxParams := len(fn.Params)
+	minParams := fn.RequiredParams // defaults to 0, which means all params required unless set
+	if minParams == 0 {
+		minParams = maxParams // if not set, all params are required
+	}
 	got := len(call.Args)
 
 	if fn.Variadic {
-		// Variadic functions accept any number of arguments (including zero)
-		// The params slice contains the base parameter type for documentation
+		// Variadic functions accept any number of arguments >= minParams
+		if got < minParams {
+			a.addError(&ArityMismatchError{
+				Name:     name,
+				Expected: minParams,
+				Got:      got,
+			})
+		}
 		return
 	}
 
-	if got != expected {
+	// Check if argument count is within valid range
+	if got < minParams || got > maxParams {
+		// Report expected as minParams if too few, maxParams if too many
+		expected := minParams
+		if got > maxParams {
+			expected = maxParams
+		}
 		a.addError(&ArityMismatchError{
 			Name:     name,
 			Expected: expected,

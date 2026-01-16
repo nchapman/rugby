@@ -67,6 +67,12 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genSetLit(e)
 	case *ast.GoStructLit:
 		g.genGoStructLit(e)
+	case *ast.StructLit:
+		g.genStructLit(e)
+	case *ast.SplatExpr:
+		// Splat expression: *arr -> arr...
+		g.genExpr(e.Expr)
+		g.buf.WriteString("...")
 
 	// Identifiers
 	case *ast.Ident:
@@ -101,7 +107,11 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			g.buf.WriteString(e.Name)
 		}
 	case *ast.InstanceVar:
-		if g.currentClass != "" {
+		if g.currentStruct != nil {
+			// In a struct method: @field -> s.Field
+			goFieldName := snakeToPascalWithAcronyms(e.Name)
+			g.buf.WriteString(fmt.Sprintf("s.%s", goFieldName))
+		} else if g.currentClass != "" {
 			recv := receiverName(g.currentClass)
 			// Use underscore prefix for accessor fields to match struct definition
 			// Check both current class and parent classes for accessor fields
@@ -1054,6 +1064,23 @@ func (g *Generator) genGoStructLit(s *ast.GoStructLit) {
 	g.buf.WriteString("{}")
 }
 
+// genStructLit generates Go code for a Rugby struct literal: Point{x: 10, y: 20} -> Point{X: 10, Y: 20}
+func (g *Generator) genStructLit(s *ast.StructLit) {
+	g.buf.WriteString(s.Name)
+	g.buf.WriteString("{")
+	for i, field := range s.Fields {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		// Convert snake_case field name to PascalCase
+		goFieldName := snakeToPascalWithAcronyms(field.Name)
+		g.buf.WriteString(goFieldName)
+		g.buf.WriteString(": ")
+		g.genExpr(field.Value)
+	}
+	g.buf.WriteString("}")
+}
+
 func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 	if r, ok := idx.Index.(*ast.RangeLit); ok {
 		g.genRangeSlice(idx.Left, r)
@@ -1452,6 +1479,47 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 					g.buf.WriteString(", ")
 				}
 				g.genExpr(arg)
+			}
+			g.buf.WriteString(")")
+			return
+		}
+
+		// Check for keyword arguments: func(name: value, ...)
+		if fnDecl, ok := g.functions[funcName]; ok && g.hasKeywordArgs(call.Args) {
+			if g.pubFuncs[funcName] {
+				funcName = snakeToPascalWithAcronyms(funcName)
+			} else {
+				funcName = snakeToCamelWithAcronyms(funcName)
+			}
+			g.buf.WriteString(funcName)
+			g.genKeywordCallArgs(fnDecl, call.Args)
+			return
+		}
+
+		// Check for user-defined function with default parameters
+		if fnDecl, ok := g.functions[funcName]; ok && len(call.Args) < len(fnDecl.Params) {
+			// We need to fill in default values for missing arguments
+			if g.pubFuncs[funcName] {
+				funcName = snakeToPascalWithAcronyms(funcName)
+			} else {
+				funcName = snakeToCamelWithAcronyms(funcName)
+			}
+			g.buf.WriteString(funcName)
+			g.buf.WriteString("(")
+			for i, param := range fnDecl.Params {
+				if i > 0 {
+					g.buf.WriteString(", ")
+				}
+				if i < len(call.Args) {
+					// Use provided argument
+					g.genExpr(call.Args[i])
+				} else if param.DefaultValue != nil {
+					// Use default value
+					g.genExpr(param.DefaultValue)
+				} else {
+					// No default - this would be an error, but semantic analysis should catch it
+					g.buf.WriteString("nil")
+				}
 			}
 			g.buf.WriteString(")")
 			return
@@ -2033,6 +2101,61 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			g.buf.WriteString(", ")
 		}
 		g.genExpr(arg)
+	}
+	g.buf.WriteString(")")
+}
+
+// hasKeywordArgs checks if any of the arguments are keyword arguments.
+func (g *Generator) hasKeywordArgs(args []ast.Expression) bool {
+	for _, arg := range args {
+		if _, ok := arg.(*ast.KeywordArg); ok {
+			return true
+		}
+	}
+	return false
+}
+
+// genKeywordCallArgs generates function call arguments with keyword args reordered.
+// It matches keyword arguments to parameter names and fills in defaults for missing args.
+func (g *Generator) genKeywordCallArgs(fnDecl *ast.FuncDecl, args []ast.Expression) {
+	// Separate positional and keyword arguments
+	var positionalArgs []ast.Expression
+	keywordArgs := make(map[string]ast.Expression)
+	for _, arg := range args {
+		if kwArg, ok := arg.(*ast.KeywordArg); ok {
+			keywordArgs[kwArg.Name] = kwArg.Value
+		} else {
+			positionalArgs = append(positionalArgs, arg)
+		}
+	}
+
+	// Generate arguments in parameter order
+	g.buf.WriteString("(")
+	for i, param := range fnDecl.Params {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+
+		// Check if we have a positional arg for this position
+		if i < len(positionalArgs) {
+			g.genExpr(positionalArgs[i])
+			continue
+		}
+
+		// Check if we have a keyword arg for this parameter
+		if kwValue, ok := keywordArgs[param.Name]; ok {
+			g.genExpr(kwValue)
+			continue
+		}
+
+		// Use default value if available
+		if param.DefaultValue != nil {
+			g.genExpr(param.DefaultValue)
+			continue
+		}
+
+		// No value provided - this should be caught by semantic analysis
+		g.buf.WriteString("nil")
 	}
 	g.buf.WriteString(")")
 }
@@ -3454,6 +3577,16 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 					return
 				}
 			}
+		}
+	}
+
+	// Handle struct field access - convert snake_case to PascalCase
+	if g.structs != nil {
+		if _, isStruct := g.structs[receiverType]; isStruct {
+			g.genExpr(sel.X)
+			g.buf.WriteString(".")
+			g.buf.WriteString(snakeToPascalWithAcronyms(sel.Sel))
+			return
 		}
 	}
 

@@ -129,6 +129,7 @@ const (
 	CONST        TokenType = "CONST"
 	TYPE         TokenType = "TYPE"
 	ENUM         TokenType = "ENUM"
+	STRUCT       TokenType = "STRUCT"
 
 	// Testing keywords
 	DESCRIBE TokenType = "DESCRIBE"
@@ -199,6 +200,7 @@ var keywords = map[string]TokenType{
 	"const":        CONST,
 	"type":         TYPE,
 	"enum":         ENUM,
+	"struct":       STRUCT,
 	// Testing keywords
 	"describe": DESCRIBE,
 	"it":       IT,

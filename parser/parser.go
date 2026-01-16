@@ -228,6 +228,14 @@ func (p *Parser) parseBlocksAndChaining(expr ast.Expression) ast.Expression {
 			case *ast.CallExpr:
 				expr = p.parseBlockCall(expr)
 				continue
+			case *ast.Ident:
+				// Check for struct literal pattern: TypeName{field: value, ...}
+				// where TypeName is PascalCase (starts with uppercase)
+				if p.peekTokenIs(token.LBRACE) && p.looksLikeStructLiteral(e) {
+					expr = p.parseStructLiteral(e)
+					continue
+				}
+				// Plain identifier with {} - fall through to let caller handle as map literal
 			case *ast.SelectorExpr:
 				// Check for Go struct literal pattern: pkg.Type{} where pkg is lowercase
 				// and Type is PascalCase. Empty {} is a Go zero-value initializer, not a block.
@@ -346,6 +354,82 @@ func (p *Parser) parseGoStructLiteral(sel *ast.SelectorExpr) ast.Expression {
 	}
 }
 
+// looksLikeStructLiteral checks if an identifier looks like a struct type name
+// (PascalCase, starting with uppercase letter).
+func (p *Parser) looksLikeStructLiteral(ident *ast.Ident) bool {
+	name := ident.Name
+	if len(name) == 0 {
+		return false
+	}
+	// Must start with uppercase letter (PascalCase type name)
+	return name[0] >= 'A' && name[0] <= 'Z'
+}
+
+// parseStructLiteral parses a struct literal like Point{x: 10, y: 20}
+// Returns a StructLit AST node.
+func (p *Parser) parseStructLiteral(ident *ast.Ident) ast.Expression {
+	line := ident.Line
+
+	p.nextToken() // move to '{'
+	p.nextToken() // consume '{'
+
+	var fields []*ast.StructLitField
+
+	// Parse field initializers: field: value, field: value, ...
+	for !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
+		p.skipNewlines()
+		if p.curTokenIs(token.RBRACE) {
+			break
+		}
+
+		// Expect field name
+		if !p.curTokenIs(token.IDENT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected field name in struct literal")
+			return ident
+		}
+		fieldName := p.curToken.Literal
+		p.nextToken()
+
+		// Expect ':'
+		if !p.curTokenIs(token.COLON) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ':' after field name in struct literal")
+			return ident
+		}
+		p.nextToken()
+
+		// Parse field value
+		value := p.parseExpression(lowest)
+		if value == nil {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected value after ':' in struct literal")
+			return ident
+		}
+
+		fields = append(fields, &ast.StructLitField{
+			Name:  fieldName,
+			Value: value,
+		})
+
+		p.nextToken() // move past value
+
+		// Skip optional comma or newline
+		if p.curTokenIs(token.COMMA) {
+			p.nextToken()
+		}
+		p.skipNewlines()
+	}
+
+	if !p.curTokenIs(token.RBRACE) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '}' to close struct literal")
+		return ident
+	}
+
+	return &ast.StructLit{
+		Name:   ident.Name,
+		Fields: fields,
+		Line:   line,
+	}
+}
+
 // leadingComments returns a group of consecutive comments that end immediately
 // before the given line. Multi-line doc comments are collected as a group.
 // Returns nil if no leading comments.
@@ -457,8 +541,13 @@ func (p *Parser) ParseProgram() *ast.Program {
 					enumDecl.Pub = true
 					program.Declarations = append(program.Declarations, enumDecl)
 				}
+			case token.STRUCT:
+				if structDecl := p.parseStructDeclWithDoc(doc); structDecl != nil {
+					structDecl.Pub = true
+					program.Declarations = append(program.Declarations, structDecl)
+				}
 			default:
-				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' must be followed by 'def', 'class', 'interface', 'module', 'type', or 'enum'")
+				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' must be followed by 'def', 'class', 'interface', 'module', 'type', 'enum', or 'struct'")
 				p.nextToken()
 			}
 		case token.DEF:
@@ -484,6 +573,10 @@ func (p *Parser) ParseProgram() *ast.Program {
 		case token.ENUM:
 			if enumDecl := p.parseEnumDecl(); enumDecl != nil {
 				program.Declarations = append(program.Declarations, enumDecl)
+			}
+		case token.STRUCT:
+			if structDecl := p.parseStructDecl(); structDecl != nil {
+				program.Declarations = append(program.Declarations, structDecl)
 			}
 		case token.CONST:
 			if constDecl := p.parseConstDecl(); constDecl != nil {

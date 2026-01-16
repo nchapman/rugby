@@ -1,8 +1,9 @@
-#@ compile-fail
-#@ skip: Structs not yet implemented (Section 12.3)
+#@ run-pass
+#@ check-output
 #
 # Test: Section 12.3 - Struct methods
-# TODO: Implement struct methods
+
+import "math"
 
 struct Point
   x : Int
@@ -11,7 +12,7 @@ struct Point
   def distance_to(other : Point) -> Float
     dx = (other.x - @x).to_f
     dy = (other.y - @y).to_f
-    Math.sqrt(dx * dx + dy * dy)
+    math.Sqrt(dx * dx + dy * dy)
   end
 
   def translate(dx : Int, dy : Int) -> Point
@@ -22,3 +23,10 @@ end
 p1 = Point{x: 0, y: 0}
 p2 = Point{x: 3, y: 4}
 puts p1.distance_to(p2)
+
+p3 = p1.translate(5, 10)
+puts p3
+
+#@ expect:
+# 5
+# Point{x: 5, y: 10}
