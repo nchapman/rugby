@@ -3657,7 +3657,7 @@ end`
 	output := compile(t, input)
 
 	// Should generate Go type switch with shadowing
-	assertContains(t, output, `switch x := x.(type) {`)
+	assertContains(t, output, `switch x.(type) {`)
 	assertContains(t, output, `case string:`)
 	assertContains(t, output, `case int:`)
 	assertContains(t, output, `default:`)
@@ -3676,7 +3676,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `switch x := x.(type) {`)
+	assertContains(t, output, `switch x.(type) {`)
 	assertContains(t, output, `case string:`)
 	assertContains(t, output, `case int:`)
 	assertNotContains(t, output, `default:`)
@@ -3694,7 +3694,7 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `switch x := x.(type) {`)
+	assertContains(t, output, `switch x.(type) {`)
 	assertContains(t, output, `case float64:`)
 	assertContains(t, output, `case string:`)
 }
@@ -3711,9 +3711,31 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `switch x := x.(type) {`)
+	assertContains(t, output, `switch x.(type) {`)
 	assertContains(t, output, `case bool:`)
 	assertContains(t, output, `case int:`)
+}
+
+func TestGenerateCaseTypeWithBindings(t *testing.T) {
+	input := `def process(x : any)
+  case_type x
+  when s : String
+    puts(s)
+  when n : Int
+    puts(n)
+  end
+end`
+
+	output := compile(t, input)
+
+	// With bindings, should generate temp variable for type assertion
+	assertContains(t, output, `switch _ts`)
+	assertContains(t, output, `case string:`)
+	assertContains(t, output, `s := _ts`)
+	assertContains(t, output, `_ = s`)
+	assertContains(t, output, `case int:`)
+	assertContains(t, output, `n := _ts`)
+	assertContains(t, output, `_ = n`)
 }
 
 // Error handling tests (Phase 19)

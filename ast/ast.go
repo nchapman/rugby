@@ -533,8 +533,9 @@ func (c *CaseTypeStmt) stmtNode() {}
 
 // TypeWhenClause represents a single when branch in a case_type statement
 type TypeWhenClause struct {
-	Type string      // the type to match (String, Int, etc.)
-	Body []Statement // statements in this when branch
+	BindingVar string      // optional binding variable name (e.g., "s" in "when s : String")
+	Type       string      // the type to match (String, Int, etc.)
+	Body       []Statement // statements in this when branch
 }
 
 // WhileStmt represents a while loop

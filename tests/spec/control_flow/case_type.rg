@@ -2,34 +2,47 @@
 #@ check-output
 #
 # Test: Section 9.6 - case_type for type matching
-# TODO: case_type should implicitly return values (Ruby expression semantics)
-#       Currently requires explicit `return` in each branch
 
-def describe_value(x : Any) -> String
-  case_type x
+# Test with binding variables
+def print_type(obj : Any)
+  case_type obj
   when s : String
-    return "a string: #{s}"
+    puts "string: #{s}"
   when n : Int
-    return "an integer: #{n}"
+    puts "int: #{n}"
   when b : Bool
-    if b
-      return "true boolean"
-    else
-      return "false boolean"
-    end
+    puts "bool: #{b}"
   else
-    return "unknown type"
+    puts "unknown type"
   end
 end
 
-# Test with different types
-puts describe_value("hello")
-puts describe_value(42)
-puts describe_value(true)
-puts describe_value(false)
+print_type("hello")
+print_type(42)
+print_type(true)
+print_type(3.14)
+
+# Test without binding variables
+def type_name(obj : Any)
+  case_type obj
+  when String
+    puts "is string"
+  when Int
+    puts "is int"
+  else
+    puts "is other"
+  end
+end
+
+type_name("test")
+type_name(100)
+type_name([1, 2, 3])
 
 #@ expect:
-# a string: hello
-# an integer: 42
-# true boolean
-# false boolean
+# string: hello
+# int: 42
+# bool: true
+# unknown type
+# is string
+# is int
+# is other

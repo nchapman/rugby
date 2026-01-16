@@ -1121,23 +1121,44 @@ func (g *Generator) genCaseStmt(s *ast.CaseStmt) {
 func (g *Generator) genCaseTypeStmt(s *ast.CaseTypeStmt) {
 	g.writeIndent()
 
-	// Get the variable name from the subject
-	var varName string
-	switch subj := s.Subject.(type) {
-	case *ast.Ident:
-		varName = subj.Name
-	default:
-		// For complex expressions, generate a unique temp variable
-		varName = fmt.Sprintf("_ts%d", g.tempVarCounter)
+	// Check if any when clause has a binding variable
+	hasBindings := false
+	for _, whenClause := range s.WhenClauses {
+		if whenClause.BindingVar != "" {
+			hasBindings = true
+			break
+		}
+	}
+
+	// Generate a temp variable for the type switch (only if we have bindings)
+	tempVar := "_"
+	if hasBindings {
+		tempVar = fmt.Sprintf("_ts%d", g.tempVarCounter)
 		g.tempVarCounter++
-		g.buf.WriteString(fmt.Sprintf("%s := ", varName))
+	}
+
+	// If subject is a simple identifier, we can use it directly
+	// Otherwise, evaluate and store in temp
+	var subjectExpr string
+	if ident, ok := s.Subject.(*ast.Ident); ok {
+		subjectExpr = ident.Name
+	} else {
+		// For complex expressions, always generate a temp var
+		evalVar := fmt.Sprintf("_ts%d", g.tempVarCounter)
+		g.tempVarCounter++
+		g.buf.WriteString(fmt.Sprintf("%s := ", evalVar))
 		g.genExpr(s.Subject)
 		g.buf.WriteString("\n")
 		g.writeIndent()
+		subjectExpr = evalVar
 	}
 
-	// Generate type switch with shadowing: switch varName := varName.(type) {
-	g.buf.WriteString(fmt.Sprintf("switch %s := %s.(type) {\n", varName, varName))
+	// Generate type switch: switch _ts := subject.(type) { or switch subject.(type) {
+	if hasBindings {
+		g.buf.WriteString(fmt.Sprintf("switch %s := %s.(type) {\n", tempVar, subjectExpr))
+	} else {
+		g.buf.WriteString(fmt.Sprintf("switch %s.(type) {\n", subjectExpr))
+	}
 
 	// Generate when clauses for each type
 	for _, whenClause := range s.WhenClauses {
@@ -1147,9 +1168,36 @@ func (g *Generator) genCaseTypeStmt(s *ast.CaseTypeStmt) {
 		g.buf.WriteString(":\n")
 
 		g.indent++
+
+		// If binding variable is specified, create the binding
+		var prevType string
+		var wasDefinedBefore bool
+		if whenClause.BindingVar != "" {
+			// Save previous state for cleanup
+			prevType, wasDefinedBefore = g.vars[whenClause.BindingVar]
+
+			g.writeIndent()
+			g.buf.WriteString(fmt.Sprintf("%s := %s\n", whenClause.BindingVar, tempVar))
+			// Suppress "declared and not used" if variable isn't referenced
+			g.writeIndent()
+			g.buf.WriteString(fmt.Sprintf("_ = %s\n", whenClause.BindingVar))
+			// Track the variable so it's not re-declared
+			g.vars[whenClause.BindingVar] = whenClause.Type
+		}
+
 		for _, stmt := range whenClause.Body {
 			g.genStatement(stmt)
 		}
+
+		// Clean up variable scope
+		if whenClause.BindingVar != "" {
+			if !wasDefinedBefore {
+				delete(g.vars, whenClause.BindingVar)
+			} else {
+				g.vars[whenClause.BindingVar] = prevType
+			}
+		}
+
 		g.indent--
 	}
 

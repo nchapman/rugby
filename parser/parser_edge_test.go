@@ -525,6 +525,49 @@ end`
 	}
 }
 
+func TestCaseTypeWithBindings(t *testing.T) {
+	input := `def main
+  case_type x
+  when s : String
+    puts s
+  when n : Int
+    puts n
+  end
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	decl, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	caseStmt, ok := decl.Body[0].(*ast.CaseTypeStmt)
+	if !ok {
+		t.Fatalf("expected CaseTypeStmt, got %T", decl.Body[0])
+	}
+	if len(caseStmt.WhenClauses) != 2 {
+		t.Errorf("expected 2 when clauses, got %d", len(caseStmt.WhenClauses))
+	}
+
+	// Check first when clause binding
+	if caseStmt.WhenClauses[0].BindingVar != "s" {
+		t.Errorf("expected BindingVar 's', got %q", caseStmt.WhenClauses[0].BindingVar)
+	}
+	if caseStmt.WhenClauses[0].Type != "String" {
+		t.Errorf("expected type 'String', got %q", caseStmt.WhenClauses[0].Type)
+	}
+
+	// Check second when clause binding
+	if caseStmt.WhenClauses[1].BindingVar != "n" {
+		t.Errorf("expected BindingVar 'n', got %q", caseStmt.WhenClauses[1].BindingVar)
+	}
+	if caseStmt.WhenClauses[1].Type != "Int" {
+		t.Errorf("expected type 'Int', got %q", caseStmt.WhenClauses[1].Type)
+	}
+}
+
 func TestSymbolLiteral(t *testing.T) {
 	input := `def main
   x = :ok

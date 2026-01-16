@@ -1579,10 +1579,15 @@ func (a *Analyzer) analyzeCaseType(s *ast.CaseTypeStmt) {
 	for _, when := range s.WhenClauses {
 		a.pushScope()
 
-		// In each branch, the subject has the narrowed type
-		// We use a special variable to track this
+		narrowedType := ParseType(when.Type)
+
+		// If binding variable is specified, define it with the narrowed type
+		if when.BindingVar != "" {
+			_ = a.scope.DefineOrShadow(NewVariable(when.BindingVar, narrowedType))
+		}
+
+		// Also shadow the subject identifier with the narrowed type (for backwards compat)
 		if ident, ok := s.Subject.(*ast.Ident); ok {
-			narrowedType := ParseType(when.Type)
 			_ = a.scope.DefineOrShadow(NewVariable(ident.Name, narrowedType))
 		}
 

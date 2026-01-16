@@ -510,12 +510,29 @@ func (p *Parser) parseCaseTypeStmt() *ast.CaseTypeStmt {
 
 		clause := ast.TypeWhenClause{}
 
-		// Parse type name (String, Int, etc.)
+		// Parse pattern: either "Type" or "var : Type"
 		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type name in 'when' clause")
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type name or binding variable in 'when' clause")
 			return nil
 		}
-		clause.Type = p.parseTypeName()
+
+		// Check if next token is ':' (indicates binding pattern "var : Type")
+		if p.peekTokenIs(token.COLON) {
+			// Parse binding variable
+			clause.BindingVar = p.curToken.Literal
+			p.nextToken() // consume variable name
+			p.nextToken() // consume ':'
+
+			// Parse type name
+			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected type name after ':' in 'when' clause")
+				return nil
+			}
+			clause.Type = p.parseTypeName()
+		} else {
+			// Just a type name without binding
+			clause.Type = p.parseTypeName()
+		}
 		p.skipNewlines()
 
 		// Parse body until next WHEN, ELSE, or END
