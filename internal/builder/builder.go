@@ -162,6 +162,11 @@ func (t *typeInfoAdapter) IsInterface(typeName string) bool {
 	return t.analyzer.IsInterface(typeName)
 }
 
+// IsStruct returns true if the given type name is a declared struct.
+func (t *typeInfoAdapter) IsStruct(typeName string) bool {
+	return t.analyzer.IsStruct(typeName)
+}
+
 // IsNoArgFunction returns true if the given name is a declared function with no parameters.
 func (t *typeInfoAdapter) IsNoArgFunction(name string) bool {
 	return t.analyzer.IsNoArgFunction(name)

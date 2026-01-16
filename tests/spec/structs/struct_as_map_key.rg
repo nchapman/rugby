@@ -1,6 +1,5 @@
 #@ run-pass
 #@ check-output
-#@ skip: Struct map keys need type mapping fixes
 #
 # Test: Section 12.2 - Structs as map keys
 

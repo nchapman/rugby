@@ -1130,6 +1130,15 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 		return
 	}
 
+	// For maps, always use native Go map indexing
+	if strings.HasPrefix(leftType, "map[") || g.typeInfo.GetTypeKind(idx.Left) == TypeMap {
+		g.genExpr(idx.Left)
+		g.buf.WriteString("[")
+		g.genExpr(idx.Index)
+		g.buf.WriteString("]")
+		return
+	}
+
 	if g.shouldUseNativeIndex(idx.Index) {
 		g.genExpr(idx.Left)
 		g.buf.WriteString("[")

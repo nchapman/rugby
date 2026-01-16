@@ -38,7 +38,8 @@ func (g *Generator) mapParamType(rubyType string) string {
 	// If it's a known class type (not already a pointer), make it a pointer
 	// Note: mapType returns class names unchanged, so we check for them here
 	// Also check for module-scoped classes (e.g., Http_Response)
-	if (g.isClass(rubyType) || g.isModuleScopedClass(rubyType)) && !strings.HasPrefix(goType, "*") && !strings.HasPrefix(goType, "[]") && !strings.HasPrefix(goType, "map[") {
+	// But NOT for structs - structs are value types and don't need pointers
+	if (g.isClass(rubyType) || g.isModuleScopedClass(rubyType)) && !g.isStruct(rubyType) && !strings.HasPrefix(goType, "*") && !strings.HasPrefix(goType, "[]") && !strings.HasPrefix(goType, "map[") {
 		return "*" + goType
 	}
 

@@ -135,6 +135,25 @@ func (p *Parser) parseStatement() ast.Statement {
 			}
 		}
 
+		// Check for index assignment: arr[idx] = value or map[key] = value
+		if indexExpr, ok := expr.(*ast.IndexExpr); ok && p.peekTokenIs(token.ASSIGN) {
+			p.nextToken() // move to '='
+			p.nextToken() // move past '=' to value
+			value := p.parseExpression(lowest)
+			if value == nil {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected expression after '='")
+				return nil
+			}
+			p.nextToken() // move past value
+			p.skipNewlines()
+			return &ast.IndexAssignStmt{
+				Left:  indexExpr.Left,
+				Index: indexExpr.Index,
+				Value: value,
+				Line:  line,
+			}
+		}
+
 		// Check for tuple literal: expr, expr, ...
 		// This handles implicit multi-value returns like: 1, "hello"
 		if p.peekTokenIs(token.COMMA) {

@@ -136,6 +136,10 @@ func (t *testTypeInfo) IsInterface(typeName string) bool {
 	return t.analyzer.IsInterface(typeName)
 }
 
+func (t *testTypeInfo) IsStruct(typeName string) bool {
+	return t.analyzer.IsStruct(typeName)
+}
+
 func (t *testTypeInfo) IsNoArgFunction(name string) bool {
 	return t.analyzer.IsNoArgFunction(name)
 }

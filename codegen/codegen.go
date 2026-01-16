@@ -107,6 +107,9 @@ type TypeInfo interface {
 	// IsClass returns true if the given type name is a declared class.
 	IsClass(typeName string) bool
 
+	// IsStruct returns true if the given type name is a declared struct.
+	IsStruct(typeName string) bool
+
 	// IsInterface returns true if the given type name is a declared interface.
 	IsInterface(typeName string) bool
 
@@ -459,6 +462,14 @@ func (g *Generator) isClass(typeName string) bool {
 		panic("codegen: typeInfo is required - run semantic analysis before code generation")
 	}
 	return g.typeInfo.IsClass(typeName)
+}
+
+// isStruct checks if a type name is a declared struct. Requires typeInfo from semantic analysis.
+func (g *Generator) isStruct(typeName string) bool {
+	if g.typeInfo == nil {
+		panic("codegen: typeInfo is required - run semantic analysis before code generation")
+	}
+	return g.typeInfo.IsStruct(typeName)
 }
 
 // stripTypeParams removes generic type parameters from a type name.

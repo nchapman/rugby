@@ -471,18 +471,21 @@ func (a *Analyzer) resolveTypes() {
 	}
 }
 
-// resolveType checks if a type is a TypeClass that should be TypeInterface.
+// resolveType checks if a type is a TypeClass that should be TypeInterface or marked as a struct.
 // If the type name matches a declared interface, it updates the type's Kind to TypeInterface.
+// If the type name matches a declared struct, it sets IsStruct to true.
 // Also recursively resolves nested types (optional, array, map, etc.)
 func (a *Analyzer) resolveType(t *Type) *Type {
 	if t == nil {
 		return t
 	}
 
-	// If this is a class type, check if it should be an interface
+	// If this is a class type, check if it should be an interface or struct
 	if t.Kind == TypeClass && t.Name != "" {
 		if _, isInterface := a.interfaces[t.Name]; isInterface {
 			t.Kind = TypeInterface
+		} else if a.structs[t.Name] {
+			t.IsStruct = true
 		}
 	}
 
@@ -1015,6 +1018,8 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 		a.analyzeOrAssign(s)
 	case *ast.SelectorAssignStmt:
 		a.analyzeSelectorAssign(s)
+	case *ast.IndexAssignStmt:
+		a.analyzeIndexAssign(s)
 	case *ast.ExprStmt:
 		a.analyzeExpr(s.Expr)
 		if s.Condition != nil {
@@ -1239,6 +1244,8 @@ func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
 		declaredType := ParseType(s.Type)
 		// Resolve type alias if applicable
 		declaredType = a.resolveTypeAliasType(declaredType)
+		// Resolve interface and struct types
+		a.resolveType(declaredType)
 
 		if declaredType.Kind == TypeArray && declaredType.Elem != nil && declaredType.Elem.Kind == TypeAny {
 			if arr, ok := s.Value.(*ast.ArrayLit); ok {
@@ -1314,6 +1321,8 @@ func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
 		var typ *Type
 		if s.Type != "" {
 			typ = ParseType(s.Type)
+			// Resolve interface and struct types
+			a.resolveType(typ)
 			// Check that value is assignable to declared type
 			if valueType.Kind != TypeUnknown && !a.isAssignable(typ, valueType) {
 				a.addError(&TypeMismatchError{
@@ -1594,6 +1603,18 @@ func (a *Analyzer) analyzeSelectorAssign(s *ast.SelectorAssignStmt) {
 			})
 		}
 	}
+}
+
+func (a *Analyzer) analyzeIndexAssign(s *ast.IndexAssignStmt) {
+	// Analyze the collection being indexed
+	collectionType := a.analyzeExpr(s.Left)
+	// Analyze the index/key
+	a.analyzeExpr(s.Index)
+	// Analyze the value being assigned
+	a.analyzeExpr(s.Value)
+
+	// Set the type for the statement (for codegen to use)
+	a.setNodeType(s, collectionType)
 }
 
 func (a *Analyzer) analyzeIf(s *ast.IfStmt) {
@@ -2304,8 +2325,8 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				a.analyzeExpr(field.Value)
 			}
 		}
-		// Return type as struct (using TypeClass kind)
-		typ = &Type{Kind: TypeClass, Name: e.Name}
+		// Return type as struct (using TypeClass kind with IsStruct flag)
+		typ = &Type{Kind: TypeClass, Name: e.Name, IsStruct: a.structs[e.Name]}
 
 	case *ast.SetLit:
 		var elemType *Type
@@ -4034,6 +4055,11 @@ func (a *Analyzer) IsClass(typeName string) bool {
 	return ok
 }
 
+// IsStruct returns true if the given type name is a declared struct.
+func (a *Analyzer) IsStruct(typeName string) bool {
+	return a.structs[typeName]
+}
+
 // IsInterface returns true if the given type name is a declared interface.
 func (a *Analyzer) IsInterface(typeName string) bool {
 	_, ok := a.interfaces[typeName]
@@ -4572,6 +4598,10 @@ func (a *Analyzer) parseTypeFromExpr(expr ast.Expression) *Type {
 		case "Error", "error":
 			return TypeErrorVal
 		default:
+			// Check if it's a struct type
+			if a.structs[e.Name] {
+				return &Type{Kind: TypeClass, Name: e.Name, IsStruct: true}
+			}
 			// Check if it's a class type
 			if cls := a.classes[e.Name]; cls != nil {
 				return NewClassType(e.Name)

@@ -47,6 +47,8 @@ func getStatementLine(stmt ast.Statement) int {
 		return s.Line
 	case *ast.SelectorAssignStmt:
 		return s.Line
+	case *ast.IndexAssignStmt:
+		return s.Line
 	case *ast.InstanceVarCompoundAssign:
 		return s.Line
 	case *ast.ClassVarAssign:
@@ -169,6 +171,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genClassVarCompoundAssign(s)
 	case *ast.SelectorAssignStmt:
 		g.genSelectorAssignStmt(s)
+	case *ast.IndexAssignStmt:
+		g.genIndexAssignStmt(s)
 
 	// Expression statements
 	case *ast.ExprStmt:
@@ -738,6 +742,17 @@ func (g *Generator) genSelectorAssignStmt(s *ast.SelectorAssignStmt) {
 	g.buf.WriteString("(")
 	g.genExpr(s.Value)
 	g.buf.WriteString(")\n")
+}
+
+// genIndexAssignStmt generates code for index assignment: arr[idx] = value or map[key] = value
+func (g *Generator) genIndexAssignStmt(s *ast.IndexAssignStmt) {
+	g.writeIndent()
+	g.genExpr(s.Left)
+	g.buf.WriteString("[")
+	g.genExpr(s.Index)
+	g.buf.WriteString("] = ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
 }
 
 func (g *Generator) genAssignStmt(s *ast.AssignStmt) {

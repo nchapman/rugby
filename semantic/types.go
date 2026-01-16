@@ -49,6 +49,9 @@ type Type struct {
 	// For Class, Interface, Func
 	Name string
 
+	// For Class - true if this is a struct (value type) rather than a class (reference type)
+	IsStruct bool
+
 	// For Func
 	Params  []*Type
 	Returns []*Type
@@ -356,6 +359,10 @@ func (t *Type) GoType() string {
 		return "map[" + keyType + "]" + valType
 	case TypeClass:
 		if t.Name != "" {
+			// Structs are value types - no pointer prefix
+			if t.IsStruct {
+				return t.Name
+			}
 			return "*" + t.Name
 		}
 		return "any"

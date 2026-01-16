@@ -499,6 +499,17 @@ type SelectorAssignStmt struct {
 func (s *SelectorAssignStmt) node()     {}
 func (s *SelectorAssignStmt) stmtNode() {}
 
+// IndexAssignStmt represents index assignment: arr[idx] = value or map[key] = value
+type IndexAssignStmt struct {
+	Left  Expression // the collection (array, map, etc.)
+	Index Expression // the index or key
+	Value Expression // the value being assigned
+	Line  int        // source line number (1-indexed)
+}
+
+func (i *IndexAssignStmt) node()     {}
+func (i *IndexAssignStmt) stmtNode() {}
+
 // OrAssignStmt represents x ||= y (logical or assignment)
 type OrAssignStmt struct {
 	Name  string
