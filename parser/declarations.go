@@ -440,12 +440,25 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' in class body must be followed by 'def', 'getter', 'setter', or 'property'")
 				p.nextToken()
 			}
+		case token.PRIVATE:
+			privateLine := p.curToken.Line
+			methodDoc := p.leadingComments(privateLine)
+			p.nextToken() // consume 'private'
+			if p.curTokenIs(token.DEF) {
+				if method := p.parseMethodDeclWithDoc(methodDoc); method != nil {
+					method.Private = true
+					cls.Methods = append(cls.Methods, method)
+				}
+			} else {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "'private' in class body must be followed by 'def'")
+				p.nextToken()
+			}
 		case token.DEF:
 			if method := p.parseMethodDecl(); method != nil {
 				cls.Methods = append(cls.Methods, method)
 			}
 		default:
-			p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("unexpected token %s in class body, expected '@field', 'def', 'pub def', 'getter', 'setter', 'property', 'include', or 'end'", p.curToken.Type))
+			p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("unexpected token %s in class body, expected '@field', 'def', 'pub def', 'private def', 'getter', 'setter', 'property', 'include', or 'end'", p.curToken.Type))
 			p.nextToken()
 		}
 	}

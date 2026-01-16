@@ -1,4 +1,3 @@
-#@ skip: private def not yet implemented
 #@ run-pass
 #@ check-output
 #
@@ -27,7 +26,7 @@ class User
 
   pub def save
     if validate
-      encrypted = encrypt_password
+      _ = encrypt_password  # just testing private method is callable
       puts "Saved #{@name}"
     end
   end

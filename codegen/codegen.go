@@ -181,6 +181,9 @@ type Generator struct {
 	classVars                    map[string]string            // "ClassName@@varname" -> "_ClassName_varname" (package-level var)
 	pubFuncs                     map[string]bool              // track functions declared with 'pub' for correct casing
 	pubAccessors                 map[string]map[string]bool   // track pub accessors per class: className -> accessorName -> isPub
+	privateMethods               map[string]map[string]bool   // track private methods per class: className -> methodName -> isPrivate
+	instanceMethods              map[string]map[string]string // track instance methods per class: className -> methodName -> goName
+	pubMethods                   map[string]map[string]bool   // track pub methods per class: className -> methodName -> isPub
 }
 
 // addError records an error during code generation
@@ -255,6 +258,9 @@ func New(opts ...Option) *Generator {
 		classVars:                    make(map[string]string),
 		pubFuncs:                     make(map[string]bool),
 		pubAccessors:                 make(map[string]map[string]bool),
+		privateMethods:               make(map[string]map[string]bool),
+		instanceMethods:              make(map[string]map[string]string),
+		pubMethods:                   make(map[string]map[string]bool),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -660,6 +666,57 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 						g.pubAccessors[cls.Name] = make(map[string]bool)
 					}
 					g.pubAccessors[cls.Name][acc.Name] = true
+				}
+			}
+		}
+	}
+
+	// Pre-pass: collect private methods per class
+	// This is needed so method calls can use the correct name (underscore prefix)
+	for _, def := range definitions {
+		if cls, ok := def.(*ast.ClassDecl); ok {
+			for _, method := range cls.Methods {
+				if method.Private {
+					if g.privateMethods[cls.Name] == nil {
+						g.privateMethods[cls.Name] = make(map[string]bool)
+					}
+					g.privateMethods[cls.Name][method.Name] = true
+				}
+			}
+		}
+	}
+
+	// Pre-pass: collect all instance methods per class
+	// This is needed to resolve implicit method calls (validate -> u.validate())
+	// Note: We can't check currentClassInterfaceMethods here since it's populated per-class during generation.
+	// Interface methods will be handled separately via structural typing during genClassDecl.
+	for _, def := range definitions {
+		if cls, ok := def.(*ast.ClassDecl); ok {
+			for _, method := range cls.Methods {
+				if method.IsClassMethod {
+					continue // Skip class methods (def self.method_name)
+				}
+				if g.instanceMethods[cls.Name] == nil {
+					g.instanceMethods[cls.Name] = make(map[string]string)
+				}
+				// Determine the Go method name based on visibility
+				// Note: pub takes precedence over private (invalid combo is caught by semantic analyzer)
+				var goName string
+				if method.Pub {
+					goName = snakeToPascalWithAcronyms(method.Name)
+				} else if method.Private {
+					goName = "_" + snakeToCamelWithAcronyms(method.Name)
+				} else {
+					goName = snakeToCamelWithAcronyms(method.Name)
+				}
+				g.instanceMethods[cls.Name][method.Name] = goName
+
+				// Track pub methods for correct casing at call sites
+				if method.Pub {
+					if g.pubMethods[cls.Name] == nil {
+						g.pubMethods[cls.Name] = make(map[string]bool)
+					}
+					g.pubMethods[cls.Name][method.Name] = true
 				}
 			}
 		}

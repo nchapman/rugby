@@ -72,6 +72,11 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			recv := receiverName(g.currentClass)
 			methodName := snakeToPascalWithAcronyms(e.Name)
 			g.buf.WriteString(fmt.Sprintf("%s.%s()", recv, methodName))
+		} else if g.currentClass != "" && g.instanceMethods[g.currentClass] != nil && g.instanceMethods[g.currentClass][e.Name] != "" {
+			// Implicit method call within class - generate as self.method()
+			recv := receiverName(g.currentClass)
+			methodName := g.instanceMethods[g.currentClass][e.Name]
+			g.buf.WriteString(fmt.Sprintf("%s.%s()", recv, methodName))
 		} else if g.isNoArgFunction(e.Name) {
 			// No-arg function - call it implicitly (Ruby-style)
 			goName := snakeToCamelWithAcronyms(e.Name)
@@ -1151,6 +1156,22 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		if g.currentClass != "" && g.isModuleMethod(funcName) {
 			recv := receiverName(g.currentClass)
 			methodName := snakeToPascalWithAcronyms(funcName)
+			g.buf.WriteString(fmt.Sprintf("%s.%s(", recv, methodName))
+			for i, arg := range call.Args {
+				if i > 0 {
+					g.buf.WriteString(", ")
+				}
+				g.genExpr(arg)
+			}
+			g.buf.WriteString(")")
+			return
+		}
+
+		// Check for private method call within class context
+		// (e.g., encrypt_password() in a class that has private def encrypt_password)
+		if g.currentClass != "" && g.privateMethods[g.currentClass] != nil && g.privateMethods[g.currentClass][funcName] {
+			recv := receiverName(g.currentClass)
+			methodName := "_" + snakeToCamelWithAcronyms(funcName)
 			g.buf.WriteString(fmt.Sprintf("%s.%s(", recv, methodName))
 			for i, arg := range call.Args {
 				if i > 0 {
@@ -3083,6 +3104,18 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 		isPubAccessor = classAccessors[sel.Sel]
 	}
 
+	// Check if this specific method is pub (for non-pub classes with pub methods)
+	isPubMethod := false
+	if classMethods := g.pubMethods[receiverClassName]; classMethods != nil {
+		isPubMethod = classMethods[sel.Sel]
+	}
+
+	// Check if this is a private method (for non-pub classes with private methods)
+	isPrivateMethod := false
+	if classMethods := g.privateMethods[receiverClassName]; classMethods != nil {
+		isPrivateMethod = classMethods[sel.Sel]
+	}
+
 	g.genExpr(sel.X)
 	g.buf.WriteString(".")
 
@@ -3092,8 +3125,10 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 		return
 	}
 
-	if isInterfaceMethod || isPubClass || isPubAccessor {
+	if isInterfaceMethod || isPubClass || isPubAccessor || isPubMethod {
 		g.buf.WriteString(snakeToPascalWithAcronyms(sel.Sel))
+	} else if isPrivateMethod {
+		g.buf.WriteString("_" + snakeToCamelWithAcronyms(sel.Sel))
 	} else {
 		g.buf.WriteString(snakeToCamelWithAcronyms(sel.Sel))
 	}

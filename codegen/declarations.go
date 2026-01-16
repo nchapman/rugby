@@ -842,12 +842,15 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	}
 
 	// Method name: convert snake_case to proper casing
-	// pub def in a pub class -> PascalCase (exported)
-	// def in any class -> camelCase (unexported)
+	// pub def -> PascalCase (exported)
+	// private def -> _camelCase (private, underscore prefix)
+	// def (default) -> camelCase (package-private)
 	// Methods required by interfaces must be exported (PascalCase) for Go interface satisfaction
 	var methodName string
 	if method.Pub || g.currentClassInterfaceMethods[method.Name] {
 		methodName = snakeToPascalWithAcronyms(method.Name)
+	} else if method.Private {
+		methodName = "_" + snakeToCamelWithAcronyms(method.Name)
 	} else {
 		methodName = snakeToCamelWithAcronyms(method.Name)
 	}

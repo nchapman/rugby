@@ -441,3 +441,32 @@ func (e *MethodRequiresArgumentsError) Error() string {
 	}
 	return msg
 }
+
+// ConflictingVisibilityError reports when a method has both pub and private modifiers.
+type ConflictingVisibilityError struct {
+	MethodName string
+	Line       int
+}
+
+func (e *ConflictingVisibilityError) Error() string {
+	msg := fmt.Sprintf("method '%s' cannot be both 'pub' and 'private'", e.MethodName)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+// PrivateMethodAccessError reports when a private method is called from outside its class.
+type PrivateMethodAccessError struct {
+	MethodName string
+	ClassName  string
+	Line       int
+}
+
+func (e *PrivateMethodAccessError) Error() string {
+	msg := fmt.Sprintf("cannot access private method '%s' from outside class '%s'", e.MethodName, e.ClassName)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}

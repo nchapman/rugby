@@ -682,6 +682,7 @@ type MethodDecl struct {
 	ReturnTypes   []string      // return types
 	Body          []Statement   // method body
 	Pub           bool          // true if exported (pub def)
+	Private       bool          // true if private (private def) - only accessible within class
 	IsClassMethod bool          // true if class method (def self.method)
 	Line          int           // source line number (1-indexed)
 	Doc           *CommentGroup // leading comments

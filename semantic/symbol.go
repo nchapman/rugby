@@ -53,7 +53,8 @@ type Symbol struct {
 	FromModule string // module name if method came from an included module
 
 	// Visibility
-	Public bool
+	Public  bool
+	Private bool // true for private methods (only accessible within the class)
 
 	// AST node reference (for later analysis)
 	Node ast.Node

@@ -613,7 +613,14 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 		method := NewMethod(m.Name, params, returnTypes)
 		method.Line = m.Line
 		method.Public = m.Pub
+		method.Private = m.Private
 		method.Node = m
+
+		// Validate pub and private are mutually exclusive
+		if m.Pub && m.Private {
+			a.addError(&ConflictingVisibilityError{MethodName: m.Name, Line: m.Line})
+		}
+
 		if m.IsClassMethod {
 			cls.AddClassMethod(method)
 		} else {
@@ -1850,6 +1857,15 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				sym = fn
 			}
 		}
+		// Check methods of the current class (implicit self.method call)
+		if sym == nil && a.scope.IsInsideClass() {
+			className := a.scope.ClassName
+			if cls := a.classes[className]; cls != nil {
+				if method := cls.GetMethod(e.Name); method != nil {
+					sym = method
+				}
+			}
+		}
 		if sym == nil {
 			a.addError(&UndefinedError{Name: e.Name, Line: e.Line, Column: e.Column, Candidates: a.findSimilar(e.Name)})
 			typ = TypeUnknownVal
@@ -2083,6 +2099,19 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		// If not a field, look up method
 		if typ == nil {
 			if method := a.lookupMethod(receiverType, e.Sel); method != nil {
+				// Check for private method access from outside the class
+				if method.Private {
+					// Private methods can only be called from within the same class
+					canAccess := a.scope.IsInsideClass() && a.scope.ClassName == receiverType.Name
+					if !canAccess {
+						a.addError(&PrivateMethodAccessError{
+							MethodName: e.Sel,
+							ClassName:  receiverType.Name,
+							Line:       method.Line, // Use method's line since SelectorExpr doesn't have one
+						})
+					}
+				}
+
 				// Only allow implicit call for methods with no required params
 				// Variadic methods can be called with 0 args, so they're allowed
 				if len(method.Params) > 0 && !method.Variadic {
@@ -2523,6 +2552,19 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 
 		// Look up method on receiver type
 		if method := a.lookupMethod(receiverType, sel.Sel); method != nil {
+			// Check for private method access from outside the class
+			if method.Private {
+				// Private methods can only be called from within the same class
+				canAccess := a.scope.IsInsideClass() && a.scope.ClassName == receiverType.Name
+				if !canAccess {
+					a.addError(&PrivateMethodAccessError{
+						MethodName: sel.Sel,
+						ClassName:  receiverType.Name,
+						Line:       method.Line, // Use method's line since SelectorExpr doesn't have one
+					})
+				}
+			}
+
 			// Check argument count and types
 			if !hasSplat {
 				methodName := sel.Sel
@@ -2623,7 +2665,17 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 	// Check argument count and types for known functions (skip if call uses splat)
 	if !hasSplat {
 		if ident, ok := call.Func.(*ast.Ident); ok {
-			if fn := a.functions[ident.Name]; fn != nil {
+			var fn *Symbol
+			if fn = a.functions[ident.Name]; fn != nil {
+				// Found as top-level function
+			} else if a.scope.IsInsideClass() {
+				// Check methods of the current class
+				className := a.scope.ClassName
+				if cls := a.classes[className]; cls != nil {
+					fn = cls.GetMethod(ident.Name)
+				}
+			}
+			if fn != nil {
 				a.checkArity(ident.Name, fn, call)
 				a.checkArgumentTypes(ident.Name, fn, argTypes)
 			}
@@ -2640,13 +2692,21 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 
 	// Check for known function and return type
 	if ident, ok := call.Func.(*ast.Ident); ok {
-		if fn := a.functions[ident.Name]; fn != nil {
-			if len(fn.ReturnTypes) > 0 {
-				if len(fn.ReturnTypes) == 1 {
-					return fn.ReturnTypes[0]
-				}
-				return NewTupleType(fn.ReturnTypes...)
+		var fn *Symbol
+		if fn = a.functions[ident.Name]; fn != nil {
+			// Found as top-level function
+		} else if a.scope.IsInsideClass() {
+			// Check methods of the current class
+			className := a.scope.ClassName
+			if cls := a.classes[className]; cls != nil {
+				fn = cls.GetMethod(ident.Name)
 			}
+		}
+		if fn != nil && len(fn.ReturnTypes) > 0 {
+			if len(fn.ReturnTypes) == 1 {
+				return fn.ReturnTypes[0]
+			}
+			return NewTupleType(fn.ReturnTypes...)
 		}
 	}
 
