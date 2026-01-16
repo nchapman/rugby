@@ -796,6 +796,7 @@ func (i *InstanceVar) exprNode() {}
 type InstanceVarAssign struct {
 	Name  string // variable name without @
 	Value Expression
+	Line  int
 }
 
 func (i *InstanceVarAssign) node()     {}
@@ -805,6 +806,7 @@ func (i *InstanceVarAssign) stmtNode() {}
 type InstanceVarOrAssign struct {
 	Name  string // variable name without @
 	Value Expression
+	Line  int
 }
 
 func (i *InstanceVarOrAssign) node()     {}

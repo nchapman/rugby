@@ -1010,6 +1010,7 @@ func (p *Parser) parseDeferStmt() *ast.DeferStmt {
 }
 
 func (p *Parser) parseInstanceVarAssign() *ast.InstanceVarAssign {
+	line := p.curToken.Line
 	p.nextToken() // consume '@'
 	if !p.curTokenIs(token.IDENT) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@'")
@@ -1032,7 +1033,7 @@ func (p *Parser) parseInstanceVarAssign() *ast.InstanceVarAssign {
 	p.nextToken() // move past expression
 	p.skipNewlines()
 
-	return &ast.InstanceVarAssign{Name: name, Value: value}
+	return &ast.InstanceVarAssign{Name: name, Value: value, Line: line}
 }
 
 func (p *Parser) parseOrAssignStmt() *ast.OrAssignStmt {
@@ -1098,6 +1099,7 @@ func (p *Parser) parseCompoundAssignStmt() ast.Statement {
 }
 
 func (p *Parser) parseInstanceVarOrAssign() *ast.InstanceVarOrAssign {
+	line := p.curToken.Line
 	p.nextToken() // consume '@'
 	if !p.curTokenIs(token.IDENT) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@'")
@@ -1120,7 +1122,7 @@ func (p *Parser) parseInstanceVarOrAssign() *ast.InstanceVarOrAssign {
 	p.nextToken() // move past expression
 	p.skipNewlines()
 
-	return &ast.InstanceVarOrAssign{Name: name, Value: value}
+	return &ast.InstanceVarOrAssign{Name: name, Value: value, Line: line}
 }
 
 // parseInstanceVarCompoundAssign parses: @name += expr, @name -= expr, etc.

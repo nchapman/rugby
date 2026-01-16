@@ -250,6 +250,22 @@ func (e *InstanceVarOutsideClassError) Error() string {
 	return msg
 }
 
+// StructFieldMutationError is returned when trying to mutate a struct field (structs are immutable).
+type StructFieldMutationError struct {
+	Field      string
+	StructName string
+	Line       int
+	Column     int
+}
+
+func (e *StructFieldMutationError) Error() string {
+	msg := fmt.Sprintf("cannot modify struct field '@%s' (structs are immutable)", e.Field)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
 // InstanceStateInClassMethodError is returned when instance state (self, @var) is accessed in a class method.
 type InstanceStateInClassMethodError struct {
 	What   string // "self" or "@varname"

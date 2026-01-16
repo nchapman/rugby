@@ -1004,8 +1004,7 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 	case *ast.ClassDecl:
 		a.analyzeClassDecl(s)
 	case *ast.StructDecl:
-		// Struct registration handled in collectDeclaration
-		// No additional analysis needed here
+		a.analyzeStructDecl(s)
 	case *ast.AssignStmt:
 		a.analyzeAssign(s)
 	case *ast.MultiAssignStmt:
@@ -1049,6 +1048,8 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 		a.analyzeInstanceVarAssign(s)
 	case *ast.InstanceVarCompoundAssign:
 		a.analyzeInstanceVarCompoundAssign(s)
+	case *ast.InstanceVarOrAssign:
+		a.analyzeInstanceVarOrAssign(s)
 	case *ast.GoStmt:
 		a.analyzeGo(s)
 	case *ast.SelectStmt:
@@ -1200,6 +1201,57 @@ func (a *Analyzer) analyzeClassDecl(c *ast.ClassDecl) {
 	a.scope = classScope
 	for _, m := range c.Methods {
 		a.analyzeMethodDecl(m)
+	}
+	a.scope = prevScope
+}
+
+func (a *Analyzer) analyzeStructDecl(s *ast.StructDecl) {
+	// Create struct scope
+	structScope := NewScope(ScopeStruct, a.scope)
+	structScope.StructName = s.Name
+
+	// Add 'self' to scope (value type)
+	selfType := &Type{Kind: TypeClass, Name: s.Name, IsStruct: true}
+	selfSym := NewVariable("self", selfType)
+	mustDefine(structScope, selfSym)
+
+	// Add fields to scope
+	for _, field := range s.Fields {
+		fieldType := ParseType(field.Type)
+		mustDefine(structScope, NewVariable(field.Name, fieldType))
+	}
+
+	// Analyze methods
+	prevScope := a.scope
+	a.scope = structScope
+	for _, m := range s.Methods {
+		a.analyzeStructMethod(m)
+	}
+	a.scope = prevScope
+}
+
+// analyzeStructMethod analyzes a struct method, checking for illegal mutations.
+func (a *Analyzer) analyzeStructMethod(m *ast.MethodDecl) {
+	// Create method scope
+	methodScope := NewScope(ScopeMethod, a.scope)
+	methodScope.StructName = a.scope.StructName
+	methodScope.ReturnTypes = make([]*Type, len(m.ReturnTypes))
+	for i, rt := range m.ReturnTypes {
+		methodScope.ReturnTypes[i] = ParseType(rt)
+	}
+
+	// Add parameters to scope
+	for _, p := range m.Params {
+		paramType := ParseType(p.Type)
+		paramSym := NewVariable(p.Name, paramType)
+		mustDefine(methodScope, paramSym)
+	}
+
+	// Analyze body
+	prevScope := a.scope
+	a.scope = methodScope
+	for _, stmt := range m.Body {
+		a.analyzeStatement(stmt)
 	}
 	a.scope = prevScope
 }
@@ -1903,6 +1955,15 @@ func (a *Analyzer) analyzeCaseType(s *ast.CaseTypeStmt) {
 }
 
 func (a *Analyzer) analyzeInstanceVarAssign(s *ast.InstanceVarAssign) {
+	// Check for struct immutability (structs cannot have field mutations)
+	if a.scope.IsInsideStruct() {
+		a.addError(&StructFieldMutationError{
+			Field:      s.Name,
+			StructName: a.scope.StructName,
+			Line:       s.Line,
+		})
+		return
+	}
 	if !a.scope.IsInsideClass() {
 		a.addError(&InstanceVarOutsideClassError{Name: s.Name})
 		return
@@ -1927,6 +1988,15 @@ func (a *Analyzer) analyzeInstanceVarAssign(s *ast.InstanceVarAssign) {
 }
 
 func (a *Analyzer) analyzeInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAssign) {
+	// Check for struct immutability (structs cannot have field mutations)
+	if a.scope.IsInsideStruct() {
+		a.addError(&StructFieldMutationError{
+			Field:      s.Name,
+			StructName: a.scope.StructName,
+			Line:       s.Line,
+		})
+		return
+	}
 	if !a.scope.IsInsideClass() {
 		a.addError(&InstanceVarOutsideClassError{Name: s.Name})
 		return
@@ -1979,6 +2049,28 @@ func (a *Analyzer) analyzeInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAs
 			})
 		}
 	}
+}
+
+func (a *Analyzer) analyzeInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
+	// Check for struct immutability (structs cannot have field mutations)
+	if a.scope.IsInsideStruct() {
+		a.addError(&StructFieldMutationError{
+			Field:      s.Name,
+			StructName: a.scope.StructName,
+			Line:       s.Line,
+		})
+		return
+	}
+	if !a.scope.IsInsideClass() {
+		a.addError(&InstanceVarOutsideClassError{Name: s.Name})
+		return
+	}
+	if a.scope.IsInsideClassMethod() {
+		a.addError(&InstanceStateInClassMethodError{What: "@" + s.Name, Line: s.Line})
+		return
+	}
+
+	a.analyzeExpr(s.Value)
 }
 
 func (a *Analyzer) analyzeGo(s *ast.GoStmt) {
@@ -2212,7 +2304,19 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 		}
 
 	case *ast.InstanceVar:
-		if !a.scope.IsInsideClass() {
+		if a.scope.IsInsideStruct() {
+			// Inside struct - look up field type from struct
+			if structScope := a.scope.StructScope(); structScope != nil {
+				// Look up the field in the struct's scope
+				if fieldSym := structScope.LookupLocal(e.Name); fieldSym != nil {
+					typ = fieldSym.Type
+				} else {
+					typ = TypeUnknownVal
+				}
+			} else {
+				typ = TypeUnknownVal
+			}
+		} else if !a.scope.IsInsideClass() {
 			a.addError(&InstanceVarOutsideClassError{Name: e.Name})
 			typ = TypeUnknownVal
 		} else if a.scope.IsInsideClassMethod() {

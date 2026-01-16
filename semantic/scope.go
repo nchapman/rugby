@@ -8,6 +8,7 @@ const (
 	ScopeFunction
 	ScopeMethod
 	ScopeClass
+	ScopeStruct
 	ScopeModule
 	ScopeBlock    // for if-then, case branches, etc.
 	ScopeLoop     // for while, until, for loops
@@ -25,8 +26,9 @@ type Scope struct {
 	IsClassMethod bool              // true if this is a class method (def self.method)
 	TypeParams    map[string]string // type parameters in scope (name -> constraint), for generics
 
-	// For class/module scopes
+	// For class/module/struct scopes
 	ClassName  string // name of enclosing class (if any)
+	StructName string // name of enclosing struct (if any)
 	ModuleName string // name of enclosing module (if any)
 }
 
@@ -37,9 +39,10 @@ func NewScope(kind ScopeKind, parent *Scope) *Scope {
 		Parent:  parent,
 		symbols: make(map[string]*Symbol),
 	}
-	// Inherit class/module context from parent
+	// Inherit class/module/struct context from parent
 	if parent != nil {
 		s.ClassName = parent.ClassName
+		s.StructName = parent.StructName
 		s.ModuleName = parent.ModuleName
 	}
 	return s
@@ -153,6 +156,11 @@ func (s *Scope) IsInsideClass() bool {
 	return s.ClassName != ""
 }
 
+// IsInsideStruct returns true if this scope is inside a struct.
+func (s *Scope) IsInsideStruct() bool {
+	return s.StructName != ""
+}
+
 // IsInsideClassMethod returns true if this scope is inside a class method (def self.method).
 func (s *Scope) IsInsideClassMethod() bool {
 	// Check this scope
@@ -214,6 +222,17 @@ func (s *Scope) ClassScope() *Scope {
 	}
 	if s.Parent != nil {
 		return s.Parent.ClassScope()
+	}
+	return nil
+}
+
+// StructScope returns the nearest enclosing struct scope, or nil.
+func (s *Scope) StructScope() *Scope {
+	if s.Kind == ScopeStruct {
+		return s
+	}
+	if s.Parent != nil {
+		return s.Parent.StructScope()
 	}
 	return nil
 }
