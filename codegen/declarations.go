@@ -773,9 +773,9 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		return
 	}
 
-	// message -> Error() string (satisfies error interface)
-	// Only applies when message has no parameters
-	if method.Name == "message" && len(method.Params) == 0 {
+	// error or message -> Error() string (satisfies Go error interface)
+	// Only applies when method has no parameters
+	if (method.Name == "error" || method.Name == "message") && len(method.Params) == 0 {
 		g.buf.WriteString(fmt.Sprintf("func (%s *%s) Error() string {\n", recv, className))
 		g.indent++
 		// Generate body statements, with implicit return for last expression

@@ -3037,8 +3037,13 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 }
 
 func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
-	// Check for channel methods: .receive, .try_receive, .close
+	// Handle special selector expressions: error interface, channel operations, etc.
 	switch sel.Sel {
+	case "error":
+		// .error on error types -> .Error() (Go's error interface)
+		g.genExpr(sel.X)
+		g.buf.WriteString(".Error()")
+		return
 	case "receive":
 		// ch.receive -> <-ch
 		g.buf.WriteString("<-")

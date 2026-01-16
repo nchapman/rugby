@@ -3214,6 +3214,13 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 		}
 	}
 
+	// Error interface: a class with def error -> String implements error
+	if to.Kind == TypeError && from.Kind == TypeClass && from.Name != "" {
+		if a.classImplementsError(from.Name) {
+			return true
+		}
+	}
+
 	// Numeric widening: Int can be assigned to Int64 or Float
 	if from.Kind == TypeInt {
 		if to.Kind == TypeInt64 || to.Kind == TypeFloat {
@@ -3288,6 +3295,33 @@ func (a *Analyzer) classImplementsInterface(className, interfaceName string) boo
 	}
 
 	return true
+}
+
+// classImplementsError checks if a class implements the Go error interface.
+// A class implements error if it has a method: def error -> String or def message -> String
+func (a *Analyzer) classImplementsError(className string) bool {
+	// Check for 'error' method first, then 'message' as fallback
+	for _, methodName := range []string{"error", "message"} {
+		method := a.getClassMethod(className, methodName)
+		if method == nil {
+			continue
+		}
+
+		// Must have no parameters
+		if len(method.Params) != 0 {
+			continue
+		}
+
+		// Must return exactly one String
+		if len(method.ReturnTypes) != 1 {
+			continue
+		}
+
+		if method.ReturnTypes[0].Kind == TypeString {
+			return true
+		}
+	}
+	return false
 }
 
 // findSimilar finds similar names for "did you mean?" suggestions.
