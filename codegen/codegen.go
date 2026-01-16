@@ -625,6 +625,33 @@ func (g *Generator) inferArrayElementGoType(expr ast.Expression) string {
 	return "any"
 }
 
+// extractMapTypes extracts the key and value types from a Go map type string.
+// For example, "map[string]int" returns ("string", "int").
+// Returns ("any", "any") if parsing fails.
+func (g *Generator) extractMapTypes(mapType string) (keyType, valueType string) {
+	keyType = "any"
+	valueType = "any"
+	if !strings.HasPrefix(mapType, "map[") {
+		return
+	}
+	rest := mapType[4:]
+	depth := 0
+	for i, ch := range rest {
+		switch ch {
+		case '[':
+			depth++
+		case ']':
+			if depth == 0 {
+				keyType = rest[:i]
+				valueType = rest[i+1:]
+				return
+			}
+			depth--
+		}
+	}
+	return
+}
+
 // inferExprGoType returns the Go type for an expression.
 // Uses semantic type info with mapType conversion, falls back to "any".
 func (g *Generator) inferExprGoType(expr ast.Expression) string {

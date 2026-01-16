@@ -2260,6 +2260,18 @@ func (g *Generator) genBlockCall(call *ast.CallExpr) {
 		}
 	}
 
+	// Check if receiver is a map type with 2-param block - needs special handling for select/reject
+	if goType := g.typeInfo.GetGoType(sel.X); strings.HasPrefix(goType, "map[") && len(block.Params) == 2 {
+		switch method {
+		case "select", "filter":
+			g.genMapSelectBlock(sel.X, block, goType)
+			return
+		case "reject":
+			g.genMapRejectBlock(sel.X, block, goType)
+			return
+		}
+	}
+
 	switch method {
 	case "each":
 		g.genEachBlock(sel.X, block)
@@ -2801,9 +2813,18 @@ func (g *Generator) genLambdaMap(iterable ast.Expression, lambda *ast.LambdaExpr
 	g.buf.WriteString("})")
 }
 
-// genLambdaSelect generates code for arr.select -> (x) { condition }
+// genLambdaSelect generates code for arr.select -> (x) { condition } or map.select -> (k, v) { condition }
 func (g *Generator) genLambdaSelect(iterable ast.Expression, lambda *ast.LambdaExpr) {
 	g.needsRuntime = true
+
+	// Check if iterating over a map with 2 parameters (key, value)
+	if len(lambda.Params) == 2 {
+		if goType := g.typeInfo.GetGoType(iterable); strings.HasPrefix(goType, "map[") {
+			g.genLambdaMapSelect(iterable, lambda, goType)
+			return
+		}
+	}
+
 	varName := "_v"
 	if len(lambda.Params) > 0 {
 		varName = lambda.Params[0].Name
@@ -2842,9 +2863,65 @@ func (g *Generator) genLambdaSelect(iterable ast.Expression, lambda *ast.LambdaE
 	g.buf.WriteString("})")
 }
 
-// genLambdaReject generates code for arr.reject -> (x) { condition }
+// genLambdaMapSelect generates code for map.select -> (k, v) { condition }
+func (g *Generator) genLambdaMapSelect(iterable ast.Expression, lambda *ast.LambdaExpr, mapType string) {
+	keyName := lambda.Params[0].Name
+	valueName := lambda.Params[1].Name
+
+	// Extract key and value types from map[K]V
+	keyType, valueType := g.extractMapTypes(mapType)
+
+	// Track the lambda params with their types
+	g.vars[keyName] = keyType
+	g.vars[valueName] = valueType
+
+	g.buf.WriteString("runtime.MapSelect(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(keyName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(keyType)
+	g.buf.WriteString(", ")
+	g.buf.WriteString(valueName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(valueType)
+	g.buf.WriteString(") bool {\n")
+
+	g.indent++
+	for i, stmt := range lambda.Body {
+		if i == len(lambda.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(lambda.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return false\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genLambdaReject generates code for arr.reject -> (x) { condition } or map.reject -> (k, v) { condition }
 func (g *Generator) genLambdaReject(iterable ast.Expression, lambda *ast.LambdaExpr) {
 	g.needsRuntime = true
+
+	// Check if iterating over a map with 2 parameters (key, value)
+	if len(lambda.Params) == 2 {
+		if goType := g.typeInfo.GetGoType(iterable); strings.HasPrefix(goType, "map[") {
+			g.genLambdaMapReject(iterable, lambda, goType)
+			return
+		}
+	}
+
 	varName := "_v"
 	if len(lambda.Params) > 0 {
 		varName = lambda.Params[0].Name
@@ -2881,6 +2958,191 @@ func (g *Generator) genLambdaReject(iterable ast.Expression, lambda *ast.LambdaE
 
 	g.writeIndent()
 	g.buf.WriteString("})")
+}
+
+// genLambdaMapReject generates code for map.reject -> (k, v) { condition }
+func (g *Generator) genLambdaMapReject(iterable ast.Expression, lambda *ast.LambdaExpr, mapType string) {
+	keyName := lambda.Params[0].Name
+	valueName := lambda.Params[1].Name
+
+	// Extract key and value types from map[K]V
+	keyType, valueType := g.extractMapTypes(mapType)
+
+	// Track the lambda params with their types
+	g.vars[keyName] = keyType
+	g.vars[valueName] = valueType
+
+	g.buf.WriteString("runtime.MapReject(")
+	g.genExpr(iterable)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(keyName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(keyType)
+	g.buf.WriteString(", ")
+	g.buf.WriteString(valueName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(valueType)
+	g.buf.WriteString(") bool {\n")
+
+	g.indent++
+	for i, stmt := range lambda.Body {
+		if i == len(lambda.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(lambda.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return false\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genMapSelectBlock generates code for map.select do |k, v| ... end
+func (g *Generator) genMapSelectBlock(mapExpr ast.Expression, block *ast.BlockExpr, mapType string) {
+	g.needsRuntime = true
+
+	keyName := "_k"
+	valueName := "_v"
+	if len(block.Params) > 0 {
+		keyName = block.Params[0]
+	}
+	if len(block.Params) > 1 {
+		valueName = block.Params[1]
+	}
+
+	// Extract key and value types from map[K]V
+	keyType, valueType := g.extractMapTypes(mapType)
+
+	// Track block params for variable resolution
+	keyPrevType, keyWasDefinedBefore := g.vars[keyName]
+	valuePrevType, valueWasDefinedBefore := g.vars[valueName]
+	g.vars[keyName] = keyType
+	g.vars[valueName] = valueType
+
+	g.buf.WriteString("runtime.MapSelect(")
+	g.genExpr(mapExpr)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(keyName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(keyType)
+	g.buf.WriteString(", ")
+	g.buf.WriteString(valueName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(valueType)
+	g.buf.WriteString(") bool {\n")
+
+	g.indent++
+	for i, stmt := range block.Body {
+		if i == len(block.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(block.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return false\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+
+	// Restore previous var state
+	if keyWasDefinedBefore {
+		g.vars[keyName] = keyPrevType
+	} else {
+		delete(g.vars, keyName)
+	}
+	if valueWasDefinedBefore {
+		g.vars[valueName] = valuePrevType
+	} else {
+		delete(g.vars, valueName)
+	}
+}
+
+// genMapRejectBlock generates code for map.reject do |k, v| ... end
+func (g *Generator) genMapRejectBlock(mapExpr ast.Expression, block *ast.BlockExpr, mapType string) {
+	g.needsRuntime = true
+
+	keyName := "_k"
+	valueName := "_v"
+	if len(block.Params) > 0 {
+		keyName = block.Params[0]
+	}
+	if len(block.Params) > 1 {
+		valueName = block.Params[1]
+	}
+
+	// Extract key and value types from map[K]V
+	keyType, valueType := g.extractMapTypes(mapType)
+
+	// Track block params for variable resolution
+	keyPrevType, keyWasDefinedBefore := g.vars[keyName]
+	valuePrevType, valueWasDefinedBefore := g.vars[valueName]
+	g.vars[keyName] = keyType
+	g.vars[valueName] = valueType
+
+	g.buf.WriteString("runtime.MapReject(")
+	g.genExpr(mapExpr)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(keyName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(keyType)
+	g.buf.WriteString(", ")
+	g.buf.WriteString(valueName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(valueType)
+	g.buf.WriteString(") bool {\n")
+
+	g.indent++
+	for i, stmt := range block.Body {
+		if i == len(block.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	if len(block.Body) == 0 {
+		g.writeIndent()
+		g.buf.WriteString("return false\n")
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+
+	// Restore previous var state
+	if keyWasDefinedBefore {
+		g.vars[keyName] = keyPrevType
+	} else {
+		delete(g.vars, keyName)
+	}
+	if valueWasDefinedBefore {
+		g.vars[valueName] = valuePrevType
+	} else {
+		delete(g.vars, valueName)
+	}
 }
 
 // genLambdaFind generates code for arr.find -> (x) { condition }
