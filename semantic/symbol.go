@@ -56,6 +56,9 @@ type Symbol struct {
 	Public  bool
 	Private bool // true for private methods (only accessible within the class)
 
+	// Builtin indicates this is a compiler-defined symbol (puts, print, p, etc.)
+	Builtin bool
+
 	// AST node reference (for later analysis)
 	Node ast.Node
 }

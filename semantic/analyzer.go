@@ -91,6 +91,7 @@ func (a *Analyzer) defineBuiltins() {
 		}
 		fn := NewFunction(b.name, params, b.returns)
 		fn.Variadic = b.variadic
+		fn.Builtin = true
 		mustDefine(a.globalScope, fn)
 		a.functions[b.name] = fn
 	}
@@ -1083,17 +1084,33 @@ func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
 		return
 	}
 
-	// Check if variable already exists
+	// Check if variable already exists in scope
 	existing := a.scope.Lookup(s.Name)
+
+	// Determine if this should be a reassignment or a new declaration
+	isReassignment := false
 	if existing != nil {
-		// Check if trying to reassign a constant
-		if existing.Kind == SymConstant {
+		// Allow shadowing of built-in functions (like Ruby allows x = 5 even though x is a method)
+		if existing.Builtin {
+			// Treat as new declaration, shadowing the built-in
+			isReassignment = false
+		} else if existing.Kind == SymConstant {
 			a.addError(&Error{
 				Message: "cannot assign to constant '" + s.Name + "'",
 				Line:    s.Line,
 			})
 			return
+		} else if existing.Kind == SymVariable || existing.Kind == SymParam {
+			// Variable or parameter exists - treat as reassignment
+			isReassignment = true
+		} else if existing.Kind == SymFunction {
+			// User-defined function - allow shadowing with warning could be added here
+			// For now, treat as new declaration (shadows the function)
+			isReassignment = false
 		}
+	}
+
+	if isReassignment {
 		// Assignment to existing variable - check type compatibility
 		a.declarations[s] = false // not a declaration, it's a reassignment
 		if existing.Type.Kind != TypeUnknown && valueType.Kind != TypeUnknown {
