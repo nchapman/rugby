@@ -607,17 +607,17 @@ These features are in the spec but marked as `skip` in tests. Implement after co
 
 **Tests:** `tests/spec/generics/*.rg` (6 passing, 1 skipped)
 
-### 14.2 Enums (Section 7)
+### 14.2 Enums (Section 7) ✅
 
-- [ ] Basic enums `enum Status ... end`
-- [ ] Explicit values `Ok = 200`
-- [ ] `.value` to get numeric value
-- [ ] `.to_s` for string representation
-- [ ] `.values` class method (returns all variants)
-- [ ] `.from_string("Name")` returns `Enum?`
-- [ ] Use in `case`/`when` expressions
+- [x] Basic enums `enum Status ... end`
+- [x] Explicit values `Ok = 200`
+- [x] `.value` to get numeric value
+- [x] `.to_s` for string representation
+- [x] `.values` class method (returns all variants)
+- [x] `.from_string("Name")` returns `Enum?`
+- [x] Use in `case`/`when` expressions
 
-**Tests:** `tests/spec/enums/*.rg` (3 test files)
+**Tests:** `tests/spec/enums/*.rg` (3 passing)
 
 ### 14.3 Structs (Section 12)
 
@@ -720,8 +720,16 @@ All core language features now pass! Only Phase 14 features (generics, enums, st
 - ✅ Constraint checking in semantic analyzer (`isOrdered`, `isNumeric`, `areTypesComparable`)
 - ✅ golang.org/x/exp/constraints auto-added to generated go.mod
 
+### Completed - Enums (Phase 14.2) ✅
+- ✅ Basic enum parsing and code generation
+- ✅ Explicit integer values with validation (no mixing explicit/implicit)
+- ✅ `.to_s`, `.value`, `.values`, `.from_string` methods
+- ✅ Semantic analysis for enum types and values
+- ✅ Case statement support for enum matching
+
 ### Next Priorities
-1. **Enums (Phase 14.2)** - Basic enums, explicit values, enum methods
+1. **Structs (Phase 14.3)** - Value types with auto-generated constructors, equality, hash
+2. **Function Features (Phase 14.4)** - Default params, named params, variadic
 
 ### Key Insights
 - Module-scoped classes use `Module_Class` naming in generated Go code
