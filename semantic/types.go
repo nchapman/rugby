@@ -52,6 +52,9 @@ type Type struct {
 	// For Func
 	Params  []*Type
 	Returns []*Type
+
+	// For TypeTypeParam - constraint name (e.g., "Ordered", "Numeric"), empty if unconstrained
+	Constraint string
 }
 
 // Primitive type singletons for common types.
@@ -122,6 +125,11 @@ func NewFuncType(params, returns []*Type) *Type {
 // NewTypeParamType creates a type parameter type (e.g., T in generics).
 func NewTypeParamType(name string) *Type {
 	return &Type{Kind: TypeTypeParam, Name: name}
+}
+
+// NewConstrainedTypeParamType creates a type parameter with a constraint.
+func NewConstrainedTypeParamType(name, constraint string) *Type {
+	return &Type{Kind: TypeTypeParam, Name: name, Constraint: constraint}
 }
 
 // String returns a human-readable representation of the type.
@@ -250,6 +258,8 @@ func (t *Type) Equals(other *Type) bool {
 		return true
 	case TypeClass, TypeInterface:
 		return t.Name == other.Name
+	case TypeTypeParam:
+		return t.Name == other.Name && t.Constraint == other.Constraint
 	case TypeFunc:
 		if len(t.Params) != len(other.Params) || len(t.Returns) != len(other.Returns) {
 			return false

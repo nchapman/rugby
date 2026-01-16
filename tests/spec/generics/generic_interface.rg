@@ -1,10 +1,33 @@
-#@ compile-fail
-#@ skip: Generics not yet implemented (Section 6.3)
+#@ run-pass
+#@ check-output
 #
 # Test: Section 6.3 - Generic interfaces
-# TODO: Implement generic interface syntax
 
 interface Container<T>
-  def get -> T?
-  def put(value : T)
+  def get -> T
+  def set(value : T)
 end
+
+class Box<T>
+  def initialize(@value : T)
+  end
+
+  def get -> T
+    @value
+  end
+
+  def set(value : T)
+    @value = value
+  end
+end
+
+# Box implements Container<Int>
+box = Box.new(42)
+puts box.get
+
+box.set(100)
+puts box.get
+
+#@ expect:
+# 42
+# 100

@@ -1,9 +1,17 @@
 #@ run-pass
 #@ check-output
-#@ skip: Generics not yet implemented (Section 6.5)
 #
 # Test: Section 6.5 - Type inference for generics
-# TODO: Implement generic type inference
+
+# Generic class for testing explicit type params
+class Box<T>
+  def initialize(@value : T)
+  end
+
+  def get -> T
+    @value
+  end
+end
 
 # Type parameters inferred from arguments
 def identity<T>(x : T) -> T
@@ -18,12 +26,16 @@ puts result1
 result2 = identity("hello")
 puts result2
 
-# Explicit type parameter when needed
-box = Box<Int>.new(42)
+# Type inferred from argument
+box = Box.new(42)
+puts box.get
 
 # Empty array needs explicit type
 result : Array<String> = []
+puts result.length
 
 #@ expect:
 # 42
 # hello
+# 42
+# 0

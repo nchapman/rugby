@@ -517,6 +517,12 @@ const RuntimeModule = "github.com/nchapman/rugby"
 // RuntimeVersion is the version of the runtime to require in generated go.mod files.
 const RuntimeVersion = "v0.2.0"
 
+// ConstraintsModule is the Go standard library constraints package for generics.
+const ConstraintsModule = "golang.org/x/exp"
+
+// ConstraintsVersion is the version of the constraints package to require.
+const ConstraintsVersion = "v0.0.0-20260112195511-716be5621a96"
+
 // IsInRugbyRepo checks if we're running from within the rugby repository.
 // Returns (true, repoPath) if we're in the repo, (false, "") otherwise.
 // This enables local development by auto-injecting a replace directive.
@@ -615,14 +621,19 @@ func (b *Builder) needsGoModUpdate(goModPath string) bool {
 		return true
 	}
 
-	// Check if go.mod has the required runtime dependency
-	// Look for the module anywhere in the file (handles both single-line and block require)
+	// Check if go.mod has the required dependencies
+	// Look for the modules anywhere in the file (handles both single-line and block require)
 	content, err := os.ReadFile(goModPath)
 	if err != nil {
 		return true
 	}
-	if !strings.Contains(string(content), RuntimeModule) {
+	contentStr := string(content)
+	if !strings.Contains(contentStr, RuntimeModule) {
 		// Missing runtime dependency - regenerate
+		return true
+	}
+	if !strings.Contains(contentStr, ConstraintsModule) {
+		// Missing constraints dependency - regenerate
 		return true
 	}
 
@@ -651,8 +662,11 @@ func (b *Builder) generateGoMod() string {
 
 go 1.25
 
-require %s %s
-`, RuntimeModule, RuntimeVersion)
+require (
+	%s %s
+	%s %s
+)
+`, RuntimeModule, RuntimeVersion, ConstraintsModule, ConstraintsVersion)
 		// Auto-detect local development and inject replace directive
 		if inRepo, repoPath := IsInRugbyRepo(); inRepo {
 			result += fmt.Sprintf("\nreplace %s => %s\n", RuntimeModule, repoPath)
@@ -665,14 +679,18 @@ require %s %s
 	lines := strings.Split(string(rugbyModContent), "\n")
 
 	hasRuntimeDep := false
+	hasConstraintsDep := false
 	inRequireBlock := false
 
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		// Check if runtime is already in rugby.mod (unlikely but possible)
+		// Check if dependencies are already in rugby.mod
 		if strings.Contains(trimmed, RuntimeModule) {
 			hasRuntimeDep = true
+		}
+		if strings.Contains(trimmed, ConstraintsModule) {
+			hasConstraintsDep = true
 		}
 
 		// Track require block state
@@ -680,9 +698,12 @@ require %s %s
 			inRequireBlock = true
 		}
 		if inRequireBlock && trimmed == ")" {
-			// Inject runtime before closing the require block
+			// Inject dependencies before closing the require block
 			if !hasRuntimeDep {
 				out.WriteString(fmt.Sprintf("\t%s %s\n", RuntimeModule, RuntimeVersion))
+			}
+			if !hasConstraintsDep {
+				out.WriteString(fmt.Sprintf("\t%s %s\n", ConstraintsModule, ConstraintsVersion))
 			}
 			inRequireBlock = false
 		}
@@ -693,14 +714,28 @@ require %s %s
 
 	result := out.String()
 
-	// If no require block exists, add one with the runtime
-	if !hasRuntimeDep && !strings.Contains(result, "require") {
-		result += fmt.Sprintf("\nrequire %s %s\n", RuntimeModule, RuntimeVersion)
-	}
-
-	// Handle single-line require statement (require foo v1.0.0)
-	if !hasRuntimeDep && strings.Contains(result, "require ") && !strings.Contains(result, "require (") {
-		result += fmt.Sprintf("require %s %s\n", RuntimeModule, RuntimeVersion)
+	// If no require block exists, add one with dependencies
+	needsRuntimeAdd := !hasRuntimeDep && !strings.Contains(result, RuntimeModule)
+	needsConstraintsAdd := !hasConstraintsDep && !strings.Contains(result, ConstraintsModule)
+	if needsRuntimeAdd || needsConstraintsAdd {
+		if !strings.Contains(result, "require") {
+			result += "\nrequire (\n"
+			if needsRuntimeAdd {
+				result += fmt.Sprintf("\t%s %s\n", RuntimeModule, RuntimeVersion)
+			}
+			if needsConstraintsAdd {
+				result += fmt.Sprintf("\t%s %s\n", ConstraintsModule, ConstraintsVersion)
+			}
+			result += ")\n"
+		} else if strings.Contains(result, "require ") && !strings.Contains(result, "require (") {
+			// Handle single-line require statement
+			if needsRuntimeAdd {
+				result += fmt.Sprintf("require %s %s\n", RuntimeModule, RuntimeVersion)
+			}
+			if needsConstraintsAdd {
+				result += fmt.Sprintf("require %s %s\n", ConstraintsModule, ConstraintsVersion)
+			}
+		}
 	}
 
 	// Auto-detect local development and inject replace directive

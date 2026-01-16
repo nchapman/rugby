@@ -1,6 +1,6 @@
 #@ run-pass
 #@ check-output
-#@ skip: Generics not yet implemented (Section 6.4)
+#@ skip: TODO: Implement T.zero for Numeric constraint
 #
 # Test: Section 6.4 - Built-in type constraints
 # TODO: Implement generic constraints

@@ -511,12 +511,12 @@ func (a *Analyzer) collectDeclaration(stmt ast.Statement) {
 }
 
 func (a *Analyzer) collectFunc(f *ast.FuncDecl) {
-	// Build a set of type parameter names for type-aware parsing
-	var typeParams map[string]bool
+	// Build a map of type parameter names to their constraints for type-aware parsing
+	var typeParams map[string]string
 	if len(f.TypeParams) > 0 {
-		typeParams = make(map[string]bool, len(f.TypeParams))
+		typeParams = make(map[string]string, len(f.TypeParams))
 		for _, tp := range f.TypeParams {
-			typeParams[tp.Name] = true
+			typeParams[tp.Name] = tp.Constraint
 		}
 	}
 
@@ -555,12 +555,12 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 	cls.Includes = c.Includes
 	cls.Node = c
 
-	// Build a set of type parameter names from the class declaration
-	var classTypeParams map[string]bool
+	// Build a map of type parameter names to constraints from the class declaration
+	var classTypeParams map[string]string
 	if len(c.TypeParams) > 0 {
-		classTypeParams = make(map[string]bool, len(c.TypeParams))
+		classTypeParams = make(map[string]string, len(c.TypeParams))
 		for _, tp := range c.TypeParams {
-			classTypeParams[tp.Name] = true
+			classTypeParams[tp.Name] = tp.Constraint
 		}
 	}
 
@@ -589,10 +589,10 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 		// Build type params for this method: class params + method-specific params
 		methodTypeParams := classTypeParams
 		if len(m.TypeParams) > 0 {
-			methodTypeParams = make(map[string]bool)
+			methodTypeParams = make(map[string]string)
 			maps.Copy(methodTypeParams, classTypeParams)
 			for _, tp := range m.TypeParams {
-				methodTypeParams[tp.Name] = true
+				methodTypeParams[tp.Name] = tp.Constraint
 			}
 		}
 
@@ -958,18 +958,27 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 }
 
 func (a *Analyzer) analyzeFuncDecl(f *ast.FuncDecl) {
+	// Build a map of type parameter names to their constraints
+	var typeParams map[string]string
+	if len(f.TypeParams) > 0 {
+		typeParams = make(map[string]string, len(f.TypeParams))
+		for _, tp := range f.TypeParams {
+			typeParams[tp.Name] = tp.Constraint
+		}
+	}
+
 	// Create function scope
 	fnScope := NewScope(ScopeFunction, a.scope)
 	fnScope.ReturnTypes = make([]*Type, len(f.ReturnTypes))
 	for i, rt := range f.ReturnTypes {
-		fnScope.ReturnTypes[i] = ParseType(rt)
+		fnScope.ReturnTypes[i] = ParseTypeWithParams(rt, typeParams)
 	}
 
 	// Add parameters to scope
 	for _, p := range f.Params {
 		var typ *Type
 		if p.Type != "" {
-			typ = ParseType(p.Type)
+			typ = ParseTypeWithParams(p.Type, typeParams)
 		} else {
 			typ = TypeUnknownVal
 		}
@@ -3311,13 +3320,31 @@ func (a *Analyzer) inferBinaryType(op string, left, right *Type) *Type {
 }
 
 // isNumeric returns true if the type is a numeric type (Int, Int64, Float).
+// Also returns true for type parameters with the Numeric or Ordered constraint
+// (Ordered implies Numeric for our purposes).
 func (a *Analyzer) isNumeric(t *Type) bool {
-	return t.Kind == TypeInt || t.Kind == TypeInt64 || t.Kind == TypeFloat
+	if t.Kind == TypeInt || t.Kind == TypeInt64 || t.Kind == TypeFloat {
+		return true
+	}
+	// Type parameters with Numeric or Ordered constraint are considered numeric
+	if t.Kind == TypeTypeParam {
+		return t.Constraint == "Numeric" || t.Constraint == "Ordered"
+	}
+	return false
 }
 
 // isOrdered returns true if the type supports ordering comparison (<, >, etc.).
+// Also returns true for type parameters with the Ordered or Numeric constraint.
 func (a *Analyzer) isOrdered(t *Type) bool {
-	return t.Kind == TypeInt || t.Kind == TypeInt64 || t.Kind == TypeFloat || t.Kind == TypeString
+	if t.Kind == TypeInt || t.Kind == TypeInt64 || t.Kind == TypeFloat || t.Kind == TypeString {
+		return true
+	}
+	// Type parameters with Ordered or Numeric constraint support ordering
+	// (Numeric types are all ordered)
+	if t.Kind == TypeTypeParam {
+		return t.Constraint == "Ordered" || t.Constraint == "Numeric"
+	}
+	return false
 }
 
 // areTypesComparable returns true if two types can be compared for equality.
@@ -3329,6 +3356,13 @@ func (a *Analyzer) areTypesComparable(left, right *Type) bool {
 	// Numeric types are comparable to each other
 	if a.isNumeric(left) && a.isNumeric(right) {
 		return true
+	}
+	// Type parameters are comparable if they have Equatable/Comparable/Ordered constraints
+	// Note: Same type parameters (same name + constraint) are already handled by Equals above
+	if left.Kind == TypeTypeParam && right.Kind == TypeTypeParam {
+		leftComp := left.Constraint == "Equatable" || left.Constraint == "Comparable" || left.Constraint == "Ordered"
+		rightComp := right.Constraint == "Equatable" || right.Constraint == "Comparable" || right.Constraint == "Ordered"
+		return leftComp && rightComp
 	}
 	// nil can be compared to optional and error types
 	if left.Kind == TypeNil {

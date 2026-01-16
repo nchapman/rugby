@@ -597,14 +597,14 @@ These features are in the spec but marked as `skip` in tests. Implement after co
 
 ### 14.1 Generics (Section 6)
 
-- [ ] Generic functions `def identity<T>(x : T) -> T`
-- [ ] Generic classes `class Box<T>`
-- [ ] Generic interfaces
+- [x] Generic functions `def identity<T>(x : T) -> T`
+- [x] Generic classes `class Box<T>`
+- [ ] Generic interfaces `interface Container<T>`
 - [ ] Type constraints `T : Comparable`
 - [ ] Built-in constraints: `Numeric`, `Ordered`, `Equatable`, `Hashable`
 - [ ] Type inference for generics
 
-**Tests:** `tests/spec/generics/*.rg` (7 test files)
+**Tests:** `tests/spec/generics/*.rg` (3 passing, 4 skipped)
 
 ### 14.2 Enums (Section 7)
 

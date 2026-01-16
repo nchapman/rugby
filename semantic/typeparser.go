@@ -5,16 +5,22 @@ import (
 )
 
 // ParseTypeWithParams parses a Rugby type string into a Type, recognizing type parameters.
-// typeParams is a set of type parameter names (e.g., {"T": true, "K": true, "V": true}).
-func ParseTypeWithParams(s string, typeParams map[string]bool) *Type {
+// typeParams maps type parameter names to their constraints (empty string if unconstrained).
+// e.g., {"T": "Ordered", "K": "", "V": ""}
+func ParseTypeWithParams(s string, typeParams map[string]string) *Type {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return TypeUnknownVal
 	}
 
 	// Check if it's a type parameter (must check before other parsing)
-	if typeParams != nil && typeParams[s] {
-		return NewTypeParamType(s)
+	if typeParams != nil {
+		if constraint, ok := typeParams[s]; ok {
+			if constraint != "" {
+				return NewConstrainedTypeParamType(s, constraint)
+			}
+			return NewTypeParamType(s)
+		}
 	}
 
 	// Check for optional suffix

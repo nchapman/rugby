@@ -742,8 +742,22 @@ func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, 
 }
 
 func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
-	// Generate: type InterfaceName interface { ... }
-	g.buf.WriteString(fmt.Sprintf("type %s interface {\n", iface.Name))
+	// Generate type parameter clause if present (e.g., "[T any]")
+	typeParamClause := ""
+	if len(iface.TypeParams) > 0 {
+		var params []string
+		for _, tp := range iface.TypeParams {
+			if tp.Constraint != "" {
+				params = append(params, fmt.Sprintf("%s %s", tp.Name, g.mapConstraint(tp.Constraint)))
+			} else {
+				params = append(params, tp.Name+" any")
+			}
+		}
+		typeParamClause = "[" + strings.Join(params, ", ") + "]"
+	}
+
+	// Generate: type InterfaceName[T any] interface { ... }
+	g.buf.WriteString(fmt.Sprintf("type %s%s interface {\n", iface.Name, typeParamClause))
 
 	// Embed parent interfaces
 	for _, parent := range iface.Parents {
