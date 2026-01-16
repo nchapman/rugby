@@ -79,7 +79,7 @@ func (a *Analyzer) defineBuiltins() {
 		{"gets", nil, []*Type{TypeStringVal}, false},
 		{"exit", []*Type{TypeIntVal}, nil, false},
 		{"sleep", []*Type{TypeFloatVal}, nil, false},
-		{"rand", []*Type{TypeIntVal}, []*Type{TypeIntVal}, false},
+		{"rand", []*Type{TypeIntVal}, []*Type{TypeAnyVal}, true}, // 0 args -> Float, 1 arg -> Int
 		{"error", []*Type{TypeStringVal}, []*Type{TypeErrorVal}, false},
 		{"panic", []*Type{TypeStringVal}, nil, false},
 	}

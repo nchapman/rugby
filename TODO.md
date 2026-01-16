@@ -157,7 +157,7 @@ Update the parser to recognize angle bracket type parameters:
 - [x] `case`/`when`/`else`/`end`
 - [x] Multiple values `when 1, 2, 3`
 - [x] Range matching `when 1..10`
-- [ ] `case_type` for type switching
+- [x] `case_type` for type switching (with binding variables)
 
 **Tests:** `tests/spec/control_flow/case_*.rg`
 
@@ -177,8 +177,8 @@ Update the parser to recognize angle bracket type parameters:
 
 - [x] `return x if condition`
 - [x] `puts x unless condition`
-- [ ] `expr while condition` (loop modifier)
-- [ ] `expr until condition` (loop modifier)
+- [x] `expr while condition` (loop modifier)
+- [x] `expr until condition` (loop modifier)
 
 **Tests:** `tests/spec/control_flow/statement_modifiers*.rg`, `loop_modifiers*.rg`
 
@@ -253,7 +253,7 @@ Update the parser to recognize angle bracket type parameters:
 - [x] `getter name : Type`
 - [x] `setter name : Type`
 - [x] `property name : Type`
-- [ ] `pub getter`, `pub setter`, `pub property`
+- [x] `pub getter`, `pub setter`, `pub property`
 - [x] Custom setters `def name=(value : Type)`
 
 **Tests:** `tests/spec/classes/accessors*.rg`, `custom_accessors.rg`
@@ -426,13 +426,13 @@ Update the parser to recognize angle bracket type parameters:
 
 - [x] `pub def` exports function
 - [x] `pub class` exports class
-- [ ] `pub getter`, `pub setter`, `pub property`
+- [x] `pub getter`, `pub setter`, `pub property`
 
 **Tests:** `tests/spec/visibility/pub_export.rg`
 
 ### 10.2 Private Modifier
 
-- [ ] `private def` restricts to class
+- [x] `private def` restricts to class
 
 **Tests:** `tests/spec/visibility/class_visibility.rg`
 
@@ -585,7 +585,7 @@ Update the parser to recognize angle bracket type parameters:
 
 - [x] `puts`, `print`, `p` (with Ruby-like formatting)
 - [ ] `gets`
-- [ ] `exit`, `sleep`, `rand`
+- [x] `exit`, `sleep`, `rand`
 
 **Tests:** `tests/spec/runtime/global_functions.rg`
 
