@@ -702,13 +702,29 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 				}
 				// Determine the Go method name based on visibility
 				// Note: pub takes precedence over private (invalid combo is caught by semantic analyzer)
+				// Special: setter methods (name=) -> SetName or setName
 				var goName string
+				isSetter := strings.HasSuffix(method.Name, "=")
+				baseName := strings.TrimSuffix(method.Name, "=")
+
 				if method.Pub {
-					goName = snakeToPascalWithAcronyms(method.Name)
+					if isSetter {
+						goName = "Set" + snakeToPascalWithAcronyms(baseName)
+					} else {
+						goName = snakeToPascalWithAcronyms(method.Name)
+					}
 				} else if method.Private {
-					goName = "_" + snakeToCamelWithAcronyms(method.Name)
+					if isSetter {
+						goName = "_set" + snakeToPascalWithAcronyms(baseName)
+					} else {
+						goName = "_" + snakeToCamelWithAcronyms(method.Name)
+					}
 				} else {
-					goName = snakeToCamelWithAcronyms(method.Name)
+					if isSetter {
+						goName = "set" + snakeToPascalWithAcronyms(baseName)
+					} else {
+						goName = snakeToCamelWithAcronyms(method.Name)
+					}
 				}
 				g.instanceMethods[cls.Name][method.Name] = goName
 

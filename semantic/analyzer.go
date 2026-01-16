@@ -1328,6 +1328,7 @@ func (a *Analyzer) analyzeSelectorAssign(s *ast.SelectorAssignStmt) {
 	// Verify the receiver type has a setter for this field
 	if receiverType.Kind == TypeClass && receiverType.Name != "" {
 		if cls := a.classes[receiverType.Name]; cls != nil {
+			// First check for a field with a setter accessor
 			if field := cls.GetField(s.Field); field != nil {
 				// Check if the field has a setter
 				if !field.HasSetter {
@@ -1345,12 +1346,32 @@ func (a *Analyzer) analyzeSelectorAssign(s *ast.SelectorAssignStmt) {
 						Context:  "setter assignment",
 					})
 				}
-			} else {
-				a.addError(&UndefinedError{
-					Name: s.Field,
-					Line: s.Line,
-				})
+				return
 			}
+
+			// Check for custom setter method: def field=(value)
+			setterName := s.Field + "="
+			if setter := cls.GetMethod(setterName); setter != nil {
+				// Setter methods should take exactly one parameter
+				if len(setter.Params) == 1 {
+					// Check type compatibility with the parameter
+					if !a.isAssignable(setter.Params[0].Type, valueType) {
+						a.addError(&TypeMismatchError{
+							Expected: setter.Params[0].Type,
+							Got:      valueType,
+							Line:     s.Line,
+							Context:  "setter assignment",
+						})
+					}
+				}
+				return
+			}
+
+			// Neither field nor custom setter found
+			a.addError(&UndefinedError{
+				Name: s.Field,
+				Line: s.Line,
+			})
 		}
 	}
 }

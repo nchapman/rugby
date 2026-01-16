@@ -846,13 +846,31 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	// private def -> _camelCase (private, underscore prefix)
 	// def (default) -> camelCase (package-private)
 	// Methods required by interfaces must be exported (PascalCase) for Go interface satisfaction
+	// Special: setter methods (name=) -> SetName or setName
 	var methodName string
+
+	// Handle setter methods (ending in =)
+	isSetter := strings.HasSuffix(method.Name, "=")
+	baseName := strings.TrimSuffix(method.Name, "=")
+
 	if method.Pub || g.currentClassInterfaceMethods[method.Name] {
-		methodName = snakeToPascalWithAcronyms(method.Name)
+		if isSetter {
+			methodName = "Set" + snakeToPascalWithAcronyms(baseName)
+		} else {
+			methodName = snakeToPascalWithAcronyms(method.Name)
+		}
 	} else if method.Private {
-		methodName = "_" + snakeToCamelWithAcronyms(method.Name)
+		if isSetter {
+			methodName = "_set" + snakeToPascalWithAcronyms(baseName)
+		} else {
+			methodName = "_" + snakeToCamelWithAcronyms(method.Name)
+		}
 	} else {
-		methodName = snakeToCamelWithAcronyms(method.Name)
+		if isSetter {
+			methodName = "set" + snakeToPascalWithAcronyms(baseName)
+		} else {
+			methodName = snakeToCamelWithAcronyms(method.Name)
+		}
 	}
 
 	// Check if method implicitly returns self (for method chaining)
