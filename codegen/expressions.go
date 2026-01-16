@@ -2789,6 +2789,12 @@ func (g *Generator) genLambdaMap(iterable ast.Expression, lambda *ast.LambdaExpr
 	g.buf.WriteString(elemType)
 	g.buf.WriteString(") any {\n")
 
+	// Store element type in vars so getReceiverClassName can detect getters
+	prevType, wasDefined := g.vars[varName]
+	if varName != "_" {
+		g.vars[varName] = elemType
+	}
+
 	g.indent++
 	// Generate body, last expression is return value
 	for i, stmt := range lambda.Body {
@@ -2808,6 +2814,15 @@ func (g *Generator) genLambdaMap(iterable ast.Expression, lambda *ast.LambdaExpr
 		g.buf.WriteString("return nil\n")
 	}
 	g.indent--
+
+	// Restore previous variable type
+	if varName != "_" {
+		if wasDefined {
+			g.vars[varName] = prevType
+		} else {
+			delete(g.vars, varName)
+		}
+	}
 
 	g.writeIndent()
 	g.buf.WriteString("})")
@@ -2840,6 +2855,12 @@ func (g *Generator) genLambdaSelect(iterable ast.Expression, lambda *ast.LambdaE
 	g.buf.WriteString(elemType)
 	g.buf.WriteString(") bool {\n")
 
+	// Store element type in vars so getReceiverClassName can detect getters
+	prevType, wasDefined := g.vars[varName]
+	if varName != "_" {
+		g.vars[varName] = elemType
+	}
+
 	g.indent++
 	for i, stmt := range lambda.Body {
 		if i == len(lambda.Body)-1 {
@@ -2858,6 +2879,15 @@ func (g *Generator) genLambdaSelect(iterable ast.Expression, lambda *ast.LambdaE
 		g.buf.WriteString("return false\n")
 	}
 	g.indent--
+
+	// Restore previous variable type
+	if varName != "_" {
+		if wasDefined {
+			g.vars[varName] = prevType
+		} else {
+			delete(g.vars, varName)
+		}
+	}
 
 	g.writeIndent()
 	g.buf.WriteString("})")
@@ -2937,6 +2967,12 @@ func (g *Generator) genLambdaReject(iterable ast.Expression, lambda *ast.LambdaE
 	g.buf.WriteString(elemType)
 	g.buf.WriteString(") bool {\n")
 
+	// Store element type in vars so getReceiverClassName can detect getters
+	prevType, wasDefined := g.vars[varName]
+	if varName != "_" {
+		g.vars[varName] = elemType
+	}
+
 	g.indent++
 	for i, stmt := range lambda.Body {
 		if i == len(lambda.Body)-1 {
@@ -2955,6 +2991,15 @@ func (g *Generator) genLambdaReject(iterable ast.Expression, lambda *ast.LambdaE
 		g.buf.WriteString("return false\n")
 	}
 	g.indent--
+
+	// Restore previous variable type
+	if varName != "_" {
+		if wasDefined {
+			g.vars[varName] = prevType
+		} else {
+			delete(g.vars, varName)
+		}
+	}
 
 	g.writeIndent()
 	g.buf.WriteString("})")
@@ -3163,6 +3208,12 @@ func (g *Generator) genLambdaFind(iterable ast.Expression, lambda *ast.LambdaExp
 	g.buf.WriteString(elemType)
 	g.buf.WriteString(") bool {\n")
 
+	// Store element type in vars so getReceiverClassName can detect getters
+	prevType, wasDefined := g.vars[varName]
+	if varName != "_" {
+		g.vars[varName] = elemType
+	}
+
 	g.indent++
 	for i, stmt := range lambda.Body {
 		if i == len(lambda.Body)-1 {
@@ -3181,6 +3232,15 @@ func (g *Generator) genLambdaFind(iterable ast.Expression, lambda *ast.LambdaExp
 		g.buf.WriteString("return false\n")
 	}
 	g.indent--
+
+	// Restore previous variable type
+	if varName != "_" {
+		if wasDefined {
+			g.vars[varName] = prevType
+		} else {
+			delete(g.vars, varName)
+		}
+	}
 
 	g.writeIndent()
 	g.buf.WriteString("})")
@@ -3204,6 +3264,12 @@ func (g *Generator) genLambdaAny(iterable ast.Expression, lambda *ast.LambdaExpr
 	g.buf.WriteString(elemType)
 	g.buf.WriteString(") bool {\n")
 
+	// Store element type in vars so getReceiverClassName can detect getters
+	prevType, wasDefined := g.vars[varName]
+	if varName != "_" {
+		g.vars[varName] = elemType
+	}
+
 	g.indent++
 	for i, stmt := range lambda.Body {
 		if i == len(lambda.Body)-1 {
@@ -3222,6 +3288,15 @@ func (g *Generator) genLambdaAny(iterable ast.Expression, lambda *ast.LambdaExpr
 		g.buf.WriteString("return false\n")
 	}
 	g.indent--
+
+	// Restore previous variable type
+	if varName != "_" {
+		if wasDefined {
+			g.vars[varName] = prevType
+		} else {
+			delete(g.vars, varName)
+		}
+	}
 
 	g.writeIndent()
 	g.buf.WriteString("})")
@@ -3245,6 +3320,12 @@ func (g *Generator) genLambdaAll(iterable ast.Expression, lambda *ast.LambdaExpr
 	g.buf.WriteString(elemType)
 	g.buf.WriteString(") bool {\n")
 
+	// Store element type in vars so getReceiverClassName can detect getters
+	prevType, wasDefined := g.vars[varName]
+	if varName != "_" {
+		g.vars[varName] = elemType
+	}
+
 	g.indent++
 	for i, stmt := range lambda.Body {
 		if i == len(lambda.Body)-1 {
@@ -3263,6 +3344,15 @@ func (g *Generator) genLambdaAll(iterable ast.Expression, lambda *ast.LambdaExpr
 		g.buf.WriteString("return true\n")
 	}
 	g.indent--
+
+	// Restore previous variable type
+	if varName != "_" {
+		if wasDefined {
+			g.vars[varName] = prevType
+		} else {
+			delete(g.vars, varName)
+		}
+	}
 
 	g.writeIndent()
 	g.buf.WriteString("})")
@@ -3286,6 +3376,12 @@ func (g *Generator) genLambdaNone(iterable ast.Expression, lambda *ast.LambdaExp
 	g.buf.WriteString(elemType)
 	g.buf.WriteString(") bool {\n")
 
+	// Store element type in vars so getReceiverClassName can detect getters
+	prevType, wasDefined := g.vars[varName]
+	if varName != "_" {
+		g.vars[varName] = elemType
+	}
+
 	g.indent++
 	for i, stmt := range lambda.Body {
 		if i == len(lambda.Body)-1 {
@@ -3304,6 +3400,15 @@ func (g *Generator) genLambdaNone(iterable ast.Expression, lambda *ast.LambdaExp
 		g.buf.WriteString("return false\n")
 	}
 	g.indent--
+
+	// Restore previous variable type
+	if varName != "_" {
+		if wasDefined {
+			g.vars[varName] = prevType
+		} else {
+			delete(g.vars, varName)
+		}
+	}
 
 	g.writeIndent()
 	g.buf.WriteString("})")
@@ -3341,6 +3446,16 @@ func (g *Generator) genLambdaReduce(iterable ast.Expression, lambda *ast.LambdaE
 	g.buf.WriteString(accType)
 	g.buf.WriteString(" {\n")
 
+	// Store variable types in vars so getReceiverClassName can detect getters
+	accPrevType, accWasDefined := g.vars[accName]
+	varPrevType, varWasDefined := g.vars[varName]
+	if accName != "_" {
+		g.vars[accName] = accType
+	}
+	if varName != "_" {
+		g.vars[varName] = elemType
+	}
+
 	g.indent++
 	for i, stmt := range lambda.Body {
 		if i == len(lambda.Body)-1 {
@@ -3361,6 +3476,22 @@ func (g *Generator) genLambdaReduce(iterable ast.Expression, lambda *ast.LambdaE
 		g.buf.WriteString("\n")
 	}
 	g.indent--
+
+	// Restore previous variable types
+	if accName != "_" {
+		if accWasDefined {
+			g.vars[accName] = accPrevType
+		} else {
+			delete(g.vars, accName)
+		}
+	}
+	if varName != "_" {
+		if varWasDefined {
+			g.vars[varName] = varPrevType
+		} else {
+			delete(g.vars, varName)
+		}
+	}
 
 	g.writeIndent()
 	g.buf.WriteString("})")
@@ -3837,11 +3968,24 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 	g.buf.WriteString(returnType)
 	g.buf.WriteString(" {\n")
 
-	if param1Name != "_" {
-		g.vars[param1Name] = ""
-	}
-	if param2Name != "_" {
-		g.vars[param2Name] = ""
+	// Store element types in vars so getReceiverClassName can detect getters
+	if method.hasAccumulator {
+		// For reduce: acc has accType, element has elemType
+		if param1Name != "_" {
+			accType := "any"
+			if len(args) > 0 {
+				accType = mapType(g.inferTypeFromExpr(args[0]))
+			}
+			g.vars[param1Name] = accType
+		}
+		if param2Name != "_" {
+			g.vars[param2Name] = elemType
+		}
+	} else {
+		// For map/select/etc: element has elemType
+		if param1Name != "_" {
+			g.vars[param1Name] = elemType
+		}
 	}
 
 	g.indent++
@@ -4243,8 +4387,8 @@ func (g *Generator) isInterfaceMethod(methodName string) bool {
 // For example, if expr is a variable of type *User, returns "User".
 // Returns empty string if the class name cannot be determined.
 func (g *Generator) getReceiverClassName(expr ast.Expression) string {
-	// Use type info from semantic analysis
-	if typ := g.typeInfo.GetRugbyType(expr); typ != "" {
+	// Use type info from semantic analysis (if it's a real type, not any/unknown)
+	if typ := g.typeInfo.GetRugbyType(expr); typ != "" && typ != "any" && typ != "unknown" {
 		// Strip pointer/optional prefixes if present
 		typ = strings.TrimPrefix(typ, "*")
 		typ = strings.TrimSuffix(typ, "?")

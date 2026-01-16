@@ -121,6 +121,12 @@ infixLoop:
 			p.nextToken()
 			left = p.parseRangeLit(left)
 		case token.DOT:
+			// Don't chain DOT onto lambdas when parsing arguments (precedence > lowest).
+			// This ensures `arr.map -> (n) { n }.length` chains .length on the map call,
+			// not on the lambda. Lambdas can only have .() or .call() chained on them.
+			if _, isLambda := left.(*ast.LambdaExpr); isLambda && precedence > lowest {
+				break infixLoop
+			}
 			p.nextToken() // curToken is now DOT
 			// Check for lambda call syntax: lambda.()
 			if p.peekTokenIs(token.LPAREN) {
@@ -156,15 +162,31 @@ infixLoop:
 	if p.isCallableExpr(left) && p.canStartCommandArg(left) {
 		left = p.parseCommandCall(left)
 
-		// After command syntax, continue checking for low-precedence operators
-		// like `and`/`or`. This allows `puts x and y` → `(puts(x)) and y`
-		for !p.peekTokenIs(token.NEWLINE) && !p.peekTokenIs(token.EOF) && precedence < p.peekPrecedence() {
-			switch p.peekToken.Type {
-			case token.AND, token.OR, token.AMPAMP, token.PIPEPIPE:
-				p.nextToken()
-				left = p.parseInfixExpr(left)
-			default:
-				return left
+		// After command syntax, continue checking for method chaining and low-precedence operators.
+		// This allows:
+		//   - `arr.select -> (x) { x > 1 }.length` (method chaining after lambda)
+		//   - `puts x and y` → `(puts(x)) and y`
+		// IMPORTANT: Only chain at the lowest precedence level (outermost expression).
+		// When parsing arguments (higher precedence), we don't want to capture chaining
+		// that belongs to the outer expression.
+		if precedence == lowest {
+			for !p.peekTokenIs(token.NEWLINE) && !p.peekTokenIs(token.EOF) {
+				switch p.peekToken.Type {
+				case token.DOT:
+					p.nextToken() // curToken is now DOT
+					// Check for lambda call syntax: result.()
+					if p.peekTokenIs(token.LPAREN) {
+						p.nextToken() // curToken is now LPAREN
+						left = p.parseLambdaCall(left)
+					} else {
+						left = p.parseSelectorExpr(left)
+					}
+				case token.AND, token.OR, token.AMPAMP, token.PIPEPIPE:
+					p.nextToken()
+					left = p.parseInfixExpr(left)
+				default:
+					return left
+				}
 			}
 		}
 	}

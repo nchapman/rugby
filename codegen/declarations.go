@@ -1257,6 +1257,16 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 				g.genReturnStmt(retStmt)
 				continue
 			}
+			// Handle CaseStmt as the last statement with implicit returns
+			if caseStmt, ok := stmt.(*ast.CaseStmt); ok {
+				g.genCaseStmtWithReturns(caseStmt)
+				continue
+			}
+			// Handle IfStmt as the last statement with implicit returns
+			if ifStmt, ok := stmt.(*ast.IfStmt); ok {
+				g.genIfStmtWithReturns(ifStmt)
+				continue
+			}
 		}
 		g.genStatement(stmt)
 	}

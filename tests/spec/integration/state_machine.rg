@@ -2,7 +2,7 @@
 #@ check-output
 #
 # Integration Test: State Machine Pattern
-# Features: Enums + Case expressions + Classes + Methods
+# Features: Enums + Case expressions + Classes + Methods + Implicit returns
 
 # Order status enum
 enum OrderStatus
@@ -18,31 +18,20 @@ class Order
   def initialize(@id : String, @status : OrderStatus)
   end
 
-  def id -> String
-    @id
-  end
+  getter id : String
+  getter status : OrderStatus
 
-  def status -> OrderStatus
-    @status
-  end
-
-  def can_advance -> Bool
+  def can_advance? -> Bool
     case @status
-    when OrderStatus::Pending
-      return true
-    when OrderStatus::Confirmed
-      return true
-    when OrderStatus::Shipped
-      return true
+    when OrderStatus::Pending, OrderStatus::Confirmed, OrderStatus::Shipped
+      true
     else
-      return false
+      false
     end
   end
 
   def advance -> Bool
-    unless can_advance
-      return false
-    end
+    return false unless can_advance?
 
     case @status
     when OrderStatus::Pending
@@ -58,26 +47,14 @@ class Order
   def cancel -> Bool
     if @status == OrderStatus::Pending || @status == OrderStatus::Confirmed
       @status = OrderStatus::Cancelled
-      return true
+      true
+    else
+      false
     end
-    false
   end
 
   def status_name -> String
-    case @status
-    when OrderStatus::Pending
-      return "Pending"
-    when OrderStatus::Confirmed
-      return "Confirmed"
-    when OrderStatus::Shipped
-      return "Shipped"
-    when OrderStatus::Delivered
-      return "Delivered"
-    when OrderStatus::Cancelled
-      return "Cancelled"
-    else
-      return "Unknown"
-    end
+    @status.to_s
   end
 end
 

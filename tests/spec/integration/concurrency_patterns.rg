@@ -18,7 +18,7 @@ go do
   ch.close
 end
 
-# Give producer time to send
+# Give producer time to send (ensures deterministic output order)
 time.sleep(50 * time.Millisecond)
 
 # Consumer reads all values
@@ -39,22 +39,20 @@ puts "  Task 2: #{result2}"
 # Pattern 3: Closure capturing
 puts "Closure capture:"
 counter = 0
-increment = -> { counter = counter + 1 }
+increment = -> { counter += 1 }
 
-3.times do |i|
-  increment.()
-end
+3.times -> { increment.() }
 puts "  Counter: #{counter}"
 
 # Pattern 4: Channel operations
 puts "Channel operations:"
-strCh = Chan<String>.new(2)
+str_ch = Chan<String>.new(2)
 
-strCh << "first"
-strCh << "second"
+str_ch << "first"
+str_ch << "second"
 
-msg1 = strCh.receive
-msg2 = strCh.receive
+msg1 = str_ch.receive
+msg2 = str_ch.receive
 puts "  Received: #{msg1}"
 puts "  Received: #{msg2}"
 

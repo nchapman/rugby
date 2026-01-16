@@ -1342,6 +1342,252 @@ func (g *Generator) genCaseStmt(s *ast.CaseStmt) {
 	g.buf.WriteString("}\n")
 }
 
+// genCaseStmtWithReturns generates a case statement where each branch returns its last value.
+// This is used when a case expression is the last statement in a method with a return type.
+func (g *Generator) genCaseStmtWithReturns(s *ast.CaseStmt) {
+	g.writeIndent()
+
+	// Check if any when clause contains a range (requires special handling)
+	hasRanges := false
+	for _, when := range s.WhenClauses {
+		for _, val := range when.Values {
+			if _, ok := val.(*ast.RangeLit); ok {
+				hasRanges = true
+				break
+			}
+		}
+		if hasRanges {
+			break
+		}
+	}
+
+	// Handle case with subject vs case without subject
+	if s.Subject != nil && !hasRanges {
+		g.buf.WriteString("switch ")
+		g.genExpr(s.Subject)
+		g.buf.WriteString(" {\n")
+	} else if s.Subject != nil && hasRanges {
+		g.needsRuntime = true
+		g.buf.WriteString("switch _subj := ")
+		g.genExpr(s.Subject)
+		g.buf.WriteString("; true {\n")
+	} else {
+		g.buf.WriteString("switch {\n")
+	}
+
+	// Generate when clauses with returns
+	for _, whenClause := range s.WhenClauses {
+		g.writeIndent()
+
+		if s.Subject != nil && !hasRanges {
+			g.buf.WriteString("case ")
+			for i, val := range whenClause.Values {
+				if i > 0 {
+					g.buf.WriteString(", ")
+				}
+				g.genExpr(val)
+			}
+			g.buf.WriteString(":\n")
+		} else if s.Subject != nil && hasRanges {
+			g.buf.WriteString("case ")
+			for i, val := range whenClause.Values {
+				if i > 0 {
+					g.buf.WriteString(" || ")
+				}
+				if rangeLit, ok := val.(*ast.RangeLit); ok {
+					g.buf.WriteString("runtime.RangeContains(")
+					g.genExpr(rangeLit)
+					g.buf.WriteString(", _subj)")
+				} else {
+					g.buf.WriteString("_subj == ")
+					g.genExpr(val)
+				}
+			}
+			g.buf.WriteString(":\n")
+		} else {
+			g.buf.WriteString("case ")
+			for i, val := range whenClause.Values {
+				if i > 0 {
+					g.buf.WriteString(" || ")
+				}
+				if err := g.genCondition(val); err != nil {
+					g.addError(err)
+					g.buf.WriteString("false")
+				}
+			}
+			g.buf.WriteString(":\n")
+		}
+
+		g.indent++
+		// Generate all but last statement normally
+		for i, stmt := range whenClause.Body {
+			if i == len(whenClause.Body)-1 {
+				// For the last statement, if it's an expression, add return
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+					continue
+				}
+			}
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	// Generate default (else) clause with returns
+	if len(s.Else) > 0 {
+		g.writeIndent()
+		g.buf.WriteString("default:\n")
+
+		g.indent++
+		for i, stmt := range s.Else {
+			if i == len(s.Else)-1 {
+				// For the last statement, if it's an expression, add return
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+					continue
+				}
+			}
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+// genIfStmtWithReturns generates an if statement where each branch returns its last value.
+// This is used when an if expression is the last statement in a method with a return type.
+func (g *Generator) genIfStmtWithReturns(s *ast.IfStmt) {
+	g.writeIndent()
+	g.buf.WriteString("if ")
+
+	// Handle assignment-in-condition pattern: if let n = expr
+	if s.AssignName != "" {
+		exprType := g.inferTypeFromExpr(s.AssignExpr)
+
+		if isOptionalType(exprType) {
+			// Pointer-based optional: generate temp var and nil check
+			tempVar := fmt.Sprintf("_iflet%d", g.tempVarCounter)
+			g.tempVarCounter++
+			g.buf.WriteString(tempVar)
+			g.buf.WriteString(" := ")
+			g.genExpr(s.AssignExpr)
+			g.buf.WriteString("; ")
+			g.buf.WriteString(tempVar)
+			g.buf.WriteString(" != nil {\n")
+
+			// Unwrap the pointer into the user's variable
+			g.indent++
+			g.writeIndent()
+			g.buf.WriteString(s.AssignName)
+			g.buf.WriteString(" := *")
+			g.buf.WriteString(tempVar)
+			g.buf.WriteString("\n")
+			// Silence "declared and not used" error if variable isn't referenced
+			g.writeIndent()
+			g.buf.WriteString("_ = ")
+			g.buf.WriteString(s.AssignName)
+			g.buf.WriteString("\n")
+			g.indent--
+
+			// Track the variable with its unwrapped type
+			unwrappedType := strings.TrimSuffix(exprType, "?")
+			g.vars[s.AssignName] = unwrappedType
+		} else {
+			// Tuple-returning function: if n, ok := expr; ok { ... }
+			g.buf.WriteString(s.AssignName)
+			g.buf.WriteString(", ok := ")
+			g.genExpr(s.AssignExpr)
+			g.buf.WriteString("; ok {\n")
+			g.vars[s.AssignName] = exprType
+		}
+	} else {
+		// For unless, negate the condition
+		if s.IsUnless {
+			g.buf.WriteString("!(")
+		}
+		if err := g.genCondition(s.Cond); err != nil {
+			g.addError(err)
+		}
+		if s.IsUnless {
+			g.buf.WriteString(")")
+		}
+		g.buf.WriteString(" {\n")
+	}
+
+	g.indent++
+	for i, stmt := range s.Then {
+		if i == len(s.Then)-1 {
+			// For the last statement, if it's an expression, add return
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				g.writeIndent()
+				g.buf.WriteString("return ")
+				g.genExpr(exprStmt.Expr)
+				g.buf.WriteString("\n")
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	// Handle elsif clauses
+	for _, elsif := range s.ElseIfs {
+		g.writeIndent()
+		g.buf.WriteString("} else if ")
+		if err := g.genCondition(elsif.Cond); err != nil {
+			g.addError(err)
+		}
+		g.buf.WriteString(" {\n")
+
+		g.indent++
+		for i, stmt := range elsif.Body {
+			if i == len(elsif.Body)-1 {
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+					continue
+				}
+			}
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	// Handle else clause
+	if len(s.Else) > 0 {
+		g.writeIndent()
+		g.buf.WriteString("} else {\n")
+
+		g.indent++
+		for i, stmt := range s.Else {
+			if i == len(s.Else)-1 {
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+					continue
+				}
+			}
+			g.genStatement(stmt)
+		}
+		g.indent--
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
 func (g *Generator) genCaseTypeStmt(s *ast.CaseTypeStmt) {
 	g.writeIndent()
 
