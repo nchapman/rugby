@@ -3236,7 +3236,9 @@ func TestPubMustBeFollowedByDefClassOrInterface(t *testing.T) {
 	}
 }
 
-func TestPubDefInNonPubClassIsError(t *testing.T) {
+func TestPubDefInNonPubClassIsAllowed(t *testing.T) {
+	// pub def inside a non-pub class is allowed - Go supports
+	// exported methods on unexported types (e.g., for interface implementation)
 	input := `class User
   pub def greet
   end
@@ -3244,14 +3246,23 @@ end`
 
 	l := lexer.New(input)
 	p := New(l)
-	p.ParseProgram()
+	program := p.ParseProgram()
 
-	if len(p.Errors()) == 0 {
-		t.Error("expected error for 'pub def' in non-pub class")
+	if len(p.Errors()) > 0 {
+		t.Errorf("unexpected errors: %v", p.Errors())
 	}
 
-	if !strings.Contains(p.Errors()[0], "pub def") || !strings.Contains(p.Errors()[0], "non-pub class") {
-		t.Errorf("expected error about 'pub def' in non-pub class, got: %s", p.Errors()[0])
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	cls, ok := program.Declarations[0].(*ast.ClassDecl)
+	if !ok {
+		t.Fatal("expected ClassDecl")
+	}
+
+	if len(cls.Methods) != 1 || !cls.Methods[0].Pub {
+		t.Error("expected pub method in class")
 	}
 }
 

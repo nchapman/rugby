@@ -389,8 +389,9 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	}
 
 	// Emit accessor methods (including from modules)
+	// An accessor is exported if the class is pub OR the accessor is marked pub
 	for _, acc := range allAccessors {
-		g.genAccessorMethods(className, acc, cls.Pub)
+		g.genAccessorMethods(className, acc, cls.Pub || acc.Pub)
 	}
 
 	// Emit methods (skip initialize - it's the constructor)

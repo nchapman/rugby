@@ -554,13 +554,19 @@ func (g *Generator) genClassVarCompoundAssign(s *ast.ClassVarCompoundAssign) {
 }
 
 // genSelectorAssignStmt generates code for setter assignment: obj.field = value
-// This generates a setter method call: obj.setField(value) or obj.SetField(value) for pub classes
+// This generates a setter method call: obj.setField(value) or obj.SetField(value) for pub classes/accessors
 func (g *Generator) genSelectorAssignStmt(s *ast.SelectorAssignStmt) {
 	g.writeIndent()
 
 	// Check if receiver is an instance of a pub class
 	receiverClassName := g.getReceiverClassName(s.Object)
 	isPubClass := g.isPublicClass(receiverClassName)
+
+	// Check if this specific accessor is pub (for non-pub classes with pub accessors)
+	isPubAccessor := false
+	if classAccessors := g.pubAccessors[receiverClassName]; classAccessors != nil {
+		isPubAccessor = classAccessors[s.Field]
+	}
 
 	// Generate: obj.setField(value) or obj.SetField(value)
 	g.genExpr(s.Object)
@@ -569,8 +575,8 @@ func (g *Generator) genSelectorAssignStmt(s *ast.SelectorAssignStmt) {
 	// Generate setter method name
 	fieldPascal := snakeToPascalWithAcronyms(s.Field)
 	var setterName string
-	if isPubClass {
-		// Pub class setters use PascalCase: SetField
+	if isPubClass || isPubAccessor {
+		// Pub class/accessor setters use PascalCase: SetField
 		setterName = "Set" + fieldPascal
 	} else {
 		// Private class setters use camelCase: setField

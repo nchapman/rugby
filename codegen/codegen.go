@@ -179,6 +179,8 @@ type Generator struct {
 	baseClassAccessors           map[string][]string          // base class name -> accessor names (for lint suppression)
 	classMethods                 map[string]map[string]string // class name -> method name -> generated function name
 	classVars                    map[string]string            // "ClassName@@varname" -> "_ClassName_varname" (package-level var)
+	pubFuncs                     map[string]bool              // track functions declared with 'pub' for correct casing
+	pubAccessors                 map[string]map[string]bool   // track pub accessors per class: className -> accessorName -> isPub
 }
 
 // addError records an error during code generation
@@ -251,6 +253,8 @@ func New(opts ...Option) *Generator {
 		baseClassAccessors:           make(map[string][]string),
 		classMethods:                 make(map[string]map[string]string),
 		classVars:                    make(map[string]string),
+		pubFuncs:                     make(map[string]bool),
+		pubAccessors:                 make(map[string]map[string]bool),
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -632,6 +636,30 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 					if acc.Kind == "getter" || acc.Kind == "property" {
 						g.baseClassAccessors[cls.Name] = append(g.baseClassAccessors[cls.Name], acc.Name)
 					}
+				}
+			}
+		}
+	}
+
+	// Pre-pass: collect public functions (declared with 'pub')
+	// This is needed so function calls can use the correct casing
+	for _, def := range definitions {
+		if fn, ok := def.(*ast.FuncDecl); ok && fn.Pub {
+			g.pubFuncs[fn.Name] = true
+		}
+	}
+
+	// Pre-pass: collect public accessors per class
+	// This is needed so accessor calls can use the correct casing
+	for _, def := range definitions {
+		if cls, ok := def.(*ast.ClassDecl); ok {
+			for _, acc := range cls.Accessors {
+				if acc.Pub || cls.Pub {
+					// Accessor is exported if it has 'pub' or the class is 'pub'
+					if g.pubAccessors[cls.Name] == nil {
+						g.pubAccessors[cls.Name] = make(map[string]bool)
+					}
+					g.pubAccessors[cls.Name][acc.Name] = true
 				}
 			}
 		}

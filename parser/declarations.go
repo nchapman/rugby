@@ -431,8 +431,13 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 					method.Pub = true
 					cls.Methods = append(cls.Methods, method)
 				}
+			} else if p.curTokenIs(token.GETTER) || p.curTokenIs(token.SETTER) || p.curTokenIs(token.PROPERTY) {
+				if accessor := p.parseAccessorDecl(); accessor != nil {
+					accessor.Pub = true
+					cls.Accessors = append(cls.Accessors, accessor)
+				}
 			} else {
-				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' in class body must be followed by 'def'")
+				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' in class body must be followed by 'def', 'getter', 'setter', or 'property'")
 				p.nextToken()
 			}
 		case token.DEF:

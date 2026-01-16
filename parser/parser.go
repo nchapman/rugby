@@ -341,15 +341,6 @@ func (p *Parser) ParseProgram() *ast.Program {
 		case token.CLASS:
 			if cls := p.parseClassDecl(); cls != nil {
 				program.Declarations = append(program.Declarations, cls)
-
-				// Validate pub def is only used in pub class
-				if !cls.Pub {
-					for _, method := range cls.Methods {
-						if method.Pub {
-							p.error(fmt.Sprintf("'pub def %s' not allowed in non-pub class '%s'", method.Name, cls.Name))
-						}
-					}
-				}
 			}
 		case token.INTERFACE:
 			if iface := p.parseInterfaceDecl(); iface != nil {

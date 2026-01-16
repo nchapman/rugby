@@ -4379,6 +4379,31 @@ end`
 	assertContains(t, output, "func (u *User) setName(v string) {")
 }
 
+func TestPubAccessorInNonPubClass(t *testing.T) {
+	// pub getter/setter/property in a non-pub class should generate PascalCase methods
+	input := `class User
+  pub property name : String
+
+  def initialize(@name : String)
+  end
+end
+
+def main
+  user = User.new("Alice")
+  puts user.name
+  user.name = "Bob"
+end`
+
+	output := compile(t, input)
+
+	// Pub accessor in non-pub class should have PascalCase method names
+	assertContains(t, output, "func (u *User) Name() string {")
+	assertContains(t, output, "func (u *User) SetName(v string) {")
+	// Call site should use PascalCase
+	assertContains(t, output, "user.Name()")
+	assertContains(t, output, "user.SetName(")
+}
+
 func TestSuperKeyword(t *testing.T) {
 	input := `class Parent
   def greet

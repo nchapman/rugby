@@ -877,6 +877,7 @@ type AccessorDecl struct {
 	Kind string // "getter", "setter", or "property"
 	Name string // field name (without @)
 	Type string // field type
+	Pub  bool   // true if declared with 'pub' modifier
 	Line int    // source line number
 }
 

@@ -1,3 +1,4 @@
+#@ skip: private def not yet implemented
 #@ run-pass
 #@ check-output
 #

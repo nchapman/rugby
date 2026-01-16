@@ -1169,7 +1169,11 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			} else {
 				funcName = kf.runtimeFunc
 			}
+		} else if g.pubFuncs[funcName] {
+			// Function declared with 'pub' -> PascalCase
+			funcName = snakeToPascalWithAcronyms(funcName)
 		} else {
+			// Regular function -> camelCase
 			funcName = snakeToCamelWithAcronyms(funcName)
 		}
 		g.buf.WriteString(funcName)
@@ -3073,6 +3077,12 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 	receiverClassName := g.getReceiverClassName(sel.X)
 	isPubClass := g.isPublicClass(receiverClassName)
 
+	// Check if this specific accessor is pub (for non-pub classes with pub accessors)
+	isPubAccessor := false
+	if classAccessors := g.pubAccessors[receiverClassName]; classAccessors != nil {
+		isPubAccessor = classAccessors[sel.Sel]
+	}
+
 	g.genExpr(sel.X)
 	g.buf.WriteString(".")
 
@@ -3082,7 +3092,7 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 		return
 	}
 
-	if isInterfaceMethod || isPubClass {
+	if isInterfaceMethod || isPubClass || isPubAccessor {
 		g.buf.WriteString(snakeToPascalWithAcronyms(sel.Sel))
 	} else {
 		g.buf.WriteString(snakeToCamelWithAcronyms(sel.Sel))
