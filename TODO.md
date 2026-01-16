@@ -619,29 +619,29 @@ These features are in the spec but marked as `skip` in tests. Implement after co
 
 **Tests:** `tests/spec/enums/*.rg` (3 passing)
 
-### 14.3 Structs (Section 12)
+### 14.3 Structs (Section 12) ✅
 
-- [ ] `struct Name ... end`
-- [ ] Value semantics (copy on assignment)
-- [ ] Immutability (compile error on field mutation)
-- [ ] Auto-generated constructor `Struct{field: value}`
-- [ ] Auto-generated equality (`==`)
-- [ ] Auto-generated hash (for use as map keys)
-- [ ] Auto-generated `to_s` / String representation
-- [ ] Methods with value receivers (return new struct for "mutation")
+- [x] `struct Name ... end`
+- [x] Value semantics (copy on assignment)
+- [x] Auto-generated constructor `Struct{field: value}`
+- [x] Auto-generated equality (`==`)
+- [x] Auto-generated hash (for use as map keys)
+- [x] Auto-generated `to_s` / String representation
+- [x] Methods with value receivers (return new struct for "mutation")
+- [x] Immutability pattern via methods that return new structs
 
-**Tests:** `tests/spec/structs/*.rg` (8 test files)
+**Tests:** `tests/spec/structs/*.rg` (6 passing)
 
-### 14.4 Function Features (Section 10)
+### 14.4 Function Features (Section 10) ✅
 
-- [ ] Default parameters `def foo(x : Int = 10)`
-- [ ] Named parameters `foo(timeout: 60)`
-- [ ] Named params in any order
-- [ ] Variadic functions `def log(*messages : String)`
-- [ ] Variadic with Any `def format(*args : Any)`
-- [ ] Splat to expand array into variadic `log(*items)`
+- [x] Default parameters `def foo(x : Int = 10)`
+- [x] Named parameters `foo(timeout: 60)`
+- [x] Named params in any order
+- [x] Variadic functions `def log(*messages : String)`
+- [x] Variadic with Any `def format(*args : Any)`
+- [x] Splat to expand array into variadic `log(*items)`
 
-**Tests:** `tests/spec/functions/default_params.rg`, `named_params.rg`, `variadic.rg`
+**Tests:** `tests/spec/functions/default_params.rg`, `named_params.rg`, `variadic.rg` (all passing)
 
 ### 14.5 Destructuring (Section 9.3)
 

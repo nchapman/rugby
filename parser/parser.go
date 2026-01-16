@@ -175,6 +175,7 @@ func (p *Parser) isFunctionTypeAhead() bool {
 }
 
 // isMultiAssignPattern checks if we have (ident, ident, ... = expr) pattern.
+// Also handles splat patterns like (ident, *rest = expr) or (*head, ident = expr).
 // This is used to distinguish multi-assignment from tuple literals.
 // Must be called when curToken is IDENT and peekToken is COMMA.
 func (p *Parser) isMultiAssignPattern() bool {
@@ -183,10 +184,23 @@ func (p *Parser) isMultiAssignPattern() bool {
 	savedCur := p.curToken
 	savedPeek := p.peekToken
 
-	// Scan through comma-separated identifiers looking for '='
+	// Scan through comma-separated identifiers (and splat patterns) looking for '='
 	// ident, ident, ... = expr  -> true
+	// ident, *rest = expr       -> true
+	// *head, ident = expr       -> true (but handled by different entry point)
 	// ident, expr               -> false
-	for p.curTokenIs(token.IDENT) {
+	for {
+		// Handle splat: *ident
+		if p.curTokenIs(token.STAR) {
+			p.nextToken() // move past '*'
+			if !p.curTokenIs(token.IDENT) {
+				break // not a valid pattern
+			}
+		}
+
+		if !p.curTokenIs(token.IDENT) {
+			break // not a valid pattern
+		}
 		p.nextToken() // move past ident
 
 		// After ident, we should see either COMMA or ASSIGN
@@ -206,6 +220,56 @@ func (p *Parser) isMultiAssignPattern() bool {
 	}
 
 	// Didn't find '=' after all identifiers
+	p.l.RestoreState(lexerState)
+	p.curToken = savedCur
+	p.peekToken = savedPeek
+	return false
+}
+
+// isSplatMultiAssignPattern checks if we have (*ident, ident, ... = expr) pattern.
+// Must be called when curToken is STAR and peekToken is IDENT.
+func (p *Parser) isSplatMultiAssignPattern() bool {
+	// Save lexer state and parser tokens
+	lexerState := p.l.SaveState()
+	savedCur := p.curToken
+	savedPeek := p.peekToken
+
+	// Start by consuming * and first ident
+	p.nextToken() // consume '*'
+	if !p.curTokenIs(token.IDENT) {
+		p.l.RestoreState(lexerState)
+		p.curToken = savedCur
+		p.peekToken = savedPeek
+		return false
+	}
+
+	// Now use the same logic as isMultiAssignPattern
+	for {
+		if p.curTokenIs(token.STAR) {
+			p.nextToken() // move past '*'
+			if !p.curTokenIs(token.IDENT) {
+				break
+			}
+		}
+
+		if !p.curTokenIs(token.IDENT) {
+			break
+		}
+		p.nextToken() // move past ident
+
+		if p.curTokenIs(token.ASSIGN) {
+			p.l.RestoreState(lexerState)
+			p.curToken = savedCur
+			p.peekToken = savedPeek
+			return true
+		}
+		if p.curTokenIs(token.COMMA) {
+			p.nextToken() // move past comma
+			continue
+		}
+		break
+	}
+
 	p.l.RestoreState(lexerState)
 	p.curToken = savedCur
 	p.peekToken = savedPeek

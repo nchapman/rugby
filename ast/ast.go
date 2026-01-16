@@ -522,9 +522,10 @@ func (c *CompoundAssignStmt) stmtNode() {}
 
 // MultiAssignStmt represents tuple unpacking: val, ok = expr
 type MultiAssignStmt struct {
-	Names []string   // variable names (e.g., ["val", "ok"])
-	Value Expression // expression returning multiple values
-	Line  int        // source line number (1-indexed)
+	Names      []string   // variable names (e.g., ["val", "ok"])
+	Value      Expression // expression returning multiple values
+	Line       int        // source line number (1-indexed)
+	SplatIndex int        // index of splat target (-1 if none), e.g., first, *rest = arr
 }
 
 func (m *MultiAssignStmt) node()     {}

@@ -1,9 +1,7 @@
 #@ run-pass
 #@ check-output
-#@ skip: Destructuring not yet implemented (Section 9.3)
 #
 # Test: Section 9.3 - Underscore to ignore values in destructuring
-# TODO: Implement destructuring with underscore
 
 def get_triple -> (Int, String, Bool)
   1, "hello", true

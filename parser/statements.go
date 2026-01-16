@@ -43,6 +43,7 @@ func (p *Parser) parseStatement() ast.Statement {
 		return p.parseConcurrentlyStmt()
 	case token.IDENT:
 		// Check for multi-assignment: ident, ident = expr
+		// Also handles splat: ident, *rest = expr
 		// Must verify it's actually a multi-assignment (all idents followed by =)
 		// vs a tuple literal (ident, expr)
 		if p.peekTokenIs(token.COMMA) && p.isMultiAssignPattern() {
@@ -60,6 +61,12 @@ func (p *Parser) parseStatement() ast.Statement {
 		if p.peekTokenIs(token.PLUSASSIGN) || p.peekTokenIs(token.MINUSASSIGN) ||
 			p.peekTokenIs(token.STARASSIGN) || p.peekTokenIs(token.SLASHASSIGN) {
 			return p.parseCompoundAssignStmt()
+		}
+	case token.STAR:
+		// Check for splat destructuring: *head, last = items
+		// Pattern: STAR IDENT COMMA ... = expr
+		if p.peekTokenIs(token.IDENT) && p.isSplatMultiAssignPattern() {
+			return p.parseMultiAssignStmt()
 		}
 	case token.AT:
 		// Check if this is assignment: @name = expr
@@ -200,14 +207,38 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 }
 
 // parseMultiAssignStmt parses tuple unpacking: val, ok = expr
+// Also handles splat patterns: first, *rest = items or *head, last = items
 func (p *Parser) parseMultiAssignStmt() *ast.MultiAssignStmt {
 	line := p.curToken.Line
-	names := []string{p.curToken.Literal}
+	var names []string
+	splatIndex := -1 // -1 means no splat
+
+	// Parse first target (may be splat)
+	if p.curTokenIs(token.STAR) {
+		splatIndex = 0
+		p.nextToken() // consume '*'
+	}
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier in multi-assignment")
+		return nil
+	}
+	names = append(names, p.curToken.Literal)
 
 	// Collect all names separated by commas
 	for p.peekTokenIs(token.COMMA) {
-		p.nextToken() // consume current ident or comma
-		p.nextToken() // consume comma, move to next ident
+		p.nextToken() // consume current ident
+		p.nextToken() // consume comma, move to next target
+
+		// Check for splat: *ident
+		if p.curTokenIs(token.STAR) {
+			if splatIndex >= 0 {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "only one splat allowed in multi-assignment")
+				return nil
+			}
+			splatIndex = len(names)
+			p.nextToken() // consume '*'
+		}
+
 		if !p.curTokenIs(token.IDENT) {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier in multi-assignment")
 			return nil
@@ -228,7 +259,7 @@ func (p *Parser) parseMultiAssignStmt() *ast.MultiAssignStmt {
 	p.nextToken() // move past expression
 	p.skipNewlines()
 
-	return &ast.MultiAssignStmt{Names: names, Value: value, Line: line}
+	return &ast.MultiAssignStmt{Names: names, Value: value, Line: line, SplatIndex: splatIndex}
 }
 
 func (p *Parser) parseIfStmt() *ast.IfStmt {

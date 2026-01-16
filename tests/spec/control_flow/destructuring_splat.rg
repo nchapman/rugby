@@ -1,27 +1,25 @@
 #@ run-pass
 #@ check-output
-#@ skip: Destructuring not yet implemented (Section 9.3)
 #
 # Test: Section 9.3 - Splat patterns in destructuring
-# TODO: Implement splat destructuring
 
 items = [1, 2, 3, 4, 5]
 
 # First element, rest in array
-first, *rest = items
-puts first
-puts rest.length
+first1, *rest1 = items
+puts first1
+puts rest1.length
 
 # All but last in array, last element
-*head, last = items
-puts head.length
-puts last
+*head2, last2 = items
+puts head2.length
+puts last2
 
 # First, middle (rest), last
-first, *middle, last = items
-puts first
-puts middle.length
-puts last
+first3, *middle3, last3 = items
+puts first3
+puts middle3.length
+puts last3
 
 #@ expect:
 # 1

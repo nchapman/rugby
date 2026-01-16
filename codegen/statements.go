@@ -339,7 +339,14 @@ func (g *Generator) genCompoundAssignStmt(s *ast.CompoundAssignStmt) {
 }
 
 // genMultiAssignStmt generates code for tuple unpacking: val, ok = expr
+// Also handles splat patterns: first, *rest = items or *head, last = items
 func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
+	// Check for splat destructuring
+	if s.SplatIndex >= 0 {
+		g.genSplatDestructuring(s)
+		return
+	}
+
 	// Check if the value expression returns an optional type (T?)
 	// If so, we need special handling for the comma-ok pattern
 	valueType := g.inferTypeFromExpr(s.Value)
@@ -383,6 +390,76 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
+}
+
+// genSplatDestructuring handles splat patterns: first, *rest = items or *head, last = items
+// Generates individual assignments using slicing.
+func (g *Generator) genSplatDestructuring(s *ast.MultiAssignStmt) {
+	splatIdx := s.SplatIndex
+	numBefore := splatIdx                   // elements before splat
+	numAfter := len(s.Names) - splatIdx - 1 // elements after splat
+
+	// Generate: _arr := expr (store in temp to avoid multiple evaluations)
+	tempVar := fmt.Sprintf("_splat%d", g.tempVarCounter)
+	g.tempVarCounter++
+	g.writeIndent()
+	g.buf.WriteString(tempVar)
+	g.buf.WriteString(" := ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+
+	// Generate assignments for elements before splat: first := _arr[0]
+	for i := range numBefore {
+		name := s.Names[i]
+		if name == "_" {
+			continue // skip unused
+		}
+		g.writeIndent()
+		g.buf.WriteString(name)
+		g.buf.WriteString(" := ")
+		g.buf.WriteString(fmt.Sprintf("%s[%d]", tempVar, i))
+		g.buf.WriteString("\n")
+	}
+
+	// Generate splat assignment: rest := _arr[numBefore:len(_arr)-numAfter]
+	splatName := s.Names[splatIdx]
+	if splatName != "_" {
+		g.writeIndent()
+		g.buf.WriteString(splatName)
+		g.buf.WriteString(" := ")
+		if numAfter == 0 {
+			// Simple case: rest := _arr[numBefore:]
+			g.buf.WriteString(fmt.Sprintf("%s[%d:]", tempVar, numBefore))
+		} else {
+			// Complex case: middle := _arr[numBefore:len(_arr)-numAfter]
+			g.buf.WriteString(fmt.Sprintf("%s[%d:len(%s)-%d]", tempVar, numBefore, tempVar, numAfter))
+		}
+		g.buf.WriteString("\n")
+	}
+
+	// Generate assignments for elements after splat: last := _arr[len(_arr)-numAfter+i]
+	for i := range numAfter {
+		name := s.Names[splatIdx+1+i]
+		if name == "_" {
+			continue // skip unused
+		}
+		g.writeIndent()
+		g.buf.WriteString(name)
+		g.buf.WriteString(" := ")
+		if numAfter == 1 {
+			// Simple case: last := _arr[len(_arr)-1]
+			g.buf.WriteString(fmt.Sprintf("%s[len(%s)-1]", tempVar, tempVar))
+		} else {
+			// General case: elem := _arr[len(_arr)-numAfter+i]
+			offset := numAfter - 1 - i
+			if offset == 0 {
+				g.buf.WriteString(fmt.Sprintf("%s[len(%s)-1]", tempVar, tempVar))
+			} else {
+				g.buf.WriteString(fmt.Sprintf("%s[len(%s)-%d]", tempVar, tempVar, offset+1))
+			}
+		}
+		g.buf.WriteString("\n")
+	}
 }
 
 // genMultiAssignFromOptional handles tuple unpacking from optionals: val, ok = optional_expr
