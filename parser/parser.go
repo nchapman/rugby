@@ -276,6 +276,80 @@ func (p *Parser) isSplatMultiAssignPattern() bool {
 	return false
 }
 
+// isMapDestructuringPattern checks if we have ({key:, key:} = expr) or ({key: var, key: var} = expr) pattern.
+// Must be called when curToken is LBRACE.
+// Map destructuring: {name:, age:} = data OR {name: n, age: a} = data
+// Map literal: {name: "Alice", age: 30}
+func (p *Parser) isMapDestructuringPattern() bool {
+	// Save lexer state and parser tokens
+	lexerState := p.l.SaveState()
+	savedCur := p.curToken
+	savedPeek := p.peekToken
+
+	// Consume opening brace
+	p.nextToken() // move past '{'
+
+	// Need at least one key: pattern
+	if !p.curTokenIs(token.IDENT) {
+		p.l.RestoreState(lexerState)
+		p.curToken = savedCur
+		p.peekToken = savedPeek
+		return false
+	}
+
+	// Look for: IDENT COLON (COMMA | RBRACE | IDENT (COMMA | RBRACE))
+	for p.curTokenIs(token.IDENT) {
+		p.nextToken() // move past ident (key)
+
+		if !p.curTokenIs(token.COLON) {
+			break
+		}
+		p.nextToken() // move past ':'
+
+		// After key:, we should see:
+		// - COMMA or RBRACE (shorthand: {name:, age:})
+		// - IDENT followed by COMMA or RBRACE (rename: {name: n, age: a})
+		if p.curTokenIs(token.COMMA) {
+			p.nextToken() // move past ','
+			continue
+		}
+		if p.curTokenIs(token.RBRACE) {
+			// Check if next token is ASSIGN
+			p.nextToken() // move past '}'
+			if p.curTokenIs(token.ASSIGN) {
+				p.l.RestoreState(lexerState)
+				p.curToken = savedCur
+				p.peekToken = savedPeek
+				return true
+			}
+			break
+		}
+		// Check for rename pattern: key: var
+		if p.curTokenIs(token.IDENT) {
+			p.nextToken() // move past var
+			if p.curTokenIs(token.COMMA) {
+				p.nextToken() // move past ','
+				continue
+			}
+			if p.curTokenIs(token.RBRACE) {
+				p.nextToken() // move past '}'
+				if p.curTokenIs(token.ASSIGN) {
+					p.l.RestoreState(lexerState)
+					p.curToken = savedCur
+					p.peekToken = savedPeek
+					return true
+				}
+			}
+		}
+		break // something else - not a destructuring pattern
+	}
+
+	p.l.RestoreState(lexerState)
+	p.curToken = savedCur
+	p.peekToken = savedPeek
+	return false
+}
+
 // parseBlocksAndChaining handles blocks and method chaining after an expression.
 // This enables:
 //   - arr.select { |x| }.map { |x| } (inline chaining)

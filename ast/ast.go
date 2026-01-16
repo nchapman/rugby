@@ -531,6 +531,26 @@ type MultiAssignStmt struct {
 func (m *MultiAssignStmt) node()     {}
 func (m *MultiAssignStmt) stmtNode() {}
 
+// MapDestructuringStmt represents map destructuring assignment
+// Examples:
+//
+//	{name:, age:} = user_data         # creates name, age from user_data["name"], user_data["age"]
+//	{name: n, age: a} = user_data     # creates n, a from user_data["name"], user_data["age"]
+type MapDestructuringStmt struct {
+	Pairs []MapDestructurePair // key-variable pairs
+	Value Expression           // the map expression being destructured
+	Line  int                  // source line number
+}
+
+// MapDestructurePair represents a single key-variable pair in map destructuring
+type MapDestructurePair struct {
+	Key      string // map key to extract (e.g., "name")
+	Variable string // variable name to assign to (defaults to Key if empty)
+}
+
+func (m *MapDestructuringStmt) node()     {}
+func (m *MapDestructuringStmt) stmtNode() {}
+
 // IfStmt represents an if/elsif/else statement or unless/else statement
 type IfStmt struct {
 	// Optional assignment in condition: if (name = expr)

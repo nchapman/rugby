@@ -43,6 +43,8 @@ func getStatementLine(stmt ast.Statement) int {
 		return s.Line
 	case *ast.MultiAssignStmt:
 		return s.Line
+	case *ast.MapDestructuringStmt:
+		return s.Line
 	case *ast.SelectorAssignStmt:
 		return s.Line
 	case *ast.InstanceVarCompoundAssign:
@@ -153,6 +155,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genCompoundAssignStmt(s)
 	case *ast.MultiAssignStmt:
 		g.genMultiAssignStmt(s)
+	case *ast.MapDestructuringStmt:
+		g.genMapDestructuringStmt(s)
 	case *ast.InstanceVarAssign:
 		g.genInstanceVarAssign(s)
 	case *ast.InstanceVarOrAssign:
@@ -459,6 +463,33 @@ func (g *Generator) genSplatDestructuring(s *ast.MultiAssignStmt) {
 			}
 		}
 		g.buf.WriteString("\n")
+	}
+}
+
+// genMapDestructuringStmt generates code for map destructuring patterns:
+//
+//	{name:, age:} = user_data         -> name := user_data["name"]; age := user_data["age"]
+//	{name: n, age: a} = user_data     -> n := user_data["name"]; a := user_data["age"]
+func (g *Generator) genMapDestructuringStmt(s *ast.MapDestructuringStmt) {
+	// Generate temp variable to hold the map
+	tempVar := fmt.Sprintf("_map%d", g.tempVarCounter)
+	g.tempVarCounter++
+
+	g.writeIndent()
+	g.buf.WriteString(tempVar)
+	g.buf.WriteString(" := ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+
+	// Generate assignment for each key-variable pair
+	for _, pair := range s.Pairs {
+		g.writeIndent()
+		g.buf.WriteString(pair.Variable)
+		g.buf.WriteString(" := ")
+		g.buf.WriteString(tempVar)
+		g.buf.WriteString("[\"")
+		g.buf.WriteString(pair.Key)
+		g.buf.WriteString("\"]\n")
 	}
 }
 

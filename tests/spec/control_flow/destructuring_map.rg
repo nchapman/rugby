@@ -1,9 +1,7 @@
 #@ run-pass
 #@ check-output
-#@ skip: Destructuring not yet implemented (Section 9.3)
 #
 # Test: Section 9.3 - Map destructuring
-# TODO: Implement map destructuring
 
 user_data = {name: "Alice", age: 30, city: "NYC"}
 

@@ -101,6 +101,12 @@ func (p *Parser) parseStatement() ast.Statement {
 			return p.parseClassVarCompoundAssign()
 		}
 		// Otherwise fall through to expression parsing
+	case token.LBRACE:
+		// Check for map destructuring: {name:, age:} = data or {name: n, age: a} = data
+		if p.isMapDestructuringPattern() {
+			return p.parseMapDestructuringStmt()
+		}
+		// Otherwise fall through to expression parsing (map literal)
 	}
 
 	// Default: expression statement
@@ -260,6 +266,70 @@ func (p *Parser) parseMultiAssignStmt() *ast.MultiAssignStmt {
 	p.skipNewlines()
 
 	return &ast.MultiAssignStmt{Names: names, Value: value, Line: line, SplatIndex: splatIndex}
+}
+
+// parseMapDestructuringStmt parses map destructuring patterns:
+//
+//	{name:, age:} = user_data         # shorthand: creates name, age
+//	{name: n, age: a} = user_data     # rename: creates n, a
+func (p *Parser) parseMapDestructuringStmt() *ast.MapDestructuringStmt {
+	line := p.curToken.Line
+
+	if !p.curTokenIs(token.LBRACE) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '{' in map destructuring")
+		return nil
+	}
+	p.nextToken() // consume '{'
+
+	var pairs []ast.MapDestructurePair
+
+	// Parse key-value pairs
+	for !p.curTokenIs(token.RBRACE) && !p.curTokenIs(token.EOF) {
+		if !p.curTokenIs(token.IDENT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected key identifier in map destructuring")
+			return nil
+		}
+		key := p.curToken.Literal
+		p.nextToken() // consume key
+
+		if !p.curTokenIs(token.COLON) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ':' after key in map destructuring")
+			return nil
+		}
+		p.nextToken() // consume ':'
+
+		// Check for rename pattern (key: var) vs shorthand (key:,)
+		variable := key // default: shorthand, variable name = key
+		if p.curTokenIs(token.IDENT) {
+			variable = p.curToken.Literal
+			p.nextToken() // consume variable
+		}
+
+		pairs = append(pairs, ast.MapDestructurePair{Key: key, Variable: variable})
+
+		// Check for comma or end
+		if p.curTokenIs(token.COMMA) {
+			p.nextToken() // consume ','
+		}
+	}
+
+	if !p.curTokenIs(token.RBRACE) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '}' after map destructuring pattern")
+		return nil
+	}
+	p.nextToken() // consume '}'
+
+	if !p.curTokenIs(token.ASSIGN) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '=' in map destructuring")
+		return nil
+	}
+	p.nextToken() // consume '='
+
+	value := p.parseExpression(lowest)
+	p.nextToken() // move past expression
+	p.skipNewlines()
+
+	return &ast.MapDestructuringStmt{Pairs: pairs, Value: value, Line: line}
 }
 
 func (p *Parser) parseIfStmt() *ast.IfStmt {

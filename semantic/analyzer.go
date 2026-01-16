@@ -997,6 +997,8 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 		a.analyzeAssign(s)
 	case *ast.MultiAssignStmt:
 		a.analyzeMultiAssign(s)
+	case *ast.MapDestructuringStmt:
+		a.analyzeMapDestructuring(s)
 	case *ast.CompoundAssignStmt:
 		a.analyzeCompoundAssign(s)
 	case *ast.OrAssignStmt:
@@ -1409,6 +1411,30 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 	}
 
 	// Mark whether this multi-assign declares any new variables (for := vs =)
+	a.declarations[s] = hasNewVar
+}
+
+func (a *Analyzer) analyzeMapDestructuring(s *ast.MapDestructuringStmt) {
+	// Analyze the map expression
+	a.analyzeExpr(s.Value)
+
+	// Initialize tracking for symbols declared at this node
+	a.declaredAt[s] = make(map[string]*Symbol)
+	hasNewVar := false
+
+	// Define variables for each key-variable pair
+	for _, pair := range s.Pairs {
+		name := pair.Variable
+		existing := a.scope.LookupLocal(name)
+		if existing == nil {
+			// Map values are dynamically typed - use any
+			v := NewVariable(name, TypeAnyVal)
+			_ = a.scope.DefineOrShadow(v)
+			a.declaredAt[s][name] = v
+			hasNewVar = true
+		}
+	}
+
 	a.declarations[s] = hasNewVar
 }
 
