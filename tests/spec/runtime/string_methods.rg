@@ -31,8 +31,8 @@ puts parts[1]
 # true
 # true
 # true
-#   HELLO WORLD
-#   hello world
+#   HELLO WORLD  
+#   hello world  
 # Hello World
 # 3
 # a
