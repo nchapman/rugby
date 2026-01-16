@@ -131,7 +131,7 @@ Update the parser to recognize angle bracket type parameters:
 - [x] Basic assignment `x = expr`
 - [x] Type-annotated assignment `x : Type = expr`
 - [x] Compound operators `+=`, `-=`, `*=`, `/=`, `%=`
-- [ ] `||=` for optionals only
+- [x] `||=` for optionals only
 
 **Tests:** `tests/spec/control_flow/variables.rg`, `or_assign.rg`
 
@@ -677,34 +677,33 @@ When a phase is complete, all tests in that phase should PASS.
 
 ## Recent Progress (2026-01-15)
 
-**Test Status:** 114 PASSING / 46 FAILING / 27 SKIPPED
+**Test Status:** 122 PASSING / 37 FAILING / 28 SKIPPED
 
 ### Completed Today
+- ✅ **case_type binding variables:** Support `when var : Type` syntax for type narrowing
+- ✅ **Case range matching:** Support `when 400..499` in case expressions
+- ✅ **Optional comparison:** Allow comparing optionals with their underlying type (`String? == String`)
+- ✅ **rand() fix:** Allow 0 or 1 arguments (returns Float or Int respectively)
+- ✅ **||= for optionals:** Now works correctly with semantic and runtime support
+- ✅ **private def modifier:** Class methods can be marked private with underscore prefix
+- ✅ **pub accessor support:** `pub getter`, `pub setter`, `pub property` work correctly
+
+### Completed Previously
 - ✅ **Optional methods:** `unwrap_or(default)` for optionals (`ok?`, `nil?`, `unwrap` already worked)
 - ✅ **`const` keyword:** Full implementation (token, AST, parser, semantic, codegen)
-- ✅ **Spec test fix:** `findRugbyBinary` now always rebuilds to avoid stale binary issues
-- ✅ **Class variables `@@`:** Full stack implementation (token, lexer, AST, parser, semantic, codegen)
-
-### Completed Overnight
+- ✅ **Class variables `@@`:** Full stack implementation
 - ✅ **Phase 1 Complete:** Angle bracket syntax migration (Array<T>, Map<K,V>, etc.)
-- ✅ **Phase 2.2 Complete:** Single-quoted strings without interpolation
-- ✅ **Phase 2.3 Complete:** Squiggly `<<~` and literal `<<'` heredocs
+- ✅ **Phase 2.2-2.3 Complete:** Single-quoted strings, squiggly/literal heredocs
 - ✅ **Phase 13.1 Complete:** All array methods (compact, take, drop, etc.)
-- ✅ **Boolean operators:** Added `&&` and `||` as aliases for `and`/`or`
-- ✅ **Array mutation:** `arr << value` works as statement with mutation semantics
-- ✅ **Parser fixes:** Custom setters with types, test keywords as method names, grouped expression commands
-- ✅ **Runtime improvements:** Ruby-like `p` formatting, nil coalescing in command arguments
+- ✅ **Loop modifiers:** `expr while/until condition` work correctly
 
 ### Next Priorities
-1. ~~`Any` type semantics~~ ✅ Complete
-2. ~~Module instance variables and state~~ ✅ Complete
-3. ~~Optional methods (`ok?`, `nil?`, `unwrap`, `unwrap_or`)~~ ✅ Complete
-4. Type aliases with function types
-5. `case_type` for type switching
-6. Loop modifiers (`expr while/until condition`)
+1. Generic type constructors (`Chan<Int>.new()` syntax)
+2. Lambda/closure return type inference
+3. Custom error classes implementing `error` interface
+4. Variable shadowing of built-in functions
 
 ### Key Insights
-- Heredoc behavior matches Ruby: content includes newlines, delimiter line doesn't
-- Command call argument parsing needs ternaryPrec to support rich expressions (??., ternary)
-- StdLib method lookup requires normalizing Go types (`[]int` → "Array") for proper dispatch
-- Single `!` vs postfix `!`: context-dependent based on SpaceBefore
+- `runtime.Equal` handles pointer vs value comparison for optional types
+- Case ranges require `switch true` pattern with `runtime.RangeContains` checks
+- Semantic analyzer needs special handling for Range in case when clauses
