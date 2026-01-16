@@ -3047,6 +3047,13 @@ func (a *Analyzer) areTypesComparable(left, right *Type) bool {
 	if right.Kind == TypeNil {
 		return left.Kind == TypeOptional || left.Kind == TypeError || left.Kind == TypeNil
 	}
+	// Optional can be compared to its underlying type (e.g., String? == String)
+	if left.Kind == TypeOptional && left.Elem != nil && left.Elem.Equals(right) {
+		return true
+	}
+	if right.Kind == TypeOptional && right.Elem != nil && right.Elem.Equals(left) {
+		return true
+	}
 	return false
 }
 

@@ -32,6 +32,15 @@ func Equal(a, b any) bool {
 	va := reflect.ValueOf(a)
 	vb := reflect.ValueOf(b)
 
+	// Handle pointer (optional) vs value comparison
+	// If one is a pointer and the other is not, dereference the pointer
+	if va.Kind() == reflect.Ptr && !va.IsNil() && vb.Kind() != reflect.Ptr {
+		return Equal(va.Elem().Interface(), b)
+	}
+	if vb.Kind() == reflect.Ptr && !vb.IsNil() && va.Kind() != reflect.Ptr {
+		return Equal(a, vb.Elem().Interface())
+	}
+
 	// Handle slices
 	if va.Kind() == reflect.Slice && vb.Kind() == reflect.Slice {
 		return sliceEqual(va, vb)
