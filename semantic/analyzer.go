@@ -724,6 +724,11 @@ func (a *Analyzer) collectModule(m *ast.ModuleDecl) {
 		a.addError(err)
 	}
 	a.modules[m.Name] = mod
+
+	// Collect nested classes defined within the module
+	for _, cls := range m.Classes {
+		a.collectClass(cls)
+	}
 }
 
 // collectTypeAlias registers a type alias for later resolution.
@@ -1689,7 +1694,18 @@ func (a *Analyzer) analyzeInstanceVarAssign(s *ast.InstanceVarAssign) {
 		return
 	}
 
-	a.analyzeExpr(s.Value)
+	valueType := a.analyzeExpr(s.Value)
+
+	// If the field exists but has unknown type, infer it from the assigned value
+	if classScope := a.scope.ClassScope(); classScope != nil {
+		if cls := a.classes[classScope.ClassName]; cls != nil {
+			if field := cls.GetField(s.Name); field != nil {
+				if field.Type != nil && field.Type.Kind == TypeUnknown && valueType != nil && valueType.Kind != TypeUnknown {
+					field.Type = valueType
+				}
+			}
+		}
+	}
 }
 
 func (a *Analyzer) analyzeInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAssign) {
@@ -2228,6 +2244,24 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			a.setSelectorKind(e, selectorKind)
 		}
 
+	case *ast.ScopeExpr:
+		// Scope resolution: Module::Class resolves to the class type
+		// e.g., Http::Response resolves to the Response class type
+		if modIdent, ok := e.Left.(*ast.Ident); ok {
+			if _, isModule := a.modules[modIdent.Name]; isModule {
+				// Look up the class within the module
+				if cls, isClass := a.classes[e.Right]; isClass {
+					typ = NewClassType(cls.Name)
+				} else {
+					typ = TypeUnknownVal
+				}
+			} else {
+				typ = TypeUnknownVal
+			}
+		} else {
+			typ = TypeUnknownVal
+		}
+
 	case *ast.IndexExpr:
 		// Special case: Chan<Type> is a channel type constructor, not an index expression
 		if ident, ok := e.Left.(*ast.Ident); ok && ident.Name == "Chan" {
@@ -2714,6 +2748,21 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 					return NewClassType(classIdent.Name)
 				}
 			}
+			// Handle Module::Class.new(args) - scoped constructor call
+			if scopeExpr, ok := sel.X.(*ast.ScopeExpr); ok {
+				if modIdent, ok := scopeExpr.Left.(*ast.Ident); ok {
+					if _, isModule := a.modules[modIdent.Name]; isModule {
+						if cls, isClass := a.classes[scopeExpr.Right]; isClass {
+							// Check initialize method arguments
+							if initMethod := cls.GetMethod("initialize"); initMethod != nil && !hasSplat {
+								a.checkArity("initialize", initMethod, call)
+								a.checkArgumentTypes(modIdent.Name+"::"+scopeExpr.Right+".new", initMethod, argTypes)
+							}
+							return NewClassType(cls.Name)
+						}
+					}
+				}
+			}
 			// Handle Chan<Type>.new(size) constructor
 			if receiverType.Kind == TypeChan {
 				return receiverType
@@ -2736,6 +2785,33 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 						return NewTupleType(classMethod.ReturnTypes...)
 					}
 					return TypeUnknownVal
+				}
+			}
+		}
+
+		// Check for module method call: ModuleName.method_name(args)
+		// Only class methods (def self.method) can be called on the module itself
+		// Instance methods are for `include` into classes
+		if modIdent, ok := sel.X.(*ast.Ident); ok {
+			if mod, isModule := a.modules[modIdent.Name]; isModule {
+				if modMethod := mod.Methods[sel.Sel]; modMethod != nil {
+					// Verify this is a class method (def self.method)
+					methodNode, isMethodDecl := modMethod.Node.(*ast.MethodDecl)
+					if isMethodDecl && methodNode.IsClassMethod {
+						// Check argument count and types
+						if !hasSplat {
+							a.checkArity(modIdent.Name+"."+sel.Sel, modMethod, call)
+							a.checkArgumentTypes(modIdent.Name+"."+sel.Sel, modMethod, argTypes)
+						}
+						// Return module method's return type
+						if len(modMethod.ReturnTypes) == 1 {
+							return modMethod.ReturnTypes[0]
+						} else if len(modMethod.ReturnTypes) > 1 {
+							return NewTupleType(modMethod.ReturnTypes...)
+						}
+						return TypeUnknownVal
+					}
+					// Instance method called as module method - fall through to error handling
 				}
 			}
 		}

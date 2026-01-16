@@ -36,7 +36,8 @@ func (g *Generator) mapParamType(rubyType string) string {
 
 	// If it's a known class type (not already a pointer), make it a pointer
 	// Note: mapType returns class names unchanged, so we check for them here
-	if g.isClass(rubyType) && !strings.HasPrefix(goType, "*") && !strings.HasPrefix(goType, "[]") && !strings.HasPrefix(goType, "map[") {
+	// Also check for module-scoped classes (e.g., Http_Response)
+	if (g.isClass(rubyType) || g.isModuleScopedClass(rubyType)) && !strings.HasPrefix(goType, "*") && !strings.HasPrefix(goType, "[]") && !strings.HasPrefix(goType, "map[") {
 		return "*" + goType
 	}
 
@@ -123,14 +124,56 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 }
 
 // genModuleDecl stores the module definition for later use when classes include it.
-// It also generates a Go interface with the module's method signatures. This enables
-// interface compliance checks for classes that include the module, which suppresses
-// "unused method" lint warnings for module methods that aren't directly called.
+// It generates:
+// 1. Nested classes as top-level types with namespaced names (Module_Class)
+// 2. Module methods (def self.method) as package-level functions (Module_method)
+// 3. A Go interface with the module's instance method signatures
 func (g *Generator) genModuleDecl(mod *ast.ModuleDecl) {
 	g.modules[mod.Name] = mod
 
-	// Generate an interface for the module if it has methods
-	if len(mod.Methods) == 0 {
+	// Track module context for nested class naming
+	g.currentModule = mod.Name
+
+	// Generate nested classes with namespaced names (Module_Class)
+	for _, cls := range mod.Classes {
+		// Temporarily rename the class for code generation
+		originalName := cls.Name
+		cls.Name = mod.Name + "_" + cls.Name
+
+		// Track the original class name for semantic analysis lookups
+		g.currentOriginalClass = originalName
+
+		// Track instance methods for the namespaced class
+		if g.instanceMethods[cls.Name] == nil {
+			g.instanceMethods[cls.Name] = make(map[string]string)
+		}
+
+		g.genClassDecl(cls)
+
+		// Restore original name and clear tracking
+		cls.Name = originalName
+		g.currentOriginalClass = ""
+	}
+
+	// Generate class methods (def self.method) as package-level functions
+	for _, method := range mod.Methods {
+		if method.IsClassMethod {
+			g.genModuleMethod(mod.Name, method)
+		}
+	}
+
+	g.currentModule = ""
+
+	// Generate an interface for the module's instance methods (for include)
+	hasInstanceMethods := false
+	for _, method := range mod.Methods {
+		if !method.IsClassMethod {
+			hasInstanceMethods = true
+			break
+		}
+	}
+
+	if !hasInstanceMethods {
 		return
 	}
 
@@ -138,6 +181,9 @@ func (g *Generator) genModuleDecl(mod *ast.ModuleDecl) {
 	g.buf.WriteString(fmt.Sprintf("type %s interface {\n", mod.Name))
 
 	for _, method := range mod.Methods {
+		if method.IsClassMethod {
+			continue // Skip class methods in interface
+		}
 		g.buf.WriteString("\t")
 		// Interface methods are always exported (PascalCase) per Go interface rules
 		methodName := snakeToPascalWithAcronyms(method.Name)
@@ -176,6 +222,107 @@ func (g *Generator) genModuleDecl(mod *ast.ModuleDecl) {
 	}
 
 	g.buf.WriteString("}\n\n")
+}
+
+// genModuleMethod generates a module-level function (def self.method)
+func (g *Generator) genModuleMethod(moduleName string, method *ast.MethodDecl) {
+	clear(g.vars)
+	clear(g.goInteropVars)
+	g.currentReturnTypes = method.ReturnTypes
+
+	g.emitLineDirective(method.Line)
+
+	// Function name is Module_Method
+	funcName := moduleName + "_" + snakeToPascalWithAcronyms(method.Name)
+	g.buf.WriteString(fmt.Sprintf("func %s(", funcName))
+
+	// Generate parameters
+	for i, param := range method.Params {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		// Handle @param promotion (strip @)
+		paramName := param.Name
+		if len(paramName) > 0 && paramName[0] == '@' {
+			paramName = paramName[1:]
+		}
+		g.buf.WriteString(paramName)
+		if param.Type != "" {
+			g.buf.WriteString(" ")
+			// Handle module-scoped types (e.g., Response -> Module_Response)
+			paramType := g.resolveModuleScopedType(moduleName, param.Type)
+			g.buf.WriteString(g.mapParamType(paramType))
+		} else {
+			g.buf.WriteString(" any")
+		}
+		g.vars[paramName] = param.Type
+	}
+	g.buf.WriteString(")")
+
+	// Return type
+	if len(method.ReturnTypes) == 1 {
+		g.buf.WriteString(" ")
+		retType := g.resolveModuleScopedType(moduleName, method.ReturnTypes[0])
+		g.buf.WriteString(g.mapParamType(retType))
+	} else if len(method.ReturnTypes) > 1 {
+		g.buf.WriteString(" (")
+		for i, rt := range method.ReturnTypes {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+			retType := g.resolveModuleScopedType(moduleName, rt)
+			g.buf.WriteString(g.mapParamType(retType))
+		}
+		g.buf.WriteString(")")
+	}
+
+	g.buf.WriteString(" {\n")
+
+	// Generate function body
+	g.indent++
+	for i, stmt := range method.Body {
+		isLast := i == len(method.Body)-1
+		if isLast && len(method.ReturnTypes) > 0 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				// Implicit return: treat last expression as return value
+				retStmt := &ast.ReturnStmt{Values: []ast.Expression{exprStmt.Expr}}
+				g.genReturnStmt(retStmt)
+				continue
+			}
+		}
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	g.buf.WriteString("}\n\n")
+	g.currentReturnTypes = nil
+}
+
+// resolveModuleScopedType resolves a type name that might be a module-scoped class
+// (e.g., "Response" inside module "Http" becomes "Http_Response")
+func (g *Generator) resolveModuleScopedType(moduleName, typeName string) string {
+	if g.modules[moduleName] == nil {
+		return typeName
+	}
+
+	mod := g.modules[moduleName]
+	for _, cls := range mod.Classes {
+		if cls.Name == typeName {
+			return moduleName + "_" + typeName
+		}
+	}
+	return typeName
+}
+
+// resolveClassName resolves a class name, handling module-scoped classes.
+// If we're in a module context and the class is defined in that module,
+// returns the namespaced name (e.g., "Response" -> "Http_Response").
+// Otherwise returns the class name unchanged.
+func (g *Generator) resolveClassName(className string) string {
+	if g.currentModule == "" {
+		return className
+	}
+	return g.resolveModuleScopedType(g.currentModule, className)
 }
 
 func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
@@ -362,11 +509,17 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			if g.isAccessorField(field.Name) {
 				goFieldName = "_" + field.Name
 			}
+			// Determine field type: explicit annotation takes precedence,
+			// then inferred type from semantic analysis, then fallback to any
+			var goType string
 			if field.Type != "" {
-				g.buf.WriteString(fmt.Sprintf("\t%s %s\n", goFieldName, mapType(field.Type)))
+				goType = mapType(field.Type)
+			} else if inferredType := g.typeInfo.GetFieldType(className, field.Name); inferredType != "" && inferredType != "unknown" {
+				goType = mapType(inferredType)
 			} else {
-				g.buf.WriteString(fmt.Sprintf("\t%s any\n", goFieldName))
+				goType = "any"
 			}
+			g.buf.WriteString(fmt.Sprintf("\t%s %s\n", goFieldName, goType))
 		}
 		g.buf.WriteString("}\n\n")
 	} else {

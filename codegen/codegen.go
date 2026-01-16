@@ -4,6 +4,7 @@ package codegen
 import (
 	"fmt"
 	"go/format"
+	"slices"
 	"strings"
 
 	"github.com/nchapman/rugby/ast"
@@ -160,6 +161,8 @@ type Generator struct {
 	needsTestingImport           bool                         // track if testing import is needed
 	needsTestImport              bool                         // track if rugby/test import is needed
 	currentClass                 string                       // current class being generated (for instance vars)
+	currentOriginalClass         string                       // original class name for module-scoped classes (for semantic analysis lookup)
+	currentModule                string                       // current module being generated (for nested class naming)
 	currentMethod                string                       // current method name being generated (for super)
 	currentMethodPub             bool                         // whether current method is pub (for super)
 	currentClassEmbeds           []string                     // embedded types (parent classes) of current class
@@ -341,8 +344,18 @@ func (g *Generator) isAccessorField(fieldName string) bool {
 	if g.typeInfo == nil {
 		panic("codegen: typeInfo is required - run semantic analysis before code generation")
 	}
-	// Check current class
-	if g.typeInfo.HasAccessor(g.currentClass, fieldName) {
+	// Check if this field is in the current class's accessorFields map
+	// (this is populated during class generation and handles module-scoped classes correctly)
+	if g.accessorFields[fieldName] {
+		return true
+	}
+	// Check current class in semantic analysis
+	// For module-scoped classes, use the original class name
+	classToCheck := g.currentClass
+	if g.currentOriginalClass != "" {
+		classToCheck = g.currentOriginalClass
+	}
+	if g.typeInfo.HasAccessor(classToCheck, fieldName) {
 		return true
 	}
 	// Check parent classes (through embedding)
@@ -374,10 +387,8 @@ func (g *Generator) isAccessorInClassHierarchy(className, fieldName string) bool
 		return true
 	}
 	// Also check baseClassAccessors (populated during pre-pass)
-	for _, accName := range g.baseClassAccessors[className] {
-		if accName == fieldName {
-			return true
-		}
+	if slices.Contains(g.baseClassAccessors[className], fieldName) {
+		return true
 	}
 	// Check parent class
 	if parent := g.classParent[className]; parent != "" {
@@ -406,11 +417,8 @@ func (g *Generator) findFieldPath(embeds []string, fieldName string) string {
 		if g.typeInfo != nil && g.typeInfo.HasAccessor(parentClass, fieldName) {
 			hasAccessor = true
 		}
-		for _, accName := range g.baseClassAccessors[parentClass] {
-			if accName == fieldName {
-				hasAccessor = true
-				break
-			}
+		if slices.Contains(g.baseClassAccessors[parentClass], fieldName) {
+			hasAccessor = true
 		}
 
 		if hasAccessor {
@@ -443,6 +451,31 @@ func (g *Generator) isClass(typeName string) bool {
 		panic("codegen: typeInfo is required - run semantic analysis before code generation")
 	}
 	return g.typeInfo.IsClass(typeName)
+}
+
+// isModuleScopedClass checks if a type name is a module-scoped class name (e.g., "Http_Response")
+// by checking if it matches the pattern Module_Class where Module exists and has Class defined.
+func (g *Generator) isModuleScopedClass(typeName string) bool {
+	// Check for underscore separator
+	idx := strings.Index(typeName, "_")
+	if idx == -1 {
+		return false
+	}
+
+	moduleName := typeName[:idx]
+	className := typeName[idx+1:]
+
+	mod := g.modules[moduleName]
+	if mod == nil {
+		return false
+	}
+
+	for _, cls := range mod.Classes {
+		if cls.Name == className {
+			return true
+		}
+	}
+	return false
 }
 
 // isInterface checks if a type name is a declared interface. Requires typeInfo from semantic analysis.
@@ -842,6 +875,65 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 						goName = snakeToCamelWithAcronyms(acc.Name)
 					}
 					g.instanceMethods[cls.Name][acc.Name] = goName
+				}
+			}
+		}
+	}
+
+	// Pre-pass: collect instance methods for nested classes inside modules
+	// The semantic analyzer uses the original class name (e.g., "Response"),
+	// so we register methods under that name for type lookups to work correctly.
+	for _, def := range definitions {
+		if mod, ok := def.(*ast.ModuleDecl); ok {
+			for _, cls := range mod.Classes {
+				// Register instance methods under the original class name
+				for _, method := range cls.Methods {
+					if method.IsClassMethod {
+						continue
+					}
+					if g.instanceMethods[cls.Name] == nil {
+						g.instanceMethods[cls.Name] = make(map[string]string)
+					}
+					var goName string
+					isSetter := strings.HasSuffix(method.Name, "=")
+					baseName := strings.TrimSuffix(method.Name, "=")
+
+					if method.Pub {
+						if isSetter {
+							goName = "Set" + snakeToPascalWithAcronyms(baseName)
+						} else {
+							goName = snakeToPascalWithAcronyms(method.Name)
+						}
+					} else if method.Private {
+						if isSetter {
+							goName = "_set" + snakeToPascalWithAcronyms(baseName)
+						} else {
+							goName = "_" + snakeToCamelWithAcronyms(method.Name)
+						}
+					} else {
+						if isSetter {
+							goName = "set" + snakeToPascalWithAcronyms(baseName)
+						} else {
+							goName = snakeToCamelWithAcronyms(method.Name)
+						}
+					}
+					g.instanceMethods[cls.Name][method.Name] = goName
+				}
+
+				// Register accessor getters under the original class name
+				for _, acc := range cls.Accessors {
+					if acc.Kind == "getter" || acc.Kind == "property" {
+						if g.instanceMethods[cls.Name] == nil {
+							g.instanceMethods[cls.Name] = make(map[string]string)
+						}
+						var goName string
+						if acc.Pub || cls.Pub {
+							goName = snakeToPascalWithAcronyms(acc.Name)
+						} else {
+							goName = snakeToCamelWithAcronyms(acc.Name)
+						}
+						g.instanceMethods[cls.Name][acc.Name] = goName
+					}
 				}
 			}
 		}

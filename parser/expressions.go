@@ -129,6 +129,9 @@ infixLoop:
 			} else {
 				left = p.parseSelectorExpr(left)
 			}
+		case token.COLONCOLON:
+			p.nextToken() // curToken is now COLONCOLON
+			left = p.parseScopeExpr(left)
 		case token.LPAREN:
 			p.nextToken()
 			left = p.parseCallExprWithParens(left)
@@ -517,6 +520,20 @@ func (p *Parser) parseSafeNavExpr(left ast.Expression) ast.Expression {
 	}
 
 	return &ast.SafeNavExpr{Receiver: left, Selector: p.curToken.Literal}
+}
+
+// parseScopeExpr parses the scope resolution operator: Module::Class
+// Used for accessing classes or constants defined within modules
+func (p *Parser) parseScopeExpr(left ast.Expression) ast.Expression {
+	// curToken is '::'
+	p.nextToken() // move past '::' to the identifier
+
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '::'")
+		return nil
+	}
+
+	return &ast.ScopeExpr{Left: left, Right: p.curToken.Literal}
 }
 
 // parseInfixExpr parses a binary expression: a + b, a && b.

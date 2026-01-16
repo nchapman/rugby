@@ -15,6 +15,12 @@ func Chars(s string) []string {
 	return strings.Split(s, "")
 }
 
+// StringBytes returns the bytes of a string as a byte slice.
+// Ruby: str.bytes (returns array of byte values)
+func StringBytes(s string) []byte {
+	return []byte(s)
+}
+
 // CharLength returns the number of characters (runes) in the string.
 // Ruby: str.length (for unicode-aware length)
 func CharLength(s string) int {

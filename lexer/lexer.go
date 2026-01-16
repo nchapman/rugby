@@ -254,16 +254,21 @@ func (l *Lexer) NextToken() token.Token {
 			tok = l.newToken(token.AT, "@")
 		}
 	case ':':
-		// Check if this is a symbol (:identifier) or type annotation
-		if isLetter(l.peekChar()) {
+		// Check for :: (scope resolution)
+		if l.peekChar() == ':' {
+			l.readChar()
+			tok = l.newToken(token.COLONCOLON, "::")
+		} else if isLetter(l.peekChar()) {
+			// Check if this is a symbol (:identifier)
 			l.readChar() // consume the ':'
 			tok.Type = token.SYMBOL
 			tok.Literal = l.readIdentifier()
 			tok.SpaceBefore = spaceBefore
 			l.prevTokenType = tok.Type
 			return tok
+		} else {
+			tok = l.newToken(token.COLON, ":")
 		}
-		tok = l.newToken(token.COLON, ":")
 	case '?':
 		if l.peekChar() == '?' {
 			l.readChar()

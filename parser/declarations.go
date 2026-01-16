@@ -1045,8 +1045,13 @@ func (p *Parser) parseModuleDeclWithDoc(doc *ast.CommentGroup) *ast.ModuleDecl {
 			if method := p.parseMethodDecl(); method != nil {
 				mod.Methods = append(mod.Methods, method)
 			}
+		case token.CLASS:
+			// Nested class declaration inside module
+			if class := p.parseClassDecl(); class != nil {
+				mod.Classes = append(mod.Classes, class)
+			}
 		default:
-			p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("unexpected token %s in module body, expected '@field', 'def', 'getter', 'setter', 'property', or 'end'", p.curToken.Type))
+			p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("unexpected token %s in module body, expected '@field', 'def', 'class', 'getter', 'setter', 'property', or 'end'", p.curToken.Type))
 			p.nextToken()
 		}
 	}

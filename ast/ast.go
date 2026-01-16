@@ -429,6 +429,16 @@ type SafeNavExpr struct {
 func (s *SafeNavExpr) node()     {}
 func (s *SafeNavExpr) exprNode() {}
 
+// ScopeExpr represents the :: scope resolution operator: Module::Class
+// Used for accessing classes defined within modules
+type ScopeExpr struct {
+	Left  Expression // module name (or nested scope)
+	Right string     // class/constant name within scope
+}
+
+func (s *ScopeExpr) node()     {}
+func (s *ScopeExpr) exprNode() {}
+
 // AssignStmt represents variable assignment
 type AssignStmt struct {
 	Name    string
@@ -954,6 +964,7 @@ type ModuleDecl struct {
 	Fields    []*FieldDecl    // fields defined in module
 	Methods   []*MethodDecl   // methods defined in module
 	Accessors []*AccessorDecl // accessor declarations
+	Classes   []*ClassDecl    // nested classes defined in module
 	Pub       bool            // true if exported
 	Line      int             // source line number
 	Doc       *CommentGroup   // associated doc comment

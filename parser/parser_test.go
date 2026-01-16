@@ -6123,18 +6123,52 @@ func TestModuleDecl_MissingEnd(t *testing.T) {
 	}
 }
 
-func TestModuleDecl_UnexpectedToken(t *testing.T) {
+func TestModuleDecl_NestedClass(t *testing.T) {
 	input := `module Foo
   class Bar
+    getter name : String
+
+    def initialize(@name : String)
+    end
   end
 end`
 
 	l := lexer.New(input)
 	p := New(l)
-	p.ParseProgram()
+	program := p.ParseProgram()
 
-	if len(p.Errors()) == 0 {
-		t.Error("expected parse error for unexpected token in module")
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parser errors: %v", p.Errors())
+	}
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	mod, ok := program.Declarations[0].(*ast.ModuleDecl)
+	if !ok {
+		t.Fatalf("expected ModuleDecl, got %T", program.Declarations[0])
+	}
+
+	if mod.Name != "Foo" {
+		t.Errorf("expected module name 'Foo', got '%s'", mod.Name)
+	}
+
+	if len(mod.Classes) != 1 {
+		t.Fatalf("expected 1 nested class, got %d", len(mod.Classes))
+	}
+
+	cls := mod.Classes[0]
+	if cls.Name != "Bar" {
+		t.Errorf("expected class name 'Bar', got '%s'", cls.Name)
+	}
+
+	if len(cls.Accessors) != 1 || cls.Accessors[0].Name != "name" {
+		t.Errorf("expected getter 'name', got %v", cls.Accessors)
+	}
+
+	if len(cls.Methods) != 1 || cls.Methods[0].Name != "initialize" {
+		t.Errorf("expected method 'initialize', got %v", cls.Methods)
 	}
 }
 

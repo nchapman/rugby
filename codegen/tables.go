@@ -118,6 +118,7 @@ var stdLib = map[string]map[string]MethodDef{
 		"replace":     {RuntimeFunc: "runtime.Replace", ReturnType: "String"},
 		"reverse":     {RuntimeFunc: "runtime.StringReverse", ReturnType: "String"},
 		"chars":       {RuntimeFunc: "runtime.Chars", ReturnType: "Array"},
+		"bytes":       {RuntimeFunc: "runtime.StringBytes", ReturnType: "[]byte"},
 		"lines":       {RuntimeFunc: "runtime.StringLines", ReturnType: "Array"},
 		"length":      {RuntimeFunc: "runtime.CharLength", ReturnType: "Int"},
 		"to_i":        {RuntimeFunc: "runtime.StringToInt", ReturnType: "(Int, error)"},

@@ -163,6 +163,8 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		g.genIndexExpr(e)
 	case *ast.SafeNavExpr:
 		g.genSafeNavExpr(e)
+	case *ast.ScopeExpr:
+		g.genScopeExpr(e)
 
 	// Concurrency
 	case *ast.SpawnExpr:
@@ -761,6 +763,55 @@ func (g *Generator) genSafeNavExpr(e *ast.SafeNavExpr) {
 	g.buf.WriteString(" } else { return nil } }()")
 }
 
+// genScopeExpr generates code for scope resolution expressions (Module::Class)
+// Converts to the namespaced form (Module_Class)
+func (g *Generator) genScopeExpr(e *ast.ScopeExpr) {
+	// Build the full namespaced name
+	var prefix string
+	switch left := e.Left.(type) {
+	case *ast.Ident:
+		prefix = left.Name
+	case *ast.ScopeExpr:
+		// Recursively handle nested scope (A::B::C)
+		// For now, just flatten it
+		g.genScopeExpr(left)
+		g.buf.WriteString("_")
+		g.buf.WriteString(e.Right)
+		return
+	default:
+		// Unexpected left expression type - just generate both parts
+		g.genExpr(e.Left)
+		g.buf.WriteString("_")
+		g.buf.WriteString(e.Right)
+		return
+	}
+
+	// Generate the namespaced name: Module_Class
+	g.buf.WriteString(prefix)
+	g.buf.WriteString("_")
+	g.buf.WriteString(e.Right)
+}
+
+// scopeExprToClassName converts a scope expression to a namespaced class name string.
+// For example, Http::Response becomes "Http_Response"
+func (g *Generator) scopeExprToClassName(e *ast.ScopeExpr) string {
+	var parts []string
+	current := e
+	for {
+		parts = append([]string{current.Right}, parts...)
+		switch left := current.Left.(type) {
+		case *ast.Ident:
+			parts = append([]string{left.Name}, parts...)
+			return strings.Join(parts, "_")
+		case *ast.ScopeExpr:
+			current = left
+		default:
+			// Unexpected - just return what we have
+			return strings.Join(parts, "_")
+		}
+	}
+}
+
 func (g *Generator) genInterpolatedString(s *ast.InterpolatedString) {
 	g.needsFmt = true
 	g.buf.WriteString("fmt.Sprintf(\"")
@@ -1058,6 +1109,11 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 
 func (g *Generator) genRangeSlice(collection ast.Expression, r *ast.RangeLit) {
 	g.needsRuntime = true
+
+	// Determine the collection type to add proper type assertion
+	collectionType := g.inferTypeFromExpr(collection)
+	goType := g.rugbyToGoSliceType(collectionType)
+
 	g.buf.WriteString("runtime.Slice(")
 	g.genExpr(collection)
 	g.buf.WriteString(", runtime.Range{Start: ")
@@ -1079,6 +1135,39 @@ func (g *Generator) genRangeSlice(collection ast.Expression, r *ast.RangeLit) {
 		g.buf.WriteString(", OpenEnd: true")
 	}
 	g.buf.WriteString("})")
+
+	// Add type assertion if we know the type
+	if goType != "" {
+		g.buf.WriteString(".(")
+		g.buf.WriteString(goType)
+		g.buf.WriteString(")")
+	}
+}
+
+// rugbyToGoSliceType converts a Rugby type to the Go slice type that would result from slicing.
+// Returns empty string if type is unknown or not sliceable.
+func (g *Generator) rugbyToGoSliceType(rugbyType string) string {
+	switch rugbyType {
+	case "String":
+		return "string"
+	case "Array<Int>", "Array<int>":
+		return "[]int"
+	case "Array<String>", "Array<string>":
+		return "[]string"
+	case "Array<Float>", "Array<float>", "Array<Float64>":
+		return "[]float64"
+	case "Array<Bool>", "Array<bool>":
+		return "[]bool"
+	case "Array":
+		return "[]any"
+	default:
+		// Handle generic Array<T> patterns
+		if strings.HasPrefix(rugbyType, "Array<") && strings.HasSuffix(rugbyType, ">") {
+			inner := rugbyType[6 : len(rugbyType)-1]
+			return "[]" + mapType(inner)
+		}
+		return ""
+	}
 }
 
 func (g *Generator) shouldUseNativeIndex(expr ast.Expression) bool {
@@ -1376,11 +1465,35 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 			// Only treat as Rugby class constructor if NOT a Go import
 			// (errors.new should become errors.New, not newerrors)
 			if ident, ok := fn.X.(*ast.Ident); ok && !g.imports[ident.Name] {
+				// Resolve module-scoped class name (e.g., Response -> Http_Response when inside module Http)
+				className := g.resolveClassName(ident.Name)
 				var ctorName string
 				if g.isPublicClass(ident.Name) {
-					ctorName = fmt.Sprintf("New%s", ident.Name)
+					ctorName = fmt.Sprintf("New%s", className)
 				} else {
-					ctorName = fmt.Sprintf("new%s", ident.Name)
+					ctorName = fmt.Sprintf("new%s", className)
+				}
+				g.buf.WriteString(ctorName)
+				g.buf.WriteString("(")
+				for i, arg := range call.Args {
+					if i > 0 {
+						g.buf.WriteString(", ")
+					}
+					g.genExpr(arg)
+				}
+				g.buf.WriteString(")")
+				return
+			}
+			// Handle scoped class constructors like Http::Response.new(...)
+			// Generate: newHttp_Response(...)
+			if scope, ok := fn.X.(*ast.ScopeExpr); ok {
+				className := g.scopeExprToClassName(scope)
+				var ctorName string
+				// For scoped classes, check if the module is public
+				if g.isPublicClass(className) {
+					ctorName = "New" + className
+				} else {
+					ctorName = "new" + className
 				}
 				g.buf.WriteString(ctorName)
 				g.buf.WriteString("(")
@@ -1419,6 +1532,29 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 					}
 					g.buf.WriteString(")")
 					return
+				}
+			}
+		}
+
+		// Handle module method calls (ModuleName.method_name -> ModuleName_Method)
+		if ident, ok := fn.X.(*ast.Ident); ok {
+			if mod, hasModule := g.modules[ident.Name]; hasModule {
+				// Check if the module has this class method
+				for _, method := range mod.Methods {
+					if method.IsClassMethod && method.Name == fn.Sel {
+						// Generate: ModuleName_MethodName(args)
+						funcName := ident.Name + "_" + snakeToPascalWithAcronyms(fn.Sel)
+						g.buf.WriteString(funcName)
+						g.buf.WriteString("(")
+						for i, arg := range call.Args {
+							if i > 0 {
+								g.buf.WriteString(", ")
+							}
+							g.genExpr(arg)
+						}
+						g.buf.WriteString(")")
+						return
+					}
 				}
 			}
 		}

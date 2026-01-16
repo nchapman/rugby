@@ -7,3 +7,4 @@ examples/*
 !examples/*.md
 !examples/*_test.go
 !examples/doc.go
+tmp/

@@ -74,6 +74,7 @@ const (
 	AT         TokenType = "@"
 	ATAT       TokenType = "@@"
 	COLON      TokenType = ":"
+	COLONCOLON TokenType = "::"
 	SHOVELLEFT TokenType = "<<"
 
 	// Keywords
