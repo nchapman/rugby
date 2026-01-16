@@ -18,4 +18,3 @@ puts query
 # SELECT *
 # FROM users
 # WHERE active = true
-#

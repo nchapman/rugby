@@ -20,7 +20,5 @@ puts template
 
 #@ expect:
 # Hello World!
-#
 # ---
 # Hello #{name}!
-#

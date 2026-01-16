@@ -21,8 +21,6 @@ puts sql
 #@ expect:
 # First line
 # Second line
-#
 # ---
 # SELECT *
 # FROM users
-#
