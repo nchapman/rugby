@@ -1,4 +1,4 @@
-#@ skip: interface pointer receiver issue with type switch
+#@ run-pass
 #@ check-output
 #
 # Test: Section 9.6 - case_type for type matching

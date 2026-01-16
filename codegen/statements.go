@@ -1378,7 +1378,12 @@ func (g *Generator) genCaseTypeStmt(s *ast.CaseTypeStmt) {
 	for _, whenClause := range s.WhenClauses {
 		g.writeIndent()
 		g.buf.WriteString("case ")
-		g.buf.WriteString(mapType(whenClause.Type))
+		// Classes use pointer receivers, so use pointer types in type switch
+		goType := mapType(whenClause.Type)
+		if g.isClass(whenClause.Type) && !strings.HasPrefix(goType, "*") {
+			g.buf.WriteString("*")
+		}
+		g.buf.WriteString(goType)
 		g.buf.WriteString(":\n")
 
 		g.indent++
