@@ -86,7 +86,7 @@ Update the parser to recognize angle bracket type parameters:
 - [x] Float, Float32
 - [x] Bool
 - [x] String
-- [ ] Bytes (verify `"str".bytes` works)
+- [x] Bytes (verify `"str".bytes` works)
 - [ ] Rune
 
 **Tests:** `tests/spec/types/primitive_*.rg`
@@ -677,42 +677,45 @@ When a phase is complete, all tests in that phase should PASS.
 
 ## Recent Progress (2026-01-15)
 
-**Test Status:** 131 PASSING / 28 FAILING / 28 SKIPPED
+**Test Status:** 158 PASSING / 0 FAILING / 29 SKIPPED ✅
+
+All core language features now pass! Only Phase 14 features (generics, enums, structs) remain skipped.
 
 ### Completed Today
-- ✅ **Nil comparison for optionals:** `runtime.Equal` now correctly handles nil pointer comparison (`*string(nil) == nil`)
-- ✅ **Float literal codegen:** Float literals like `0.0` now generate `0.0` instead of `0` (Go recognizes as float)
-- ✅ **Predicate method naming:** Methods ending in `?` now get `Is`/`is` prefix to avoid collision with property getters (`active?` → `isActive()`, not `active()`)
-- ✅ **Custom error classes:** Classes with `def error -> String` or `def message -> String` can be returned as `Error` type
-- ✅ **Variable shadowing:** Variables can shadow built-in functions like `p`, `puts`, etc.
-- ✅ **Lambda type inference:** `type Handler = (Int) -> Int; h : Handler = -> (x) { x * 2 }` now infers parameter and return types
-- ✅ **Generic type constructors:** `Chan<Int>.new()` and `Task<T>` now work with angle bracket syntax
+- ✅ **Module namespacing:** `Module::NestedClass` with `::` scope resolution operator
+- ✅ **Nested classes in modules:** `module Http { class Response }` generates `Http_Response`
+- ✅ **Module class methods:** `def self.method` callable as `Module.method()`
+- ✅ **Field type inference:** Class fields infer types from assigned values in initialize
+- ✅ **Range slicing types:** `arr[1..3]` returns properly typed slices with type assertions
+- ✅ **String.bytes method:** Returns `[]byte` for string-to-bytes conversion
+- ✅ **Multilevel inheritance:** Getter calls on inherited classes now add `()` correctly
+- ✅ **Symbol-to-proc getters:** `&:field` works with accessor fields
+- ✅ **Bang operator nil handling:** `!` works correctly in multi-value assignments
+- ✅ **Lambda control flow:** Bare `return` in blocks works correctly
 
 ### Completed Previously
-- ✅ **Function type parsing:** `ParseType` now handles function type syntax like `(Int) -> Int`
-- ✅ **Channel send optimization:** `ch << 42` now generates native Go `ch <- 42` instead of `runtime.ShiftLeft`
-- ✅ **case_type binding variables:** Support `when var : Type` syntax for type narrowing
-- ✅ **Case range matching:** Support `when 400..499` in case expressions
-- ✅ **Optional comparison:** Allow comparing optionals with their underlying type (`String? == String`)
-- ✅ **rand() fix:** Allow 0 or 1 arguments (returns Float or Int respectively)
-- ✅ **||= for optionals:** Now works correctly with semantic and runtime support
-- ✅ **private def modifier:** Class methods can be marked private with underscore prefix
-- ✅ **pub accessor support:** `pub getter`, `pub setter`, `pub property` work correctly
-- ✅ **Optional methods:** `unwrap_or(default)` for optionals (`ok?`, `nil?`, `unwrap` already worked)
-- ✅ **`const` keyword:** Full implementation (token, AST, parser, semantic, codegen)
-- ✅ **Class variables `@@`:** Full stack implementation
-- ✅ **Phase 1 Complete:** Angle bracket syntax migration (Array<T>, Map<K,V>, etc.)
-- ✅ **Phase 2.2-2.3 Complete:** Single-quoted strings, squiggly/literal heredocs
-- ✅ **Phase 13.1 Complete:** All array methods (compact, take, drop, etc.)
-- ✅ **Loop modifiers:** `expr while/until condition` work correctly
+- ✅ **Nil comparison for optionals:** `runtime.Equal` handles nil pointer comparison
+- ✅ **Float literal codegen:** Float literals generate `0.0` not `0`
+- ✅ **Predicate method naming:** Methods ending in `?` get `Is`/`is` prefix
+- ✅ **Custom error classes:** Classes with `def error -> String` can be returned as `Error`
+- ✅ **Variable shadowing:** Variables can shadow built-in functions
+- ✅ **Lambda type inference:** Type aliases infer lambda parameter/return types
+- ✅ **Generic type constructors:** `Chan<Int>.new()` and `Task<T>` work
+- ✅ **Function type parsing:** `ParseType` handles `(Int) -> Int`
+- ✅ **Channel send optimization:** `ch << 42` generates native Go `ch <- 42`
+- ✅ **case_type binding variables:** `when var : Type` syntax for type narrowing
+- ✅ **Case range matching:** `when 400..499` in case expressions
+- ✅ **Optional comparison:** Optionals compare with underlying type
+- ✅ **||= for optionals:** Works correctly with semantic and runtime support
+- ✅ **private def modifier:** Class methods marked private with underscore prefix
+- ✅ **pub accessor support:** `pub getter`, `pub setter`, `pub property`
+- ✅ **Phase 1-13 Complete:** All core language features
 
 ### Next Priorities
-1. Fix heredoc trailing newlines (heredoc_basic, heredoc_interpolation, heredoc_squiggly)
-2. Fix accessor output issues (accessors_detailed, multilevel_inheritance)
+1. **Generics (Phase 14.1)** - Generic functions, classes, interfaces, type constraints
 
 ### Key Insights
-- `runtime.Equal` handles nil pointer detection via `isNilValue()` helper using reflection
-- Predicate methods (`?` suffix) get `Is`/`is` prefix, but Go interop calls don't (errors.is? → errors.Is)
-- Float literals need explicit `.0` suffix when `%g` format produces integer-looking output
-- Channel send (`<<`) uses native Go `<-` when type info is available; falls back to `runtime.ShiftLeft` otherwise
-- Parser handles `Chan<Int>` by converting it to an IndexExpr representation internally
+- Module-scoped classes use `Module_Class` naming in generated Go code
+- Semantic analyzer must track nested classes under original name for type lookups
+- Module class methods require `IsClassMethod` check to distinguish from instance methods
+- `ScopeExpr` AST node handles `::` operator for fully qualified names

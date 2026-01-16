@@ -211,6 +211,72 @@ func (p *Parser) parseFuncDecl() *ast.FuncDecl {
 	return p.parseFuncDeclWithDoc(doc)
 }
 
+// parseTypeParams parses generic type parameters: <T>, <T, U>, <T : Constraint>
+// Returns nil if no type parameters are present (no '<' token)
+func (p *Parser) parseTypeParams() []*ast.TypeParam {
+	if !p.curTokenIs(token.LT) {
+		return nil
+	}
+	p.nextToken() // consume '<'
+
+	var typeParams []*ast.TypeParam
+
+	// Parse first type parameter
+	if !p.curTokenIs(token.IDENT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type parameter name")
+		return nil
+	}
+
+	for {
+		tp := &ast.TypeParam{Name: p.curToken.Literal}
+		p.nextToken()
+
+		// Check for constraint: T : Constraint
+		if p.curTokenIs(token.COLON) {
+			p.nextToken() // consume ':'
+			if !p.curTokenIs(token.IDENT) {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected constraint name after ':'")
+				return nil
+			}
+			tp.Constraint = p.curToken.Literal
+			p.nextToken()
+
+			// Handle multiple constraints: T : A & B
+			for p.curTokenIs(token.AMP) {
+				p.nextToken() // consume '&'
+				if !p.curTokenIs(token.IDENT) {
+					p.errorAt(p.curToken.Line, p.curToken.Column, "expected constraint name after '&'")
+					return nil
+				}
+				tp.Constraint += " & " + p.curToken.Literal
+				p.nextToken()
+			}
+		}
+
+		typeParams = append(typeParams, tp)
+
+		// Check for more type parameters
+		if p.curTokenIs(token.COMMA) {
+			p.nextToken() // consume ','
+			if !p.curTokenIs(token.IDENT) {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected type parameter name after ','")
+				return nil
+			}
+			continue
+		}
+
+		break
+	}
+
+	if !p.curTokenIs(token.GT) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '>' after type parameters")
+		return nil
+	}
+	p.nextToken() // consume '>'
+
+	return typeParams
+}
+
 func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 	line := p.curToken.Line
 	p.nextToken() // consume 'def'
@@ -222,6 +288,9 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 
 	fn := &ast.FuncDecl{Name: p.curToken.Literal, Line: line, Doc: doc}
 	p.nextToken()
+
+	// Parse optional type parameters: def name<T, U>
+	fn.TypeParams = p.parseTypeParams()
 
 	// Parse optional parameter list
 	if p.curTokenIs(token.LPAREN) {
@@ -336,6 +405,49 @@ func (p *Parser) parseClassDecl() *ast.ClassDecl {
 	return p.parseClassDeclWithDoc(doc)
 }
 
+// isGenericTypeParamList uses lookahead to check if current '<' starts a generic type parameter list.
+// Returns true if we find a matching '>' (generics), false otherwise (inheritance).
+func (p *Parser) isGenericTypeParamList() bool {
+	if !p.curTokenIs(token.LT) {
+		return false
+	}
+
+	// Save state for lookahead
+	lexerState := p.l.SaveState()
+	savedCurToken := p.curToken
+	savedPeekToken := p.peekToken
+
+	p.nextToken() // skip '<'
+
+	// Look for '>' while allowing valid type param syntax
+	depth := 1
+	result := false
+	for depth > 0 && !p.curTokenIs(token.EOF) && !p.curTokenIs(token.NEWLINE) {
+		switch p.curToken.Type {
+		case token.LT:
+			depth++
+		case token.GT:
+			depth--
+			if depth == 0 {
+				result = true // Found matching '>'
+				goto restore
+			}
+		case token.IDENT, token.COMMA, token.COLON, token.AMP:
+			// Valid in type param list
+		default:
+			goto restore // Invalid token for type params
+		}
+		p.nextToken()
+	}
+
+restore:
+	// Restore parser state
+	p.l.RestoreState(lexerState)
+	p.curToken = savedCurToken
+	p.peekToken = savedPeekToken
+	return result
+}
+
 func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 	line := p.curToken.Line
 	p.nextToken() // consume 'class'
@@ -348,7 +460,13 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 	cls := &ast.ClassDecl{Name: p.curToken.Literal, Line: line, Doc: doc}
 	p.nextToken()
 
-	// Parse optional embedded types: class Service < Logger, Authenticator
+	// Parse optional type parameters: class Box<T>
+	// Use lookahead to distinguish from inheritance: class Child < Parent
+	if p.isGenericTypeParamList() {
+		cls.TypeParams = p.parseTypeParams()
+	}
+
+	// Parse optional embedded types (inheritance): class Service < Logger, Authenticator
 	if p.curTokenIs(token.LT) {
 		p.nextToken() // consume '<'
 		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
@@ -525,6 +643,12 @@ func (p *Parser) parseInterfaceDeclWithDoc(doc *ast.CommentGroup) *ast.Interface
 
 	iface := &ast.InterfaceDecl{Name: p.curToken.Literal, Line: line, Doc: doc}
 	p.nextToken()
+
+	// Parse optional type parameters: interface Container<T>
+	// Use lookahead to distinguish from parent interfaces: interface IO < Reader
+	if p.isGenericTypeParamList() {
+		iface.TypeParams = p.parseTypeParams()
+	}
 
 	// Parse parent interfaces if present (interface IO < Reader, Writer)
 	if p.curTokenIs(token.LT) {
@@ -903,6 +1027,9 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 
 	method := &ast.MethodDecl{Name: methodName, Line: line, Doc: doc, IsClassMethod: isClassMethod}
 
+	// Parse optional type parameters: def map<R>(f : (T) -> R) -> Box<R>
+	method.TypeParams = p.parseTypeParams()
+
 	// Parse optional parameter list
 	if p.curTokenIs(token.LPAREN) {
 		p.nextToken() // consume '('
@@ -1146,7 +1273,7 @@ func (p *Parser) parseTypeAliasDeclWithDoc(doc *ast.CommentGroup) *ast.TypeAlias
 	}
 	p.nextToken() // consume '='
 
-	// Parse the underlying type using the full type parser (handles generics like Array[T])
+	// Parse the underlying type using the full type parser (handles generics like Array<T>)
 	// Also handle function types like (Int) -> Int
 	var typeName string
 	if p.curTokenIs(token.LPAREN) {

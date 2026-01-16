@@ -158,6 +158,7 @@ type Generator struct {
 	needsFmt                     bool                         // track if fmt import is needed (string interpolation)
 	needsErrors                  bool                         // track if errors import is needed (error_is?, error_as)
 	needsRegexp                  bool                         // track if regexp import is needed (regex literals)
+	needsConstraints             bool                         // track if constraints import is needed (generics)
 	needsTestingImport           bool                         // track if testing import is needed
 	needsTestImport              bool                         // track if rugby/test import is needed
 	currentClass                 string                       // current class being generated (for instance vars)
@@ -166,6 +167,8 @@ type Generator struct {
 	currentMethod                string                       // current method name being generated (for super)
 	currentMethodPub             bool                         // whether current method is pub (for super)
 	currentClassEmbeds           []string                     // embedded types (parent classes) of current class
+	currentClassTypeParamClause  string                       // type parameter clause for current class (e.g., "[T any]")
+	currentClassTypeParamNames   string                       // type parameter names for current class (e.g., "[T]")
 	accessorFields               map[string]bool              // track which fields have accessor methods (need underscore prefix)
 	modules                      map[string]*ast.ModuleDecl   // track module definitions for include
 	currentClassInterfaceMethods map[string]bool              // methods that must be exported for current class (to satisfy interfaces)
@@ -453,6 +456,15 @@ func (g *Generator) isClass(typeName string) bool {
 	return g.typeInfo.IsClass(typeName)
 }
 
+// stripTypeParams removes generic type parameters from a type name.
+// For example: "Box<Int>" -> "Box", "User" -> "User"
+func stripTypeParams(typeName string) string {
+	if idx := strings.Index(typeName, "<"); idx != -1 {
+		return typeName[:idx]
+	}
+	return typeName
+}
+
 // isModuleScopedClass checks if a type name is a module-scoped class name (e.g., "Http_Response")
 // by checking if it matches the pattern Module_Class where Module exists and has Class defined.
 func (g *Generator) isModuleScopedClass(typeName string) bool {
@@ -661,7 +673,7 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 
 	// Minimal fallback: literal type detection only
 	// Semantic analysis should provide types for all other expressions
-	switch expr.(type) {
+	switch e := expr.(type) {
 	case *ast.IntLit:
 		return "Int"
 	case *ast.FloatLit:
@@ -682,6 +694,14 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		return "Map"
 	case *ast.SetLit:
 		return "Set"
+	case *ast.CallExpr:
+		// Constructor call: ClassName.new(...) -> ClassName
+		// Note: Doesn't handle chained calls or explicit type params yet
+		if sel, ok := e.Func.(*ast.SelectorExpr); ok && sel.Sel == "new" {
+			if ident, ok := sel.X.(*ast.Ident); ok {
+				return ident.Name
+			}
+		}
 	}
 	return "" // unknown - semantic analysis should have provided the type
 }
@@ -974,13 +994,15 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	// Collect all imports
 	const runtimeImport = "github.com/nchapman/rugby/runtime"
 	const testImport = "github.com/nchapman/rugby/test"
+	const constraintsImport = "golang.org/x/exp/constraints"
 	needsRuntimeImport := g.needsRuntime && !userImports[runtimeImport]
 	needsFmtImport := g.needsFmt && !userImports["fmt"]
 	needsErrorsImport := g.needsErrors && !userImports["errors"]
 	needsRegexpImport := g.needsRegexp && !userImports["regexp"]
 	needsTestingImport := g.needsTestingImport && !userImports["testing"]
 	needsTestImport := g.needsTestImport && !userImports[testImport]
-	hasImports := len(program.Imports) > 0 || needsRuntimeImport || needsFmtImport || needsErrorsImport || needsRegexpImport || needsTestingImport || needsTestImport
+	needsConstraintsImport := g.needsConstraints && !userImports[constraintsImport]
+	hasImports := len(program.Imports) > 0 || needsRuntimeImport || needsFmtImport || needsErrorsImport || needsRegexpImport || needsTestingImport || needsTestImport || needsConstraintsImport
 	if hasImports {
 		out.WriteString("import (\n")
 		// User-specified imports
@@ -1010,6 +1032,9 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 		}
 		if needsTestImport {
 			out.WriteString(fmt.Sprintf("\ttest %q\n", testImport))
+		}
+		if needsConstraintsImport {
+			out.WriteString(fmt.Sprintf("\t%q\n", constraintsImport))
 		}
 		out.WriteString(")\n\n")
 	}

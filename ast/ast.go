@@ -75,9 +75,17 @@ type Param struct {
 	Type string // optional type annotation, empty if not specified
 }
 
+// TypeParam represents a generic type parameter
+// e.g., T in def identity<T>(x : T), or T : Comparable in def sort<T : Comparable>(arr)
+type TypeParam struct {
+	Name       string // type parameter name (e.g., "T", "K", "V")
+	Constraint string // optional constraint (e.g., "Comparable", "Numeric"), empty if unconstrained
+}
+
 // FuncDecl represents a function definition
 type FuncDecl struct {
 	Name        string
+	TypeParams  []*TypeParam // generic type parameters (e.g., <T>, <K, V>)
 	Params      []*Param
 	ReturnTypes []string // empty if not specified
 	Body        []Statement
@@ -336,7 +344,7 @@ type TupleLit struct {
 func (t *TupleLit) node()     {}
 func (t *TupleLit) exprNode() {}
 
-// SetLit represents a set literal: Set{1, 2, 3} or Set[Int]{1, 2, 3}
+// SetLit represents a set literal: Set{1, 2, 3} or Set<Int>{1, 2, 3}
 type SetLit struct {
 	Elements []Expression
 	TypeHint string // optional element type, e.g., "Int", "String"
@@ -669,6 +677,7 @@ func (d *DeferStmt) stmtNode() {}
 // ClassDecl represents a class definition
 type ClassDecl struct {
 	Name       string          // class name (e.g., "User")
+	TypeParams []*TypeParam    // generic type parameters (e.g., <T>, <K, V>)
 	Embeds     []string        // embedded types (Go struct embedding), empty if none
 	Implements []string        // interfaces this class explicitly implements
 	Fields     []*FieldDecl    // fields inferred from initialize
@@ -701,6 +710,7 @@ type FieldDecl struct {
 // MethodDecl represents a method definition within a class
 type MethodDecl struct {
 	Name          string        // method name (may end with ? for predicates)
+	TypeParams    []*TypeParam  // generic type parameters (e.g., <R> in map<R>)
 	Params        []*Param      // parameters
 	ReturnTypes   []string      // return types
 	Body          []Statement   // method body
@@ -783,13 +793,14 @@ func (c *ClassVarCompoundAssign) stmtNode() {}
 
 // InterfaceDecl represents an interface definition
 type InterfaceDecl struct {
-	Name    string        // interface name (e.g., "Speaker")
-	Parents []string      // parent interfaces for embedding (e.g., ["Reader", "Writer"])
-	Methods []*MethodSig  // method signatures (no body)
-	Pub     bool          // true if exported (pub interface)
-	Line    int           // source line number (1-indexed)
-	Doc     *CommentGroup // leading comments
-	Comment *CommentGroup // trailing comment on same line
+	Name       string        // interface name (e.g., "Speaker")
+	TypeParams []*TypeParam  // generic type parameters (e.g., <T>)
+	Parents    []string      // parent interfaces for embedding (e.g., ["Reader", "Writer"])
+	Methods    []*MethodSig  // method signatures (no body)
+	Pub        bool          // true if exported (pub interface)
+	Line       int           // source line number (1-indexed)
+	Doc        *CommentGroup // leading comments
+	Comment    *CommentGroup // trailing comment on same line
 }
 
 func (i *InterfaceDecl) node()     {}

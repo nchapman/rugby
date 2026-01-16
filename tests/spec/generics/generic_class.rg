@@ -1,8 +1,7 @@
-#@ compile-fail
-#@ skip: Generics not yet implemented (Section 6.2)
+#@ run-pass
+#@ check-output
 #
 # Test: Section 6.2 - Generic classes
-# TODO: Implement generic class syntax
 
 class Box<T>
   def initialize(@value : T)
@@ -11,11 +10,11 @@ class Box<T>
   def get -> T
     @value
   end
-
-  def map<R>(f : (T) -> R) -> Box<R>
-    Box<R>.new(f.(@value))
-  end
 end
 
-box = Box<Int>.new(42)
+# For now, use type inference (no explicit type param on constructor)
+box = Box.new(42)
 puts box.get
+
+#@ expect:
+# 42

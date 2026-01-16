@@ -31,6 +31,7 @@ const (
 	TypeClass     // user-defined class
 	TypeInterface // user-defined interface
 	TypeFunc      // function type
+	TypeTypeParam // generic type parameter (e.g., T in def identity<T>)
 )
 
 // Type represents a type in the Rugby type system.
@@ -116,6 +117,11 @@ func NewInterfaceType(name string) *Type {
 // NewFuncType creates a function type.
 func NewFuncType(params, returns []*Type) *Type {
 	return &Type{Kind: TypeFunc, Params: params, Returns: returns}
+}
+
+// NewTypeParamType creates a type parameter type (e.g., T in generics).
+func NewTypeParamType(name string) *Type {
+	return &Type{Kind: TypeTypeParam, Name: name}
 }
 
 // String returns a human-readable representation of the type.
@@ -205,6 +211,8 @@ func (t *Type) String() string {
 			return fmt.Sprintf("(%s) -> %s", strings.Join(params, ", "), returns[0])
 		}
 		return fmt.Sprintf("(%s) -> (%s)", strings.Join(params, ", "), strings.Join(returns, ", "))
+	case TypeTypeParam:
+		return t.Name
 	default:
 		return "unknown"
 	}

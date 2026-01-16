@@ -21,8 +21,9 @@ type Scope struct {
 	symbols map[string]*Symbol
 
 	// For method/function scopes
-	ReturnTypes   []*Type // expected return types
-	IsClassMethod bool    // true if this is a class method (def self.method)
+	ReturnTypes   []*Type           // expected return types
+	IsClassMethod bool              // true if this is a class method (def self.method)
+	TypeParams    map[string]string // type parameters in scope (name -> constraint), for generics
 
 	// For class/module scopes
 	ClassName  string // name of enclosing class (if any)
@@ -99,6 +100,20 @@ func (s *Scope) Lookup(name string) *Symbol {
 // LookupLocal searches for a symbol only in this scope, not parent scopes.
 func (s *Scope) LookupLocal(name string) *Symbol {
 	return s.symbols[name]
+}
+
+// LookupTypeParam searches for a type parameter by name in this scope and parent scopes.
+// Returns the constraint (or empty string if unconstrained) and true if found.
+func (s *Scope) LookupTypeParam(name string) (constraint string, found bool) {
+	if s.TypeParams != nil {
+		if constraint, ok := s.TypeParams[name]; ok {
+			return constraint, true
+		}
+	}
+	if s.Parent != nil {
+		return s.Parent.LookupTypeParam(name)
+	}
+	return "", false
 }
 
 // IsDefinedLocally returns true if a symbol with the given name exists in this scope.

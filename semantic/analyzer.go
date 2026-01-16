@@ -1,6 +1,7 @@
 package semantic
 
 import (
+	"maps"
 	"strings"
 
 	"github.com/nchapman/rugby/ast"
@@ -510,11 +511,20 @@ func (a *Analyzer) collectDeclaration(stmt ast.Statement) {
 }
 
 func (a *Analyzer) collectFunc(f *ast.FuncDecl) {
+	// Build a set of type parameter names for type-aware parsing
+	var typeParams map[string]bool
+	if len(f.TypeParams) > 0 {
+		typeParams = make(map[string]bool, len(f.TypeParams))
+		for _, tp := range f.TypeParams {
+			typeParams[tp.Name] = true
+		}
+	}
+
 	params := make([]*Symbol, len(f.Params))
 	for i, p := range f.Params {
 		var typ *Type
 		if p.Type != "" {
-			typ = ParseType(p.Type)
+			typ = ParseTypeWithParams(p.Type, typeParams)
 		} else {
 			typ = TypeUnknownVal
 		}
@@ -523,7 +533,7 @@ func (a *Analyzer) collectFunc(f *ast.FuncDecl) {
 
 	returnTypes := make([]*Type, len(f.ReturnTypes))
 	for i, rt := range f.ReturnTypes {
-		returnTypes[i] = ParseType(rt)
+		returnTypes[i] = ParseTypeWithParams(rt, typeParams)
 	}
 
 	fn := NewFunction(f.Name, params, returnTypes)
@@ -545,13 +555,22 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 	cls.Includes = c.Includes
 	cls.Node = c
 
+	// Build a set of type parameter names from the class declaration
+	var classTypeParams map[string]bool
+	if len(c.TypeParams) > 0 {
+		classTypeParams = make(map[string]bool, len(c.TypeParams))
+		for _, tp := range c.TypeParams {
+			classTypeParams[tp.Name] = true
+		}
+	}
+
 	// Collect fields from explicit declarations and accessors
 	for _, f := range c.Fields {
-		field := NewField(f.Name, ParseType(f.Type))
+		field := NewField(f.Name, ParseTypeWithParams(f.Type, classTypeParams))
 		cls.AddField(field)
 	}
 	for _, acc := range c.Accessors {
-		field := NewField(acc.Name, ParseType(acc.Type))
+		field := NewField(acc.Name, ParseTypeWithParams(acc.Type, classTypeParams))
 		// Set accessor flags based on accessor kind
 		switch acc.Kind {
 		case "getter":
@@ -567,11 +586,21 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 
 	// Collect methods (signatures only for now)
 	for _, m := range c.Methods {
+		// Build type params for this method: class params + method-specific params
+		methodTypeParams := classTypeParams
+		if len(m.TypeParams) > 0 {
+			methodTypeParams = make(map[string]bool)
+			maps.Copy(methodTypeParams, classTypeParams)
+			for _, tp := range m.TypeParams {
+				methodTypeParams[tp.Name] = true
+			}
+		}
+
 		params := make([]*Symbol, len(m.Params))
 		for i, p := range m.Params {
 			var typ *Type
 			if p.Type != "" {
-				typ = ParseType(p.Type)
+				typ = ParseTypeWithParams(p.Type, methodTypeParams)
 			} else {
 				typ = TypeUnknownVal
 			}
@@ -580,7 +609,7 @@ func (a *Analyzer) collectClass(c *ast.ClassDecl) {
 
 		returnTypes := make([]*Type, len(m.ReturnTypes))
 		for i, rt := range m.ReturnTypes {
-			returnTypes[i] = ParseType(rt)
+			returnTypes[i] = ParseTypeWithParams(rt, methodTypeParams)
 		}
 
 		// Check if method implicitly returns self (for method chaining)
@@ -821,7 +850,7 @@ func (a *Analyzer) resolveTypeAliasType(t *Type) *Type {
 		}
 	}
 
-	// Resolve nested types (e.g., Array[UserID] should resolve to Array[Int64])
+	// Resolve nested types (e.g., Array<UserID> should resolve to Array<Int64>)
 	if t.Elem != nil {
 		resolved := a.resolveTypeAliasType(t.Elem)
 		if resolved != t.Elem {
@@ -3371,6 +3400,13 @@ func (a *Analyzer) isAssignable(to, from *Type) bool {
 	if to.Kind == TypeAny || from.Kind == TypeAny {
 		return true
 	}
+
+	// Type parameters accept any type (generic type checking)
+	// TODO: Implement proper constraint checking - verify that `from` satisfies
+	// any constraints on `to` when it's a TypeTypeParam (e.g., T : Ordered)
+	if to.Kind == TypeTypeParam || from.Kind == TypeTypeParam {
+		return true
+	}
 	if to.Kind == TypeUnknown || from.Kind == TypeUnknown {
 		return true
 	}
@@ -4262,7 +4298,7 @@ func (a *Analyzer) parseTypeFromExpr(expr ast.Expression) *Type {
 			return TypeUnknownVal
 		}
 	case *ast.IndexExpr:
-		// Handle nested generics like Array[Int]
+		// Handle nested generics like Array<Int>
 		if ident, ok := e.Left.(*ast.Ident); ok {
 			elemType := a.parseTypeFromExpr(e.Index)
 			switch ident.Name {

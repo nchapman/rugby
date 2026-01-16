@@ -44,6 +44,35 @@ func (g *Generator) mapParamType(rubyType string) string {
 	return goType
 }
 
+// mapConstraint converts Rugby type constraints to Go constraint interfaces.
+// Rugby constraints map to Go's comparable or custom interfaces.
+func (g *Generator) mapConstraint(constraint string) string {
+	// Handle multiple constraints: "A & B" -> "interface{ A; B }" (Go doesn't support this directly)
+	// For now, just use the first constraint
+	if strings.Contains(constraint, " & ") {
+		parts := strings.Split(constraint, " & ")
+		constraint = parts[0] // Use first constraint for now
+	}
+
+	switch constraint {
+	case "Comparable", "Equatable":
+		return "comparable"
+	case "Hashable":
+		return "comparable" // Go uses comparable for map keys
+	case "Ordered":
+		// Go's cmp.Ordered requires import - use constraints.Ordered
+		g.needsConstraints = true
+		return "constraints.Ordered"
+	case "Numeric":
+		// Custom interface for numeric types
+		g.needsConstraints = true
+		return "constraints.Integer | constraints.Float"
+	default:
+		// Assume it's a custom interface name
+		return constraint
+	}
+}
+
 func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	clear(g.vars)          // reset vars for each function
 	clear(g.goInteropVars) // reset Go interop tracking for each function
@@ -73,7 +102,27 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	}
 
 	// Generate function signature
-	g.buf.WriteString(fmt.Sprintf("func %s(", funcName))
+	g.buf.WriteString(fmt.Sprintf("func %s", funcName))
+
+	// Generate type parameters if present: [T any, U Constraint]
+	if len(fn.TypeParams) > 0 {
+		g.buf.WriteString("[")
+		for i, tp := range fn.TypeParams {
+			if i > 0 {
+				g.buf.WriteString(", ")
+			}
+			g.buf.WriteString(tp.Name)
+			g.buf.WriteString(" ")
+			if tp.Constraint != "" {
+				g.buf.WriteString(g.mapConstraint(tp.Constraint))
+			} else {
+				g.buf.WriteString("any")
+			}
+		}
+		g.buf.WriteString("]")
+	}
+
+	g.buf.WriteString("(")
 	for i, param := range fn.Params {
 		if i > 0 {
 			g.buf.WriteString(", ")
@@ -329,6 +378,8 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	className := cls.Name
 	g.currentClass = className
 	g.currentClassEmbeds = cls.Embeds
+	g.currentClassTypeParamClause = ""
+	g.currentClassTypeParamNames = ""
 	clear(g.currentClassInterfaceMethods) // Reset for new class
 
 	// For structural typing support: export methods that match ANY interface method
@@ -489,9 +540,33 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	// Emit struct definition
 	// Class names are already PascalCase by convention; pub affects field/method visibility
 	// Accessor fields use underscore prefix (e.g., _name) to avoid Go field/method name conflict
+
+	// Build type parameter names set for mapping field types
+	var classTypeParamNames map[string]bool
+	if len(cls.TypeParams) > 0 {
+		classTypeParamNames = make(map[string]bool, len(cls.TypeParams))
+		for _, tp := range cls.TypeParams {
+			classTypeParamNames[tp.Name] = true
+		}
+	}
+
+	// Generate type parameter clause if present
+	typeParamClause := ""
+	if len(cls.TypeParams) > 0 {
+		var params []string
+		for _, tp := range cls.TypeParams {
+			if tp.Constraint != "" {
+				params = append(params, fmt.Sprintf("%s %s", tp.Name, g.mapConstraint(tp.Constraint)))
+			} else {
+				params = append(params, tp.Name+" any")
+			}
+		}
+		typeParamClause = "[" + strings.Join(params, ", ") + "]"
+	}
+
 	hasContent := len(cls.Embeds) > 0 || len(allFields) > 0
 	if hasContent {
-		g.buf.WriteString(fmt.Sprintf("type %s struct {\n", className))
+		g.buf.WriteString(fmt.Sprintf("type %s%s struct {\n", className, typeParamClause))
 		for _, embed := range cls.Embeds {
 			g.buf.WriteString("\t")
 			g.buf.WriteString(embed)
@@ -523,14 +598,28 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		}
 		g.buf.WriteString("}\n\n")
 	} else {
-		g.buf.WriteString(fmt.Sprintf("type %s struct{}\n\n", className))
+		g.buf.WriteString(fmt.Sprintf("type %s%s struct{}\n\n", className, typeParamClause))
 	}
+
+	// Build type param names string for generic instantiation (e.g., "[T, U]")
+	typeParamNames := ""
+	if len(cls.TypeParams) > 0 {
+		var names []string
+		for _, tp := range cls.TypeParams {
+			names = append(names, tp.Name)
+		}
+		typeParamNames = "[" + strings.Join(names, ", ") + "]"
+	}
+
+	// Store type params in generator fields for use by method generation
+	g.currentClassTypeParamClause = typeParamClause
+	g.currentClassTypeParamNames = typeParamNames
 
 	// Emit constructor if initialize exists
 	hasInitialize := false
 	for _, method := range cls.Methods {
 		if method.Name == "initialize" {
-			g.genConstructor(className, method, cls.Pub)
+			g.genConstructor(className, method, cls.Pub, typeParamClause, typeParamNames)
 			hasInitialize = true
 			break
 		}
@@ -538,13 +627,13 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 
 	// If no initialize but has parent class, generate delegating constructor
 	if !hasInitialize && len(cls.Embeds) > 0 {
-		g.genSubclassConstructor(className, cls.Embeds[0], cls.Pub)
+		g.genSubclassConstructor(className, cls.Embeds[0], cls.Pub, typeParamClause, typeParamNames)
 	}
 
 	// If no initialize and no parent, generate a simple default constructor
 	// This enables instantiation of classes that only have methods (no fields)
 	if !hasInitialize && len(cls.Embeds) == 0 {
-		g.genDefaultConstructor(className, cls.Pub)
+		g.genDefaultConstructor(className, cls.Pub, typeParamClause, typeParamNames)
 	}
 
 	// Emit accessor methods (including from modules)
@@ -632,7 +721,7 @@ func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, 
 		} else {
 			methodName = snakeToCamelWithAcronyms(acc.Name)
 		}
-		g.buf.WriteString(fmt.Sprintf("func (%s *%s) %s() %s {\n", recv, className, methodName, goType))
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) %s() %s {\n", recv, className, g.currentClassTypeParamNames, methodName, goType))
 		g.buf.WriteString(fmt.Sprintf("\treturn %s.%s\n", recv, internalField))
 		g.buf.WriteString("}\n\n")
 	}
@@ -646,7 +735,7 @@ func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, 
 		} else {
 			methodName = "set" + snakeToPascalWithAcronyms(acc.Name)
 		}
-		g.buf.WriteString(fmt.Sprintf("func (%s *%s) %s(v %s) {\n", recv, className, methodName, goType))
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) %s(v %s) {\n", recv, className, g.currentClassTypeParamNames, methodName, goType))
 		g.buf.WriteString(fmt.Sprintf("\t%s.%s = v\n", recv, internalField))
 		g.buf.WriteString("}\n\n")
 	}
@@ -702,7 +791,7 @@ func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
 	g.buf.WriteString("}\n")
 }
 
-func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub bool) {
+func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub bool, typeParamClause string, typeParamNames string) {
 	clear(g.vars)
 
 	// Set currentMethod so super calls are recognized as being inside a method
@@ -736,12 +825,12 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 	// Receiver name for field assignments
 	recv := receiverName(className)
 
-	// Constructor: func NewClassName(params) *ClassName (pub) or newClassName (non-pub)
+	// Constructor: func NewClassName[T any](params) *ClassName[T] (pub) or newClassName (non-pub)
 	constructorName := "new" + className
 	if pub {
 		constructorName = "New" + className
 	}
-	g.buf.WriteString(fmt.Sprintf("func %s(", constructorName))
+	g.buf.WriteString(fmt.Sprintf("func %s%s(", constructorName, typeParamClause))
 	for i, param := range method.Params {
 		if i > 0 {
 			g.buf.WriteString(", ")
@@ -757,10 +846,10 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 			g.buf.WriteString(fmt.Sprintf("%s any", paramName))
 		}
 	}
-	g.buf.WriteString(fmt.Sprintf(") *%s {\n", className))
+	g.buf.WriteString(fmt.Sprintf(") *%s%s {\n", className, typeParamNames))
 
 	// Create instance
-	g.buf.WriteString(fmt.Sprintf("\t%s := &%s{}\n", recv, className))
+	g.buf.WriteString(fmt.Sprintf("\t%s := &%s%s{}\n", recv, className, typeParamNames))
 
 	// Auto-assign promoted parameters
 	for _, promoted := range promotedParams {
@@ -786,7 +875,7 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 
 // genSubclassConstructor generates a constructor for a subclass that doesn't
 // define its own initialize method. It delegates to the parent class constructor.
-func (g *Generator) genSubclassConstructor(className, parentClass string, pub bool) {
+func (g *Generator) genSubclassConstructor(className, parentClass string, pub bool, typeParamClause string, typeParamNames string) {
 	recv := receiverName(className)
 
 	// Only generate delegating constructor if parent is a known Rugby class
@@ -810,8 +899,8 @@ func (g *Generator) genSubclassConstructor(className, parentClass string, pub bo
 		parentConstructorName = "New" + parentClass
 	}
 
-	// Generate: func newSubclass(params...) *Subclass {
-	g.buf.WriteString(fmt.Sprintf("func %s(", constructorName))
+	// Generate: func newSubclass[T any](params...) *Subclass[T] {
+	g.buf.WriteString(fmt.Sprintf("func %s%s(", constructorName, typeParamClause))
 
 	// Use same parameters as parent constructor
 	for i, param := range parentParams {
@@ -830,10 +919,10 @@ func (g *Generator) genSubclassConstructor(className, parentClass string, pub bo
 			g.buf.WriteString(fmt.Sprintf("%s any", paramName))
 		}
 	}
-	g.buf.WriteString(fmt.Sprintf(") *%s {\n", className))
+	g.buf.WriteString(fmt.Sprintf(") *%s%s {\n", className, typeParamNames))
 
 	// Create instance
-	g.buf.WriteString(fmt.Sprintf("\t%s := &%s{}\n", recv, className))
+	g.buf.WriteString(fmt.Sprintf("\t%s := &%s%s{}\n", recv, className, typeParamNames))
 
 	// Initialize embedded parent using parent constructor
 	// Dereference the parent constructor result to embed by value
@@ -857,16 +946,16 @@ func (g *Generator) genSubclassConstructor(className, parentClass string, pub bo
 
 // genDefaultConstructor generates a zero-argument constructor for a class that has fields
 // but no initialize method (e.g., classes that only include modules with fields).
-func (g *Generator) genDefaultConstructor(className string, pub bool) {
+func (g *Generator) genDefaultConstructor(className string, pub bool, typeParamClause string, typeParamNames string) {
 	// Constructor name: newClassName (private) or NewClassName (pub)
 	constructorName := "new" + className
 	if pub {
 		constructorName = "New" + className
 	}
 
-	// Generate: func newClassName() *ClassName { return &ClassName{} }
-	g.buf.WriteString(fmt.Sprintf("func %s() *%s {\n", constructorName, className))
-	g.buf.WriteString(fmt.Sprintf("\treturn &%s{}\n", className))
+	// Generate: func newClassName[T any]() *ClassName[T] { return &ClassName[T]{} }
+	g.buf.WriteString(fmt.Sprintf("func %s%s() *%s%s {\n", constructorName, typeParamClause, className, typeParamNames))
+	g.buf.WriteString(fmt.Sprintf("\treturn &%s%s{}\n", className, typeParamNames))
 	g.buf.WriteString("}\n\n")
 }
 
@@ -907,7 +996,7 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	// to_s -> String() string (satisfies fmt.Stringer)
 	// Only applies when to_s has no parameters
 	if method.Name == "to_s" && len(method.Params) == 0 {
-		g.buf.WriteString(fmt.Sprintf("func (%s *%s) String() string {\n", recv, className))
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) String() string {\n", recv, className, g.currentClassTypeParamNames))
 		g.indent++
 		// Generate body statements, with implicit return for last expression
 		for i, stmt := range method.Body {
@@ -935,7 +1024,7 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	// error or message -> Error() string (satisfies Go error interface)
 	// Only applies when method has no parameters
 	if (method.Name == "error" || method.Name == "message") && len(method.Params) == 0 {
-		g.buf.WriteString(fmt.Sprintf("func (%s *%s) Error() string {\n", recv, className))
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) Error() string {\n", recv, className, g.currentClassTypeParamNames))
 		g.indent++
 		// Generate body statements, with implicit return for last expression
 		for i, stmt := range method.Body {
@@ -964,11 +1053,11 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	// Only applies when == has exactly one parameter
 	if method.Name == "==" && len(method.Params) == 1 {
 		param := method.Params[0]
-		g.buf.WriteString(fmt.Sprintf("func (%s *%s) Equal(other any) bool {\n", recv, className))
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) Equal(other any) bool {\n", recv, className, g.currentClassTypeParamNames))
 		g.indent++
 		// Create type assertion for the parameter
 		g.writeIndent()
-		g.buf.WriteString(fmt.Sprintf("%s, ok := other.(*%s)\n", param.Name, className))
+		g.buf.WriteString(fmt.Sprintf("%s, ok := other.(*%s%s)\n", param.Name, className, g.currentClassTypeParamNames))
 		g.writeIndent()
 		g.buf.WriteString("if !ok {\n")
 		g.indent++
@@ -1054,8 +1143,8 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		}
 	}
 
-	// Generate method signature with pointer receiver: func (r *ClassName) MethodName(params) returns
-	g.buf.WriteString(fmt.Sprintf("func (%s *%s) %s(", recv, className, methodName))
+	// Generate method signature with pointer receiver: func (r *ClassName[T]) MethodName(params) returns
+	g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) %s(", recv, className, g.currentClassTypeParamNames, methodName))
 	for i, param := range method.Params {
 		if i > 0 {
 			g.buf.WriteString(", ")

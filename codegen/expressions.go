@@ -1817,10 +1817,17 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 
 		// Only check uniqueMethods if this isn't a Go interop call
 		// Otherwise strings.split() would incorrectly match the String.split method
+		// Also skip for user-defined class receivers (class methods take precedence)
 		if !found && !g.isGoInterop(fn.X) {
-			if def, ok := uniqueMethods[fn.Sel]; ok {
-				methodDef = def
-				found = true
+			receiverClassName := g.getReceiverClassName(fn.X)
+			baseClassName := stripTypeParams(receiverClassName)
+			isClassReceiver := baseClassName != "" && (g.isClass(baseClassName) || g.isModuleScopedClass(baseClassName))
+
+			if !isClassReceiver {
+				if def, ok := uniqueMethods[fn.Sel]; ok {
+					methodDef = def
+					found = true
+				}
 			}
 		}
 
@@ -3576,8 +3583,8 @@ func (g *Generator) getReceiverClassName(expr ast.Expression) string {
 	// Fall back to inferring from expression
 	switch e := expr.(type) {
 	case *ast.Ident:
-		// Look up variable type from semantic analysis
-		if varType := g.typeInfo.GetRugbyType(e); varType != "" {
+		// Fall back to codegen's vars map (variable name -> type)
+		if varType, ok := g.vars[e.Name]; ok && varType != "" {
 			varType = strings.TrimPrefix(varType, "*")
 			varType = strings.TrimSuffix(varType, "?")
 			return varType
@@ -3745,6 +3752,15 @@ func (g *Generator) genStdLibPropertyMethod(sel *ast.SelectorExpr) bool {
 		return false
 	}
 
+	// Skip stdLib methods for user-defined class receivers (class methods take precedence)
+	receiverClassName := g.getReceiverClassName(sel.X)
+	if receiverClassName != "" {
+		baseClassName := stripTypeParams(receiverClassName)
+		if g.isClass(baseClassName) || g.isModuleScopedClass(baseClassName) {
+			return false
+		}
+	}
+
 	receiverType := g.inferTypeFromExpr(sel.X)
 
 	// Map common Go types to Rugby types for lookup
@@ -3770,13 +3786,17 @@ func (g *Generator) genStdLibPropertyMethod(sel *ast.SelectorExpr) bool {
 	}
 
 	// Also check uniqueMethods for methods with unique names
-	if def, ok := uniqueMethods[sel.Sel]; ok {
-		g.needsRuntime = true
-		g.buf.WriteString(def.RuntimeFunc)
-		g.buf.WriteString("(")
-		g.genExpr(sel.X)
-		g.buf.WriteString(")")
-		return true
+	// But skip if the receiver is a user-defined class (class methods take precedence)
+	baseType := stripTypeParams(receiverType)
+	if !g.isClass(baseType) && !g.isModuleScopedClass(baseType) {
+		if def, ok := uniqueMethods[sel.Sel]; ok {
+			g.needsRuntime = true
+			g.buf.WriteString(def.RuntimeFunc)
+			g.buf.WriteString("(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		}
 	}
 
 	return false

@@ -4,6 +4,115 @@ import (
 	"strings"
 )
 
+// ParseTypeWithParams parses a Rugby type string into a Type, recognizing type parameters.
+// typeParams is a set of type parameter names (e.g., {"T": true, "K": true, "V": true}).
+func ParseTypeWithParams(s string, typeParams map[string]bool) *Type {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return TypeUnknownVal
+	}
+
+	// Check if it's a type parameter (must check before other parsing)
+	if typeParams != nil && typeParams[s] {
+		return NewTypeParamType(s)
+	}
+
+	// Check for optional suffix
+	if strings.HasSuffix(s, "?") {
+		inner := ParseTypeWithParams(s[:len(s)-1], typeParams)
+		return NewOptionalType(inner)
+	}
+
+	// Check for function type: (Params) -> Return or Param -> Return
+	if arrowIdx := findTopLevelArrow(s); arrowIdx != -1 {
+		paramsPart := strings.TrimSpace(s[:arrowIdx])
+		returnPart := strings.TrimSpace(s[arrowIdx+2:])
+
+		var paramTypes []*Type
+		if strings.HasPrefix(paramsPart, "(") && strings.HasSuffix(paramsPart, ")") {
+			inner := paramsPart[1 : len(paramsPart)-1]
+			if inner != "" {
+				parts := splitTopLevel(inner)
+				for _, p := range parts {
+					paramTypes = append(paramTypes, ParseTypeWithParams(strings.TrimSpace(p), typeParams))
+				}
+			}
+		} else if paramsPart != "" {
+			paramTypes = append(paramTypes, ParseTypeWithParams(paramsPart, typeParams))
+		}
+
+		returnType := ParseTypeWithParams(returnPart, typeParams)
+		return NewFuncType(paramTypes, []*Type{returnType})
+	}
+
+	// Check for tuple: (T1, T2, ...)
+	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+		inner := s[1 : len(s)-1]
+		if inner == "" {
+			return NewTupleType()
+		}
+		parts := splitTopLevel(inner)
+		elems := make([]*Type, len(parts))
+		for i, p := range parts {
+			elems[i] = ParseTypeWithParams(strings.TrimSpace(p), typeParams)
+		}
+		return NewTupleType(elems...)
+	}
+
+	// Check for generic types: Array<T>, Map<K, V>, Chan<T>, Task<T>
+	if idx := strings.Index(s, "<"); idx != -1 && strings.HasSuffix(s, ">") {
+		base := s[:idx]
+		inner := s[idx+1 : len(s)-1]
+
+		switch base {
+		case "Array":
+			return NewArrayType(ParseTypeWithParams(inner, typeParams))
+		case "Chan":
+			return NewChanType(ParseTypeWithParams(inner, typeParams))
+		case "Task":
+			return NewTaskType(ParseTypeWithParams(inner, typeParams))
+		case "Map":
+			parts := splitTopLevel(inner)
+			if len(parts) == 2 {
+				return NewMapType(
+					ParseTypeWithParams(strings.TrimSpace(parts[0]), typeParams),
+					ParseTypeWithParams(strings.TrimSpace(parts[1]), typeParams),
+				)
+			}
+			return NewMapType(TypeAnyVal, TypeAnyVal)
+		}
+	}
+
+	// Primitive types
+	switch s {
+	case "Int":
+		return TypeIntVal
+	case "Int64":
+		return TypeInt64Val
+	case "Float":
+		return TypeFloatVal
+	case "Bool":
+		return TypeBoolVal
+	case "String":
+		return TypeStringVal
+	case "Bytes":
+		return TypeBytesVal
+	case "Any", "any":
+		return TypeAnyVal
+	case "Error", "error":
+		return TypeErrorVal
+	case "nil":
+		return TypeNilVal
+	case "Range":
+		return TypeRangeVal
+	case "":
+		return TypeUnknownVal
+	}
+
+	// Assume it's a class or interface name
+	return NewClassType(s)
+}
+
 // ParseType parses a Rugby type string into a Type.
 // Examples: "Int", "String?", "Array<Int>", "Map<String, Int>", "(Int, Bool)"
 func ParseType(s string) *Type {
@@ -28,7 +137,7 @@ func ParseType(s string) *Type {
 		if strings.HasPrefix(paramsPart, "(") && strings.HasSuffix(paramsPart, ")") {
 			inner := paramsPart[1 : len(paramsPart)-1]
 			if inner != "" {
-				parts := splitTopLevel(inner, ',')
+				parts := splitTopLevel(inner)
 				for _, p := range parts {
 					paramTypes = append(paramTypes, ParseType(strings.TrimSpace(p)))
 				}
@@ -48,7 +157,7 @@ func ParseType(s string) *Type {
 		if inner == "" {
 			return NewTupleType()
 		}
-		parts := splitTopLevel(inner, ',')
+		parts := splitTopLevel(inner)
 		elems := make([]*Type, len(parts))
 		for i, p := range parts {
 			elems[i] = ParseType(strings.TrimSpace(p))
@@ -70,7 +179,7 @@ func ParseType(s string) *Type {
 			return NewTaskType(ParseType(inner))
 		case "Map":
 			// Split on comma at top level (not inside nested brackets)
-			parts := splitTopLevel(inner, ',')
+			parts := splitTopLevel(inner)
 			if len(parts) == 2 {
 				return NewMapType(
 					ParseType(strings.TrimSpace(parts[0])),
@@ -111,9 +220,9 @@ func ParseType(s string) *Type {
 	return NewClassType(s)
 }
 
-// splitTopLevel splits a string on a delimiter, but only at the top level
-// (not inside brackets).
-func splitTopLevel(s string, delim rune) []string {
+// splitTopLevel splits a string on commas, but only at the top level
+// (not inside brackets). Used for parsing generic type parameters.
+func splitTopLevel(s string) []string {
 	var result []string
 	var current strings.Builder
 	depth := 0
@@ -126,7 +235,7 @@ func splitTopLevel(s string, delim rune) []string {
 		case '>', ')':
 			depth--
 			current.WriteRune(c)
-		case delim:
+		case ',':
 			if depth == 0 {
 				result = append(result, current.String())
 				current.Reset()
