@@ -2829,6 +2829,14 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				if len(returnStmt.Values) > 0 {
 					lastExprType = a.GetType(returnStmt.Values[0])
 				}
+			} else if compound, ok := stmt.(*ast.CompoundAssignStmt); ok {
+				// Compound assignments (x += 1) return the new value
+				if sym := a.scope.Lookup(compound.Name); sym != nil {
+					lastExprType = sym.Type
+				}
+			} else {
+				// Non-expression statements (assignments, control flow) don't produce a return value
+				lastExprType = nil
 			}
 		}
 
@@ -2843,15 +2851,17 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				paramTypes = append(paramTypes, TypeAnyVal)
 			}
 		}
-		returnType := TypeAnyVal
+		var returnTypes []*Type
 		if e.ReturnType != "" {
 			// Explicit return type annotation takes precedence
-			returnType = ParseType(e.ReturnType)
+			returnTypes = []*Type{ParseType(e.ReturnType)}
 		} else if lastExprType != nil && lastExprType.Kind != TypeUnknown {
 			// Infer return type from the last expression in the body
-			returnType = lastExprType
+			returnTypes = []*Type{lastExprType}
 		}
-		typ = NewFuncType(paramTypes, []*Type{returnType})
+		// Note: if body ends with non-expression statement (assignment, control flow),
+		// returnTypes stays nil, producing func() { ... } for Go interop compatibility
+		typ = NewFuncType(paramTypes, returnTypes)
 
 	case *ast.InterpolatedString:
 		for _, part := range e.Parts {

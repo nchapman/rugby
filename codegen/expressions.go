@@ -311,11 +311,13 @@ func (g *Generator) genLambdaExpr(e *ast.LambdaExpr) {
 		// Use inferred return type
 		g.buf.WriteString(" ")
 		g.buf.WriteString(inferredReturnType)
-	} else if len(e.Body) > 0 {
-		// If no return type but body has statements, use 'any' as return type
-		// to allow implicit returns
+	} else if len(e.Body) > 0 && g.lambdaBodyNeedsReturn(e.Body) {
+		// If no return type but body ends with an expression that should be returned,
+		// use 'any' as return type to allow implicit returns
 		g.buf.WriteString(" any")
 	}
+	// Note: if body ends with a non-expression statement (assignment, control flow, etc.),
+	// we don't add a return type, producing func() { ... } for Go interop compatibility
 
 	g.buf.WriteString(" {\n")
 	g.indent++
@@ -371,6 +373,28 @@ func (g *Generator) genLambdaExpr(e *ast.LambdaExpr) {
 	g.indent--
 	g.writeIndent()
 	g.buf.WriteString("}")
+}
+
+// lambdaBodyNeedsReturn checks if the lambda body ends with a statement that
+// should be implicitly returned (expression statement or compound assignment).
+// Returns false for bodies ending with regular assignments, control flow, etc.
+// This allows lambdas passed to Go functions expecting func() to work correctly.
+func (g *Generator) lambdaBodyNeedsReturn(body []ast.Statement) bool {
+	if len(body) == 0 {
+		return false
+	}
+	lastStmt := body[len(body)-1]
+	switch lastStmt.(type) {
+	case *ast.ExprStmt:
+		// Expression statements are returned (e.g., `x + 1`, `call()`)
+		return true
+	case *ast.CompoundAssignStmt:
+		// Compound assignments (x += 1) return the new value
+		return true
+	default:
+		// Regular assignments, control flow, etc. don't produce a return value
+		return false
+	}
 }
 
 // getLambdaInferredTypes extracts parameter and return types from the lambda's
