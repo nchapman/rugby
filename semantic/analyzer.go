@@ -1096,6 +1096,7 @@ func (a *Analyzer) analyzeFuncDecl(f *ast.FuncDecl) {
 
 	// Create function scope
 	fnScope := NewScope(ScopeFunction, a.scope)
+	fnScope.TypeParams = typeParams // Store type parameters for T.zero, etc.
 	fnScope.ReturnTypes = make([]*Type, len(f.ReturnTypes))
 	for i, rt := range f.ReturnTypes {
 		fnScope.ReturnTypes[i] = ParseTypeWithParams(rt, typeParams)
@@ -2275,6 +2276,13 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 				break
 			}
 		}
+		// Check if this is a type parameter reference (for T.zero, etc.)
+		if sym == nil {
+			if constraint, found := a.scope.LookupTypeParam(e.Name); found {
+				typ = &Type{Kind: TypeTypeParam, Name: e.Name, Constraint: constraint}
+				break
+			}
+		}
 		if sym == nil {
 			a.addError(&UndefinedError{Name: e.Name, Line: e.Line, Column: e.Column, Candidates: a.findSimilar(e.Name)})
 			typ = TypeUnknownVal
@@ -2522,6 +2530,22 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 						// Enum.values returns Array<EnumType>
 						typ = NewArrayType(&Type{Kind: TypeClass, Name: enumIdent.Name})
 						selectorKind = ast.SelectorMethod
+					}
+				}
+			}
+		}
+
+		// Check for type parameter methods (T.zero for Numeric constraint)
+		if typ == nil {
+			if typeIdent, ok := e.X.(*ast.Ident); ok {
+				if constraint, found := a.scope.LookupTypeParam(typeIdent.Name); found {
+					switch e.Sel {
+					case "zero":
+						// T.zero returns the zero value of type T (for Numeric types)
+						if constraint == "Numeric" {
+							typ = &Type{Kind: TypeTypeParam, Name: typeIdent.Name}
+							selectorKind = ast.SelectorMethod
+						}
 					}
 				}
 			}

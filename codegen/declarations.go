@@ -81,6 +81,13 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	g.currentReturnTypes = fn.ReturnTypes
 	g.inMainFunc = fn.Name == "main"
 
+	// Track type parameters for this function (for T.zero, etc.)
+	g.currentFuncTypeParams = make(map[string]string)
+	for _, tp := range fn.TypeParams {
+		g.currentFuncTypeParams[tp.Name] = tp.Constraint
+	}
+	defer func() { g.currentFuncTypeParams = nil }()
+
 	// Store the function declaration for default parameter lookup at call sites
 	g.functions[fn.Name] = fn
 

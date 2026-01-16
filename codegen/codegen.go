@@ -172,6 +172,7 @@ type Generator struct {
 	currentClassEmbeds           []string                     // embedded types (parent classes) of current class
 	currentClassTypeParamClause  string                       // type parameter clause for current class (e.g., "[T any]")
 	currentClassTypeParamNames   string                       // type parameter names for current class (e.g., "[T]")
+	currentFuncTypeParams        map[string]string            // current function's type parameters (name -> constraint)
 	accessorFields               map[string]bool              // track which fields have accessor methods (need underscore prefix)
 	modules                      map[string]*ast.ModuleDecl   // track module definitions for include
 	currentClassInterfaceMethods map[string]bool              // methods that must be exported for current class (to satisfy interfaces)

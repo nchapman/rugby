@@ -153,6 +153,19 @@ func (g *Generator) genExpr(expr ast.Expression) {
 	case *ast.CallExpr:
 		g.genCallExpr(e)
 	case *ast.SelectorExpr:
+		// Handle type parameter methods (T.zero) directly - not as method calls
+		if ident, ok := e.X.(*ast.Ident); ok && g.currentFuncTypeParams != nil {
+			if constraint, isTypeParam := g.currentFuncTypeParams[ident.Name]; isTypeParam {
+				if e.Sel == "zero" && constraint == "Numeric" {
+					// T.zero -> *new(T) for Numeric constraint
+					g.buf.WriteString("*new(")
+					g.buf.WriteString(ident.Name)
+					g.buf.WriteString(")")
+					break
+				}
+			}
+		}
+
 		// Use SelectorKind to determine if this is a field access or method call
 		selectorKind := g.getSelectorKind(e)
 		switch selectorKind {
@@ -3480,6 +3493,9 @@ func (g *Generator) genRuntimeBlock(iterable ast.Expression, block *ast.BlockExp
 }
 
 func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
+	// Note: Type parameter methods (T.zero) are handled early in genExpr's SelectorExpr case
+	// before the selectorKind dispatching, so they never reach this function.
+
 	// Handle special selector expressions: error interface, channel operations, etc.
 	switch sel.Sel {
 	case "error":
