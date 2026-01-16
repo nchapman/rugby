@@ -643,14 +643,14 @@ These features are in the spec but marked as `skip` in tests. Implement after co
 
 **Tests:** `tests/spec/functions/default_params.rg`, `named_params.rg`, `variadic.rg` (all passing)
 
-### 14.5 Destructuring (Section 9.3)
+### 14.5 Destructuring (Section 9.3) ✅
 
-- [ ] Tuple destructuring `a, b = get_pair()`
-- [ ] Splat patterns `first, *rest = items`
-- [ ] Reverse splat `*head, last = items`
-- [ ] Underscore ignore `_, second, _ = triple`
-- [ ] Map destructuring `{name:, age:} = data`
-- [ ] Map destructuring with rename `{name: n, age: a} = data`
+- [x] Tuple destructuring `a, b = get_pair()`
+- [x] Splat patterns `first, *rest = items`
+- [x] Reverse splat `*head, last = items`
+- [x] Underscore ignore `_, second, _ = triple`
+- [x] Map destructuring `{name:, age:} = data`
+- [x] Map destructuring with rename `{name: n, age: a} = data`
 - [ ] Parameter destructuring `def process({name:, age:} : Data)`
 
 **Tests:** `tests/spec/control_flow/destructuring*.rg` (5 test files)
@@ -728,8 +728,8 @@ All core language features now pass! Only Phase 14 features (generics, enums, st
 - ✅ Case statement support for enum matching
 
 ### Next Priorities
-1. **Structs (Phase 14.3)** - Value types with auto-generated constructors, equality, hash
-2. **Function Features (Phase 14.4)** - Default params, named params, variadic
+1. **Type-level methods (Phase 14.1)** - `T.zero` for Numeric default values
+2. **Parameter destructuring (Phase 14.5)** - `def process({name:, age:} : Data)`
 
 ### Key Insights
 - Module-scoped classes use `Module_Class` naming in generated Go code
