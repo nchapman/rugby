@@ -335,6 +335,14 @@ func (g *Generator) genLambdaExpr(e *ast.LambdaExpr) {
 					g.buf.WriteString("return ")
 					g.genExpr(exprStmt.Expr)
 					g.buf.WriteString("\n")
+				} else if compound, ok := stmt.(*ast.CompoundAssignStmt); ok {
+					// For compound assignments (x += y), generate assignment and return the new value
+					// This makes lambdas like `-> { count += 1 }` return the new count value
+					g.genStatement(stmt)
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.buf.WriteString(compound.Name)
+					g.buf.WriteString("\n")
 				} else {
 					g.genStatement(stmt)
 				}

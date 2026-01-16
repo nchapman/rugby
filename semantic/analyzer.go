@@ -947,7 +947,25 @@ func (a *Analyzer) analyzeFuncDecl(f *ast.FuncDecl) {
 	// Analyze body
 	prevScope := a.scope
 	a.scope = fnScope
-	for _, stmt := range f.Body {
+	for i, stmt := range f.Body {
+		// Special case: if this is the last statement and it's a lambda expression,
+		// infer its types from the function's return type (for implicit return)
+		if i == len(f.Body)-1 {
+			if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+				if lambda, ok := exprStmt.Expr.(*ast.LambdaExpr); ok {
+					if len(fnScope.ReturnTypes) > 0 {
+						// The function returns a function type - use it to infer lambda types
+						expectedType := fnScope.ReturnTypes[0]
+						resultType := a.analyzeLambdaWithExpectedType(lambda, expectedType)
+						if resultType != nil {
+							// Store the inferred type for codegen
+							a.setNodeType(lambda, resultType)
+						}
+						continue
+					}
+				}
+			}
+		}
 		a.analyzeStatement(stmt)
 	}
 	a.scope = prevScope
