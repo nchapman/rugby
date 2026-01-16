@@ -296,7 +296,7 @@ Update the parser to recognize angle bracket type parameters:
 
 - [x] `obj.is_a?(Type)` returns Bool
 - [x] `obj.as(Type)` returns Type?
-- [ ] Works in `if let`
+- [x] Works in `if let`
 
 **Tests:** `tests/spec/interfaces/type_checking.rg`
 
@@ -558,9 +558,9 @@ Update the parser to recognize angle bracket type parameters:
 - [x] `include?`, `start_with?`, `end_with?`
 - [x] `upcase`, `downcase`, `strip`
 - [x] `split`
-- [ ] `chars`, `lines`, `bytes`
-- [ ] `replace`, `reverse`
-- [ ] `to_i`, `to_f`
+- [x] `chars`, `lines`, `bytes`
+- [x] `replace`, `reverse`
+- [x] `to_i`, `to_f`
 
 **Tests:** `tests/spec/runtime/string_methods.rg`
 
@@ -584,7 +584,7 @@ Update the parser to recognize angle bracket type parameters:
 ### 13.6 Global Functions
 
 - [x] `puts`, `print`, `p` (with Ruby-like formatting)
-- [ ] `gets`
+- [x] `gets`
 - [x] `exit`, `sleep`, `rand`
 
 **Tests:** `tests/spec/runtime/global_functions.rg`

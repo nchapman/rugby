@@ -2005,10 +2005,21 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				g.buf.WriteString("false")
 				return
 			}
+			// Get the target type name to check if it's a class
+			var targetType string
+			if ident, ok := call.Args[0].(*ast.Ident); ok {
+				targetType = ident.Name
+			}
+			// Check if target is a class (registered in instanceMethods but not a struct)
+			// Classes are reference types and need pointer type assertion
+			isClass := g.instanceMethods[targetType] != nil && g.structs[targetType] == nil
 			// Cast to any first to allow type assertion on concrete types
 			g.buf.WriteString("func() bool { _, ok := any(")
 			g.genExpr(fn.X)
 			g.buf.WriteString(").(")
+			if isClass {
+				g.buf.WriteString("*")
+			}
 			g.genExpr(call.Args[0])
 			g.buf.WriteString("); return ok }()")
 			return
@@ -2020,12 +2031,26 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				g.buf.WriteString("func() (any, bool) { return nil, false }()")
 				return
 			}
+			// Get the target type name
+			var targetType string
+			if ident, ok := call.Args[0].(*ast.Ident); ok {
+				targetType = ident.Name
+			}
+			// Check if target is a class (registered in instanceMethods but not a struct)
+			// Classes are reference types and need pointer type assertion
+			isClass := g.instanceMethods[targetType] != nil && g.structs[targetType] == nil
 			// Cast to any first to allow type assertion on concrete types
 			g.buf.WriteString("func() (")
+			if isClass {
+				g.buf.WriteString("*")
+			}
 			g.genExpr(call.Args[0])
 			g.buf.WriteString(", bool) { v, ok := any(")
 			g.genExpr(fn.X)
 			g.buf.WriteString(").(")
+			if isClass {
+				g.buf.WriteString("*")
+			}
 			g.genExpr(call.Args[0])
 			g.buf.WriteString("); return v, ok }()")
 			return

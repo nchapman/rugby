@@ -1171,8 +1171,18 @@ func (g *Generator) genIfStmt(s *ast.IfStmt) {
 			g.buf.WriteString(", ok := ")
 			g.genExpr(s.AssignExpr)
 			g.buf.WriteString("; ok {\n")
+
 			// Track the variable with its inferred type
-			g.vars[s.AssignName] = exprType
+			// Special handling for .as(Type) calls - extract the target type
+			varType := exprType
+			if call, ok := s.AssignExpr.(*ast.CallExpr); ok {
+				if sel, ok := call.Func.(*ast.SelectorExpr); ok && sel.Sel == "as" && len(call.Args) == 1 {
+					if typeArg, ok := call.Args[0].(*ast.Ident); ok {
+						varType = typeArg.Name
+					}
+				}
+			}
+			g.vars[s.AssignName] = varType
 		}
 	} else {
 		// For unless, negate the condition

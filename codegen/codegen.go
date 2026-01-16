@@ -673,6 +673,18 @@ func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {
 			return ast.SelectorGetter
 		}
 	}
+	// - Check codegen's vars map for variables from if-let bindings
+	//   The semantic analyzer may not have type info for these
+	if ident, ok := sel.X.(*ast.Ident); ok {
+		if varType, ok := g.vars[ident.Name]; ok && varType != "" {
+			// Strip pointer/optional suffixes
+			varType = strings.TrimPrefix(varType, "*")
+			varType = strings.TrimSuffix(varType, "?")
+			if g.isClassInstanceMethod(varType, sel.Sel) != "" {
+				return ast.SelectorGetter
+			}
+		}
+	}
 
 	return ast.SelectorUnknown
 }
