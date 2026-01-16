@@ -380,7 +380,7 @@ Update the parser to recognize angle bracket type parameters:
 - [x] `unwrap` (panics if nil)
 - [x] `unwrap_or(default)`
 - [x] `map`, `each` (with blocks)
-- [ ] `flat_map`, `filter`
+- [x] `flat_map`, `filter`
 
 **Tests:** `tests/spec/optionals/optional_methods.rg`
 
@@ -548,7 +548,7 @@ Update the parser to recognize angle bracket type parameters:
 - [x] `length`, `size`, `empty?`
 - [x] `has_key?`, `key?`
 - [x] `fetch`, `get`
-- [ ] `select`, `reject`, `merge`
+- [x] `select`, `reject`, `merge`
 
 **Tests:** `tests/spec/runtime/map_methods.rg`
 
