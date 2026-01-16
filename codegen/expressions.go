@@ -248,6 +248,9 @@ func (g *Generator) genRangeLit(r *ast.RangeLit) {
 // genLambdaExpr generates code for arrow lambda expressions: -> (params) { body }
 // Lambdas compile to Go anonymous functions (closures).
 func (g *Generator) genLambdaExpr(e *ast.LambdaExpr) {
+	// Try to get inferred types from type info (for lambdas assigned to typed variables)
+	inferredParamTypes, inferredReturnType := g.getLambdaInferredTypes(e)
+
 	g.buf.WriteString("func(")
 
 	// Generate parameters
@@ -256,12 +259,17 @@ func (g *Generator) genLambdaExpr(e *ast.LambdaExpr) {
 			g.buf.WriteString(", ")
 		}
 		g.buf.WriteString(param.Name)
+		g.buf.WriteString(" ")
+
 		if param.Type != "" {
-			g.buf.WriteString(" ")
+			// Explicit type annotation takes precedence
 			g.buf.WriteString(mapType(param.Type))
+		} else if i < len(inferredParamTypes) && inferredParamTypes[i] != "" {
+			// Use inferred type from expected function type
+			g.buf.WriteString(inferredParamTypes[i])
 		} else {
-			// Default to any if no type annotation
-			g.buf.WriteString(" any")
+			// Default to any if no type annotation or inference
+			g.buf.WriteString("any")
 		}
 	}
 
@@ -271,6 +279,10 @@ func (g *Generator) genLambdaExpr(e *ast.LambdaExpr) {
 	if e.ReturnType != "" {
 		g.buf.WriteString(" ")
 		g.buf.WriteString(mapType(e.ReturnType))
+	} else if inferredReturnType != "" {
+		// Use inferred return type
+		g.buf.WriteString(" ")
+		g.buf.WriteString(inferredReturnType)
 	} else if len(e.Body) > 0 {
 		// If no return type but body has statements, use 'any' as return type
 		// to allow implicit returns
@@ -283,11 +295,15 @@ func (g *Generator) genLambdaExpr(e *ast.LambdaExpr) {
 	// Save variable scope
 	savedVars := maps.Clone(g.vars)
 
-	// Add parameters to scope
-	for _, param := range e.Params {
-		goType := "any"
+	// Add parameters to scope with inferred types
+	for i, param := range e.Params {
+		var goType string
 		if param.Type != "" {
 			goType = mapType(param.Type)
+		} else if i < len(inferredParamTypes) && inferredParamTypes[i] != "" {
+			goType = inferredParamTypes[i]
+		} else {
+			goType = "any"
 		}
 		g.vars[param.Name] = goType
 	}
@@ -319,6 +335,87 @@ func (g *Generator) genLambdaExpr(e *ast.LambdaExpr) {
 	g.indent--
 	g.writeIndent()
 	g.buf.WriteString("}")
+}
+
+// getLambdaInferredTypes extracts parameter and return types from the lambda's
+// inferred function type. Returns nil slices if no type info is available.
+func (g *Generator) getLambdaInferredTypes(e *ast.LambdaExpr) (paramTypes []string, returnType string) {
+	goType := g.typeInfo.GetGoType(e)
+	if goType == "" || !strings.HasPrefix(goType, "func(") {
+		return nil, ""
+	}
+
+	// Parse: func(type1, type2) returnType
+	// Find the closing paren for params
+	depth := 0
+	paramsEnd := -1
+	for i := 5; i < len(goType); i++ { // Start after "func("
+		switch goType[i] {
+		case '(':
+			depth++
+		case ')':
+			if depth == 0 {
+				paramsEnd = i
+				break
+			}
+			depth--
+		}
+		if paramsEnd != -1 {
+			break
+		}
+	}
+
+	if paramsEnd == -1 {
+		return nil, ""
+	}
+
+	// Extract params
+	paramsStr := goType[5:paramsEnd]
+	if paramsStr != "" {
+		// Split on comma, handling nested types
+		paramTypes = splitGoTypeParams(paramsStr)
+	}
+
+	// Extract return type (everything after ") ")
+	rest := strings.TrimSpace(goType[paramsEnd+1:])
+	if rest != "" {
+		returnType = rest
+	}
+
+	return paramTypes, returnType
+}
+
+// splitGoTypeParams splits a comma-separated list of Go types, respecting nested brackets.
+func splitGoTypeParams(s string) []string {
+	var result []string
+	var current strings.Builder
+	depth := 0
+
+	for _, c := range s {
+		switch c {
+		case '(', '[', '<':
+			depth++
+			current.WriteRune(c)
+		case ')', ']', '>':
+			depth--
+			current.WriteRune(c)
+		case ',':
+			if depth == 0 {
+				result = append(result, strings.TrimSpace(current.String()))
+				current.Reset()
+			} else {
+				current.WriteRune(c)
+			}
+		default:
+			current.WriteRune(c)
+		}
+	}
+
+	if current.Len() > 0 {
+		result = append(result, strings.TrimSpace(current.String()))
+	}
+
+	return result
 }
 
 func (g *Generator) genRangeMethodCall(rangeExpr ast.Expression, method string, args []ast.Expression) bool {

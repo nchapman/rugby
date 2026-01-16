@@ -346,6 +346,23 @@ func (t *Type) GoType() string {
 			return t.Name
 		}
 		return "any"
+	case TypeFunc:
+		// Generate Go function type: func(params) returns
+		params := make([]string, len(t.Params))
+		for i, p := range t.Params {
+			params[i] = p.GoType()
+		}
+		returns := make([]string, len(t.Returns))
+		for i, r := range t.Returns {
+			returns[i] = r.GoType()
+		}
+		sig := "func(" + strings.Join(params, ", ") + ")"
+		if len(returns) == 1 {
+			sig += " " + returns[0]
+		} else if len(returns) > 1 {
+			sig += " (" + strings.Join(returns, ", ") + ")"
+		}
+		return sig
 	default:
 		return ""
 	}

@@ -1054,10 +1054,21 @@ func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
 	var valueType *Type
 	if s.Type != "" {
 		declaredType := ParseType(s.Type)
+		// Resolve type alias if applicable
+		declaredType = a.resolveTypeAliasType(declaredType)
+
 		if declaredType.Kind == TypeArray && declaredType.Elem != nil && declaredType.Elem.Kind == TypeAny {
 			if arr, ok := s.Value.(*ast.ArrayLit); ok {
 				// Analyze array literal allowing heterogeneous elements
 				valueType = a.analyzeArrayLitWithExpectedType(arr, TypeAnyVal)
+			}
+		}
+
+		// Check if this is a lambda being assigned to a function type
+		// In this case, infer parameter/return types from the expected type
+		if declaredType.Kind == TypeFunc {
+			if lambda, ok := s.Value.(*ast.LambdaExpr); ok {
+				valueType = a.analyzeLambdaWithExpectedType(lambda, declaredType)
 			}
 		}
 	}
@@ -2492,6 +2503,70 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 	}
 
 	a.setNodeType(expr, typ)
+	return typ
+}
+
+// analyzeLambdaWithExpectedType analyzes a lambda expression using the expected
+// function type to infer parameter and return types when not explicitly specified.
+// This enables `handler : (Int) -> Int = -> (x) { x * 2 }` to work without
+// explicit type annotations on the lambda.
+func (a *Analyzer) analyzeLambdaWithExpectedType(e *ast.LambdaExpr, expectedType *Type) *Type {
+	if expectedType == nil || expectedType.Kind != TypeFunc {
+		// Fall back to regular analysis
+		return a.analyzeExpr(e)
+	}
+
+	// Create a new scope for the lambda
+	lambdaScope := NewScope(ScopeBlock, a.scope)
+	prevScope := a.scope
+	a.scope = lambdaScope
+
+	// Add parameters to scope, using expected types for untyped params
+	for i, param := range e.Params {
+		var paramType *Type
+		if param.Type != "" {
+			// Explicit type takes precedence
+			paramType = ParseType(param.Type)
+		} else if i < len(expectedType.Params) {
+			// Infer from expected function type
+			paramType = expectedType.Params[i]
+		} else {
+			paramType = TypeAnyVal
+		}
+		mustDefine(lambdaScope, NewSymbol(param.Name, SymParam, paramType))
+	}
+
+	// Analyze body
+	for _, stmt := range e.Body {
+		a.analyzeStatement(stmt)
+	}
+
+	a.scope = prevScope
+
+	// Build function type using inferred types
+	var paramTypes []*Type
+	for i, param := range e.Params {
+		if param.Type != "" {
+			paramTypes = append(paramTypes, ParseType(param.Type))
+		} else if i < len(expectedType.Params) {
+			paramTypes = append(paramTypes, expectedType.Params[i])
+		} else {
+			paramTypes = append(paramTypes, TypeAnyVal)
+		}
+	}
+
+	// Use expected return type if lambda doesn't have explicit return type
+	var returnType *Type
+	if e.ReturnType != "" {
+		returnType = ParseType(e.ReturnType)
+	} else if len(expectedType.Returns) > 0 {
+		returnType = expectedType.Returns[0]
+	} else {
+		returnType = TypeAnyVal
+	}
+
+	typ := NewFuncType(paramTypes, []*Type{returnType})
+	a.setNodeType(e, typ)
 	return typ
 }
 

@@ -18,6 +18,30 @@ func ParseType(s string) *Type {
 		return NewOptionalType(inner)
 	}
 
+	// Check for function type: (Params) -> Return or Param -> Return
+	if arrowIdx := findTopLevelArrow(s); arrowIdx != -1 {
+		paramsPart := strings.TrimSpace(s[:arrowIdx])
+		returnPart := strings.TrimSpace(s[arrowIdx+2:])
+
+		var paramTypes []*Type
+		// Handle (Params) or single Param
+		if strings.HasPrefix(paramsPart, "(") && strings.HasSuffix(paramsPart, ")") {
+			inner := paramsPart[1 : len(paramsPart)-1]
+			if inner != "" {
+				parts := splitTopLevel(inner, ',')
+				for _, p := range parts {
+					paramTypes = append(paramTypes, ParseType(strings.TrimSpace(p)))
+				}
+			}
+		} else if paramsPart != "" {
+			// Single parameter without parens
+			paramTypes = append(paramTypes, ParseType(paramsPart))
+		}
+
+		returnType := ParseType(returnPart)
+		return NewFuncType(paramTypes, []*Type{returnType})
+	}
+
 	// Check for tuple: (T1, T2, ...)
 	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
 		inner := s[1 : len(s)-1]
@@ -119,4 +143,23 @@ func splitTopLevel(s string, delim rune) []string {
 	}
 
 	return result
+}
+
+// findTopLevelArrow finds the index of "->" at the top level (not inside brackets).
+// Returns -1 if not found.
+func findTopLevelArrow(s string) int {
+	depth := 0
+	for i, c := range s {
+		switch c {
+		case '<', '(':
+			depth++
+		case '>', ')':
+			depth--
+		case '-':
+			if depth == 0 && i+1 < len(s) && s[i+1] == '>' {
+				return i
+			}
+		}
+	}
+	return -1
 }
