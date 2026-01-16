@@ -3298,13 +3298,30 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 			// Special handling for optional.map { } - return type is Optional[BlockReturnType]
 			if receiverType.Kind == TypeOptional && sel.Sel == "map" && call.Block != nil {
 				blockReturnType := a.inferBlockReturnType(call.Block)
-				return NewOptionalType(blockReturnType)
+				typ := NewOptionalType(blockReturnType)
+				a.setNodeType(call, typ)
+				return typ
+			}
+
+			// Special handling for optional.filter { } - return type is same optional type T?
+			if receiverType.Kind == TypeOptional && sel.Sel == "filter" && call.Block != nil {
+				a.setNodeType(call, receiverType)
+				return receiverType
+			}
+
+			// Special handling for optional.flat_map { } - return type is block return type (should be R?)
+			if receiverType.Kind == TypeOptional && sel.Sel == "flat_map" && call.Block != nil {
+				typ := a.inferBlockReturnType(call.Block)
+				a.setNodeType(call, typ)
+				return typ
 			}
 
 			// Special handling for array.map { } - return type is Array[BlockReturnType]
 			if receiverType.Kind == TypeArray && sel.Sel == "map" && call.Block != nil {
 				blockReturnType := a.inferBlockReturnType(call.Block)
-				return NewArrayType(blockReturnType)
+				typ := NewArrayType(blockReturnType)
+				a.setNodeType(call, typ)
+				return typ
 			}
 
 			// Return method's return type
@@ -4734,7 +4751,7 @@ func (a *Analyzer) optionalMethod(name string, innerType *Type) *Symbol {
 		return NewMethod(name, nil, []*Type{TypeBoolVal})
 	case "unwrap":
 		return NewMethod(name, nil, []*Type{innerType})
-	case "map", "each":
+	case "map", "each", "filter", "flat_map":
 		return NewMethod(name, nil, nil) // Block methods
 	}
 	return nil

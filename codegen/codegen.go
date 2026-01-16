@@ -700,6 +700,15 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		return rugbyType
 	}
 
+	// For identifiers, check codegen's variable tracking as fallback
+	// This handles cases where the semantic analyzer doesn't have type info for the specific node
+	// (e.g., when a variable's type was tracked during assignment but the reference is a new node)
+	if ident, ok := expr.(*ast.Ident); ok {
+		if varType, ok := g.vars[ident.Name]; ok && varType != "" {
+			return varType
+		}
+	}
+
 	// Minimal fallback: literal type detection only
 	// Semantic analysis should provide types for all other expressions
 	switch e := expr.(type) {

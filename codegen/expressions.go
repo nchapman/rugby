@@ -2248,6 +2248,12 @@ func (g *Generator) genBlockCall(call *ast.CallExpr) {
 		case "map":
 			g.genOptionalMapBlock(sel.X, block, receiverType)
 			return
+		case "flat_map":
+			g.genOptionalFlatMapBlock(sel.X, block, receiverType)
+			return
+		case "filter":
+			g.genOptionalFilterBlock(sel.X, block, receiverType)
+			return
 		case "each":
 			g.genOptionalEachBlock(sel.X, block, receiverType)
 			return
@@ -2340,6 +2346,116 @@ func (g *Generator) genOptionalMapBlock(receiver ast.Expression, block *ast.Bloc
 
 	g.buf.WriteString("; return &_result }; return nil }()")
 	_ = goType // inner type used for block param binding
+}
+
+// genOptionalFlatMapBlock generates code for optional.flat_map { |x| ... }
+// Returns the result directly (flattened) if block returns an optional.
+func (g *Generator) genOptionalFlatMapBlock(receiver ast.Expression, block *ast.BlockExpr, optType string) {
+	varName := "_optVal"
+	blockParam := "_"
+	if len(block.Params) > 0 {
+		blockParam = block.Params[0]
+	}
+
+	// Determine the inner type (without ?)
+	innerType := strings.TrimSuffix(optType, "?")
+	goType := mapType(innerType)
+
+	// For flat_map, the block returns an optional (*R), and we return that directly
+	// Generate: func() *R { if opt := receiver; opt != nil { return block(*opt) }; return nil }()
+	g.buf.WriteString("func() ")
+
+	// Infer return type from block - assume it returns an optional (pointer type)
+	blockReturnGoType := "*string" // default fallback
+	if len(block.Body) > 0 {
+		if exprStmt, ok := block.Body[len(block.Body)-1].(*ast.ExprStmt); ok {
+			if inferredType := g.inferTypeFromExpr(exprStmt.Expr); inferredType != "" {
+				// The block should return an optional T?, which is *T in Go
+				inferredGoType := mapType(strings.TrimSuffix(inferredType, "?"))
+				blockReturnGoType = "*" + inferredGoType
+			}
+		}
+	}
+	g.buf.WriteString(blockReturnGoType)
+	g.buf.WriteString(" { if ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.genExpr(receiver)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" != nil { ")
+	g.buf.WriteString(blockParam)
+	g.buf.WriteString(" := *")
+	g.buf.WriteString(varName)
+	if blockParam != "_" {
+		g.buf.WriteString("; _ = ")
+		g.buf.WriteString(blockParam)
+	}
+	g.buf.WriteString("; return ")
+
+	// Generate block body - last expression is the result (should be an optional)
+	if len(block.Body) > 0 {
+		lastStmt := block.Body[len(block.Body)-1]
+		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
+			g.genExpr(exprStmt.Expr)
+		} else {
+			g.buf.WriteString("nil")
+		}
+	} else {
+		g.buf.WriteString("nil")
+	}
+
+	g.buf.WriteString(" }; return nil }()")
+	_ = goType
+}
+
+// genOptionalFilterBlock generates code for optional.filter { |x| ... }
+// Returns the original value if predicate is true, nil otherwise.
+func (g *Generator) genOptionalFilterBlock(receiver ast.Expression, block *ast.BlockExpr, optType string) {
+	varName := "_optVal"
+	blockParam := "_"
+	if len(block.Params) > 0 {
+		blockParam = block.Params[0]
+	}
+
+	// Determine the inner type (without ?)
+	innerType := strings.TrimSuffix(optType, "?")
+	goType := mapType(innerType)
+
+	// Generate: func() *T { if opt := receiver; opt != nil && predicate(*opt) { return opt }; return nil }()
+	g.buf.WriteString("func() *")
+	g.buf.WriteString(goType)
+	g.buf.WriteString(" { if ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.genExpr(receiver)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" != nil { ")
+	g.buf.WriteString(blockParam)
+	g.buf.WriteString(" := *")
+	g.buf.WriteString(varName)
+	if blockParam != "_" {
+		g.buf.WriteString("; _ = ")
+		g.buf.WriteString(blockParam)
+	}
+	g.buf.WriteString("; if ")
+
+	// Generate block body - last expression should be a boolean predicate
+	if len(block.Body) > 0 {
+		lastStmt := block.Body[len(block.Body)-1]
+		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
+			g.genExpr(exprStmt.Expr)
+		} else {
+			g.buf.WriteString("true")
+		}
+	} else {
+		g.buf.WriteString("true")
+	}
+
+	g.buf.WriteString(" { return ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" } }; return nil }()")
 }
 
 // genOptionalEachBlock generates code for optional.each { |x| ... }
