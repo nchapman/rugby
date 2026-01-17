@@ -4,7 +4,7 @@
 # Test: Section 9.3 - Destructuring assignment
 
 # Tuple destructuring
-def get_pair -> (Int, String)
+def get_pair: (Int, String)
   42, "hello"
 end
 

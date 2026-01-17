@@ -8,12 +8,12 @@ import rugby/json
 import time
 
 class Todo
-  getter id : Int
-  getter title : String
-  getter created_at : String
-  property completed : Bool
+  getter id: Int
+  getter title: String
+  getter created_at: String
+  property completed: Bool
 
-  def initialize(@id : Int, @title : String)
+  def initialize(@id: Int, @title: String)
     @completed = false
     @created_at = time.now.format("2006-01-02 15:04:05")
   end
@@ -22,7 +22,7 @@ class Todo
     @completed = true
   end
 
-  def to_map -> Map<String, any>
+  def to_map: Map<String, any>
     {
       id: @id,
       title: @title,
@@ -38,18 +38,18 @@ class TodoList
     @next_id = 1
   end
 
-  def add(title : String) -> Todo
+  def add(title: String): Todo
     todo = Todo.new(@next_id, title)
     @todos = @todos << todo
     @next_id += 1
     todo
   end
 
-  def find(id : Int) -> Todo?
+  def find(id: Int): Todo?
     @todos.find -> { |t| t.id == id }
   end
 
-  def complete(id : Int) -> Bool
+  def complete(id: Int): Bool
     if let todo = find(id)
       todo.complete
       true
@@ -58,38 +58,38 @@ class TodoList
     end
   end
 
-  def remove(id : Int) -> Bool
+  def remove(id: Int): Bool
     original_length = @todos.length
     @todos = @todos.reject -> { |t| t.id == id }
     @todos.length < original_length
   end
 
-  def pending -> Array<Todo>
+  def pending: Array<Todo>
     @todos.reject(&:completed)
   end
 
-  def completed -> Array<Todo>
+  def completed: Array<Todo>
     @todos.select(&:completed)
   end
 
-  def all -> Array<Todo>
+  def all: Array<Todo>
     @todos
   end
 
-  def stats -> String
+  def stats: String
     total = @todos.length
     done = completed.length
     "#{done}/#{total} completed"
   end
 
-  def save(path : String) -> Error
+  def save(path: String): Error
     data = @todos.map -> { |t| t.to_map }
     content = json.pretty(data)!
     file.write(path, content)
   end
 end
 
-def print_todos(todos : Array<Todo>, label : String)
+def print_todos(todos: Array<Todo>, label: String)
   puts "\n#{label}:"
   return puts "  (none)" if todos.empty?
 

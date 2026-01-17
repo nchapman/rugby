@@ -236,7 +236,7 @@ func (f *Formatter) formatFuncDecl(fn *ast.FuncDecl) {
 	}
 
 	if len(fn.ReturnTypes) > 0 {
-		f.write(" -> ")
+		f.write(": ")
 		f.write(strings.Join(fn.ReturnTypes, ", "))
 	}
 
@@ -344,7 +344,7 @@ func (f *Formatter) formatMethodDecl(m *ast.MethodDecl) {
 	}
 
 	if len(m.ReturnTypes) > 0 {
-		f.write(" -> ")
+		f.write(": ")
 		f.write(strings.Join(m.ReturnTypes, ", "))
 	}
 
@@ -372,7 +372,7 @@ func (f *Formatter) formatMethodSig(sig *ast.MethodSig) {
 	}
 
 	if len(sig.ReturnTypes) > 0 {
-		f.write(" -> ")
+		f.write(": ")
 		f.write(strings.Join(sig.ReturnTypes, ", "))
 	}
 	f.write("\n")

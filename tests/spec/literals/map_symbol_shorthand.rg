@@ -4,13 +4,13 @@
 # Test: Section 5.8 - Map literals with symbol shorthand
 
 class Todo
-  getter id : Int
-  getter title : String
+  getter id: Int
+  getter title: String
 
-  def initialize(@id : Int, @title : String)
+  def initialize(@id: Int, @title: String)
   end
 
-  def to_map -> Map<String, Any>
+  def to_map: Map<String, Any>
     {
       id: @id,
       title: @title

@@ -3,8 +3,8 @@
 # Test: Section 12.4 - Struct immutability
 
 struct Point
-  x : Int
-  y : Int
+  x: Int
+  y: Int
 end
 
 def main

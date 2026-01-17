@@ -4,16 +4,16 @@
 # Test: Section 11.4 - Custom accessors
 
 class Temperature
-  def initialize(@celsius : Float)
+  def initialize(@celsius: Float)
   end
 
-  getter celsius : Float
+  getter celsius: Float
 
-  def fahrenheit -> Float
+  def fahrenheit: Float
     @celsius * 9.0 / 5.0 + 32.0
   end
 
-  def fahrenheit=(f : Float)
+  def fahrenheit=(f: Float)
     @celsius = (f - 32.0) * 5.0 / 9.0
   end
 end

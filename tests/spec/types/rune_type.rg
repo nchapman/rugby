@@ -4,23 +4,23 @@
 # Test Rune type - represents a Unicode code point
 
 # Function returning Rune
-def get_char_code -> Rune
+def get_char_code: Rune
   65  # ASCII 'A'
 end
 
 # Variable with Rune type annotation
-r : Rune = get_char_code()
+r: Rune = get_char_code()
 puts r
 
 # Rune as function parameter
-def print_code(c : Rune)
+def print_code(c: Rune)
   puts c
 end
 
 print_code(97)  # ASCII 'a'
 
 # Rune in function returning Rune
-def echo_rune(c : Rune) -> Rune
+def echo_rune(c: Rune): Rune
   c
 end
 

@@ -6,21 +6,21 @@
 import "math"
 
 struct Point
-  x : Int
-  y : Int
+  x: Int
+  y: Int
 
   # Zero-argument method (property-style call)
-  def sum -> Int
+  def sum: Int
     @x + @y
   end
 
-  def distance_to(other : Point) -> Float
+  def distance_to(other: Point): Float
     dx = (other.x - @x).to_f
     dy = (other.y - @y).to_f
     math.Sqrt(dx * dx + dy * dy)
   end
 
-  def translate(dx : Int, dy : Int) -> Point
+  def translate(dx: Int, dy: Int): Point
     Point{x: @x + dx, y: @y + dy}
   end
 end

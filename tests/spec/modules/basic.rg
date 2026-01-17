@@ -4,11 +4,11 @@
 # Test module definition and include
 
 module Greetable
-  def greet -> String
+  def greet: String
     "Hello!"
   end
 
-  def farewell -> String
+  def farewell: String
     "Goodbye!"
   end
 end
@@ -16,9 +16,9 @@ end
 class Person
   include Greetable
 
-  getter name : String
+  getter name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 end
 

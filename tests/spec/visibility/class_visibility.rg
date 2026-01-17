@@ -4,23 +4,23 @@
 # Test: Section 15.2 - Class visibility levels
 
 class User
-  pub getter name : String
+  pub getter name: String
 
-  def initialize(@name : String, @password : String)
+  def initialize(@name: String, @password: String)
   end
 
   # Public - accessible from anywhere (with pub)
-  pub def display -> String
+  pub def display: String
     "User: #{@name}"
   end
 
   # Package-private (default) - accessible within same package
-  def validate -> Bool
+  def validate: Bool
     @password.length >= 8
   end
 
   # Private - accessible only within this class
-  private def encrypt_password -> String
+  private def encrypt_password: String
     "***"
   end
 

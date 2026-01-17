@@ -8,7 +8,7 @@ x = 42
 puts x
 
 # Explicit type annotation
-y : Int = 100
+y: Int = 100
 puts y
 
 # Compound operators

@@ -3,7 +3,7 @@
 #
 # Test: Section 10.4 - Named parameters
 
-def fetch(url : String, timeout : Int = 30, retry : Bool = true)
+def fetch(url: String, timeout: Int = 30, retry: Bool = true)
   puts url
 end
 

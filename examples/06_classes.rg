@@ -3,33 +3,33 @@
 
 # Simple class with parameter promotion
 class Point
-  def initialize(@x : Int, @y : Int)
+  def initialize(@x: Int, @y: Int)
   end
 
-  def magnitude_squared -> Int
+  def magnitude_squared: Int
     @x * @x + @y * @y
   end
 
-  def to_s -> String
+  def to_s: String
     "(#{@x}, #{@y})"
   end
 
   # Use self for method chaining or explicit reference
-  def equals?(other : Point) -> Bool
+  def equals?(other: Point): Bool
     self.magnitude_squared == other.magnitude_squared
   end
 end
 
 # Class with accessors
 class Person
-  getter name : String      # def name -> String
-  getter age : Int          # def age -> Int
-  property email : String   # getter + setter
+  getter name: String      # def name: String
+  getter age: Int          # def age: Int
+  property email: String   # getter + setter
 
-  def initialize(@name : String, @age : Int, @email : String)
+  def initialize(@name: String, @age: Int, @email: String)
   end
 
-  def introduce -> String
+  def introduce: String
     "Hi, I'm #{@name}, #{@age} years old"
   end
 
@@ -40,31 +40,31 @@ end
 
 # Inheritance with <
 class Animal
-  getter name : String
+  getter name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
-  def speak -> String
+  def speak: String
     "..."
   end
 end
 
 class Cat < Animal
-  def speak -> String
+  def speak: String
     "Meow! I'm #{@name}"
   end
 end
 
 class Dog < Animal
-  def speak -> String
+  def speak: String
     "Woof! I'm #{@name}"
   end
 end
 
 # pub exports to Go (uppercase in generated code)
 pub class Counter
-  @count : Int
+  @count: Int
 
   def initialize
     @count = 0
@@ -75,7 +75,7 @@ pub class Counter
     self  # return self for chaining
   end
 
-  pub def value -> Int
+  pub def value: Int
     @count
   end
 end

@@ -16,7 +16,7 @@ puts words[0]
 puts words[1]
 
 # Empty typed array
-empty : Array<Int> = []
+empty: Array<Int> = []
 puts empty.length
 
 # Append with <<

@@ -3,7 +3,7 @@
 #
 # Test: Section 10.2 - Multiple return values
 
-def parse(s : String) -> (Int, Bool)
+def parse(s: String): (Int, Bool)
   if s.empty?
     return 0, false
   end

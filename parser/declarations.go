@@ -121,7 +121,7 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 	// Require explicit type annotation (Phase 17 strictness)
 	if !p.curTokenIs(token.COLON) {
 		p.errorWithHint("parameter type required",
-			fmt.Sprintf("add type annotation: %s : Type", name))
+			fmt.Sprintf("add type annotation: %s: Type", name))
 		return nil
 	}
 	p.nextToken() // consume ':'
@@ -238,7 +238,7 @@ func (p *Parser) parseDestructuringParam(seen map[string]bool) *ast.Param {
 	}
 }
 
-// parseFunctionType parses a function type like () -> Int or (Int, String) -> Bool.
+// parseFunctionType parses a function type like (): Int or (Int, String): Bool.
 // Returns the full function type string including params and return type.
 // Assumes the parser is positioned at '(' when called.
 func (p *Parser) parseFunctionType() string {
@@ -262,12 +262,12 @@ func (p *Parser) parseFunctionType() string {
 	result += ")"
 	p.nextToken() // consume ')'
 
-	if !p.curTokenIs(token.ARROW) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '->' after function params")
+	if !p.curTokenIs(token.COLON) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected ':' after function params")
 		return result
 	}
-	result += " -> "
-	p.nextToken() // consume '->'
+	result += ": "
+	p.nextToken() // consume ':'
 
 	// Parse return type (which could itself be a function type)
 	if p.curTokenIs(token.LPAREN) {
@@ -442,12 +442,12 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 		p.nextToken() // consume ')'
 	}
 
-	// Parse optional return type: -> Type, -> (Type1, Type2), or -> () -> T (function type)
-	if p.curTokenIs(token.ARROW) {
-		p.nextToken() // consume '->'
+	// Parse optional return type: : Type, : (Type1, Type2), or : (): T (function type)
+	if p.curTokenIs(token.COLON) {
+		p.nextToken() // consume ':'
 
 		if p.curTokenIs(token.LPAREN) {
-			// Could be tuple return (Type1, Type2) or function type () -> T
+			// Could be tuple return (Type1, Type2) or function type (): T
 			// Use lookahead to check if it's a function type
 			if p.isFunctionTypeAhead() {
 				fn.ReturnTypes = append(fn.ReturnTypes, p.parseFunctionType())
@@ -484,7 +484,7 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 			// Single return type
 			fn.ReturnTypes = append(fn.ReturnTypes, p.parseTypeName())
 		} else {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ->")
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 			return nil
 		}
 	}
@@ -863,9 +863,9 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 		p.nextToken() // consume ')'
 	}
 
-	// Parse optional return type: -> Type or -> (Type1, Type2)
-	if p.curTokenIs(token.ARROW) {
-		p.nextToken() // consume '->'
+	// Parse optional return type: : Type or : (Type1, Type2)
+	if p.curTokenIs(token.COLON) {
+		p.nextToken() // consume ':'
 
 		if p.curTokenIs(token.LPAREN) {
 			// Multiple return types: (Type1, Type2, ...)
@@ -899,7 +899,7 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 			// Single return type
 			sig.ReturnTypes = append(sig.ReturnTypes, p.parseTypeName())
 		} else {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ->")
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 			return nil
 		}
 	}
@@ -925,7 +925,7 @@ func (p *Parser) parseAccessorDecl() *ast.AccessorDecl {
 
 	if !p.curTokenIs(token.COLON) {
 		p.errorWithHint("accessor type required",
-			fmt.Sprintf("add type annotation: %s %s : Type", kind, name))
+			fmt.Sprintf("add type annotation: %s %s: Type", kind, name))
 		return nil
 	}
 	p.nextToken() // consume ':'
@@ -953,7 +953,7 @@ func (p *Parser) parseFieldDecl() *ast.FieldDecl {
 
 	if !p.curTokenIs(token.COLON) {
 		p.errorWithHint("field type required",
-			fmt.Sprintf("add type annotation: @%s : Type", name))
+			fmt.Sprintf("add type annotation: @%s: Type", name))
 		return nil
 	}
 	p.nextToken() // consume ':'
@@ -1186,9 +1186,9 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 		p.nextToken() // consume ')'
 	}
 
-	// Parse optional return type: -> Type or -> (Type1, Type2)
-	if p.curTokenIs(token.ARROW) {
-		p.nextToken() // consume '->'
+	// Parse optional return type: : Type or : (Type1, Type2)
+	if p.curTokenIs(token.COLON) {
+		p.nextToken() // consume ':'
 
 		if p.curTokenIs(token.LPAREN) {
 			// Multiple return types: (Type1, Type2, ...)
@@ -1222,7 +1222,7 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 			// Single return type
 			method.ReturnTypes = append(method.ReturnTypes, p.parseTypeName())
 		} else {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ->")
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 			return nil
 		}
 	}

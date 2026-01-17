@@ -3,7 +3,7 @@
 #
 # Test: Section 8.2 - Optional methods
 
-def find_value(id : Int) -> Int?
+def find_value(id: Int): Int?
   if id == 1
     return 42
   end

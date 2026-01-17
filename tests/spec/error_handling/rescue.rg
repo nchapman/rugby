@@ -6,7 +6,7 @@
 import "errors"
 
 # Function that returns (value, Error)
-def parse(input : String) -> (Int, Error)
+def parse(input: String): (Int, Error)
   if input == "bad"
     return 0, errors.new("invalid input")
   end

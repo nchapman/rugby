@@ -4,32 +4,32 @@
 # Test: Section 11.6 - Inheritance and super
 
 class Animal
-  getter name : String
+  getter name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
-  def speak -> String
+  def speak: String
     "..."
   end
 
-  def describe -> String
+  def describe: String
     "Animal: #{@name}"
   end
 end
 
 class Dog < Animal
-  getter breed : String
+  getter breed: String
 
-  def initialize(name : String, @breed : String)
+  def initialize(name: String, @breed: String)
     super(name)
   end
 
-  def speak -> String
+  def speak: String
     "Woof!"
   end
 
-  def describe -> String
+  def describe: String
     "#{super} (#{@breed})"
   end
 end

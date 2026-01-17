@@ -3,7 +3,7 @@
 #
 # Test: Section 13.5 - The Any type
 
-def debug(value : Any)
+def debug(value: Any)
   puts value
 end
 
@@ -13,7 +13,7 @@ debug(true)
 debug(3.14)
 
 # Array of Any
-items : Array<Any> = [1, "two", 3.0]
+items: Array<Any> = [1, "two", 3.0]
 puts items.length
 
 #@ expect:

@@ -16,8 +16,8 @@ func receiverName(className string) string {
 
 // mapType converts Rugby type names to Go type names
 func mapType(rubyType string) string {
-	// Handle function types: () -> Int, (Int) -> String, etc.
-	if strings.HasPrefix(rubyType, "(") && strings.Contains(rubyType, " -> ") {
+	// Handle function types: (): Int, (Int): String, etc.
+	if strings.HasPrefix(rubyType, "(") && strings.Contains(rubyType, "): ") {
 		return mapFunctionType(rubyType)
 	}
 
@@ -111,20 +111,19 @@ func mapType(rubyType string) string {
 
 // mapFunctionType converts a Rugby function type to Go func type.
 // Examples:
-//   - "() -> Int" → "func() int"
-//   - "(Int) -> String" → "func(int) string"
-//   - "(Int, String) -> Bool" → "func(int, string) bool"
+//   - "(): Int" → "func() int"
+//   - "(Int): String" → "func(int) string"
+//   - "(Int, String): Bool" → "func(int, string) bool"
 func mapFunctionType(rubyType string) string {
-	// Find the " -> " separator
-	arrowIdx := strings.Index(rubyType, " -> ")
-	if arrowIdx == -1 {
+	// Find the "): " separator
+	colonIdx := strings.Index(rubyType, "): ")
+	if colonIdx == -1 {
 		return rubyType // Not a valid function type
 	}
 
-	// Extract params part: "(T1, T2)"
-	paramsStr := rubyType[:arrowIdx]
-	// Extract return type: "R"
-	returnStr := rubyType[arrowIdx+4:]
+	// Extract params part: "(T1, T2)" and return type
+	paramsStr := rubyType[:colonIdx+1] // include the closing paren
+	returnStr := rubyType[colonIdx+3:]
 
 	// Parse params (strip outer parens and split by comma)
 	if !strings.HasPrefix(paramsStr, "(") || !strings.HasSuffix(paramsStr, ")") {

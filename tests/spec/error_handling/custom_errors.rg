@@ -4,24 +4,24 @@
 # Test: Section 16.3 - Custom error types
 
 class ValidationError
-  def initialize(@field : String, @message : String)
+  def initialize(@field: String, @message: String)
   end
 
-  def error -> String
+  def error: String
     "#{@field}: #{@message}"
   end
 end
 
 class NotFoundError
-  def initialize(@resource : String, @id : Int)
+  def initialize(@resource: String, @id: Int)
   end
 
-  def error -> String
+  def error: String
     "#{@resource} not found: #{@id}"
   end
 end
 
-def validate_age(age : Int) -> Error
+def validate_age(age: Int): Error
   if age < 0
     return ValidationError.new("age", "must be non-negative")
   end

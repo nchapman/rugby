@@ -3,7 +3,7 @@
 #
 # Test: Nil coalescing operator (??)
 
-def maybe_string(return_nil : Bool) -> String?
+def maybe_string(return_nil: Bool): String?
   return nil if return_nil
   "value"
 end

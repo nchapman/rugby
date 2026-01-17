@@ -12,7 +12,7 @@ puts DEFAULT_HOST
 puts PI
 
 # Typed constant
-const TIMEOUT : Int64 = 30
+const TIMEOUT: Int64 = 30
 puts TIMEOUT
 
 # Computed constant

@@ -432,10 +432,10 @@ func TestFunctionParams(t *testing.T) {
 	}{
 		{"def foo\nend", nil},
 		{"def foo()\nend", nil},
-		{"def foo(a : any)\nend", []string{"a"}},
-		{"def foo(a : any, b : any)\nend", []string{"a", "b"}},
-		{"def foo(a : any, b : any, c : any)\nend", []string{"a", "b", "c"}},
-		{"def foo(a : any, b : any,)\nend", []string{"a", "b"}}, // trailing comma allowed
+		{"def foo(a: any)\nend", []string{"a"}},
+		{"def foo(a: any, b: any)\nend", []string{"a", "b"}},
+		{"def foo(a: any, b: any, c: any)\nend", []string{"a", "b", "c"}},
+		{"def foo(a: any, b: any,)\nend", []string{"a", "b"}}, // trailing comma allowed
 	}
 
 	for _, tt := range tests {
@@ -467,7 +467,7 @@ func TestFunctionParams(t *testing.T) {
 }
 
 func TestDuplicateParams(t *testing.T) {
-	input := `def foo(a : any, a : any)
+	input := `def foo(a: any, a: any)
 end`
 
 	l := lexer.New(input)
@@ -493,7 +493,7 @@ end`
 }
 
 func TestEmptyReturnTypeParens(t *testing.T) {
-	input := `def foo() -> ()
+	input := `def foo(): ()
 end`
 
 	l := lexer.New(input)
@@ -551,13 +551,13 @@ func TestReturnType(t *testing.T) {
 	}{
 		{"def foo\nend", nil},
 		{"def foo()\nend", nil},
-		{"def foo() -> Int\nend", []string{"Int"}},
-		{"def foo(a : any, b : any) -> String\nend", []string{"String"}},
-		{"def foo(x : any) -> Bool\nend", []string{"Bool"}},
-		{"def foo -> Int\nend", []string{"Int"}}, // no parens
-		{"def foo() -> (Int, Bool)\nend", []string{"Int", "Bool"}},
-		{"def foo() -> (String, Int, Bool)\nend", []string{"String", "Int", "Bool"}},
-		{"def foo() -> (Int, Bool,)\nend", []string{"Int", "Bool"}}, // trailing comma
+		{"def foo(): Int\nend", []string{"Int"}},
+		{"def foo(a: any, b: any): String\nend", []string{"String"}},
+		{"def foo(x: any): Bool\nend", []string{"Bool"}},
+		{"def foo: Int\nend", []string{"Int"}}, // no parens
+		{"def foo(): (Int, Bool)\nend", []string{"Int", "Bool"}},
+		{"def foo(): (String, Int, Bool)\nend", []string{"String", "Int", "Bool"}},
+		{"def foo(): (Int, Bool,)\nend", []string{"Int", "Bool"}}, // trailing comma
 	}
 
 	for _, tt := range tests {
@@ -1934,7 +1934,7 @@ end`
 
 func TestClassWithMethodParams(t *testing.T) {
 	input := `class Calculator
-  def add(a : any, b : any) -> Int
+  def add(a: any, b: any): Int
     a + b
   end
 end`
@@ -1978,7 +1978,7 @@ func TestClassWithMultipleMethods(t *testing.T) {
     puts("decrement")
   end
 
-  def value -> Int
+  def value: Int
     0
   end
 end`
@@ -2102,7 +2102,7 @@ func TestClassMissingName(t *testing.T) {
 
 func TestClassDuplicateMethodParams(t *testing.T) {
 	input := `class User
-  def add(a : any, a : any)
+  def add(a: any, a: any)
   end
 end`
 
@@ -2117,7 +2117,7 @@ end`
 
 func TestClassWithInitialize(t *testing.T) {
 	input := `class User
-  def initialize(name : any, age : any)
+  def initialize(name: any, age: any)
     @name = name
     @age = age
   end
@@ -2149,7 +2149,7 @@ end`
 
 func TestInstanceVariableAssignment(t *testing.T) {
 	input := `class User
-  def initialize(name : any)
+  def initialize(name: any)
     @name = name
   end
 end`
@@ -2178,7 +2178,7 @@ end`
 
 func TestInstanceVariableReference(t *testing.T) {
 	input := `class User
-  def initialize(name : any)
+  def initialize(name: any)
     @name = name
   end
 
@@ -2217,7 +2217,7 @@ end`
 
 func TestTypedAssignment(t *testing.T) {
 	input := `def main
-  x : Int = 5
+  x: Int = 5
 end`
 
 	l := lexer.New(input)
@@ -2258,7 +2258,7 @@ end`
 }
 
 func TestTypedFunctionParams(t *testing.T) {
-	input := `def add(a : Int, b : Int) -> Int
+	input := `def add(a: Int, b: Int): Int
   return a
 end
 
@@ -2299,7 +2299,7 @@ end`
 }
 
 func TestMixedTypedUntypedParams(t *testing.T) {
-	input := `def foo(a : Int, b : any, c : String)
+	input := `def foo(a: Int, b: any, c: String)
 end
 
 def main
@@ -2319,17 +2319,17 @@ end`
 		t.Fatalf("expected 3 params, got %d", len(fn.Params))
 	}
 
-	// a : Int
+	// a: Int
 	if fn.Params[0].Name != "a" || fn.Params[0].Type != "Int" {
 		t.Errorf("param 0: expected a:Int, got %s:%s", fn.Params[0].Name, fn.Params[0].Type)
 	}
 
-	// b : any
+	// b: any
 	if fn.Params[1].Name != "b" || fn.Params[1].Type != "any" {
 		t.Errorf("param 1: expected b:any, got %s:%s", fn.Params[1].Name, fn.Params[1].Type)
 	}
 
-	// c : String
+	// c: String
 	if fn.Params[2].Name != "c" || fn.Params[2].Type != "String" {
 		t.Errorf("param 2: expected c:String, got %s:%s", fn.Params[2].Name, fn.Params[2].Type)
 	}
@@ -2337,10 +2337,10 @@ end`
 
 func TestClassFieldTypeInference(t *testing.T) {
 	input := `class User
-  @name : String
-  @age : Int
+  @name: String
+  @age: Int
 
-  def initialize(name : String, age : Int)
+  def initialize(name: String, age: Int)
     @name = name
     @age = age
   end
@@ -2379,7 +2379,7 @@ end`
 
 func TestParameterPromotion(t *testing.T) {
 	input := `class Point
-  def initialize(@x : Int, @y : Int)
+  def initialize(@x: Int, @y: Int)
   end
 end
 
@@ -2431,7 +2431,7 @@ end`
 
 func TestNewFieldOutsideInitializeError(t *testing.T) {
 	input := `class User
-  def initialize(name : String)
+  def initialize(name: String)
     @name = name
   end
 
@@ -2463,7 +2463,7 @@ func TestTypedMethodParams(t *testing.T) {
   def initialize
   end
 
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     return a
   end
 end
@@ -2695,7 +2695,7 @@ func TestSelfKeyword(t *testing.T) {
     @name = ""
   end
 
-  def with_name(n : any)
+  def with_name(n: any)
     @name = n
     self
   end
@@ -2846,12 +2846,12 @@ end`
 
 func TestCustomEqualityMethod(t *testing.T) {
 	input := `class Point
-  def initialize(x : Int, y : Int)
+  def initialize(x: Int, y: Int)
     @x = x
     @y = y
   end
 
-  def ==(other : any)
+  def ==(other: any)
     @x == other.x and @y == other.y
   end
 end`
@@ -2895,7 +2895,7 @@ end`
 
 func TestInterfaceDeclaration(t *testing.T) {
 	input := `interface Speaker
-  def speak -> String
+  def speak: String
 end`
 
 	l := lexer.New(input)
@@ -2932,8 +2932,8 @@ end`
 
 func TestInterfaceWithMultipleMethods(t *testing.T) {
 	input := `interface ReadWriter
-  def read(n : Int) -> String
-  def write(data : String) -> Int
+  def read(n: Int): String
+  def write(data: String): Int
 end`
 
 	l := lexer.New(input)
@@ -2981,7 +2981,7 @@ end`
 }
 
 func TestPubFunction(t *testing.T) {
-	input := `pub def add(a : Int, b : Int) -> Int
+	input := `pub def add(a: Int, b: Int): Int
   a + b
 end`
 
@@ -3010,7 +3010,7 @@ end`
 
 func TestPubClass(t *testing.T) {
 	input := `pub class User
-  def initialize(name : String)
+  def initialize(name: String)
     @name = name
   end
 end`
@@ -3032,11 +3032,11 @@ end`
 
 func TestPubClassWithPubMethods(t *testing.T) {
 	input := `pub class User
-  def initialize(name : String)
+  def initialize(name: String)
     @name = name
   end
 
-  pub def get_name -> String
+  pub def get_name: String
     @name
   end
 
@@ -3082,7 +3082,7 @@ end`
 
 func TestPubInterface(t *testing.T) {
 	input := `pub interface Speaker
-  def speak -> String
+  def speak: String
 end`
 
 	l := lexer.New(input)
@@ -3495,7 +3495,7 @@ func TestCompoundAssignStmt(t *testing.T) {
 }
 
 func TestOptionalTypeInParam(t *testing.T) {
-	input := `def find(id : Int?) -> User?
+	input := `def find(id: Int?): User?
 end`
 
 	l := lexer.New(input)
@@ -3522,7 +3522,7 @@ end`
 
 func TestOptionalTypeInVariable(t *testing.T) {
 	input := `def main
-  x : Int? = nil
+  x: Int? = nil
 end`
 
 	l := lexer.New(input)
@@ -3572,7 +3572,7 @@ func TestBareScriptSimple(t *testing.T) {
 }
 
 func TestBareScriptWithFunctions(t *testing.T) {
-	input := `def greet(name : String)
+	input := `def greet(name: String)
   puts("Hello!")
 end
 
@@ -3618,7 +3618,7 @@ greet("World")`
 
 func TestBareScriptWithClass(t *testing.T) {
 	input := `class Counter
-  def initialize(n : Int)
+  def initialize(n: Int)
     @n = n
   end
 end
@@ -3843,7 +3843,7 @@ func TestBareScriptWithBlock(t *testing.T) {
 func TestBareScriptMixedOrdering(t *testing.T) {
 	input := `puts("start")
 
-def helper(x : Int) -> Int
+def helper(x: Int): Int
   x * 2
 end
 
@@ -3851,7 +3851,7 @@ result = helper(5)
 puts(result)
 
 class Counter
-  def initialize(n : Int)
+  def initialize(n: Int)
     @n = n
   end
 end
@@ -4174,7 +4174,7 @@ end`
 func TestClassDocComment(t *testing.T) {
 	input := `# User represents a user in the system
 class User
-  def initialize(name : String)
+  def initialize(name: String)
     @name = name
   end
 end`
@@ -4409,9 +4409,9 @@ func TestAnyKeywordInParameters(t *testing.T) {
 		input     string
 		paramType string
 	}{
-		{"def log(thing : any)\nend", "any"},
-		{"def process(a : Int, b : any)\nend", "any"},
-		{"def identity(x : any) -> any\nend", "any"},
+		{"def log(thing: any)\nend", "any"},
+		{"def process(a: Int, b: any)\nend", "any"},
+		{"def identity(x: any): any\nend", "any"},
 	}
 
 	for _, tt := range tests {
@@ -5488,7 +5488,7 @@ func TestArraySplatTrailingComma(t *testing.T) {
 
 func TestModuleDecl(t *testing.T) {
 	input := `module Loggable
-  def log(msg : String)
+  def log(msg: String)
     puts msg
   end
 end`
@@ -5522,7 +5522,7 @@ end`
 
 func TestModuleWithAccessor(t *testing.T) {
 	input := `module Countable
-  getter count : Int
+  getter count: Int
 
   def increment
     puts "incrementing"
@@ -5556,7 +5556,7 @@ end`
 
 func TestModuleWithField(t *testing.T) {
 	input := `module Cacheable
-  @data : Map<String, any>
+  @data: Map<String, any>
 end`
 
 	l := lexer.New(input)
@@ -5582,9 +5582,9 @@ end`
 
 func TestAccessorDecl_Getter(t *testing.T) {
 	input := `class User
-  getter name : String
+  getter name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 end`
 
@@ -5616,9 +5616,9 @@ end`
 
 func TestAccessorDecl_Setter(t *testing.T) {
 	input := `class User
-  setter name : String
+  setter name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 end`
 
@@ -5640,9 +5640,9 @@ end`
 
 func TestAccessorDecl_Property(t *testing.T) {
 	input := `class User
-  property email : String
+  property email: String
 
-  def initialize(@email : String)
+  def initialize(@email: String)
   end
 end`
 
@@ -5664,7 +5664,7 @@ end`
 
 func TestAccessorDecl_WithAnyType(t *testing.T) {
 	input := `class Container
-  property data : any
+  property data: any
 
   def initialize
     @data = nil
@@ -5720,7 +5720,7 @@ end`
 
 func TestSuperExpr_WithArgs(t *testing.T) {
 	input := `class Child < Parent
-  def initialize(name : String, age : Int)
+  def initialize(name: String, age: Int)
     super(name, age)
   end
 end`
@@ -5950,9 +5950,9 @@ func TestFormatErrors(t *testing.T) {
 		{
 			name: "single error with hint",
 			errors: []ParseError{
-				{Line: 2, Column: 10, Message: "missing type", Hint: "add : Type"},
+				{Line: 2, Column: 10, Message: "missing type", Hint: "add: Type"},
 			},
-			expected: "2:10: missing type (hint: add : Type)",
+			expected: "2:10: missing type (hint: add: Type)",
 		},
 		{
 			name: "multiple errors",
@@ -6057,9 +6057,9 @@ func TestModuleDecl_MissingEnd(t *testing.T) {
 func TestModuleDecl_NestedClass(t *testing.T) {
 	input := `module Foo
   class Bar
-    getter name : String
+    getter name: String
 
-    def initialize(@name : String)
+    def initialize(@name: String)
     end
   end
 end`
@@ -6119,7 +6119,7 @@ end`
 
 func TestAccessorDecl_MissingName(t *testing.T) {
 	input := `class Foo
-  getter : String
+  getter: String
 end`
 
 	l := lexer.New(input)
@@ -6153,15 +6153,15 @@ func TestTypeNameParsing_GenericTypes(t *testing.T) {
 		expected string
 	}{
 		{
-			input:    "class Foo\n  @items : Array<String>\nend",
+			input:    "class Foo\n  @items: Array<String>\nend",
 			expected: "Array<String>",
 		},
 		{
-			input:    "class Foo\n  @map : Map<String, Int>\nend",
+			input:    "class Foo\n  @map: Map<String, Int>\nend",
 			expected: "Map<String, Int>",
 		},
 		{
-			input:    "class Foo\n  @nested : Array<Map<String, Int>>\nend",
+			input:    "class Foo\n  @nested: Array<Map<String, Int>>\nend",
 			expected: "Array<Map<String, Int>>",
 		},
 	}
@@ -6186,7 +6186,7 @@ func TestTypeNameParsing_GenericTypes(t *testing.T) {
 
 func TestTypeNameParsing_Optional(t *testing.T) {
 	input := `class Foo
-  @value : String?
+  @value: String?
 end`
 
 	l := lexer.New(input)
@@ -6219,8 +6219,8 @@ end`
 
 func TestMethodSig_InInterface(t *testing.T) {
 	input := `interface Speaker
-  def speak(msg : String) -> String
-  def volume -> Int
+  def speak(msg: String): String
+  def volume: Int
 end`
 
 	l := lexer.New(input)
@@ -6247,7 +6247,7 @@ end`
 
 func TestMethodSig_MultipleReturnTypes(t *testing.T) {
 	input := `interface Parser
-  def parse(input : String) -> (AST, Error)
+  def parse(input: String): (AST, Error)
 end`
 
 	l := lexer.New(input)
@@ -6274,7 +6274,7 @@ end`
 
 func TestMethodSig_MultipleParams(t *testing.T) {
 	input := `interface Calculator
-  def add(a : Int, b : Int, c : Int) -> Int
+  def add(a: Int, b: Int, c: Int): Int
 end`
 
 	l := lexer.New(input)
@@ -6291,7 +6291,7 @@ end`
 
 func TestMethodSig_TrailingCommaParams(t *testing.T) {
 	input := `interface Foo
-  def bar(a : Int, b : String,) -> Bool
+  def bar(a: Int, b: String,): Bool
 end`
 
 	l := lexer.New(input)
@@ -6308,7 +6308,7 @@ end`
 
 func TestMethodSig_TrailingCommaReturnTypes(t *testing.T) {
 	input := `interface Foo
-  def bar -> (Int, String,)
+  def bar: (Int, String,)
 end`
 
 	l := lexer.New(input)
@@ -6339,7 +6339,7 @@ end`
 
 func TestMethodSig_MissingCloseParen(t *testing.T) {
 	input := `interface Foo
-  def bar(a : Int
+  def bar(a: Int
 end`
 
 	l := lexer.New(input)
@@ -6369,9 +6369,9 @@ end`
 
 func TestValidateNoNewFields_InMethod(t *testing.T) {
 	input := `class User
-  @name : String
+  @name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
   def set_unknown
@@ -6390,9 +6390,9 @@ end`
 
 func TestValidateNoNewFields_InIfStatement(t *testing.T) {
 	input := `class User
-  @name : String
+  @name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
   def check
@@ -6413,9 +6413,9 @@ end`
 
 func TestValidateNoNewFields_InWhileLoop(t *testing.T) {
 	input := `class User
-  @name : String
+  @name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
   def loop
@@ -6436,9 +6436,9 @@ end`
 
 func TestValidateNoNewFields_InForLoop(t *testing.T) {
 	input := `class User
-  @name : String
+  @name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
   def iterate
@@ -6459,9 +6459,9 @@ end`
 
 func TestValidateNoNewFields_OrAssign(t *testing.T) {
 	input := `class User
-  @name : String
+  @name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
   def lazy
@@ -6768,7 +6768,7 @@ func TestConstDeclaration(t *testing.T) {
 		{"const MAX_SIZE = 1024", "MAX_SIZE", "", int64(1024)},
 		{"const PI = 3.14", "PI", "", 3.14},
 		{`const NAME = "hello"`, "NAME", "", "hello"},
-		{"const TIMEOUT : Int64 = 30", "TIMEOUT", "Int64", int64(30)},
+		{"const TIMEOUT: Int64 = 30", "TIMEOUT", "Int64", int64(30)},
 		{"const BUFFER_SIZE = 1024 * 2", "BUFFER_SIZE", "", nil}, // computed value
 	}
 

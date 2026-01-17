@@ -8,7 +8,7 @@
 arr = [1, 2, 3, 4, 5]
 
 # Test 1: flat_map on Some value with block returning Some
-name : String? = "Alice"
+name: String? = "Alice"
 result1 = name.flat_map -> { |n| arr.find -> { |x| x > 3 } }
 if let r = result1
   puts "1: #{r}"
@@ -17,7 +17,7 @@ else
 end
 
 # Test 2: flat_map on Some value with block returning None
-name2 : String? = "Bob"
+name2: String? = "Bob"
 result2 = name2.flat_map -> { |n| arr.find -> { |x| x > 10 } }
 if let r = result2
   puts "2: #{r}"
@@ -26,7 +26,7 @@ else
 end
 
 # Test 3: flat_map on None value
-name3 : String? = nil
+name3: String? = nil
 result3 = name3.flat_map -> { |n| arr.find -> { |x| x > 0 } }
 if let r = result3
   puts "3: #{r}"
@@ -35,7 +35,7 @@ else
 end
 
 # Test 4: Chained flat_map
-opt1 : Int? = 5
+opt1: Int? = 5
 result4 = opt1.flat_map -> { |n| arr.find -> { |x| x == n } }
 if let r = result4
   puts "4: #{r}"

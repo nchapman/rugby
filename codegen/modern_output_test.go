@@ -10,11 +10,11 @@ import (
 
 // TestGeneratedCodeModernization ensures the generated Go code follows modern best practices
 func TestGeneratedCodeModernization(t *testing.T) {
-	input := `def greet(name : any)
+	input := `def greet(name: any)
   puts("Hello, #{name}!")
 end
 
-def process(items : any)
+def process(items: any)
   items.each -> do |item|
     puts(item)
   end
@@ -79,7 +79,7 @@ func TestGeneratedCodeLints(t *testing.T) {
 		t.Skip("golangci-lint not installed, skipping generated code lint test")
 	}
 
-	input := `def double(x : Int) -> Int
+	input := `def double(x: Int): Int
   return x * 2
 end
 

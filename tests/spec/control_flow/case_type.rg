@@ -4,13 +4,13 @@
 # Test: Section 9.6 - case_type for type matching
 
 # Test with binding variables
-def print_type(obj : Any)
+def print_type(obj: Any)
   case_type obj
-  when s : String
+  when s: String
     puts "string: #{s}"
-  when n : Int
+  when n: Int
     puts "int: #{n}"
-  when b : Bool
+  when b: Bool
     puts "bool: #{b}"
   else
     puts "unknown type"
@@ -23,7 +23,7 @@ print_type(true)
 print_type(3.14)
 
 # Test without binding variables
-def type_name(obj : Any)
+def type_name(obj: Any)
   case_type obj
   when String
     puts "is string"

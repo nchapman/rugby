@@ -5,7 +5,7 @@
 
 import "errors"
 
-def read_file(path : String) -> (String, Error)
+def read_file(path: String): (String, Error)
   if path == ""
     return "", errors.new("empty path")
   end

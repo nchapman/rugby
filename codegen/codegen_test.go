@@ -181,7 +181,7 @@ func TestGeneratePostfixWhileMethodChain(t *testing.T) {
 end
 
 class Obj
-  def foo -> Foo
+  def foo: Foo
     Foo.new
   end
 end
@@ -238,7 +238,7 @@ class Obj
   def foo
   end
 
-  def bar -> Bar
+  def bar: Bar
     Bar.new
   end
 end
@@ -282,7 +282,7 @@ end`
 }
 
 func TestGenerateFunctionParams(t *testing.T) {
-	input := `def add(a : any, b : any)
+	input := `def add(a: any, b: any)
   x = a
   a = b
   return a
@@ -300,11 +300,11 @@ end`
 }
 
 func TestGenerateReturnType(t *testing.T) {
-	input := `def add(a : any, b : any) -> Int
+	input := `def add(a: any, b: any): Int
   return 42
 end
 
-def greet() -> String
+def greet(): String
   return "hello"
 end
 
@@ -319,11 +319,11 @@ end`
 }
 
 func TestGenerateMultipleReturnTypes(t *testing.T) {
-	input := `def parse(s : any) -> (Int, Bool)
+	input := `def parse(s: any): (Int, Bool)
   return 42, true
 end
 
-def fetch() -> (String, Int, Bool)
+def fetch(): (String, Int, Bool)
   return "hello", 1, false
 end
 
@@ -365,7 +365,7 @@ func TestLineDirectiveEmission(t *testing.T) {
   y, ok = get_value()
 end
 
-def get_value() -> (Int, Bool)
+def get_value(): (Int, Bool)
   return 42, true
 end`
 
@@ -840,7 +840,7 @@ func TestGenerateTernaryOperator(t *testing.T) {
 	input := `def main
   a = 5
   b = 3
-  x = a > b ? a : b
+  x = a > b ? a: b
 end`
 
 	output := compile(t, input)
@@ -885,14 +885,14 @@ end`
 }
 
 func TestGenerateTernaryWithFunctionCall(t *testing.T) {
-	input := `def foo -> Bool
+	input := `def foo: Bool
   true
 end
 
 def main
   a = 1
   b = 2
-  x = foo() ? a : b
+  x = foo() ? a: b
 end`
 
 	output := compile(t, input)
@@ -905,7 +905,7 @@ func TestGenerateTernaryWithMethodCalls(t *testing.T) {
 	input := `def main
   cond = true
   list = [1, 2, 3]
-  x = cond ? list.first : list.last
+  x = cond ? list.first: list.last
 end`
 
 	output := compile(t, input)
@@ -1009,7 +1009,7 @@ end`
 }
 
 func TestBlockOnMethodCall(t *testing.T) {
-	input := `def getItems -> Array<Int>
+	input := `def getItems: Array<Int>
   [1, 2, 3]
 end
 
@@ -1369,7 +1369,7 @@ end`
 
 func TestClassMethodWithParams(t *testing.T) {
 	input := `class Calculator
-  def add(a : any, b : any) -> Int
+  def add(a: any, b: any): Int
     return a + b
   end
 end
@@ -1387,7 +1387,7 @@ end`
 
 func TestClassMethodSnakeCaseToCamelCase(t *testing.T) {
 	input := `class User
-  def get_name -> String
+  def get_name: String
     "test"
   end
 end
@@ -1458,7 +1458,7 @@ end`
 
 func TestClassWithEmbeddingAndFields(t *testing.T) {
 	input := `class Service < Logger
-  def initialize(name : String)
+  def initialize(name: String)
     @name = name
   end
 end
@@ -1475,7 +1475,7 @@ end`
 
 func TestClassWithInstanceVariables(t *testing.T) {
 	input := `class User
-  def initialize(name : any, age : any)
+  def initialize(name: any, age: any)
     @name = name
     @age = age
   end
@@ -1498,11 +1498,11 @@ end`
 
 func TestClassMethodAccessingInstanceVar(t *testing.T) {
 	input := `class User
-  def initialize(name : any)
+  def initialize(name: any)
     @name = name
   end
 
-  def get_name -> String
+  def get_name: String
     return @name
   end
 end
@@ -1518,7 +1518,7 @@ end`
 
 func TestClassNewSyntax(t *testing.T) {
 	input := `class User
-  def initialize(name : any)
+  def initialize(name: any)
     @name = name
   end
 end
@@ -1535,10 +1535,10 @@ end`
 
 func TestClassNewWithMultipleArgs(t *testing.T) {
 	input := `class Point
-  getter x : any
-  getter y : any
+  getter x: any
+  getter y: any
 
-  def initialize(@x : any, @y : any)
+  def initialize(@x: any, @y: any)
   end
 end
 
@@ -1555,7 +1555,7 @@ end`
 
 func TestGenerateTypedVariable(t *testing.T) {
 	input := `def main
-  x : Int = 5
+  x: Int = 5
 end`
 
 	output := compile(t, input)
@@ -1564,7 +1564,7 @@ end`
 }
 
 func TestGenerateTypedParams(t *testing.T) {
-	input := `def add(a : Int, b : Int) -> Int
+	input := `def add(a: Int, b: Int): Int
   return a
 end
 
@@ -1577,7 +1577,7 @@ end`
 }
 
 func TestGenerateMixedParams(t *testing.T) {
-	input := `def foo(a : Int, b : any, c : String)
+	input := `def foo(a: Int, b: any, c: String)
 end
 
 def main
@@ -1590,7 +1590,7 @@ end`
 
 func TestGenerateTypedInstanceVars(t *testing.T) {
 	input := `class User
-  def initialize(name : String, age : Int)
+  def initialize(name: String, age: Int)
     @name = name
     @age = age
   end
@@ -1613,7 +1613,7 @@ func TestGenerateTypedMethodParams(t *testing.T) {
   def initialize
   end
 
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     return a
   end
 end
@@ -1627,7 +1627,7 @@ end`
 }
 
 func TestGenerateUntypedStillWorks(t *testing.T) {
-	input := `def add(a : any, b : any)
+	input := `def add(a: any, b: any)
   return a
 end
 
@@ -1643,7 +1643,7 @@ end`
 
 func TestGenerateTypedReassignment(t *testing.T) {
 	input := `def main
-  x : Int = 5
+  x: Int = 5
   x = 10
 end`
 
@@ -1741,7 +1741,7 @@ end`
 
 func TestClassMethodWithPredicateSuffix(t *testing.T) {
 	input := `class User
-  def valid? -> Bool
+  def valid?: Bool
     return true
   end
 end
@@ -1758,7 +1758,7 @@ end`
 
 func TestRugbyMethodCallCasing(t *testing.T) {
 	input := `class User
-  def get_name -> String
+  def get_name: String
     return "test"
   end
 end
@@ -1781,7 +1781,7 @@ func TestGoInteropVsRugbyMethodCasing(t *testing.T) {
 import strings
 
 class MyReader
-  def read_all -> String
+  def read_all: String
     return "data"
   end
 end
@@ -1821,11 +1821,11 @@ end`
 func TestChanTypeInFunctionParams(t *testing.T) {
 	// BUG-045: Chan<T> in function params should generate chan *T for classes
 	input := `class Job
-  def initialize(@id : Int)
+  def initialize(@id: Int)
   end
 end
 
-def worker(jobs : Chan<Job>)
+def worker(jobs: Chan<Job>)
   for job in jobs
     puts job
   end
@@ -1853,7 +1853,7 @@ func TestSelfKeyword(t *testing.T) {
     @name = ""
   end
 
-  def with_name(n : any)
+  def with_name(n: any)
     @name = n
     self
   end
@@ -1883,7 +1883,7 @@ func TestSelfInMethodChain(t *testing.T) {
     @value = nil
   end
 
-  def set_value(v : any)
+  def set_value(v: any)
     @value = v
     self
   end
@@ -1905,7 +1905,7 @@ end`
 
 func TestToSMethod(t *testing.T) {
 	input := `class User
-  def initialize(name : String)
+  def initialize(name: String)
     @name = name
   end
 
@@ -1926,7 +1926,7 @@ end`
 
 func TestToSWithInterpolation(t *testing.T) {
 	input := `class Point
-  def initialize(x : Int, y : Int)
+  def initialize(x: Int, y: Int)
     @x = x
     @y = y
   end
@@ -1948,10 +1948,10 @@ end`
 func TestToSWithImplicitReturn(t *testing.T) {
 	// to_s without explicit return should have implicit return for last expression
 	input := `class Point
-  def initialize(@x : Int, @y : Int)
+  def initialize(@x: Int, @y: Int)
   end
 
-  def to_s -> String
+  def to_s: String
     "(#{@x}, #{@y})"
   end
 end
@@ -1972,7 +1972,7 @@ func TestToSWithParamsFallsBack(t *testing.T) {
   def initialize
   end
 
-  def to_s(format : String)
+  def to_s(format: String)
     return format
   end
 end
@@ -1989,10 +1989,10 @@ end`
 func TestMessageWithImplicitReturn(t *testing.T) {
 	// message without explicit return should have implicit return for last expression
 	input := `class MyError
-  def initialize(@code : Int)
+  def initialize(@code: Int)
   end
 
-  def message -> String
+  def message: String
     "Error code: #{@code}"
   end
 end
@@ -2047,7 +2047,7 @@ end`
 
 func TestStringInterpolationWithInstanceVar(t *testing.T) {
 	input := `class User
-  def initialize(name : String)
+  def initialize(name: String)
     @name = name
   end
 
@@ -2091,12 +2091,12 @@ end`
 
 func TestCustomEqualityMethod(t *testing.T) {
 	input := `class Point
-  def initialize(x : Int, y : Int)
+  def initialize(x: Int, y: Int)
     @x = x
     @y = y
   end
 
-  def ==(other : any)
+  def ==(other: any)
     @x == other.x and @y == other.y
   end
 end
@@ -2118,8 +2118,8 @@ end`
 
 func TestEqualityWithVariables(t *testing.T) {
 	input := `class User
-  getter name : String
-  def initialize(@name : String)
+  getter name: String
+  def initialize(@name: String)
   end
 end
 
@@ -2153,8 +2153,8 @@ end`
 
 func TestNotEqualWithVariables(t *testing.T) {
 	input := `class User
-  getter name : String
-  def initialize(@name : String)
+  getter name: String
+  def initialize(@name: String)
   end
 end
 
@@ -2193,8 +2193,8 @@ func TestEqualityOptimizationWithTypeInfo(t *testing.T) {
 	// When we have type info from semantic analysis, primitive type comparisons
 	// can use direct == instead of runtime.Equal
 	input := `def main
-  x : Int = 5
-  y : Int = 10
+  x: Int = 5
+  y: Int = 10
   result = x == y
 end`
 
@@ -2207,8 +2207,8 @@ end`
 
 func TestEqualityOptimizationStringVariables(t *testing.T) {
 	input := `def main
-  a : String = "hello"
-  b : String = "world"
+  a: String = "hello"
+  b: String = "world"
   same = a == b
 end`
 
@@ -2221,8 +2221,8 @@ end`
 
 func TestEqualityOptimizationBoolVariables(t *testing.T) {
 	input := `def main
-  a : Bool = true
-  b : Bool = false
+  a: Bool = true
+  b: Bool = false
   same = a == b
 end`
 
@@ -2235,8 +2235,8 @@ end`
 
 func TestEqualityOptimizationFloatVariables(t *testing.T) {
 	input := `def main
-  a : Float = 1.5
-  b : Float = 2.5
+  a: Float = 1.5
+  b: Float = 2.5
   same = a == b
 end`
 
@@ -2249,7 +2249,7 @@ end`
 
 func TestEqualityOptimizationClassVariablesStillUseRuntime(t *testing.T) {
 	input := `class User
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 end
 
@@ -2267,8 +2267,8 @@ end`
 
 func TestNotEqualOptimizationWithTypeInfo(t *testing.T) {
 	input := `def main
-  x : Int = 5
-  y : Int = 10
+  x: Int = 5
+  y: Int = 10
   different = x != y
 end`
 
@@ -2313,7 +2313,7 @@ func TestTypeInfoForVariableAssignments(t *testing.T) {
 	// Test that semantic type info enables proper type inference for function call results.
 	// The key test is that with type info, later operations on the variable use the
 	// correct type, enabling optimizations like direct comparison.
-	input := `def get_count() -> Int
+	input := `def get_count(): Int
   return 42
 end
 
@@ -2355,7 +2355,7 @@ end`
 
 func TestInterfaceDeclaration(t *testing.T) {
 	input := `interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 def main
@@ -2371,8 +2371,8 @@ end`
 
 func TestInterfaceWithMultipleMethods(t *testing.T) {
 	input := `interface ReadWriter
-  def read(n : Int) -> String
-  def write(data : String) -> Int
+  def read(n: Int): String
+  def write(data: String): Int
 end
 
 def main
@@ -2387,7 +2387,7 @@ end`
 
 func TestInterfaceMethodWithSnakeCase(t *testing.T) {
 	input := `interface Handler
-  def handle_request(req : String) -> String
+  def handle_request(req: String): String
 end
 
 def main
@@ -2400,7 +2400,7 @@ end`
 }
 
 func TestPubFunctionExported(t *testing.T) {
-	input := `pub def parse_json(s : String) -> String
+	input := `pub def parse_json(s: String): String
   s
 end
 
@@ -2414,7 +2414,7 @@ end`
 }
 
 func TestNonPubFunctionCamelCase(t *testing.T) {
-	input := `def parse_json(s : String) -> String
+	input := `def parse_json(s: String): String
   s
 end
 
@@ -2429,15 +2429,15 @@ end`
 
 func TestPubClassWithPubMethod(t *testing.T) {
 	input := `pub class User
-  def initialize(name : String)
+  def initialize(name: String)
     @name = name
   end
 
-  pub def get_name -> String
+  pub def get_name: String
     @name
   end
 
-  def internal_helper -> String
+  def internal_helper: String
     @name
   end
 end
@@ -2457,11 +2457,11 @@ end`
 
 func TestNonPubClassWithMethods(t *testing.T) {
 	input := `class User
-  def initialize(name : String)
+  def initialize(name: String)
     @name = name
   end
 
-  def get_name -> String
+  def get_name: String
     @name
   end
 end
@@ -2478,15 +2478,15 @@ end`
 }
 
 func TestAcronymHandling(t *testing.T) {
-	input := `pub def get_user_id -> Int
+	input := `pub def get_user_id: Int
   0
 end
 
-pub def parse_http_url -> String
+pub def parse_http_url: String
   ""
 end
 
-def get_api_json -> String
+def get_api_json: String
   ""
 end
 
@@ -2529,8 +2529,8 @@ end`
 
 func TestInterfaceWithSnakeCaseAcronyms(t *testing.T) {
 	input := `interface HttpHandler
-  def get_user_id -> Int
-  def parse_json -> String
+  def get_user_id: Int
+  def parse_json: String
 end
 
 def main
@@ -2764,8 +2764,8 @@ end`
 func TestRangeWithIntVariables(t *testing.T) {
 	// Ranges with Int variables should work fine
 	input := `def main
-  a : Int = 1
-  b : Int = 10
+  a: Int = 1
+  b: Int = 10
   r = a..b
 end`
 
@@ -2868,7 +2868,7 @@ end`
 }
 
 func TestOptionalValueType(t *testing.T) {
-	input := `def find(id : Int?) -> String?
+	input := `def find(id: Int?): String?
 end
 
 def main
@@ -2881,7 +2881,7 @@ end`
 }
 
 func TestOptionalReferenceType(t *testing.T) {
-	input := `def find(id : Int) -> User?
+	input := `def find(id: Int): User?
 end
 
 def main
@@ -2895,7 +2895,7 @@ end`
 
 func TestOptionalVariable(t *testing.T) {
 	input := `def main
-  x : Int? = nil
+  x: Int? = nil
 end`
 
 	output := compile(t, input)
@@ -2907,7 +2907,7 @@ end`
 func TestOptionalValueTypeInCondition(t *testing.T) {
 	// Rugby requires explicit nil checks for optionals (no implicit truthiness)
 	input := `def main
-  x : Int? = nil
+  x: Int? = nil
   if x != nil
     puts("has value")
   end
@@ -2921,7 +2921,7 @@ end`
 
 func TestOptionalReferenceTypeInCondition(t *testing.T) {
 	// Rugby requires explicit nil checks for optionals
-	input := `def process(u : User?)
+	input := `def process(u: User?)
   if u != nil
     puts("has user")
   end
@@ -2939,8 +2939,8 @@ end`
 func TestOptionalInElsifCondition(t *testing.T) {
 	// Rugby requires explicit nil checks for optionals
 	input := `def main
-  x : Int? = nil
-  y : String? = nil
+  x: Int? = nil
+  y: String? = nil
   if x != nil
     puts("x")
   elsif y != nil
@@ -2957,7 +2957,7 @@ end`
 
 func TestNonOptionalInCondition(t *testing.T) {
 	input := `def main
-  x : Bool = true
+  x: Bool = true
   if x
     puts("yes")
   end
@@ -2972,7 +2972,7 @@ end`
 func TestStrictConditionRejectsNonBool(t *testing.T) {
 	// Using non-Bool type directly in condition should be caught by semantic analysis
 	input := `def main
-  x : Int = 5
+  x: Int = 5
   if x
     puts("yes")
   end
@@ -3005,7 +3005,7 @@ end`
 func TestStrictConditionRejectsOptionalWithoutExplicitCheck(t *testing.T) {
 	// Using optional type directly in condition should be caught by semantic analysis
 	input := `def main
-  x : Int? = nil
+  x: Int? = nil
   if x
     puts("yes")
   end
@@ -3037,7 +3037,7 @@ end`
 
 func TestNilLiteral(t *testing.T) {
 	input := `def main
-  x : User? = nil
+  x: User? = nil
 end`
 
 	output := compile(t, input)
@@ -3051,7 +3051,7 @@ end`
 func TestPredicateMethodReturnsBool(t *testing.T) {
 	// Methods ending in ? must return Bool - this should compile
 	// Non-pub predicate methods get "is" prefix: valid? -> isValid (camelCase)
-	input := `def valid? -> Bool
+	input := `def valid?: Bool
   true
 end`
 
@@ -3063,7 +3063,7 @@ end`
 
 func TestPredicateMethodRejectsNonBoolReturn(t *testing.T) {
 	// Methods ending in ? that don't return Bool should error
-	input := `def valid? -> Int
+	input := `def valid?: Int
   42
 end`
 
@@ -3099,7 +3099,7 @@ func TestClassPredicateMethodReturnsBool(t *testing.T) {
 	// Class methods ending in ? must return Bool - this should compile
 	// Predicate methods get "is" prefix: empty? -> isEmpty (for class methods)
 	input := `class Container
-  def empty? -> Bool
+  def empty?: Bool
     true
   end
 end`
@@ -3112,7 +3112,7 @@ end`
 func TestClassPredicateMethodRejectsNonBoolReturn(t *testing.T) {
 	// Class methods ending in ? that don't return Bool should error
 	input := `class Container
-  def count? -> Int
+  def count?: Int
     0
   end
 end`
@@ -3129,7 +3129,7 @@ end`
 }
 
 func TestStringToIntWithBang(t *testing.T) {
-	input := `def process(s : String) -> (Int, Error)
+	input := `def process(s: String): (Int, Error)
   n = s.to_i()!
   n
 end`
@@ -3143,7 +3143,7 @@ end`
 }
 
 func TestStringToFloatWithBang(t *testing.T) {
-	input := `def process(s : String) -> (Float, Error)
+	input := `def process(s: String): (Float, Error)
   n = s.to_f()!
   n
 end`
@@ -3195,7 +3195,7 @@ func TestErrorIs(t *testing.T) {
 	input := `import "io"
 
 def main
-  err : Error = nil
+  err: Error = nil
   if error_is?(err, io.EOF)
     puts("end of file")
   end
@@ -3210,7 +3210,7 @@ end`
 }
 
 func TestErrorIsWithCustomError(t *testing.T) {
-	input := `def check(err : Error, target : Error) -> Bool
+	input := `def check(err: Error, target: Error): Bool
   error_is?(err, target)
 end`
 
@@ -3223,7 +3223,7 @@ func TestErrorAs(t *testing.T) {
 	input := `import "os"
 
 def main
-  err : Error = nil
+  err: Error = nil
   if let pathErr = error_as(err, os.PathError)
     puts(pathErr.Path)
   end
@@ -3240,11 +3240,11 @@ end`
 
 func TestErrorAsWithIfLet(t *testing.T) {
 	input := `class MyError
-  def initialize(@code : Int)
+  def initialize(@code: Int)
   end
 end
 
-def check(err : Error) -> Int
+def check(err: Error): Int
   if let myErr = error_as(err, MyError)
     myErr.code
   else
@@ -3273,7 +3273,7 @@ func TestBareScriptSimple(t *testing.T) {
 }
 
 func TestBareScriptWithFunction(t *testing.T) {
-	input := `def greet(name : String)
+	input := `def greet(name: String)
   puts(name)
 end
 
@@ -3290,11 +3290,11 @@ greet("World")`
 
 func TestBareScriptWithClass(t *testing.T) {
 	input := `class Counter
-  def initialize(n : Int)
+  def initialize(n: Int)
     @n = n
   end
 
-  def value -> Int
+  def value: Int
     @n
   end
 end
@@ -3374,7 +3374,7 @@ end`
 }
 
 func TestLibraryModeNoMain(t *testing.T) {
-	input := `def helper(x : Int) -> Int
+	input := `def helper(x: Int): Int
   x * 2
 end
 
@@ -3449,7 +3449,7 @@ end`
 func TestBareScriptMixedOrdering(t *testing.T) {
 	input := `puts("start")
 
-def helper(x : Int) -> Int
+def helper(x: Int): Int
   return x * 2
 end
 
@@ -3657,7 +3657,7 @@ end`
 // --- case_type (Type Switch) Tests ---
 
 func TestGenerateCaseTypeBasic(t *testing.T) {
-	input := `def type_of(x : any) -> String
+	input := `def type_of(x: any): String
   case_type x
   when String
     return "it's a string"
@@ -3679,7 +3679,7 @@ end`
 }
 
 func TestGenerateCaseTypeNoElse(t *testing.T) {
-	input := `def process(x : any)
+	input := `def process(x: any)
   case_type x
   when String
     puts("string")
@@ -3697,7 +3697,7 @@ end`
 }
 
 func TestGenerateCaseTypeWithFloat(t *testing.T) {
-	input := `def check(x : any)
+	input := `def check(x: any)
   case_type x
   when Float
     puts("float")
@@ -3714,7 +3714,7 @@ end`
 }
 
 func TestGenerateCaseTypeWithBool(t *testing.T) {
-	input := `def check(x : any)
+	input := `def check(x: any)
   case_type x
   when Bool
     puts("boolean")
@@ -3731,11 +3731,11 @@ end`
 }
 
 func TestGenerateCaseTypeWithBindings(t *testing.T) {
-	input := `def process(x : any)
+	input := `def process(x: any)
   case_type x
-  when s : String
+  when s: String
     puts(s)
-  when n : Int
+  when n: Int
     puts(n)
   end
 end`
@@ -3755,7 +3755,7 @@ end`
 // Error handling tests (Phase 19)
 
 func TestGenerateErrorReturnType(t *testing.T) {
-	input := `def save(path : String) -> Error
+	input := `def save(path: String): Error
   nil
 end
 
@@ -3769,7 +3769,7 @@ end`
 }
 
 func TestGenerateValueAndErrorReturnType(t *testing.T) {
-	input := `def read_file(path : String) -> (String, Error)
+	input := `def read_file(path: String): (String, Error)
   return "content", nil
 end
 
@@ -3783,7 +3783,7 @@ end`
 }
 
 func TestGenerateMultipleValuesAndErrorReturnType(t *testing.T) {
-	input := `def parse(s : String) -> (Int, Bool, Error)
+	input := `def parse(s: String): (Int, Bool, Error)
   return 42, true, nil
 end
 
@@ -3829,7 +3829,7 @@ end`
 }
 
 func TestGenerateBangInMain(t *testing.T) {
-	input := `def read_file(path : String) -> (String, Error)
+	input := `def read_file(path: String): (String, Error)
   return "content", nil
 end
 
@@ -3847,11 +3847,11 @@ end`
 }
 
 func TestGenerateBangInErrorFunction(t *testing.T) {
-	input := `def read_file(path : String) -> (String, Error)
+	input := `def read_file(path: String): (String, Error)
   return "content", nil
 end
 
-def load(path : String) -> (String, Error)
+def load(path: String): (String, Error)
   data = read_file(path)!
   return data, nil
 end
@@ -3868,7 +3868,7 @@ end`
 }
 
 func TestGenerateBangAsStatement(t *testing.T) {
-	input := `def do_something() -> Error
+	input := `def do_something(): Error
   return nil
 end
 
@@ -3885,11 +3885,11 @@ end`
 
 func TestGenerateBangWithMultiReturnError(t *testing.T) {
 	// Test error propagation in a function that returns (T, T, error)
-	input := `def fetch(url : String) -> (String, Error)
+	input := `def fetch(url: String): (String, Error)
   return "data", nil
 end
 
-def process(url : String) -> (String, Int, Error)
+def process(url: String): (String, Int, Error)
   data = fetch(url)!
   return data, 200, nil
 end
@@ -3905,11 +3905,11 @@ end`
 }
 
 func TestGenerateBangWithInterfaceReturn(t *testing.T) {
-	input := `def parse(s : String) -> (any, Error)
+	input := `def parse(s: String): (any, Error)
   return nil, nil
 end
 
-def process(s : String) -> (any, Error)
+def process(s: String): (any, Error)
   obj = parse(s)!
   return obj, nil
 end
@@ -3928,20 +3928,20 @@ end`
 // not Type{} which is invalid Go syntax for interfaces.
 func TestGenerateBangWithCustomInterfaceReturn(t *testing.T) {
 	input := `interface Readable
-  def read -> String
+  def read: String
 end
 
 class FileReader
-  def read -> String
+  def read: String
     return "data"
   end
 end
 
-def open_reader(path : String) -> (FileReader, Error)
+def open_reader(path: String): (FileReader, Error)
   return FileReader.new, nil
 end
 
-def process(path : String) -> (FileReader, Error)
+def process(path: String): (FileReader, Error)
   r = open_reader(path)!
   return r, nil
 end
@@ -3960,7 +3960,7 @@ end`
 }
 
 func TestGenerateRescueInline(t *testing.T) {
-	input := `def read_config(path : String) -> (String, Error)
+	input := `def read_config(path: String): (String, Error)
   return "config", nil
 end
 
@@ -3978,7 +3978,7 @@ end`
 }
 
 func TestGenerateRescueBlock(t *testing.T) {
-	input := `def load_data(path : String) -> (String, Error)
+	input := `def load_data(path: String): (String, Error)
   return "data", nil
 end
 
@@ -3999,7 +3999,7 @@ end`
 }
 
 func TestGenerateRescueWithErrorBinding(t *testing.T) {
-	input := `def fetch_url(url : String) -> (String, Error)
+	input := `def fetch_url(url: String): (String, Error)
   return "response", nil
 end
 
@@ -4021,7 +4021,7 @@ end`
 }
 
 func TestGenerateErrorKernelFunc(t *testing.T) {
-	input := `def validate(n : Int) -> (Int, Error)
+	input := `def validate(n: Int): (Int, Error)
   if n < 0
     return 0, error("negative number")
   end
@@ -4038,7 +4038,7 @@ end`
 }
 
 func TestGenerateErrorWithInterpolation(t *testing.T) {
-	input := `def validate(n : Int) -> (Int, Error)
+	input := `def validate(n: Int): (Int, Error)
   if n < 0
     return 0, error("negative: #{n}")
   end
@@ -4055,7 +4055,7 @@ end`
 }
 
 func TestNilCoalesceIntOptional(t *testing.T) {
-	input := `def get_value(opt : Int?) -> Int
+	input := `def get_value(opt: Int?): Int
   return opt ?? 0
 end
 
@@ -4069,7 +4069,7 @@ end`
 }
 
 func TestNilCoalesceStringOptional(t *testing.T) {
-	input := `def get_name(opt : String?) -> String
+	input := `def get_name(opt: String?): String
   return opt ?? "default"
 end
 
@@ -4083,7 +4083,7 @@ end`
 }
 
 func TestNilCoalesceFloatOptional(t *testing.T) {
-	input := `def get_price(opt : Float?) -> Float
+	input := `def get_price(opt: Float?): Float
   return opt ?? 3.14
 end
 
@@ -4097,7 +4097,7 @@ end`
 }
 
 func TestNilCoalesceBoolOptional(t *testing.T) {
-	input := `def get_flag(opt : Bool?) -> Bool
+	input := `def get_flag(opt: Bool?): Bool
   return opt ?? false
 end
 
@@ -4111,7 +4111,7 @@ end`
 }
 
 func TestSafeNavigation(t *testing.T) {
-	input := `def get_length(opt : String?) -> any
+	input := `def get_length(opt: String?): any
   return opt&.length
 end
 
@@ -4129,7 +4129,7 @@ end`
 }
 
 func TestChainedSafeNavigationUniqueVars(t *testing.T) {
-	input := `def get_city(user : User?) -> any
+	input := `def get_city(user: User?): any
   return user&.address&.city
 end
 
@@ -4151,7 +4151,7 @@ func TestMultiAssignmentNewVariables(t *testing.T) {
   puts ok
 end
 
-def get_data() -> (Int, Bool)
+def get_data(): (Int, Bool)
   return 42, true
 end`
 
@@ -4168,7 +4168,7 @@ func TestMultiAssignmentExistingVariables(t *testing.T) {
   val, ok = get_data()
 end
 
-def get_data() -> (Int, Bool)
+def get_data(): (Int, Bool)
   return 42, true
 end`
 
@@ -4186,7 +4186,7 @@ func TestMultiAssignmentThreeValues(t *testing.T) {
   puts c
 end
 
-def get_triple() -> (Int, Int, Int)
+def get_triple(): (Int, Int, Int)
   return 1, 2, 3
 end`
 
@@ -4202,7 +4202,7 @@ func TestMultiAssignmentWithBlankIdentifier(t *testing.T) {
   puts err
 end
 
-def get_data() -> (Int, Bool)
+def get_data(): (Int, Bool)
   return 42, true
 end`
 
@@ -4228,7 +4228,7 @@ end`
 
 func TestMultiAssignmentWithTypeInfo(t *testing.T) {
 	// Test that multi-value returns get proper types from semantic analysis
-	input := `def get_data() -> (Int, Bool)
+	input := `def get_data(): (Int, Bool)
   return 42, true
 end
 
@@ -4247,7 +4247,7 @@ end`
 }
 
 func TestOptionalMethodOk(t *testing.T) {
-	input := `def check(opt : Int?) -> Bool
+	input := `def check(opt: Int?): Bool
   return opt.ok?
 end
 
@@ -4261,7 +4261,7 @@ end`
 }
 
 func TestOptionalMethodPresent(t *testing.T) {
-	input := `def check(opt : String?) -> Bool
+	input := `def check(opt: String?): Bool
   return opt.present?
 end
 
@@ -4275,7 +4275,7 @@ end`
 }
 
 func TestOptionalMethodNil(t *testing.T) {
-	input := `def check(opt : Int?) -> Bool
+	input := `def check(opt: Int?): Bool
   return opt.nil?
 end
 
@@ -4289,7 +4289,7 @@ end`
 }
 
 func TestOptionalMethodAbsent(t *testing.T) {
-	input := `def check(opt : Float?) -> Bool
+	input := `def check(opt: Float?): Bool
   return opt.absent?
 end
 
@@ -4303,7 +4303,7 @@ end`
 }
 
 func TestOptionalMethodUnwrap(t *testing.T) {
-	input := `def get_value(opt : Int?) -> Int
+	input := `def get_value(opt: Int?): Int
   return opt.unwrap
 end
 
@@ -4318,9 +4318,9 @@ end`
 
 func TestAccessorGetter(t *testing.T) {
 	input := `pub class User
-  getter name : String
+  getter name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 end
 
@@ -4343,9 +4343,9 @@ end`
 
 func TestAccessorSetter(t *testing.T) {
 	input := `pub class User
-  setter email : String
+  setter email: String
 
-  def initialize(@email : String)
+  def initialize(@email: String)
   end
 end
 
@@ -4368,9 +4368,9 @@ end`
 
 func TestAccessorProperty(t *testing.T) {
 	input := `pub class Counter
-  property value : Int
+  property value: Int
 
-  def initialize(@value : Int)
+  def initialize(@value: Int)
   end
 end
 
@@ -4399,9 +4399,9 @@ end`
 
 func TestAccessorNonPubClass(t *testing.T) {
 	input := `class User
-  property name : String
+  property name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 end
 
@@ -4418,9 +4418,9 @@ end`
 func TestPubAccessorInNonPubClass(t *testing.T) {
 	// pub getter/setter/property in a non-pub class should generate PascalCase methods
 	input := `class User
-  pub property name : String
+  pub property name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 end
 
@@ -4469,13 +4469,13 @@ end`
 
 func TestSuperWithArgs(t *testing.T) {
 	input := `class Parent
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     a + b
   end
 end
 
 class Child < Parent
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     super(a, b) + 10
   end
 end
@@ -4563,7 +4563,7 @@ end`
 
 func TestModuleWithProperty(t *testing.T) {
 	input := `module Named
-  property name : String
+  property name: String
 end
 
 class User
@@ -4591,7 +4591,7 @@ func TestModuleMultipleIncludes(t *testing.T) {
 end
 
 module Named
-  property name : String
+  property name: String
 end
 
 class Worker
@@ -4616,16 +4616,16 @@ end`
 
 func TestModuleWithClassFields(t *testing.T) {
 	input := `module Loggable
-  def log(msg : String)
+  def log(msg: String)
     puts msg
   end
 end
 
 class Service
   include Loggable
-  @port : Int
+  @port: Int
 
-  def initialize(@port : Int)
+  def initialize(@port: Int)
   end
 end
 
@@ -4733,12 +4733,12 @@ end`
 
 func TestModuleClassOverridesModuleAccessor(t *testing.T) {
 	input := `module Named
-  property name : String
+  property name: String
 end
 
 class Worker
   include Named
-  property name : String
+  property name: String
 end
 
 def main
@@ -4755,11 +4755,11 @@ end`
 func TestModuleAccessorLastIncludeWins(t *testing.T) {
 	// Test: when multiple modules define the same accessor, the last included module wins
 	input := `module A
-  property name : String
+  property name: String
 end
 
 module B
-  property name : String
+  property name: String
 end
 
 class Worker
@@ -4784,16 +4784,16 @@ func TestBaseClassMethodReferenceAssertions(t *testing.T) {
 	// assertions to suppress "unused method" lint warnings for shadowed methods
 	input := `
 class Animal
-  getter name : String
-  def initialize(@name : String)
+  getter name: String
+  def initialize(@name: String)
   end
-  def speak -> String
+  def speak: String
     "..."
   end
 end
 
 class Cat < Animal
-  def speak -> String
+  def speak: String
     "Meow!"
   end
 end
@@ -4814,16 +4814,16 @@ func TestBaseClassWithPubMethods(t *testing.T) {
 	// Tests that pub base classes generate PascalCase method references
 	input := `
 pub class Animal
-  getter name : String
-  def initialize(@name : String)
+  getter name: String
+  def initialize(@name: String)
   end
-  pub def speak -> String
+  pub def speak: String
     "..."
   end
 end
 
 pub class Cat < Animal
-  pub def speak -> String
+  pub def speak: String
     "Meow!"
   end
 end
@@ -5065,7 +5065,7 @@ end`
 // BUG-027: Compound assignment to instance variables should expand correctly
 func TestInstanceVarCompoundAssign(t *testing.T) {
 	input := `class Counter
-  getter count : Int
+  getter count: Int
   def initialize
     @count = 0
   end
@@ -5102,13 +5102,13 @@ end`
 // BUG-028: to_s method calls should map to String()
 func TestToSMethodMapping(t *testing.T) {
 	input := `class Point
-  getter x : Int
-  getter y : Int
+  getter x: Int
+  getter y: Int
 
-  def initialize(@x : Int, @y : Int)
+  def initialize(@x: Int, @y: Int)
   end
 
-  def to_s -> String
+  def to_s: String
     "Point"
   end
 end
@@ -5132,8 +5132,8 @@ end`
 // BUG-030: Setter assignment via property accessor
 func TestSetterAssignment(t *testing.T) {
 	input := `class Person
-  property name : String
-  def initialize(@name : String)
+  property name: String
+  def initialize(@name: String)
   end
 end
 
@@ -5154,7 +5154,7 @@ end`
 // Test that accessor field types propagate correctly
 func TestAccessorFieldTypeInheritance(t *testing.T) {
 	input := `class Counter
-  getter count : Int
+  getter count: Int
   def initialize
     @count = 0
   end
@@ -5190,8 +5190,8 @@ end`
 
 // TestConstWithTypeAnnotation tests constant declaration with explicit type
 func TestConstWithTypeAnnotation(t *testing.T) {
-	input := `const TIMEOUT : Int64 = 30
-const RATE : Float = 0.15
+	input := `const TIMEOUT: Int64 = 30
+const RATE: Float = 0.15
 
 def main
 end`

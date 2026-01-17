@@ -3,7 +3,7 @@
 #
 # Test: Section 5.1 - String primitive type (immutable UTF-8)
 
-s : String = "hello"
+s: String = "hello"
 puts s
 
 # String methods

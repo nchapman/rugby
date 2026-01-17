@@ -5,10 +5,10 @@
 # This test should fail to compile because structs are immutable
 
 struct Point
-  x : Int
-  y : Int
+  x: Int
+  y: Int
 
-  def try_move(dx : Int)
+  def try_move(dx: Int)
     @x += dx  # ERROR: cannot modify struct field
   end
 end

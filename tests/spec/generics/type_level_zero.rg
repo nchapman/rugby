@@ -4,7 +4,7 @@
 # Test: Section 6.4 - T.zero type-level method
 # Returns the zero value for a Numeric type parameter
 
-def zero_like<T : Numeric>(x : T) -> T
+def zero_like<T: Numeric>(x: T): T
   T.zero
 end
 

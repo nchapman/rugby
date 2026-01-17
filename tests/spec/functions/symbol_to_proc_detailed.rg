@@ -4,13 +4,13 @@
 # Test: Section 10.8 - Symbol-to-proc (&:method)
 
 class User
-  getter name : String
-  getter active : Bool
+  getter name: String
+  getter active: Bool
 
-  def initialize(@name : String, @active : Bool)
+  def initialize(@name: String, @active: Bool)
   end
 
-  def active? -> Bool
+  def active?: Bool
     @active
   end
 end

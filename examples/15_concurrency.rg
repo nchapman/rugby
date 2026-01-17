@@ -93,7 +93,7 @@ def spawn_demo
   puts "  Results: #{r1}, #{r2}, #{r3}"
 end
 
-def compute(n : Int) -> Int
+def compute(n: Int): Int
   time.sleep(5 * time.Millisecond)
   n * 2
 end

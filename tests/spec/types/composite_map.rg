@@ -19,7 +19,7 @@ puts m2.has_key?("name")
 puts m2.has_key?("missing")
 
 # Empty typed map
-empty : Map<String, Int> = {}
+empty: Map<String, Int> = {}
 puts empty.length
 
 #@ expect:

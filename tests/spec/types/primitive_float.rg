@@ -4,7 +4,7 @@
 # Test: Section 5.1 - Float primitive types
 
 # Float (float64)
-x : Float = 3.14159
+x: Float = 3.14159
 puts x
 
 # Float operations

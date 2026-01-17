@@ -5,14 +5,14 @@
 
 module Http
   class Response
-    getter status : Int
-    getter body : String
+    getter status: Int
+    getter body: String
 
-    def initialize(@status : Int, @body : String)
+    def initialize(@status: Int, @body: String)
     end
   end
 
-  def self.get(url : String) -> Response
+  def self.get(url: String): Response
     Response.new(200, "Hello from #{url}")
   end
 end

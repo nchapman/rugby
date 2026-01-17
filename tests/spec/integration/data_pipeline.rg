@@ -6,12 +6,12 @@
 
 # Data record class
 class Person
-  def initialize(@name : String, @age : Int, @department : String)
+  def initialize(@name: String, @age: Int, @department: String)
   end
 
-  getter name : String
-  getter age : Int
-  getter department : String
+  getter name: String
+  getter age: Int
+  getter department: String
 end
 
 # Create sample data

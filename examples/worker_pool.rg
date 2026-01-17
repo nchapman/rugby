@@ -4,30 +4,30 @@
 import time
 
 class Job
-  getter id : Int
-  getter payload : String
+  getter id: Int
+  getter payload: String
 
-  def initialize(@id : Int, @payload : String)
+  def initialize(@id: Int, @payload: String)
   end
 end
 
 class Result
-  getter job_id : Int
-  getter output : String
-  getter worker : Int
+  getter job_id: Int
+  getter output: String
+  getter worker: Int
 
-  def initialize(@job_id : Int, @output : String, @worker : Int)
+  def initialize(@job_id: Int, @output: String, @worker: Int)
   end
 end
 
-def process_job(job : Job, worker_id : Int) -> Result
+def process_job(job: Job, worker_id: Int): Result
   # Simulate work
   time.sleep(50 * time.Millisecond)
   output = job.payload.upcase
   Result.new(job.id, output, worker_id)
 end
 
-def worker(id : Int, jobs : Chan<Job>, results : Chan<Result>)
+def worker(id: Int, jobs: Chan<Job>, results: Chan<Result>)
   for job in jobs
     result = process_job(job, id)
     results << result

@@ -176,13 +176,13 @@ end`
 // ====================
 
 func TestFunctionDuplicateParams(t *testing.T) {
-	input := `def foo(a : Int, a : Int)
+	input := `def foo(a: Int, a: Int)
 end`
 	expectError(t, input, "duplicate parameter")
 }
 
 func TestFunctionMissingReturnType(t *testing.T) {
-	input := `def foo() ->
+	input := `def foo():
 end`
 	expectError(t, input, "expected type")
 }
@@ -576,7 +576,7 @@ func TestForMissingEndHint(t *testing.T) {
 }
 
 func TestFunctionMissingEndHint(t *testing.T) {
-	input := `def greet(name : String)
+	input := `def greet(name: String)
   puts name
 `
 	expectErrorWithHint(t, input, "expected 'end' to close function", "every 'def' needs a matching 'end'")
@@ -615,8 +615,8 @@ func TestEnumMissingEndHint(t *testing.T) {
 
 func TestStructMissingEndHint(t *testing.T) {
 	input := `struct Point
-  x : Int
-  y : Int
+  x: Int
+  y: Int
 `
 	expectErrorWithHint(t, input, "expected 'end' to close struct", "every 'struct' needs a matching 'end'")
 }
@@ -706,7 +706,7 @@ func TestRecoveryAfterBadFunction(t *testing.T) {
 	input := `def broken(x : )
 end
 
-def valid(y : Int) -> Int
+def valid(y: Int): Int
   y * 2
 end`
 	l := lexer.New(input)

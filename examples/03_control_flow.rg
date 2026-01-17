@@ -70,7 +70,7 @@ def main
   describe_type(3.14)
 end
 
-def describe_type(x : any)
+def describe_type(x: any)
   case_type x
   when String
     puts "It's a string: #{x}"

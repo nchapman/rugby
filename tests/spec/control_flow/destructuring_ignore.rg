@@ -3,7 +3,7 @@
 #
 # Test: Section 9.3 - Underscore to ignore values in destructuring
 
-def get_triple -> (Int, String, Bool)
+def get_triple: (Int, String, Bool)
   1, "hello", true
 end
 
@@ -17,7 +17,7 @@ puts first
 puts third
 
 # Can use multiple underscores
-def get_five -> (Int, Int, Int, Int, Int)
+def get_five: (Int, Int, Int, Int, Int)
   1, 2, 3, 4, 5
 end
 

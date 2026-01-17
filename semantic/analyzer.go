@@ -423,7 +423,7 @@ func (a *Analyzer) formatMethodSignature(method *Symbol) string {
 
 	sig := "(" + strings.Join(params, ", ") + ")"
 	if len(returns) > 0 {
-		sig += " -> " + strings.Join(returns, ", ")
+		sig += ": " + strings.Join(returns, ", ")
 	}
 	return sig
 }
@@ -3008,7 +3008,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 
 		a.scope = prevScope
 
-		// Build function type: (ParamTypes) -> ReturnType
+		// Build function type: (ParamTypes): ReturnType
 		var paramTypes []*Type
 		for _, param := range e.Params {
 			if param.Type != "" {
@@ -3068,7 +3068,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 
 // analyzeLambdaWithExpectedType analyzes a lambda expression using the expected
 // function type to infer parameter and return types when not explicitly specified.
-// This enables `handler : (Int) -> Int = -> { |x| x * 2 }` to work without
+// This enables `handler: (Int): Int = -> { |x| x * 2 }` to work without
 // explicit type annotations on the lambda.
 func (a *Analyzer) analyzeLambdaWithExpectedType(e *ast.LambdaExpr, expectedType *Type) *Type {
 	if expectedType == nil || expectedType.Kind != TypeFunc {

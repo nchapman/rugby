@@ -4,7 +4,7 @@
 # Test: Section 5.4 - Tuple types
 
 # Function returning tuple
-def get_pair -> (Int, String)
+def get_pair: (Int, String)
   42, "hello"
 end
 
@@ -18,7 +18,7 @@ first, _ = get_pair
 puts first
 
 # Multiple values
-def get_bounds -> (Int, Int, Int, Int)
+def get_bounds: (Int, Int, Int, Int)
   0, 0, 100, 200
 end
 

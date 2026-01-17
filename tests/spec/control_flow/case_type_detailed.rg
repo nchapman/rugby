@@ -4,26 +4,26 @@
 # Test: Section 9.6 - case_type for type matching
 
 interface Printable
-  def to_string -> String
+  def to_string: String
 end
 
 class Dog
-  def to_string -> String
+  def to_string: String
     "Dog"
   end
 end
 
 class Cat
-  def to_string -> String
+  def to_string: String
     "Cat"
   end
 end
 
-def identify(obj : Printable) -> String
+def identify(obj: Printable): String
   case_type obj
-  when d : Dog
+  when d: Dog
     return "It's a dog: #{d.to_string}"
-  when c : Cat
+  when c: Cat
     return "It's a cat: #{c.to_string}"
   else
     return "Unknown animal"

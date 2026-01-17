@@ -4,19 +4,19 @@
 # Test: Section 6.3 - Generic interfaces
 
 interface Container<T>
-  def get -> T
-  def set(value : T)
+  def get: T
+  def set(value: T)
 end
 
 class Box<T>
-  def initialize(@value : T)
+  def initialize(@value: T)
   end
 
-  def get -> T
+  def get: T
     @value
   end
 
-  def set(value : T)
+  def set(value: T)
     @value = value
   end
 end

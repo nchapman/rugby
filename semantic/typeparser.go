@@ -29,10 +29,10 @@ func ParseTypeWithParams(s string, typeParams map[string]string) *Type {
 		return NewOptionalType(inner)
 	}
 
-	// Check for function type: (Params) -> Return or Param -> Return
-	if arrowIdx := findTopLevelArrow(s); arrowIdx != -1 {
-		paramsPart := strings.TrimSpace(s[:arrowIdx])
-		returnPart := strings.TrimSpace(s[arrowIdx+2:])
+	// Check for function type: (Params): Return
+	if parenIdx := findTopLevelColon(s); parenIdx != -1 {
+		paramsPart := strings.TrimSpace(s[:parenIdx+1]) // include closing paren
+		returnPart := strings.TrimSpace(s[parenIdx+3:]) // skip "): "
 
 		var paramTypes []*Type
 		if strings.HasPrefix(paramsPart, "(") && strings.HasSuffix(paramsPart, ")") {
@@ -135,10 +135,10 @@ func ParseType(s string) *Type {
 		return NewOptionalType(inner)
 	}
 
-	// Check for function type: (Params) -> Return or Param -> Return
-	if arrowIdx := findTopLevelArrow(s); arrowIdx != -1 {
-		paramsPart := strings.TrimSpace(s[:arrowIdx])
-		returnPart := strings.TrimSpace(s[arrowIdx+2:])
+	// Check for function type: (Params): Return
+	if parenIdx := findTopLevelColon(s); parenIdx != -1 {
+		paramsPart := strings.TrimSpace(s[:parenIdx+1]) // include closing paren
+		returnPart := strings.TrimSpace(s[parenIdx+3:]) // skip "): "
 
 		var paramTypes []*Type
 		// Handle (Params) or single Param
@@ -264,18 +264,20 @@ func splitTopLevel(s string) []string {
 	return result
 }
 
-// findTopLevelArrow finds the index of "->" at the top level (not inside brackets).
-// Returns -1 if not found.
-func findTopLevelArrow(s string) int {
+// findTopLevelColon finds the index of "): " at the top level (function type separator).
+// Returns the index of the closing paren, or -1 if not found.
+func findTopLevelColon(s string) int {
 	depth := 0
 	for i, c := range s {
 		switch c {
 		case '<', '(':
 			depth++
-		case '>', ')':
+		case '>':
 			depth--
-		case '-':
-			if depth == 0 && i+1 < len(s) && s[i+1] == '>' {
+		case ')':
+			depth--
+			// Check if this is "): " pattern at top level
+			if depth == 0 && i+2 < len(s) && s[i+1] == ':' && s[i+2] == ' ' {
 				return i
 			}
 		}

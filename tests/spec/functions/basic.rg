@@ -3,11 +3,11 @@
 #
 # Test: Basic function definitions and calls
 
-def greet(name : String) -> String
+def greet(name: String): String
   "Hello, #{name}!"
 end
 
-def add(a : Int, b : Int) -> Int
+def add(a: Int, b: Int): Int
   a + b
 end
 

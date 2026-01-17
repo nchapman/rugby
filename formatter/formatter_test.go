@@ -27,7 +27,7 @@ end
 
 func TestFormatWithComments(t *testing.T) {
 	input := `# This is a comment
-def greet(name : String)
+def greet(name: String)
   # Say hello
   puts("Hello, #{name}")
 end`
@@ -46,7 +46,7 @@ end`
 }
 
 func TestFormatIdempotent(t *testing.T) {
-	input := `def add(a : Int, b : Int) -> Int
+	input := `def add(a: Int, b: Int): Int
   return a + b
 end
 `
@@ -68,7 +68,7 @@ end
 
 func TestFormatClass(t *testing.T) {
 	input := `class User
-def initialize(name : String)
+def initialize(name: String)
 @name = name
 end
 def greet
@@ -247,7 +247,7 @@ m = {"a"=>1,"b"=>2}`
 
 func TestFormatInterface(t *testing.T) {
 	input := `interface Speaker
-def speak -> String
+def speak: String
 end`
 
 	result, err := Format(input)
@@ -258,7 +258,7 @@ end`
 	if !strings.Contains(result, "interface Speaker") {
 		t.Error("interface declaration not preserved")
 	}
-	if !strings.Contains(result, "  def speak -> String") {
+	if !strings.Contains(result, "  def speak: String") {
 		t.Error("method signature should be indented")
 	}
 }
@@ -267,7 +267,7 @@ func TestFormatMultiLineDocComment(t *testing.T) {
 	input := `# This is the first line of documentation
 # This is the second line
 # And this is the third line
-def greet(name : String)
+def greet(name: String)
   puts("Hello, " + name)
 end`
 
@@ -343,7 +343,7 @@ func TestFormatClassWithMethodComments(t *testing.T) {
 	input := `# User class represents a user
 class User
   # Initialize with a name
-  def initialize(name : String)
+  def initialize(name: String)
     @name = name
   end
 

@@ -7,19 +7,19 @@ class Animal
   def initialize
   end
 
-  def speak -> String
+  def speak: String
     "..."
   end
 end
 
 class Dog < Animal
-  def speak -> String
+  def speak: String
     "Woof!"
   end
 end
 
 class Cat < Animal
-  def speak -> String
+  def speak: String
     "Meow!"
   end
 end

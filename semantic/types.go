@@ -220,12 +220,12 @@ func (t *Type) String() string {
 			returns[i] = r.String()
 		}
 		if len(returns) == 0 {
-			return fmt.Sprintf("(%s) -> ()", strings.Join(params, ", "))
+			return fmt.Sprintf("(%s): ()", strings.Join(params, ", "))
 		}
 		if len(returns) == 1 {
-			return fmt.Sprintf("(%s) -> %s", strings.Join(params, ", "), returns[0])
+			return fmt.Sprintf("(%s): %s", strings.Join(params, ", "), returns[0])
 		}
-		return fmt.Sprintf("(%s) -> (%s)", strings.Join(params, ", "), strings.Join(returns, ", "))
+		return fmt.Sprintf("(%s): (%s)", strings.Join(params, ", "), strings.Join(returns, ", "))
 	case TypeTypeParam:
 		return t.Name
 	default:

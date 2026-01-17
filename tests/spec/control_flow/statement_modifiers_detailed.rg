@@ -4,7 +4,7 @@
 # Test: Section 9.8 - Statement modifiers
 
 # return if
-def check_id(id : Int) -> String
+def check_id(id: Int): String
   return "invalid" if id < 0
   return "zero" if id == 0
   "valid"

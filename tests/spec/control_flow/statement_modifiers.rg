@@ -14,7 +14,7 @@ puts "invalid!" unless valid
 puts "still checking" unless false
 
 # Test return with if modifier
-def check_positive(n : Int) -> String
+def check_positive(n: Int): String
   return "negative" if n < 0
   return "zero" if n == 0
   "positive"
@@ -25,7 +25,7 @@ puts check_positive(0)
 puts check_positive(10)
 
 # Test return with unless modifier
-def check_valid(s : String) -> String
+def check_valid(s: String): String
   return "empty" unless s.length > 0
   "has content"
 end

@@ -3,7 +3,7 @@
 #
 # Test: If-let pattern for optional binding
 
-def find_name(id : Int) -> String?
+def find_name(id: Int): String?
   return "Alice" if id == 1
   nil
 end

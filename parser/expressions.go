@@ -1003,7 +1003,8 @@ func (p *Parser) parseLambdaCall(lambda ast.Expression) ast.Expression {
 //	-> { expr }                    # no params
 //	-> { |x| x * 2 }               # one param
 //	-> { |x, y| x + y }            # multiple params
-//	-> Int { |x : Int| x * 2 }     # with type annotations
+//	-> { |x: Int| x * 2 }          # with type annotations
+//	-> { |x: Int|: Int x * 2 }     # with return type
 //	-> do |x| ... end              # multiline form
 func (p *Parser) parseLambdaExpr() ast.Expression {
 	line := p.curToken.Line
@@ -1011,14 +1012,7 @@ func (p *Parser) parseLambdaExpr() ast.Expression {
 
 	lambda := &ast.LambdaExpr{Line: line}
 
-	// Check for optional return type: -> ReturnType { ... }
-	// Return type annotation appears before the block
-	// e.g., -> Int { |n| n * n } or -> String do |s| s.upcase end
-	if !p.curTokenIs(token.LBRACE) && !p.curTokenIs(token.DO) {
-		lambda.ReturnType = p.parseTypeName()
-	}
-
-	// Parse body: { |params| ... } or do |params| ... end
+	// Parse body: { |params|: ReturnType ... } or do |params|: ReturnType ... end
 	if p.curTokenIs(token.LBRACE) {
 		p.nextToken() // consume '{'
 
@@ -1087,7 +1081,8 @@ func (p *Parser) parseLambdaExpr() ast.Expression {
 }
 
 // parseLambdaParams parses |params| inside a lambda body.
-// Supports type annotations: |x : Int, y : String|
+// Supports type annotations: |x: Int, y: String|
+// Supports optional return type: |x: Int|: ReturnType
 // Returns false if parsing failed.
 func (p *Parser) parseLambdaParams(lambda *ast.LambdaExpr) bool {
 	p.nextToken() // consume '|'
@@ -1133,6 +1128,12 @@ func (p *Parser) parseLambdaParams(lambda *ast.LambdaExpr) bool {
 		return false
 	}
 	p.nextToken() // consume closing '|'
+
+	// Optional return type annotation: |params|: ReturnType
+	if p.curTokenIs(token.COLON) {
+		p.nextToken() // consume ':'
+		lambda.ReturnType = p.parseTypeName()
+	}
 
 	return true
 }

@@ -3,7 +3,7 @@
 #
 # Test that values of type 'Any' can be indexed
 
-def get_post -> Any
+def get_post: Any
   { "title" => "Hello", "body" => "World" }
 end
 

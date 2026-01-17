@@ -209,11 +209,11 @@ func compileWithTypeInfo(t *testing.T, input string) string {
 func TestInterfaceInheritance(t *testing.T) {
 	input := `
 interface Reader
-  def read -> String
+  def read: String
 end
 
 interface Writer
-  def write(data : String)
+  def write(data: String)
 end
 
 interface IO < Reader, Writer
@@ -238,22 +238,22 @@ end
 func TestClassImplements(t *testing.T) {
 	input := `
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 interface Serializable
-  def to_json -> String
+  def to_json: String
 end
 
 class User implements Speaker, Serializable
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
-  def speak -> String
+  def speak: String
     @name
   end
 
-  def to_json -> String
+  def to_json: String
     @name
   end
 end
@@ -272,7 +272,7 @@ end
 
 func TestAnyKeyword(t *testing.T) {
 	input := `
-def log(thing : any)
+def log(thing: any)
   thing
 end
 `
@@ -287,7 +287,7 @@ end
 
 func TestIsAMethodCall(t *testing.T) {
 	input := `
-def check(obj : any) -> Bool
+def check(obj: any): Bool
   obj.is_a?(String)
 end
 `
@@ -305,7 +305,7 @@ end
 
 func TestAsMethodCall(t *testing.T) {
 	input := `
-def cast(obj : any) -> (String, Bool)
+def cast(obj: any): (String, Bool)
   obj.as(String)
 end
 `
@@ -321,10 +321,10 @@ end
 func TestMessageMethodMapping(t *testing.T) {
 	input := `
 class CustomError
-  def initialize(@msg : String)
+  def initialize(@msg: String)
   end
 
-  def message -> String
+  def message: String
     @msg
   end
 end

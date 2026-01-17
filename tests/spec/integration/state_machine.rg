@@ -15,13 +15,13 @@ end
 
 # Order class implementing the state machine
 class Order
-  def initialize(@id : String, @status : OrderStatus)
+  def initialize(@id: String, @status: OrderStatus)
   end
 
-  getter id : String
-  getter status : OrderStatus
+  getter id: String
+  getter status: OrderStatus
 
-  def can_advance? -> Bool
+  def can_advance?: Bool
     case @status
     when OrderStatus::Pending, OrderStatus::Confirmed, OrderStatus::Shipped
       true
@@ -30,7 +30,7 @@ class Order
     end
   end
 
-  def advance -> Bool
+  def advance: Bool
     return false unless can_advance?
 
     case @status
@@ -44,7 +44,7 @@ class Order
     true
   end
 
-  def cancel -> Bool
+  def cancel: Bool
     if @status == OrderStatus::Pending || @status == OrderStatus::Confirmed
       @status = OrderStatus::Cancelled
       true
@@ -53,13 +53,13 @@ class Order
     end
   end
 
-  def status_name -> String
+  def status_name: String
     @status.to_s
   end
 end
 
 # Helper to print order state
-def print_order(order : Order)
+def print_order(order: Order)
   puts "Order #{order.id}: #{order.status_name}"
 end
 

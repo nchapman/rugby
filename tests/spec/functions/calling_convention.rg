@@ -3,11 +3,11 @@
 #
 # Test: Section 10.10 - Calling convention (optional parens)
 
-def greet(name : String)
+def greet(name: String)
   puts "Hello, #{name}!"
 end
 
-def get_value -> Int
+def get_value: Int
   42
 end
 

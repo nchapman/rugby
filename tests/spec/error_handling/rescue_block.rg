@@ -5,7 +5,7 @@
 
 import "errors"
 
-def fetch_data(url : String) -> (String, Error)
+def fetch_data(url: String): (String, Error)
   if url == ""
     return "", errors.new("empty url")
   end

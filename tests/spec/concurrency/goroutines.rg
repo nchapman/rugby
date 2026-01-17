@@ -29,7 +29,7 @@ end
 wg.wait
 
 # Collect results (order may vary, so we collect and sort)
-results : Array<String> = []
+results: Array<String> = []
 results = results << ch.receive
 results = results << ch.receive
 results = results << ch.receive

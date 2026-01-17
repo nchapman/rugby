@@ -4,24 +4,24 @@
 # Test that getters are inherited through multiple levels of inheritance
 
 class Grandparent
-  getter id : Int
+  getter id: Int
 
-  def initialize(@id : Int)
+  def initialize(@id: Int)
   end
 end
 
 class Parent < Grandparent
-  getter name : String
+  getter name: String
 
-  def initialize(id : Int, @name : String)
+  def initialize(id: Int, @name: String)
     @id = id
   end
 end
 
 class Child < Parent
-  getter age : Int
+  getter age: Int
 
-  def initialize(id : Int, name : String, @age : Int)
+  def initialize(id: Int, name: String, @age: Int)
     @id = id
     @name = name
   end

@@ -4,8 +4,8 @@
 # Test: Section 9.3 - Destructuring in function parameters
 
 struct UserData
-  name : String
-  age : Int
+  name: String
+  age: Int
 end
 
 # Struct destructuring in function parameters

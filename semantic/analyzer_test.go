@@ -40,7 +40,7 @@ func TestAnalyzeVariableDeclaration(t *testing.T) {
 }
 
 func TestAnalyzeVariableWithTypeAnnotation(t *testing.T) {
-	input := `x : Int64 = 5`
+	input := `x: Int64 = 5`
 	p := parse(t, input)
 	program := p.ParseProgram()
 	if len(p.Errors()) > 0 {
@@ -90,7 +90,7 @@ func TestAnalyzeUndefinedVariable(t *testing.T) {
 
 func TestAnalyzeFunctionDeclaration(t *testing.T) {
 	input := `
-def add(a : Int, b : Int) -> Int
+def add(a: Int, b: Int): Int
   a + b
 end
 `
@@ -121,10 +121,10 @@ end
 func TestAnalyzeClassDeclaration(t *testing.T) {
 	input := `
 class User
-  def initialize(@name : String, @age : Int)
+  def initialize(@name: String, @age: Int)
   end
 
-  def greet -> String
+  def greet: String
     "Hello, #{@name}"
   end
 end
@@ -294,7 +294,7 @@ end
 func TestAnalyzeReturnOutsideBlockIsAllowed(t *testing.T) {
 	// return in a regular loop should still be allowed
 	input := `
-def main -> Int
+def main: Int
   for i in [1, 2, 3]
     return i if i > 1
   end
@@ -431,7 +431,7 @@ end
 
 func TestAnalyzeIfLet(t *testing.T) {
 	input := `
-def find_user(id : Int) -> User?
+def find_user(id: Int): User?
   nil
 end
 
@@ -616,7 +616,7 @@ func TestAnalyzeBinaryExpressionTypes(t *testing.T) {
 func TestAnalyzeInterface(t *testing.T) {
 	input := `
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 `
 	p := parse(t, input)
@@ -677,7 +677,7 @@ puts z  # z is not defined anywhere
 
 func TestAnalyzeMultipleReturnTypes(t *testing.T) {
 	input := `
-def parse(s : String) -> (Int, Bool)
+def parse(s: String): (Int, Bool)
   return 0, false
 end
 `
@@ -761,7 +761,7 @@ func TestAnalyzeErrorMessages(t *testing.T) {
 
 func TestAnalyzeArityMismatch(t *testing.T) {
 	input := `
-def add(a : Int, b : Int) -> Int
+def add(a: Int, b: Int): Int
   a + b
 end
 
@@ -795,7 +795,7 @@ add(1)
 
 func TestAnalyzeArityMismatchTooMany(t *testing.T) {
 	input := `
-def greet(name : String)
+def greet(name: String)
   puts name
 end
 
@@ -829,7 +829,7 @@ greet("Alice", "Bob")
 
 func TestAnalyzeArityCorrect(t *testing.T) {
 	input := `
-def add(a : Int, b : Int) -> Int
+def add(a: Int, b: Int): Int
   a + b
 end
 
@@ -977,7 +977,7 @@ func TestAnalyzeUnaryTypeMismatch(t *testing.T) {
 		{"minus int", `x = -5`, "", false, ""},
 		{"minus float", `x = -3.14`, "", false, ""},
 		{"minus int64", `def main
-  x : Int64 = 5
+  x: Int64 = 5
   y = -x
 end`, "", false, ""},
 		{"double minus", `x = --5`, "", false, ""},
@@ -1088,8 +1088,8 @@ func TestAnalyzeClassInstanceEquality(t *testing.T) {
 		{
 			name: "same class instances comparable",
 			input: `class Dog
-  def initialize(name : String)
-    @name : String = name
+  def initialize(name: String)
+    @name: String = name
   end
 end
 
@@ -1103,14 +1103,14 @@ end`,
 		{
 			name: "different class instances not comparable",
 			input: `class Dog
-  def initialize(name : String)
-    @name : String = name
+  def initialize(name: String)
+    @name: String = name
   end
 end
 
 class Cat
-  def initialize(name : String)
-    @name : String = name
+  def initialize(name: String)
+    @name: String = name
   end
 end
 
@@ -1124,8 +1124,8 @@ end`,
 		{
 			name: "class compared with primitive not comparable",
 			input: `class Dog
-  def initialize(name : String)
-    @name : String = name
+  def initialize(name: String)
+    @name: String = name
   end
 end
 
@@ -1165,28 +1165,28 @@ func TestAnalyzeReturnTypeValidation(t *testing.T) {
 	}{
 		{
 			name: "correct return type",
-			input: `def add(a : Int, b : Int) -> Int
+			input: `def add(a: Int, b: Int): Int
   return a + b
 end`,
 			wantErr: false,
 		},
 		{
 			name: "wrong return type - string instead of int",
-			input: `def add(a : Int, b : Int) -> Int
+			input: `def add(a: Int, b: Int): Int
   return "hello"
 end`,
 			wantErr: true,
 		},
 		{
 			name: "wrong return type - bool instead of string",
-			input: `def getName -> String
+			input: `def getName: String
   return true
 end`,
 			wantErr: true,
 		},
 		{
 			name: "compatible numeric return - int for float",
-			input: `def getFloat -> Float
+			input: `def getFloat: Float
   return 42
 end`,
 			wantErr: false, // Int is assignable to Float
@@ -1200,14 +1200,14 @@ end`,
 		},
 		{
 			name: "return array of correct type",
-			input: `def getNumbers -> Array<Int>
+			input: `def getNumbers: Array<Int>
   return [1, 2, 3]
 end`,
 			wantErr: false,
 		},
 		{
 			name: "return array of wrong element type",
-			input: `def getNumbers -> Array<Int>
+			input: `def getNumbers: Array<Int>
   return ["a", "b"]
 end`,
 			wantErr: true,
@@ -1242,7 +1242,7 @@ func TestAnalyzeArgumentTypeValidation(t *testing.T) {
 	}{
 		{
 			name: "correct argument types",
-			input: `def greet(name : String, age : Int)
+			input: `def greet(name: String, age: Int)
   puts name
 end
 
@@ -1251,7 +1251,7 @@ greet("Alice", 30)`,
 		},
 		{
 			name: "wrong argument type - int instead of string",
-			input: `def greet(name : String)
+			input: `def greet(name: String)
   puts name
 end
 
@@ -1260,7 +1260,7 @@ greet(42)`,
 		},
 		{
 			name: "wrong argument type - string instead of int",
-			input: `def addOne(x : Int) -> Int
+			input: `def addOne(x: Int): Int
   return x + 1
 end
 
@@ -1269,7 +1269,7 @@ addOne("hello")`,
 		},
 		{
 			name: "compatible numeric - int for float param",
-			input: `def double(x : Float) -> Float
+			input: `def double(x: Float): Float
   return x * 2.0
 end
 
@@ -1278,7 +1278,7 @@ double(5)`,
 		},
 		{
 			name: "wrong second argument type",
-			input: `def compute(a : Int, b : Int) -> Int
+			input: `def compute(a: Int, b: Int): Int
   return a + b
 end
 
@@ -1287,7 +1287,7 @@ compute(1, "two")`,
 		},
 		{
 			name: "array argument with correct element type",
-			input: `def sumAll(nums : Array<Int>) -> Int
+			input: `def sumAll(nums: Array<Int>): Int
   return 0
 end
 
@@ -1296,7 +1296,7 @@ sumAll([1, 2, 3])`,
 		},
 		{
 			name: "array argument with wrong element type",
-			input: `def sumAll(nums : Array<Int>) -> Int
+			input: `def sumAll(nums: Array<Int>): Int
   return 0
 end
 
@@ -1501,7 +1501,7 @@ func TestAnalyzeIndexTypeValidation(t *testing.T) {
 			name: "array with int64 index",
 			input: `def main
   arr = [1, 2, 3]
-  i : Int64 = 1
+  i: Int64 = 1
   x = arr[i]
 end`,
 			wantErr: false,
@@ -1968,21 +1968,21 @@ func TestAnalyzeNilCoalesceTypeValidation(t *testing.T) {
 		// Valid nil coalesce operations
 		{
 			name: "optional int with int default",
-			input: `def check(x : Int?)
+			input: `def check(x: Int?)
   y = x ?? 0
 end`,
 			wantErr: false,
 		},
 		{
 			name: "optional string with string default",
-			input: `def check(x : String?)
+			input: `def check(x: String?)
   y = x ?? "default"
 end`,
 			wantErr: false,
 		},
 		{
 			name: "optional float with int default (numeric widening)",
-			input: `def check(x : Float?)
+			input: `def check(x: Float?)
   y = x ?? 0
 end`,
 			wantErr: false,
@@ -1991,7 +1991,7 @@ end`,
 		// Invalid nil coalesce operations
 		{
 			name: "optional int with string default",
-			input: `def check(x : Int?)
+			input: `def check(x: Int?)
   y = x ?? "hello"
 end`,
 			wantErr: true,
@@ -1999,7 +1999,7 @@ end`,
 		},
 		{
 			name: "optional string with int default",
-			input: `def check(x : String?)
+			input: `def check(x: String?)
   y = x ?? 42
 end`,
 			wantErr: true,
@@ -2060,26 +2060,26 @@ func TestAnalyzeMethodCallTypeChecking(t *testing.T) {
 		{
 			name: "string length returns Int",
 			input: `s = "hello"
-x : Int = s.length`,
+x: Int = s.length`,
 			wantErr: false,
 		},
 		{
 			name: "string upcase returns String",
 			input: `s = "hello"
-x : String = s.upcase`,
+x: String = s.upcase`,
 			wantErr: false,
 		},
 		{
 			name: "string empty? returns Bool",
 			input: `s = "hello"
-x : Bool = s.empty?`,
+x: Bool = s.empty?`,
 			wantErr: false,
 		},
 		{
 			name: "string split returns Array[String]",
 			input: `s = "a,b,c"
 words = s.split(",")
-first : String = words[0]`,
+first: String = words[0]`,
 			wantErr: false,
 		},
 
@@ -2087,7 +2087,7 @@ first : String = words[0]`,
 		{
 			name: "array length returns Int",
 			input: `arr = [1, 2, 3]
-x : Int = arr.length`,
+x: Int = arr.length`,
 			wantErr: false,
 		},
 		{
@@ -2100,7 +2100,7 @@ y = x ?? 0`,
 		{
 			name: "array empty? returns Bool",
 			input: `arr = [1, 2, 3]
-x : Bool = arr.empty?`,
+x: Bool = arr.empty?`,
 			wantErr: false,
 		},
 
@@ -2108,19 +2108,19 @@ x : Bool = arr.empty?`,
 		{
 			name: "int abs returns Int",
 			input: `n = -5
-x : Int = n.abs`,
+x: Int = n.abs`,
 			wantErr: false,
 		},
 		{
 			name: "int even? returns Bool",
 			input: `n = 4
-x : Bool = n.even?`,
+x: Bool = n.even?`,
 			wantErr: false,
 		},
 		{
 			name: "int to_s returns String",
 			input: `n = 42
-x : String = n.to_s`,
+x: String = n.to_s`,
 			wantErr: false,
 		},
 
@@ -2128,13 +2128,13 @@ x : String = n.to_s`,
 		{
 			name: "float floor returns Float",
 			input: `f = 3.14
-x : Float = f.floor`,
+x: Float = f.floor`,
 			wantErr: false,
 		},
 		{
 			name: "float nan? returns Bool",
 			input: `f = 3.14
-x : Bool = f.nan?`,
+x: Bool = f.nan?`,
 			wantErr: false,
 		},
 
@@ -2143,20 +2143,20 @@ x : Bool = f.nan?`,
 			name: "map keys returns array of keys",
 			input: `m = {"a" => 1, "b" => 2}
 keys = m.keys
-first : String = keys[0]`,
+first: String = keys[0]`,
 			wantErr: false,
 		},
 		{
 			name: "map values returns array of values",
 			input: `m = {"a" => 1, "b" => 2}
 vals = m.values
-first : Int = vals[0]`,
+first: Int = vals[0]`,
 			wantErr: false,
 		},
 		{
 			name: "map has_key? returns Bool",
 			input: `m = {"a" => 1}
-x : Bool = m.has_key?("a")`,
+x: Bool = m.has_key?("a")`,
 			wantErr: false,
 		},
 
@@ -2165,32 +2165,32 @@ x : Bool = m.has_key?("a")`,
 			name: "class method returns declared type",
 			input: `
 class User
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
-  def get_name -> String
+  def get_name: String
     @name
   end
 end
 
 u = User.new("Alice")
-name : String = u.get_name`,
+name: String = u.get_name`,
 			wantErr: false,
 		},
 		{
 			name: "class method with wrong assignment type",
 			input: `
 class User
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
-  def get_name -> String
+  def get_name: String
     @name
   end
 end
 
 u = User.new("Alice")
-name : Int = u.get_name`,
+name: Int = u.get_name`,
 			wantErr: true,
 			errMsg:  "assignment",
 		},
@@ -2199,14 +2199,14 @@ name : Int = u.get_name`,
 		{
 			name: "chained string methods",
 			input: `s = "hello world"
-x : String = s.upcase.strip`,
+x: String = s.upcase.strip`,
 			wantErr: false,
 		},
 		{
 			name: "chained array methods",
 			input: `arr = [3, 1, 2]
 sorted = arr.sorted
-len : Int = sorted.length`,
+len: Int = sorted.length`,
 			wantErr: false,
 		},
 
@@ -2223,13 +2223,13 @@ x = s.include?("ell")`,
 			name: "range to_a returns array of Int",
 			input: `r = 1..5
 arr = r.to_a
-x : Int = arr[0]`,
+x: Int = arr[0]`,
 			wantErr: false,
 		},
 		{
 			name: "range include? returns Bool",
 			input: `r = 1..10
-x : Bool = r.include?(5)`,
+x: Bool = r.include?(5)`,
 			wantErr: false,
 		},
 
@@ -2238,20 +2238,20 @@ x : Bool = r.include?(5)`,
 		// Optional method return types
 		{
 			name: "optional ok? returns Bool",
-			input: `def get_val -> Int?
+			input: `def get_val: Int?
   5
 end
 x = get_val
-y : Bool = x.ok?`,
+y: Bool = x.ok?`,
 			wantErr: false,
 		},
 		{
 			name: "optional unwrap returns inner type",
-			input: `def get_val -> Int?
+			input: `def get_val: Int?
   5
 end
 x = get_val
-y : Int = x.unwrap`,
+y: Int = x.unwrap`,
 			wantErr: false,
 		},
 	}
@@ -2301,7 +2301,7 @@ func TestAnalyzeBangOperator(t *testing.T) {
 		{
 			name: "bang at top level (allowed for scripts)",
 			input: `
-def read_file(path : String) -> (String, Error)
+def read_file(path: String): (String, Error)
   return "contents", nil
 end
 
@@ -2312,11 +2312,11 @@ puts data`,
 		{
 			name: "bang in non-error-returning function",
 			input: `
-def read_file(path : String) -> (String, Error)
+def read_file(path: String): (String, Error)
   return "contents", nil
 end
 
-def process -> String
+def process: String
   read_file("test.txt")!
 end`,
 			wantErr: true,
@@ -2325,11 +2325,11 @@ end`,
 		{
 			name: "bang on error-only return",
 			input: `
-def validate(x : Int) -> Error
+def validate(x: Int): Error
   nil
 end
 
-def process -> Error
+def process: Error
   validate(5)!
   nil
 end`,
@@ -2338,11 +2338,11 @@ end`,
 		{
 			name: "bang on non-error function",
 			input: `
-def get_value -> Int
+def get_value: Int
   42
 end
 
-def process -> Error
+def process: Error
   get_value!
   nil
 end`,
@@ -2397,11 +2397,11 @@ func TestAnalyzeInterfaceImplementation(t *testing.T) {
 			name: "class correctly implements interface",
 			input: `
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 class Dog implements Speaker
-  def speak -> String
+  def speak: String
     "woof"
   end
 end`,
@@ -2411,7 +2411,7 @@ end`,
 			name: "class missing interface method",
 			input: `
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 class Dog implements Speaker
@@ -2423,11 +2423,11 @@ end`,
 			name: "class with wrong return type",
 			input: `
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 class Dog implements Speaker
-  def speak -> Int
+  def speak: Int
     42
   end
 end`,
@@ -2438,11 +2438,11 @@ end`,
 			name: "class with wrong parameter type",
 			input: `
 interface Greeter
-  def greet(name : String) -> String
+  def greet(name: String): String
 end
 
 class FormalGreeter implements Greeter
-  def greet(name : Int) -> String
+  def greet(name: Int): String
     "Hello"
   end
 end`,
@@ -2453,11 +2453,11 @@ end`,
 			name: "class with wrong parameter count",
 			input: `
 interface Adder
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
 end
 
 class Calculator implements Adder
-  def add(a : Int) -> Int
+  def add(a: Int): Int
     a
   end
 end`,
@@ -2468,7 +2468,7 @@ end`,
 			name: "undefined interface",
 			input: `
 class Dog implements NonExistent
-  def speak -> String
+  def speak: String
     "woof"
   end
 end`,
@@ -2479,15 +2479,15 @@ end`,
 			name: "interface with multiple methods",
 			input: `
 interface Animal
-  def speak -> String
-  def move -> String
+  def speak: String
+  def move: String
 end
 
 class Dog implements Animal
-  def speak -> String
+  def speak: String
     "woof"
   end
-  def move -> String
+  def move: String
     "run"
   end
 end`,
@@ -2497,12 +2497,12 @@ end`,
 			name: "interface with multiple methods - one missing",
 			input: `
 interface Animal
-  def speak -> String
-  def move -> String
+  def speak: String
+  def move: String
 end
 
 class Dog implements Animal
-  def speak -> String
+  def speak: String
     "woof"
   end
 end`,
@@ -2513,11 +2513,11 @@ end`,
 			name: "inherited method satisfies interface",
 			input: `
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 class Animal
-  def speak -> String
+  def speak: String
     "sound"
   end
 end
@@ -2530,17 +2530,17 @@ end`,
 			name: "inherited method with override satisfies interface",
 			input: `
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 class Animal
-  def speak -> String
+  def speak: String
     "sound"
   end
 end
 
 class Dog < Animal implements Speaker
-  def speak -> String
+  def speak: String
     "woof"
   end
 end`,
@@ -2550,7 +2550,7 @@ end`,
 			name: "parent missing method fails interface",
 			input: `
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 class Animal
@@ -2694,7 +2694,7 @@ func TestAnalyzeClassMethodArgumentTypeChecking(t *testing.T) {
 			name: "class method with correct argument type",
 			input: `
 class Calculator
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     a + b
   end
 end
@@ -2707,7 +2707,7 @@ result = c.add(1, 2)`,
 			name: "class method with wrong argument type",
 			input: `
 class Calculator
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     a + b
   end
 end
@@ -2721,7 +2721,7 @@ result = c.add("hello", 2)`,
 			name: "class method with wrong arity",
 			input: `
 class Calculator
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     a + b
   end
 end
@@ -2735,7 +2735,7 @@ result = c.add(1)`,
 			name: "constructor with correct argument types",
 			input: `
 class User
-  def initialize(@name : String, @age : Int)
+  def initialize(@name: String, @age: Int)
   end
 end
 
@@ -2746,7 +2746,7 @@ u = User.new("Alice", 30)`,
 			name: "constructor with wrong argument type",
 			input: `
 class User
-  def initialize(@name : String, @age : Int)
+  def initialize(@name: String, @age: Int)
   end
 end
 
@@ -2978,11 +2978,11 @@ func TestAnalyzeSafeNavigationReturnType(t *testing.T) {
 			name: "safe nav on class field returns optional of field type",
 			input: `
 class User
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 end
 
-def get_user -> User?
+def get_user: User?
   nil
 end
 
@@ -2997,7 +2997,7 @@ end
 		{
 			name: "safe nav on string method returns optional",
 			input: `
-def get_string -> String?
+def get_string: String?
   "hello"
 end
 s = get_string
@@ -3009,7 +3009,7 @@ len = s&.length
 		{
 			name: "safe nav on array method returns optional",
 			input: `
-def get_array -> Array<Int>?
+def get_array: Array<Int>?
   [1, 2, 3]
 end
 arr = get_array
@@ -3022,11 +3022,11 @@ first = arr&.first
 			name: "safe nav result used correctly with if-let",
 			input: `
 class User
-  def initialize(@age : Int)
+  def initialize(@age: Int)
   end
 end
 
-def find_user -> User?
+def find_user: User?
   nil
 end
 
@@ -3050,16 +3050,16 @@ len = s&.length
 			name: "chained safe navigation",
 			input: `
 class Address
-  def initialize(@city : String)
+  def initialize(@city: String)
   end
 end
 
 class User
-  def initialize(@address : Address?)
+  def initialize(@address: Address?)
   end
 end
 
-def find_user -> User?
+def find_user: User?
   nil
 end
 
@@ -3073,12 +3073,12 @@ city = u&.address&.city
 			name: "safe nav method call with arguments type checked",
 			input: `
 class Calculator
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     a + b
   end
 end
 
-def get_calc -> Calculator?
+def get_calc: Calculator?
   nil
 end
 
@@ -3091,12 +3091,12 @@ result = c&.add(1, 2)
 			name: "safe nav method call with wrong argument type",
 			input: `
 class Calculator
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     a + b
   end
 end
 
-def get_calc -> Calculator?
+def get_calc: Calculator?
   nil
 end
 
@@ -3153,7 +3153,7 @@ func TestAnalyzeImplicitMethodCalls(t *testing.T) {
 		{
 			name: "no-arg function implicit call",
 			input: `
-def get_value -> Int
+def get_value: Int
   42
 end
 
@@ -3165,7 +3165,7 @@ y = x + 1
 		{
 			name: "function with required params without parens errors",
 			input: `
-def greet(name : String) -> String
+def greet(name: String): String
   "Hello"
 end
 
@@ -3178,7 +3178,7 @@ x = greet
 			name: "no-arg method implicit call",
 			input: `
 class Counter
-  def count -> Int
+  def count: Int
     10
   end
 end
@@ -3192,7 +3192,7 @@ x = c.count + 1
 			name: "method with required params without parens errors",
 			input: `
 class Calculator
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     a + b
   end
 end
@@ -3207,7 +3207,7 @@ x = c.add
 			name: "method with one required param without parens errors",
 			input: `
 class Greeter
-  def greet(name : String) -> String
+  def greet(name: String): String
     "Hello"
   end
 end
@@ -3231,12 +3231,12 @@ x = s.include?
 			name: "safe nav method with required params without parens errors",
 			input: `
 class Calculator
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     a + b
   end
 end
 
-def get_calc -> Calculator?
+def get_calc: Calculator?
   nil
 end
 
@@ -3250,7 +3250,7 @@ x = c&.add
 			name: "method with parens and args works",
 			input: `
 class Calculator
-  def add(a : Int, b : Int) -> Int
+  def add(a: Int, b: Int): Int
     a + b
   end
 end

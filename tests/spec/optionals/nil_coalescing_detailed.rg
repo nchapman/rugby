@@ -3,7 +3,7 @@
 #
 # Test: Section 8.1 - Nil coalescing operator (??)
 
-def find_user(id : Int) -> String?
+def find_user(id: Int): String?
   if id == 1
     return "Alice"
   end
@@ -19,16 +19,16 @@ puts name2
 
 # ?? checks presence, not truthiness
 # 0 IS present, so ?? doesn't replace it
-count : Int? = 0
+count: Int? = 0
 puts count ?? 10
 
 # Empty string IS present
-str : String? = ""
+str: String? = ""
 puts str ?? "default"
 puts "got empty" if str == ""
 
 # nil triggers the default
-missing : Int? = nil
+missing: Int? = nil
 puts missing ?? 42
 
 #@ expect:

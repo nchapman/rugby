@@ -3,8 +3,8 @@
 #
 # Test: Section 5.1 - Bool primitive type
 
-t : Bool = true
-f : Bool = false
+t: Bool = true
+f: Bool = false
 
 puts t
 puts f

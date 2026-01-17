@@ -4,8 +4,8 @@
 # This test should fail to compile because struct fields cannot be assigned
 
 struct Point
-  x : Int
-  y : Int
+  x: Int
+  y: Int
 end
 
 def main

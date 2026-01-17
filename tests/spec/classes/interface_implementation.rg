@@ -4,37 +4,37 @@
 # Test: Section 11.7 - Designing for abstraction with interfaces
 
 interface Shape
-  def area -> Float
-  def perimeter -> Float
+  def area: Float
+  def perimeter: Float
 end
 
 class Circle implements Shape
-  def initialize(@radius : Float)
+  def initialize(@radius: Float)
   end
 
-  def area -> Float
+  def area: Float
     3.14159 * @radius * @radius
   end
 
-  def perimeter -> Float
+  def perimeter: Float
     2.0 * 3.14159 * @radius
   end
 end
 
 class Rectangle implements Shape
-  def initialize(@width : Float, @height : Float)
+  def initialize(@width: Float, @height: Float)
   end
 
-  def area -> Float
+  def area: Float
     @width * @height
   end
 
-  def perimeter -> Float
+  def perimeter: Float
     2.0 * (@width + @height)
   end
 end
 
-def print_shape(s : Shape)
+def print_shape(s: Shape)
   puts s.area
   puts s.perimeter
 end

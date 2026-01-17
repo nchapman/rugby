@@ -4,15 +4,15 @@
 # Test: Section 5.1 - Integer primitive types
 
 # Int (platform-dependent)
-x : Int = 42
+x: Int = 42
 puts x
 
 # Int64
-big : Int64 = 9223372036854775807
+big: Int64 = 9223372036854775807
 puts big
 
 # Negative numbers
-neg : Int = -100
+neg: Int = -100
 puts neg
 
 # Integer operations

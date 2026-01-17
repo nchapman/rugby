@@ -4,15 +4,15 @@
 # Test: Section 11.3 - Accessors (getter, setter, property)
 
 class Person
-  getter age : Int           # read-only
-  setter status : String     # write-only
-  property name : String     # read-write
+  getter age: Int           # read-only
+  setter status: String     # write-only
+  property name: String     # read-write
 
-  def initialize(@name : String, @age : Int)
+  def initialize(@name: String, @age: Int)
     @status = "active"
   end
 
-  def get_status -> String
+  def get_status: String
     @status
   end
 end

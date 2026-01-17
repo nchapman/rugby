@@ -4,17 +4,17 @@
 # Test: Section 8.1 - Safe navigation operator (&.)
 
 class Address
-  getter city : String
+  getter city: String
 
-  def initialize(@city : String)
+  def initialize(@city: String)
   end
 end
 
 class User
-  getter name : String
-  getter address : Address?
+  getter name: String
+  getter address: Address?
 
-  def initialize(@name : String, @address : Address?)
+  def initialize(@name: String, @address: Address?)
   end
 end
 

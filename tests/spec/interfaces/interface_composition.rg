@@ -4,11 +4,11 @@
 # Test: Section 13.1 - Interface composition
 
 interface Reader
-  def read -> String
+  def read: String
 end
 
 interface Writer
-  def write(data : String)
+  def write(data: String)
 end
 
 interface ReadWriter < Reader, Writer
@@ -19,16 +19,16 @@ class Buffer implements ReadWriter
     @data = ""
   end
 
-  def read -> String
+  def read: String
     @data
   end
 
-  def write(data : String)
+  def write(data: String)
     @data = @data + data
   end
 end
 
-def copy(from : Reader, to : Writer)
+def copy(from: Reader, to: Writer)
   to.write(from.read)
 end
 

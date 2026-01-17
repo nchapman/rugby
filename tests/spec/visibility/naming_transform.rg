@@ -8,11 +8,11 @@
 # pub find_user -> FindUser (exported)
 # user_id -> userID (acronym handling)
 
-def find_user(user_id : Int) -> String
+def find_user(user_id: Int): String
   "User #{user_id}"
 end
 
-pub def get_user_by_id(user_id : Int) -> String
+pub def get_user_by_id(user_id: Int): String
   find_user(user_id)
 end
 

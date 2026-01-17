@@ -3,7 +3,7 @@
 
 # Define interfaces
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 interface Mover
@@ -16,10 +16,10 @@ end
 
 # Explicit interface implementation (optional, but enables compile-time check)
 class Dog implements Speaker
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
-  def speak -> String
+  def speak: String
     "Woof! I'm #{@name}"
   end
 
@@ -30,10 +30,10 @@ end
 
 # Structural typing - satisfies Speaker without explicit implements
 class Robot
-  def initialize(@model : String)
+  def initialize(@model: String)
   end
 
-  def speak -> String
+  def speak: String
     "Beep boop, I am #{@model}"
   end
 
@@ -43,7 +43,7 @@ class Robot
 end
 
 # Function accepting interface type
-def greet(s : Speaker)
+def greet(s: Speaker)
   puts s.speak
 end
 

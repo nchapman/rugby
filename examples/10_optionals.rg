@@ -3,23 +3,23 @@
 #
 # Prefer optional operators over manual nil checks for cleaner code.
 
-def find_user(id : Int) -> String?
+def find_user(id: Int): String?
   return "Alice" if id == 1
   return "Bob" if id == 2
   nil
 end
 
 class Address
-  getter city : String
+  getter city: String
 
-  def initialize(@city : String, @zip : String)
+  def initialize(@city: String, @zip: String)
   end
 end
 
 class User
-  getter address : Address?
+  getter address: Address?
 
-  def initialize(@name : String, @address : Address?)
+  def initialize(@name: String, @address: Address?)
   end
 end
 

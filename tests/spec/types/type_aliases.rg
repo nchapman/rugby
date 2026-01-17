@@ -16,25 +16,25 @@ type ID = UserID
 # Public alias
 pub type PublicID = Int64
 
-def greet(name : Name) -> String
+def greet(name: Name): String
   "Hello, #{name}"
 end
 
 def main
   # Use basic aliases
-  id : UserID = 42
-  name : Name = "Alice"
+  id: UserID = 42
+  name: Name = "Alice"
 
   puts id
   puts name
   puts greet(name)
 
   # Use alias for array type
-  names : Strings = ["Bob", "Carol"]
+  names: Strings = ["Bob", "Carol"]
   names.each -> { |n| puts n }
 
   # Use chained alias
-  second_id : ID = 100
+  second_id: ID = 100
   puts second_id
 end
 

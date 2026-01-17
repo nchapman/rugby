@@ -3,7 +3,7 @@
 #
 # Test: Section 6.1 - Generic functions
 
-def identity<T>(x : T) -> T
+def identity<T>(x: T): T
   x
 end
 

@@ -19,7 +19,7 @@ class Manager
   end
 end
 
-def process(obj : Any)
+def process(obj: Any)
   # is_a? returns Bool
   if obj.is_a?(Runnable)
     puts "is runnable"

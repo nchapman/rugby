@@ -11,11 +11,11 @@ def main
   puts "Int: #{n}, Float: #{pi}, Bool: #{flag}"
 
   # Explicit type annotations when needed
-  count : Int = 100
-  ratio : Float = 2.5
+  count: Int = 100
+  ratio: Float = 2.5
 
   # Empty typed arrays
-  empty_nums : Array<Int> = []
+  empty_nums: Array<Int> = []
   empty_strs = [] : Array<String>  # inline annotation syntax
 
   # Symbols - compile to strings, great for status values

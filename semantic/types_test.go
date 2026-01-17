@@ -29,9 +29,9 @@ func TestTypeString(t *testing.T) {
 		{NewTupleType(TypeStringVal, TypeErrorVal), "(String, error)"},
 		{NewClassType("User"), "User"},
 		{NewInterfaceType("Reader"), "Reader"},
-		{NewFuncType([]*Type{TypeIntVal}, []*Type{TypeBoolVal}), "(Int) -> Bool"},
-		{NewFuncType([]*Type{TypeIntVal, TypeIntVal}, []*Type{TypeIntVal}), "(Int, Int) -> Int"},
-		{NewFuncType([]*Type{}, []*Type{}), "() -> ()"},
+		{NewFuncType([]*Type{TypeIntVal}, []*Type{TypeBoolVal}), "(Int): Bool"},
+		{NewFuncType([]*Type{TypeIntVal, TypeIntVal}, []*Type{TypeIntVal}), "(Int, Int): Int"},
+		{NewFuncType([]*Type{}, []*Type{}), "(): ()"},
 		{nil, "unknown"},
 	}
 

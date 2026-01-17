@@ -4,10 +4,10 @@
 # Test: Section 6.2 - Generic classes
 
 class Box<T>
-  def initialize(@value : T)
+  def initialize(@value: T)
   end
 
-  def get -> T
+  def get: T
     @value
   end
 end

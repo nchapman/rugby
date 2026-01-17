@@ -5,7 +5,7 @@
 # TODO: case/when should implicitly return values (Ruby expression semantics)
 #       Currently requires explicit `return` in each branch
 
-def grade_to_letter(score : Int) -> String
+def grade_to_letter(score: Int): String
   case score
   when 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100
     return "A"
@@ -20,7 +20,7 @@ def grade_to_letter(score : Int) -> String
   end
 end
 
-def day_type(day : String) -> String
+def day_type(day: String): String
   case day
   when "Saturday", "Sunday"
     return "weekend"

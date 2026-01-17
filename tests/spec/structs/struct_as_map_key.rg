@@ -4,13 +4,13 @@
 # Test: Section 12.2 - Structs as map keys
 
 struct Point
-  x : Int
-  y : Int
+  x: Int
+  y: Int
 end
 
 def main
   # Structs can be used as map keys because they have comparable fields
-  points : Map<Point, String> = {}
+  points: Map<Point, String> = {}
 
   p1 = Point{x: 0, y: 0}
   p2 = Point{x: 1, y: 1}

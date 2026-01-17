@@ -4,13 +4,13 @@
 # Test multiple module includes in a class
 
 module Greetable
-  def greet -> String
+  def greet: String
     "Hello!"
   end
 end
 
 module Printable
-  def info -> String
+  def info: String
     "A printable object"
   end
 end
@@ -19,9 +19,9 @@ class Thing
   include Greetable
   include Printable
 
-  getter name : String
+  getter name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 end
 

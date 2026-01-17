@@ -4,13 +4,13 @@
 # Test: Basic class definitions
 
 class Person
-  getter name : String
-  getter age : Int
+  getter name: String
+  getter age: Int
 
-  def initialize(@name : String, @age : Int)
+  def initialize(@name: String, @age: Int)
   end
 
-  def greet -> String
+  def greet: String
     "Hi, I'm #{@name}"
   end
 end

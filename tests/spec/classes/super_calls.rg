@@ -7,31 +7,31 @@
 # This tests both constructor super and method super.
 
 class Animal
-  getter name : String
-  getter sound : String
+  getter name: String
+  getter sound: String
 
-  def initialize(@name : String, @sound : String)
+  def initialize(@name: String, @sound: String)
   end
 
-  def speak -> String
+  def speak: String
     "#{@name} says #{@sound}"
   end
 
-  def greet(greeting : String) -> String
+  def greet(greeting: String): String
     "#{greeting}, I'm #{@name}"
   end
 end
 
 class Dog < Animal
-  getter breed : String
+  getter breed: String
 
   # Super in constructor with args
-  def initialize(name : String, @breed : String)
+  def initialize(name: String, @breed: String)
     super(name, "woof")
   end
 
   # Super in method (no args - uses same args as current method)
-  def greet(greeting : String) -> String
+  def greet(greeting: String): String
     result = super(greeting)
     "#{result} the #{@breed}"
   end

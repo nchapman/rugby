@@ -4,7 +4,7 @@
 # Test: Section 8.4 - The nil keyword
 
 # nil valid for optional types
-def find_user(id : Int) -> String?
+def find_user(id: Int): String?
   return nil if id < 0
   "User#{id}"
 end

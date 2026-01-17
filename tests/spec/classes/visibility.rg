@@ -4,7 +4,7 @@
 # Test visibility modifiers (pub)
 
 pub class Counter
-  getter value : Int
+  getter value: Int
 
   def initialize
     @value = 0

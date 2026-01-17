@@ -4,19 +4,19 @@
 # Test: Section 14.2 - Module state (instance variables)
 
 module Timestamped
-  @created_at : Int?
-  @updated_at : Int?
+  @created_at: Int?
+  @updated_at: Int?
 
-  def touch(now : Int)
+  def touch(now: Int)
     @created_at ||= now
     @updated_at = now
   end
 
-  def created -> Int
+  def created: Int
     @created_at ?? 0
   end
 
-  def updated -> Int
+  def updated: Int
     @updated_at ?? 0
   end
 end
@@ -24,12 +24,12 @@ end
 class Document
   include Timestamped
 
-  getter title : String
+  getter title: String
 
-  def initialize(@title : String)
+  def initialize(@title: String)
   end
 
-  def save(now : Int)
+  def save(now: Int)
     touch(now)
   end
 end

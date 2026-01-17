@@ -4,7 +4,7 @@
 # Test: Section 10.3 - Default parameters
 # TODO: Implement default parameter syntax
 
-def connect(host : String, port : Int = 8080, timeout : Int = 30)
+def connect(host: String, port: Int = 8080, timeout: Int = 30)
   puts "#{host}:#{port} timeout=#{timeout}"
 end
 

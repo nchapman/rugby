@@ -7,11 +7,11 @@
 # same name, the class method should take precedence.
 
 module Greetable
-  def greet -> String
+  def greet: String
     "Hello from module!"
   end
 
-  def farewell -> String
+  def farewell: String
     "Goodbye from module!"
   end
 end
@@ -19,13 +19,13 @@ end
 class Person
   include Greetable
 
-  getter name : String
+  getter name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
   # Override the greet method from module
-  def greet -> String
+  def greet: String
     "Hello, I'm #{@name}!"
   end
 end

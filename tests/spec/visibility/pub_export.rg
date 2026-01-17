@@ -4,17 +4,17 @@
 # Test: Section 15.1 - Export with pub
 
 # pub exports to Go (uppercase)
-pub def double(x : Int) -> Int
+pub def double(x: Int): Int
   helper(x)
 end
 
 # No pub = internal (lowercase in Go)
-def helper(x : Int) -> Int
+def helper(x: Int): Int
   x * 2
 end
 
 pub class Counter
-  pub getter count : Int
+  pub getter count: Int
 
   def initialize
     @count = 0

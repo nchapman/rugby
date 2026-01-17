@@ -4,13 +4,13 @@
 # Test: Section 14.4 - Module conflicts (diamond problem)
 
 module A
-  def greet -> String
+  def greet: String
     "Hello from A"
   end
 end
 
 module B
-  def greet -> String
+  def greet: String
     "Hello from B"
   end
 end
@@ -24,7 +24,7 @@ class D
   include A
   include B
 
-  def greet -> String
+  def greet: String
     "Hello from D"  # class method wins
   end
 end

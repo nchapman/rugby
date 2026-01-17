@@ -10,7 +10,7 @@ class Counter
     @@count += 1
   end
 
-  def self.count -> Int
+  def self.count: Int
     @@count
   end
 

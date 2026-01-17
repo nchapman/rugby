@@ -4,18 +4,18 @@
 # Test: Section 11.2 - Instance variables
 
 class User
-  @role : String                # explicit declaration
+  @role: String                # explicit declaration
 
-  def initialize(@name : String) # parameter promotion
+  def initialize(@name: String) # parameter promotion
     @age = 0                     # inferred from initialize
     @role = "user"
   end
 
-  def info -> String
+  def info: String
     "#{@name}, #{@age}, #{@role}"
   end
 
-  def set_age(age : Int)
+  def set_age(age: Int)
     @age = age
   end
 end

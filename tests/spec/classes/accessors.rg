@@ -4,14 +4,14 @@
 # Test getter, setter, and property declarations
 
 class Person
-  getter name : String
-  setter age : Int
-  property email : String
+  getter name: String
+  setter age: Int
+  property email: String
 
-  def initialize(@name : String, @age : Int, @email : String)
+  def initialize(@name: String, @age: Int, @email: String)
   end
 
-  def get_age -> Int
+  def get_age: Int
     @age
   end
 end

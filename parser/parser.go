@@ -136,9 +136,9 @@ func (p *Parser) isAssignmentPattern() bool {
 }
 
 // isFunctionTypeAhead checks if the current position is at a function type.
-// A function type is: () -> T or (T) -> U or (T, U) -> V
+// A function type is: (): T or (T): U or (T, U): V
 // Must be called when curToken is LPAREN.
-// This is used to distinguish `-> () -> Int` (function type) from `-> (Int, String)` (tuple).
+// This is used to distinguish `(): Int` (function type) from `(Int, String)` (tuple).
 func (p *Parser) isFunctionTypeAhead() bool {
 	// Save lexer state and parser tokens
 	lexerState := p.l.SaveState()
@@ -159,11 +159,11 @@ func (p *Parser) isFunctionTypeAhead() bool {
 		}
 	}
 
-	// Now curToken should be ')'. Check if next is '->'
+	// Now curToken should be ')'. Check if next is ':'
 	var result bool
 	if p.curTokenIs(token.RPAREN) {
 		p.nextToken() // consume ')'
-		result = p.curTokenIs(token.ARROW)
+		result = p.curTokenIs(token.COLON)
 	}
 
 	// Restore lexer state and parser tokens

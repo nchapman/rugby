@@ -4,18 +4,18 @@
 # Test: Type assertions with class types (not just interfaces)
 
 class Dog
-  def speak -> String
+  def speak: String
     "Woof"
   end
 end
 
 class Cat
-  def speak -> String
+  def speak: String
     "Meow"
   end
 end
 
-def test_dog(obj : Any)
+def test_dog(obj: Any)
   # is_a? with class type
   if obj.is_a?(Dog)
     puts "is a dog"
@@ -27,7 +27,7 @@ def test_dog(obj : Any)
   end
 end
 
-def test_cat(obj : Any)
+def test_cat(obj: Any)
   if obj.is_a?(Cat)
     puts "is a cat"
   end

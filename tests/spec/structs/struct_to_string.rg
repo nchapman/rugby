@@ -5,9 +5,9 @@
 # TODO: Implement auto-generated String() method for structs
 
 struct User
-  id : Int64
-  name : String
-  active : Bool
+  id: Int64
+  name: String
+  active: Bool
 end
 
 user = User{id: 1, name: "Alice", active: true}

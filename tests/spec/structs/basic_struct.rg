@@ -4,8 +4,8 @@
 # Test: Section 12.1 - Struct definition
 
 struct Point
-  x : Int
-  y : Int
+  x: Int
+  y: Int
 end
 
 p = Point{x: 10, y: 20}

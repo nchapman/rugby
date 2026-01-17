@@ -2,16 +2,16 @@
 # Demonstrates: explicit declarations, parameter promotion, assignment inference
 
 class User
-  @role : String  # 1. Explicit declaration
+  @role: String  # 1. Explicit declaration
 
   # 2. Parameter promotion (@name) - declares field and assigns argument
   # 3. Assignment inference (@email) - first assignment in initialize
-  def initialize(@name : String, email : String, role : String)
+  def initialize(@name: String, email: String, role: String)
     @email = email
     @role = role
   end
 
-  def update_email(new_email : String)
+  def update_email(new_email: String)
     @email = new_email  # OK: @email already exists
   end
 

@@ -4,11 +4,11 @@
 # Test: Section 14.1 - Module definition and include
 
 module Loggable
-  def log(msg : String)
+  def log(msg: String)
     puts "[LOG] #{msg}"
   end
 
-  def debug(msg : String)
+  def debug(msg: String)
     puts "[DEBUG] #{msg}"
   end
 end

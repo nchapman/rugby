@@ -4,9 +4,9 @@
 # Test: Section 12.2 - Struct features (auto-constructor, equality)
 
 struct User
-  id : Int64
-  name : String
-  email : String
+  id: Int64
+  name: String
+  email: String
 end
 
 u1 = User{id: 1, name: "Alice", email: "alice@example.com"}

@@ -2,35 +2,35 @@
 # Demonstrates: def, return types, multiple returns, implicit return
 
 # Simple function - last expression is the return value
-def double(n : Int) -> Int
+def double(n: Int): Int
   n * 2
 end
 
 # Explicit return with statement modifier
-def abs(n : Int) -> Int
+def abs(n: Int): Int
   return -n if n < 0
   n
 end
 
 # Multiple return values
-def divmod(a : Int, b : Int) -> (Int, Int)
+def divmod(a: Int, b: Int): (Int, Int)
   return a / b, a % b
 end
 
 # Function returning optional
-def find_user(id : Int) -> String?
+def find_user(id: Int): String?
   return "Alice" if id == 1
   return "Bob" if id == 2
   nil
 end
 
 # Function with array parameter - use blocks for transformation
-def sum_all(nums : Array<Int>) -> Int
+def sum_all(nums: Array<Int>): Int
   nums.sum  # idiomatic: use built-in method
 end
 
 # Or use reduce for custom aggregation
-def product_all(nums : Array<Int>) -> Int
+def product_all(nums: Array<Int>): Int
   nums.reduce(1) { |acc, n| acc * n }
 end
 

@@ -348,7 +348,7 @@ end`
 }
 
 func TestTupleLiteralReturn(t *testing.T) {
-	input := `def pair -> (Int, String)
+	input := `def pair: (Int, String)
   42, "hello"
 end`
 	l := lexer.New(input)
@@ -528,9 +528,9 @@ end`
 func TestCaseTypeWithBindings(t *testing.T) {
 	input := `def main
   case_type x
-  when s : String
+  when s: String
     puts s
-  when n : Int
+  when n: Int
     puts n
   end
 end`
@@ -649,7 +649,7 @@ end`
 
 func TestTernaryExpressionParsing(t *testing.T) {
 	input := `def main
-  x = a > b ? a : b
+  x = a > b ? a: b
 end`
 	l := lexer.New(input)
 	p := New(l)
@@ -773,7 +773,7 @@ end`
 }
 
 func TestTernaryWithPredicateMethod(t *testing.T) {
-	// empty? ? a : b - the ? suffix on method name shouldn't confuse ternary parsing
+	// empty? ? a: b - the ? suffix on method name shouldn't confuse ternary parsing
 	input := `def main
   x = empty? ? "none" : "some"
 end`
@@ -1187,12 +1187,12 @@ end`
 func TestMethodOperatorOverload(t *testing.T) {
 	// Class with == operator overload
 	input := `class Point
-  def initialize(x : Int, y : Int)
+  def initialize(x: Int, y: Int)
     @x = x
     @y = y
   end
 
-  def ==(other : Point) -> Bool
+  def ==(other: Point): Bool
     @x == other.x and @y == other.y
   end
 end`
@@ -1226,7 +1226,7 @@ func TestMethodWithMultipleReturnTypes(t *testing.T) {
   def initialize
   end
 
-  def fetch(key : String) -> (Int, Bool)
+  def fetch(key: String): (Int, Bool)
     return 0, false
   end
 end`
@@ -1869,7 +1869,7 @@ end`
 
 func TestInstanceVarRead(t *testing.T) {
 	input := `class User
-  def initialize(name : String)
+  def initialize(name: String)
     @name = name
   end
 
@@ -2000,7 +2000,7 @@ end`, "/", "total"},
 // ====================
 
 func TestGenericTypeAnnotation(t *testing.T) {
-	input := `def process(items : Array<String>) -> Array<Int>
+	input := `def process(items: Array<String>): Array<Int>
   items.map { |s| s.size }
 end`
 	l := lexer.New(input)
@@ -2021,7 +2021,7 @@ end`
 }
 
 func TestOptionalTypeAnnotation(t *testing.T) {
-	input := `def find(id : Int) -> User?
+	input := `def find(id: Int): User?
   nil
 end`
 	l := lexer.New(input)

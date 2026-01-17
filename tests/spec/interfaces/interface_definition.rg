@@ -4,11 +4,11 @@
 # Test: Section 13.1 - Interface definition
 
 interface Reader
-  def read(size : Int) -> String
+  def read(size: Int): String
 end
 
 interface Writer
-  def write(data : String) -> Int
+  def write(data: String): Int
 end
 
 class StringBuffer implements Reader, Writer
@@ -16,13 +16,13 @@ class StringBuffer implements Reader, Writer
     @buffer = ""
   end
 
-  def read(size : Int) -> String
+  def read(size: Int): String
     result = @buffer[0...size]
     @buffer = @buffer[size..]
     result
   end
 
-  def write(data : String) -> Int
+  def write(data: String): Int
     @buffer = @buffer + data
     data.length
   end

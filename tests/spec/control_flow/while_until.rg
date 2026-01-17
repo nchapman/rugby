@@ -19,7 +19,7 @@ end
 
 # Test while with complex condition
 i = 0
-arr : Array<Int> = []
+arr: Array<Int> = []
 while arr.length < 4
   arr = arr << i
   i += 1

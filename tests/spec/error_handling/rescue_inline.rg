@@ -5,7 +5,7 @@
 
 import "errors"
 
-def get_port(s : String) -> (Int, Error)
+def get_port(s: String): (Int, Error)
   if s == ""
     return 0, errors.new("empty")
   end

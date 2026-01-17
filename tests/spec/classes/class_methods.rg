@@ -10,19 +10,19 @@
 # - Class-level state access
 
 class Point
-  getter x : Int
-  getter y : Int
+  getter x: Int
+  getter y: Int
 
-  def initialize(@x : Int, @y : Int)
+  def initialize(@x: Int, @y: Int)
   end
 
   # Class method to create origin point
-  def self.origin -> Point
+  def self.origin: Point
     Point.new(0, 0)
   end
 
   # Class method with parameters
-  def self.from_coords(x : Int, y : Int) -> Point
+  def self.from_coords(x: Int, y: Int): Point
     Point.new(x, y)
   end
 end

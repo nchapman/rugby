@@ -4,11 +4,11 @@
 # Test: Section 4.3/10.6 - Single-line lambdas with braces
 
 # Basic lambda
-double = -> { |x : Int| x * 2 }
+double = -> { |x: Int| x * 2 }
 puts double.(5)
 
 # Lambda with multiple params
-add = -> { |a : Int, b : Int| a + b }
+add = -> { |a: Int, b: Int| a + b }
 puts add.(3, 4)
 
 # Lambda in method call

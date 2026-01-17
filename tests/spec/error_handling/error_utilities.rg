@@ -9,11 +9,11 @@ import "errors"
 import "io"
 
 # Create test errors
-def make_eof_error -> Error
+def make_eof_error: Error
   io.EOF
 end
 
-def make_custom_error -> Error
+def make_custom_error: Error
   errors.new("custom error")
 end
 

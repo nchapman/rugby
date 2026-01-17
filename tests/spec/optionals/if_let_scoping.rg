@@ -4,12 +4,12 @@
 # Test: Section 8.3 - if let scoping rules
 
 class User
-  getter name : String
-  def initialize(@name : String)
+  getter name: String
+  def initialize(@name: String)
   end
 end
 
-def find_user(id : Int) -> User?
+def find_user(id: Int): User?
   if id == 1
     return User.new("Alice")
   end

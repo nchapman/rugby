@@ -4,18 +4,18 @@
 # Test method chaining with self return
 
 class Builder
-  getter result : String
+  getter result: String
 
   def initialize
     @result = ""
   end
 
-  def add(s : String) -> Builder
+  def add(s: String): Builder
     @result = @result + s
     self
   end
 
-  def space -> Builder
+  def space: Builder
     @result = @result + " "
     self
   end

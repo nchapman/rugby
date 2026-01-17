@@ -5,7 +5,7 @@
 
 import "fmt"
 
-def log(level : String, *messages : String)
+def log(level: String, *messages: String)
   for msg in messages
     puts "[#{level}] #{msg}"
   end
@@ -18,7 +18,7 @@ items = ["a", "b", "c"]
 log("debug", *items)
 
 # Variadic with Any type (uses Go interop for sprintf)
-def format(template : String, *args : Any) -> String
+def format(template: String, *args: Any): String
   fmt.sprintf(template, *args)
 end
 

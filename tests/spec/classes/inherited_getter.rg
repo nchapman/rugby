@@ -4,14 +4,14 @@
 # Test that getters defined in parent classes work correctly in child classes
 
 class Animal
-  getter name : String
+  getter name: String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 end
 
 class Dog < Animal
-  def speak -> String
+  def speak: String
     "Woof!"
   end
 end

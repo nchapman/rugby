@@ -5,16 +5,16 @@
 
 # Generic class for testing explicit type params
 class Box<T>
-  def initialize(@value : T)
+  def initialize(@value: T)
   end
 
-  def get -> T
+  def get: T
     @value
   end
 end
 
 # Type parameters inferred from arguments
-def identity<T>(x : T) -> T
+def identity<T>(x: T): T
   x
 end
 
@@ -31,7 +31,7 @@ box = Box.new(42)
 puts box.get
 
 # Empty array needs explicit type
-result : Array<String> = []
+result: Array<String> = []
 puts result.length
 
 #@ expect:

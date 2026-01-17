@@ -3,7 +3,7 @@
 #
 # Test: Basic optional type usage
 
-def find_user(id : Int) -> String?
+def find_user(id: Int): String?
   return "Alice" if id == 1
   nil
 end

@@ -4,29 +4,29 @@
 # Test: Section 13.2 - Structural typing
 
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 # No "implements" needed - just have matching methods
 class Dog
-  def speak -> String
+  def speak: String
     "Woof!"
   end
 end
 
 class Cat
-  def speak -> String
+  def speak: String
     "Meow!"
   end
 end
 
 class Robot
-  def speak -> String
+  def speak: String
     "Beep boop"
   end
 end
 
-def announce(s : Speaker)
+def announce(s: Speaker)
   puts s.speak
 end
 

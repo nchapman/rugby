@@ -5,7 +5,7 @@
 
 import "errors"
 
-def read_config(path : String) -> (String, Error)
+def read_config(path: String): (String, Error)
   if path == ""
     return "", errors.new("empty path")
   end

@@ -6,7 +6,7 @@ import (
 
 func TestOptionalIntCodeGen(t *testing.T) {
 	input := `def main
-  x : Int? = 5
+  x: Int? = 5
 end`
 	output := compile(t, input)
 
@@ -17,7 +17,7 @@ end`
 
 func TestOptionalStringOrAssign(t *testing.T) {
 	input := `def main
-  x : String? = nil
+  x: String? = nil
   x ||= "default"
 end`
 	output := compile(t, input)
@@ -30,7 +30,7 @@ end`
 func TestReferenceTypeOrAssign(t *testing.T) {
 	// Arrays in Rugby are value types initialized to nil slice
 	input := `def main
-  x : Array<Int> = []
+  x: Array<Int> = []
   x ||= [1, 2, 3]
 end`
 	output := compile(t, input)
@@ -42,7 +42,7 @@ end`
 }
 
 func TestOptionalReturn(t *testing.T) {
-	input := `def find(n : Int) -> Int?
+	input := `def find(n: Int): Int?
   if n < 0
     return nil
   end

@@ -3,11 +3,11 @@
 #
 # Test: Section 17.5 - Structured concurrency with concurrently
 
-def compute_a -> Int
+def compute_a: Int
   10
 end
 
-def compute_b -> Int
+def compute_b: Int
   20
 end
 

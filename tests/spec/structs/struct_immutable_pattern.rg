@@ -7,14 +7,14 @@
 # Since structs are immutable, methods return new structs instead of mutating
 
 struct Point
-  x : Int
-  y : Int
+  x: Int
+  y: Int
 
-  def moved(dx : Int, dy : Int) -> Point
+  def moved(dx: Int, dy: Int): Point
     Point{x: @x + dx, y: @y + dy}
   end
 
-  def scaled(factor : Int) -> Point
+  def scaled(factor: Int): Point
     Point{x: @x * factor, y: @y * factor}
   end
 end
