@@ -5278,7 +5278,20 @@ func (g *Generator) genStdLibPropertyMethod(sel *ast.SelectorExpr) bool {
 func (g *Generator) genSpawnExpr(e *ast.SpawnExpr) {
 	g.needsRuntime = true
 
-	// Infer return type from block body for generic Spawn[T]
+	// Direct call form: spawn function(args) - fire-and-forget
+	if e.IsDirectCall {
+		g.buf.WriteString("runtime.SpawnVoid(func() {\n")
+		g.indent++
+		for _, stmt := range e.Block.Body {
+			g.genStatement(stmt)
+		}
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("})")
+		return
+	}
+
+	// Block form: spawn { expr } or spawn do ... end - returns Task<T>
 	returnType := g.inferBlockBodyReturnType(e.Block.Body)
 
 	g.buf.WriteString("runtime.Spawn(func() ")

@@ -720,25 +720,38 @@ func (p *Parser) parseSuperExpr() ast.Expression {
 	return &ast.SuperExpr{Args: args, Line: line}
 }
 
-// parseSpawnExpr parses: spawn { expr } or spawn do ... end
+// parseSpawnExpr parses:
+//
+//	spawn { expr }           - block form (returns Task<T>)
+//	spawn do ... end         - block form with do/end (returns Task<T>)
+//	spawn function(args)     - direct function call form (fire-and-forget)
 func (p *Parser) parseSpawnExpr() ast.Expression {
 	line := p.curToken.Line
 	p.nextToken() // consume 'spawn'
 
-	// Expect block: spawn { expr } or spawn do ... end
+	// Block form: spawn { expr } or spawn do ... end
 	var block *ast.BlockExpr
 	if p.curTokenIs(token.DO) {
 		block = p.parseBlock(token.END)
+		return &ast.SpawnExpr{Block: block, Line: line, IsDirectCall: false}
 	} else if p.curTokenIs(token.LBRACE) {
 		block = p.parseBlock(token.RBRACE)
-	} else {
-		p.errorAtWithHint(line, p.curToken.Column,
-			"expected block after 'spawn'",
-			"use 'spawn { expr }' or 'spawn do ... end'")
+		return &ast.SpawnExpr{Block: block, Line: line, IsDirectCall: false}
+	}
+
+	// Direct call form: spawn function(args)
+	// Parse the following expression and wrap it in a synthetic block
+	expr := p.parseExpression(lowest)
+	if expr == nil {
 		return nil
 	}
 
-	return &ast.SpawnExpr{Block: block, Line: line}
+	// Create a synthetic block containing just the expression
+	block = &ast.BlockExpr{
+		Body: []ast.Statement{&ast.ExprStmt{Expr: expr}},
+	}
+
+	return &ast.SpawnExpr{Block: block, Line: line, IsDirectCall: true}
 }
 
 // parseAwaitExpr parses: await task or await(task)

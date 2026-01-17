@@ -31,6 +31,12 @@ func Spawn[T any](fn func() T) *Task[T] {
 	return t
 }
 
+// SpawnVoid starts a goroutine without returning a Task.
+// Use this for fire-and-forget operations that don't return a value.
+func SpawnVoid(fn func()) {
+	go fn()
+}
+
 // Await blocks until the task completes and returns its value.
 // Awaiting a completed task returns immediately.
 func Await[T any](t *Task[T]) T {

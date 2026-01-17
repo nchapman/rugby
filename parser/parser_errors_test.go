@@ -628,11 +628,22 @@ func TestLambdaMissingBodyHint(t *testing.T) {
 	expectErrorWithHint(t, input, "expected '{' or 'do' for lambda body", "lambdas need a body")
 }
 
-func TestSpawnMissingBlockHint(t *testing.T) {
+func TestSpawnDirectCallSyntax(t *testing.T) {
+	// spawn with direct call syntax should now be valid
 	input := `def main
-  spawn 42
+  spawn puts("hello")
 end`
-	expectErrorWithHint(t, input, "expected block after 'spawn'", "use 'spawn { expr }' or 'spawn do ... end'")
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) > 0 {
+		t.Errorf("unexpected errors for 'spawn expr' syntax: %v", p.Errors())
+	}
+
+	if program == nil {
+		t.Fatal("ParseProgram returned nil")
+	}
 }
 
 func TestConcurrentlyMissingBlockHint(t *testing.T) {
