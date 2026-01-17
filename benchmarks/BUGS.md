@@ -98,28 +98,26 @@ end
 ```
 **Workaround:** Rename to `cache` or similar.
 
-### Hash Literal Type Inference
-**Affects:** lru
-**Status:** Empty hash literal `{}` infers `map[any]any` instead of typed map
+### Hash Literal Type Inference - FIXED
+Empty hash literals now infer type from context (property type annotation).
+
+### Hash Indexing for Class Types - FIXED
+For class-valued hashes, direct indexing returns nil for missing keys (class pointers are nullable).
+For value-type hashes, use `.get(key)` method for optional-returning access.
 
 ```ruby
-class LRU
-  property cache: Hash<Int, Node>
-
-  def initialize
-    @cache = {}  # Error: cannot use map[any]any as map[int]Node
-  end
-end
-```
-
-### Hash Indexing Returns Value, Not Optional
-**Affects:** lru
-**Status:** Hash lookup returns value type directly, not optional, so nil checks don't work
-
-```ruby
-node = @cache[key]
-if node == nil        # Error: mismatched types Node and untyped nil
+# Class-valued hash - works directly
+cache = {} : Hash<Int, Node>
+node = cache[key]
+if node == nil  # Works - class pointers can be nil
   return 0, false
+end
+
+# Value-type hash - use .get() for nil-checking
+scores = {} : Hash<String, Int>
+score = scores.get(name)  # Returns Int? (optional)
+if score == nil
+  return 0
 end
 ```
 
@@ -179,12 +177,12 @@ len = bytes.length  # Error: type []byte has no field or method Length
 | fasta | ✅ | ✅ | ✅ | ✅ | Working |
 | mandelbrot | ✅ | ✅ | - | ✅ | Working |
 | coro-prime-sieve | ✅ | ✅ | ✅ | ✅ | Working |
-| lru | ✅ | ✅ | ✅ | ❌ | Blocked: Hash type issues |
+| lru | ✅ | ✅ | ✅ | ✅ | Working |
 | pidigits | ✅ | ✅ | ✅ | ❌ | Blocked: pointer type properties |
 | knucleotide | ✅ | ✅ | ✅ | ❌ | Blocked: Hash type inference |
 | regex-redux | ✅ | ✅ | ✅ | ❌ | Blocked: []byte.length |
 
-**9 of 13 Rugby benchmarks working**
+**10 of 13 Rugby benchmarks working**
 
 ## Notes
 

@@ -1406,8 +1406,9 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 	}
 
 	if _, isStringKey := idx.Index.(*ast.StringLit); isStringKey {
-		// For "any" type receivers, use runtime.GetKey to handle type assertion
 		leftType := g.inferTypeFromExpr(idx.Left)
+
+		// For "any" type receivers, use runtime.GetKey to handle type assertion
 		if leftType == "any" {
 			g.needsRuntime = true
 			g.buf.WriteString("runtime.GetKey(")
@@ -1418,22 +1419,26 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 			return
 		}
 
-		switch idx.Left.(type) {
-		case *ast.Ident, *ast.MapLit:
+		// For maps with string keys, use direct Go indexing
+		// Class values return nil for missing keys (pointer is nullable)
+		// Value types return zero value for missing keys (Go semantics)
+		// Use .get(key) method for optional-returning access
+		if strings.HasPrefix(leftType, "map[") || g.typeInfo.GetTypeKind(idx.Left) == TypeMap {
 			g.genExpr(idx.Left)
 			g.buf.WriteString("[")
 			g.genExpr(idx.Index)
 			g.buf.WriteString("]")
 			return
-		default:
-			g.needsRuntime = true
-			g.buf.WriteString("runtime.GetKey(")
-			g.genExpr(idx.Left)
-			g.buf.WriteString(", ")
-			g.genExpr(idx.Index)
-			g.buf.WriteString(")")
-			return
 		}
+
+		// For other types (like structs with map fields via method call), use GetKey
+		g.needsRuntime = true
+		g.buf.WriteString("runtime.GetKey(")
+		g.genExpr(idx.Left)
+		g.buf.WriteString(", ")
+		g.genExpr(idx.Index)
+		g.buf.WriteString(")")
+		return
 	}
 
 	// For strings, always use runtime.AtIndex to return characters (not bytes)
@@ -1448,7 +1453,10 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 		return
 	}
 
-	// For maps, always use native Go map indexing
+	// For maps, use direct Go indexing
+	// Class values return nil for missing keys (pointer is nullable)
+	// Value types return zero value for missing keys (Go semantics)
+	// Use .get(key) method for optional-returning access
 	if strings.HasPrefix(leftType, "map[") || g.typeInfo.GetTypeKind(idx.Left) == TypeMap {
 		g.genExpr(idx.Left)
 		g.buf.WriteString("[")
@@ -2556,8 +2564,18 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				g.buf.WriteString(" == nil)")
 				return
 			case "unwrap":
-				g.buf.WriteString("*")
-				g.genExpr(fn.X)
+				// For class types, the optional T? is the same as *T (pointer),
+				// so unwrap should just return the pointer (no dereference needed).
+				// For value types, unwrap dereferences the pointer to get the value.
+				baseType := strings.TrimSuffix(receiverType, "?")
+				if g.typeInfo.IsClass(baseType) {
+					// Class optional - no dereference, pointer IS the value
+					g.genExpr(fn.X)
+				} else {
+					// Value type optional - dereference to get value
+					g.buf.WriteString("*")
+					g.genExpr(fn.X)
+				}
 				return
 			case "unwrap_or":
 				if len(call.Args) == 0 {
@@ -3441,6 +3459,51 @@ func (g *Generator) genLambdaEach(iterable ast.Expression, lambda *ast.LambdaExp
 
 	// Generate: for _, v := range iterable { lambda(v) }
 	elemType := g.inferArrayElementGoType(iterable)
+
+	// Check for tuple destructuring: array of tuples with multiple lambda params
+	// e.g., pairs.each -> { |name, value| ... } where pairs is Array<(String, Int)>
+	isTupleDestructure := len(lambda.Params) > 1 && strings.HasPrefix(elemType, "struct{")
+
+	if isTupleDestructure {
+		// Generate tuple destructuring:
+		// for _, _tuple := range iterable {
+		//     name := _tuple._0
+		//     value := _tuple._1
+		//     ...body...
+		// }
+		g.buf.WriteString("for _, _tuple := range ")
+		g.genExpr(iterable)
+		g.buf.WriteString(" {\n")
+
+		prevInInlinedLambda := g.inInlinedLambda
+		g.inInlinedLambda = true
+
+		// Register all destructured variables
+		var scopeVars []struct{ name, varType string }
+		for i, param := range lambda.Params {
+			scopeVars = append(scopeVars, struct{ name, varType string }{param.Name, "any"})
+			g.indent++
+			g.writeIndent()
+			g.buf.WriteString(param.Name)
+			g.buf.WriteString(" := _tuple._")
+			g.buf.WriteString(fmt.Sprintf("%d", i))
+			g.buf.WriteString("\n")
+			g.indent--
+		}
+
+		g.scopedVars(scopeVars, func() {
+			g.indent++
+			for _, stmt := range lambda.Body {
+				g.genStatement(stmt)
+			}
+			g.indent--
+		})
+		g.inInlinedLambda = prevInInlinedLambda
+
+		g.writeIndent()
+		g.buf.WriteString("}")
+		return
+	}
 
 	g.buf.WriteString("for _, ")
 	g.buf.WriteString(varName)
@@ -5036,8 +5099,17 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 			g.buf.WriteString(" == nil)")
 			return
 		case "unwrap":
-			g.buf.WriteString("*")
-			g.genExpr(sel.X)
+			// For class types, the optional T? is the same as *T (pointer),
+			// so unwrap should just return the pointer (no dereference needed).
+			baseType := strings.TrimSuffix(receiverType, "?")
+			if g.typeInfo.IsClass(baseType) {
+				// Class optional - no dereference
+				g.genExpr(sel.X)
+			} else {
+				// Value type optional - dereference
+				g.buf.WriteString("*")
+				g.genExpr(sel.X)
+			}
 			return
 		}
 	}

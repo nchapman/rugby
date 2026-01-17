@@ -3271,6 +3271,65 @@ func (a *Analyzer) analyzeLambdaWithExpectedType(e *ast.LambdaExpr, expectedType
 	return typ
 }
 
+// analyzeLambdaWithParamTypes analyzes a lambda expression with inferred parameter types.
+// This is used for block methods like each, map, etc. where we know the parameter types
+// from the receiver type.
+func (a *Analyzer) analyzeLambdaWithParamTypes(e *ast.LambdaExpr, paramTypes []*Type) *Type {
+	// Create a new scope for the lambda
+	lambdaScope := NewScope(ScopeBlock, a.scope)
+	prevScope := a.scope
+	a.scope = lambdaScope
+
+	// Add parameters to scope, using inferred types for untyped params
+	// Handle tuple destructuring: if we have one tuple type but multiple params,
+	// expand the tuple elements as individual param types
+	expandedParamTypes := paramTypes
+	if len(paramTypes) == 1 && paramTypes[0] != nil &&
+		paramTypes[0].Kind == TypeTuple && len(e.Params) > 1 {
+		tupleType := paramTypes[0]
+		if len(tupleType.Elements) == len(e.Params) {
+			expandedParamTypes = tupleType.Elements
+		}
+	}
+
+	for i, param := range e.Params {
+		var paramType *Type
+		if param.Type != "" {
+			// Explicit type takes precedence
+			paramType = ParseType(param.Type)
+		} else if i < len(expandedParamTypes) && expandedParamTypes[i] != nil {
+			// Infer from method block param types
+			paramType = expandedParamTypes[i]
+		} else {
+			paramType = TypeAnyVal
+		}
+		mustDefine(lambdaScope, NewSymbol(param.Name, SymParam, paramType))
+	}
+
+	// Analyze body
+	for _, stmt := range e.Body {
+		a.analyzeStatement(stmt)
+	}
+
+	a.scope = prevScope
+
+	// Build function type
+	var finalParamTypes []*Type
+	for i, param := range e.Params {
+		if param.Type != "" {
+			finalParamTypes = append(finalParamTypes, ParseType(param.Type))
+		} else if i < len(expandedParamTypes) && expandedParamTypes[i] != nil {
+			finalParamTypes = append(finalParamTypes, expandedParamTypes[i])
+		} else {
+			finalParamTypes = append(finalParamTypes, TypeAnyVal)
+		}
+	}
+
+	typ := NewFuncType(finalParamTypes, []*Type{TypeAnyVal})
+	a.setNodeType(e, typ)
+	return typ
+}
+
 func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 	// First, try to resolve the function to get expected parameter types for lambdas
 	var expectedParamTypes []*Type
@@ -3289,6 +3348,15 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 				}
 			}
 		}
+	}
+
+	// For selector method calls (receiver.method(args)), we need the receiver type
+	// BEFORE analyzing lambda arguments so we can infer their parameter types.
+	var selectorReceiverType *Type
+	var selectorMethodName string
+	if sel, ok := call.Func.(*ast.SelectorExpr); ok {
+		selectorReceiverType = a.analyzeExpr(sel.X)
+		selectorMethodName = sel.Sel
 	}
 
 	// Analyze arguments and collect types, check for splat
@@ -3310,6 +3378,14 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 			} else {
 				argType = a.analyzeExpr(arg)
 			}
+		} else if lambda, ok := arg.(*ast.LambdaExpr); ok && selectorReceiverType != nil {
+			// For selector method calls, infer lambda param types from the receiver type
+			blockParamTypes := a.inferBlockParamTypes(selectorReceiverType, selectorMethodName)
+			if len(blockParamTypes) > 0 {
+				argType = a.analyzeLambdaWithParamTypes(lambda, blockParamTypes)
+			} else {
+				argType = a.analyzeExpr(arg)
+			}
 		} else {
 			argType = a.analyzeExpr(arg)
 		}
@@ -3321,7 +3397,11 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 
 	// Handle method calls: receiver.method(args)
 	if sel, ok := call.Func.(*ast.SelectorExpr); ok {
-		receiverType := a.analyzeExpr(sel.X)
+		// Reuse receiverType if we already computed it for lambda inference
+		receiverType := selectorReceiverType
+		if receiverType == nil {
+			receiverType = a.analyzeExpr(sel.X)
+		}
 
 		// Analyze block with inferred parameter types
 		if call.Block != nil {
