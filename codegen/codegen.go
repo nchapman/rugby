@@ -666,6 +666,95 @@ func (g *Generator) inferExprGoType(expr ast.Expression) string {
 	return "any"
 }
 
+// inferLambdaReturnType infers the Go return type for a lambda expression.
+// It looks at the last expression in the lambda body and infers its type.
+// Falls back to "any" if the type cannot be determined.
+func (g *Generator) inferLambdaReturnType(lambda *ast.LambdaExpr, _ string) string {
+	return g.inferBlockBodyReturnType(lambda.Body)
+}
+
+// inferBlockBodyReturnType infers the Go return type for a block body.
+// It looks at the last statement and infers its type.
+// Falls back to "any" if the type cannot be determined.
+func (g *Generator) inferBlockBodyReturnType(body []ast.Statement) string {
+	if len(body) == 0 {
+		return "any"
+	}
+
+	// Get the last statement
+	lastStmt := body[len(body)-1]
+
+	// If it's an expression statement, get the expression's type
+	if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
+		return g.inferExprGoTypeDeep(exprStmt.Expr)
+	}
+
+	// If it's a return statement with a value
+	if retStmt, ok := lastStmt.(*ast.ReturnStmt); ok && len(retStmt.Values) > 0 {
+		return g.inferExprGoTypeDeep(retStmt.Values[0])
+	}
+
+	return "any"
+}
+
+// inferExprGoTypeDeep infers the Go type for an expression with deep analysis.
+// It first tries standard inference, then recursively analyzes binary expressions
+// and checks the vars map for identifiers.
+func (g *Generator) inferExprGoTypeDeep(expr ast.Expression) string {
+	// First try the standard inference
+	if goType := g.inferExprGoType(expr); goType != "" && goType != "any" {
+		return goType
+	}
+
+	// For binary expressions, infer from operands
+	if binExpr, ok := expr.(*ast.BinaryExpr); ok {
+		switch binExpr.Op {
+		case "+", "-", "*", "/", "%":
+			// Arithmetic operations preserve type
+			leftType := g.inferExprGoTypeDeep(binExpr.Left)
+			if leftType != "" && leftType != "any" {
+				return leftType
+			}
+			rightType := g.inferExprGoTypeDeep(binExpr.Right)
+			if rightType != "" && rightType != "any" {
+				return rightType
+			}
+			// If operand is an identifier, check vars
+			if ident, ok := binExpr.Left.(*ast.Ident); ok {
+				if varType, exists := g.vars[ident.Name]; exists && varType != "" {
+					return varType
+				}
+			}
+		case "==", "!=", "<", ">", "<=", ">=", "and", "or":
+			return "bool"
+		}
+	}
+
+	// For identifiers, check vars
+	if ident, ok := expr.(*ast.Ident); ok {
+		if varType, exists := g.vars[ident.Name]; exists && varType != "" {
+			return varType
+		}
+	}
+
+	// For method calls on known types, infer return type
+	if call, ok := expr.(*ast.CallExpr); ok {
+		if sel, ok := call.Func.(*ast.SelectorExpr); ok {
+			// String methods that return string
+			if sel.Sel == "upcase" || sel.Sel == "downcase" || sel.Sel == "strip" ||
+				sel.Sel == "reverse" || sel.Sel == "capitalize" {
+				return "string"
+			}
+			// Methods that return int
+			if sel.Sel == "length" || sel.Sel == "size" || sel.Sel == "abs" {
+				return "int"
+			}
+		}
+	}
+
+	return "any"
+}
+
 // getSelectorKind returns the resolved selector kind for a SelectorExpr.
 // First checks the AST annotation, then falls back to TypeInfo, then to heuristics.
 func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {

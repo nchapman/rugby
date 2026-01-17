@@ -604,7 +604,17 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 			g.genExpr(e.Right)
 			return
 		}
-		// For arrays, use runtime.ShiftLeft
+		// Check if left operand is a typed array - use generic Append
+		if elemType := g.inferArrayElementGoType(e.Left); elemType != "" && elemType != "any" {
+			g.needsRuntime = true
+			g.buf.WriteString("runtime.Append(")
+			g.genExpr(e.Left)
+			g.buf.WriteString(", ")
+			g.genExpr(e.Right)
+			g.buf.WriteString(")")
+			return
+		}
+		// Fallback to runtime.ShiftLeft for unknown types
 		g.needsRuntime = true
 		g.buf.WriteString("runtime.ShiftLeft(")
 		g.genExpr(e.Left)
@@ -654,18 +664,94 @@ func (g *Generator) hasAnyTypedOperand(left, right ast.Expression) bool {
 
 // canUseDirectComparison returns true if we can use Go's == operator directly
 // instead of runtime.Equal. This is possible when:
-// 1. Both operands are primitive literals, OR
-// 2. Both operands are primitive types (Int, Float, String, Bool)
+// 1. Either operand is nil (Go's == works for any nullable type)
+// 2. Both operands are primitive literals, OR
+// 3. Both operands are primitive types (Int, Float, String, Bool)
 func (g *Generator) canUseDirectComparison(left, right ast.Expression) bool {
+	// Nil comparisons always work with direct == in Go
+	_, leftIsNil := left.(*ast.NilLit)
+	_, rightIsNil := right.(*ast.NilLit)
+	if leftIsNil || rightIsNil {
+		return true
+	}
+
 	// Primitive literals can always use direct comparison
 	if isPrimitiveLiteral(left) && isPrimitiveLiteral(right) {
 		return true
 	}
 
-	// Check if both types are primitive
-	leftKind := g.typeInfo.GetTypeKind(left)
-	rightKind := g.typeInfo.GetTypeKind(right)
+	// Check if both types are primitive, using enhanced inference
+	leftKind := g.inferPrimitiveKind(left)
+	rightKind := g.inferPrimitiveKind(right)
 	return isPrimitiveKind(leftKind) && isPrimitiveKind(rightKind)
+}
+
+// inferPrimitiveKind tries to determine the primitive type of an expression
+// by checking typeInfo first, then falling back to local variable info and
+// structural inference for binary expressions.
+func (g *Generator) inferPrimitiveKind(expr ast.Expression) TypeKind {
+	// First try typeInfo
+	kind := g.typeInfo.GetTypeKind(expr)
+	if isPrimitiveKind(kind) {
+		return kind
+	}
+
+	// Check for primitive literals
+	switch expr.(type) {
+	case *ast.IntLit:
+		return TypeInt
+	case *ast.FloatLit:
+		return TypeFloat
+	case *ast.BoolLit:
+		return TypeBool
+	case *ast.StringLit:
+		return TypeString
+	}
+
+	// Check identifiers against vars map
+	if ident, ok := expr.(*ast.Ident); ok {
+		if goType, exists := g.vars[ident.Name]; exists {
+			return goTypeToKind(goType)
+		}
+	}
+
+	// For arithmetic binary expressions, infer from operands
+	if binExpr, ok := expr.(*ast.BinaryExpr); ok {
+		switch binExpr.Op {
+		case "+", "-", "*", "/", "%":
+			// Arithmetic operations preserve numeric type
+			leftKind := g.inferPrimitiveKind(binExpr.Left)
+			if leftKind == TypeInt || leftKind == TypeFloat || leftKind == TypeInt64 {
+				return leftKind
+			}
+			rightKind := g.inferPrimitiveKind(binExpr.Right)
+			if rightKind == TypeInt || rightKind == TypeFloat || rightKind == TypeInt64 {
+				return rightKind
+			}
+		case "==", "!=", "<", ">", "<=", ">=", "and", "or":
+			return TypeBool
+		}
+	}
+
+	return kind
+}
+
+// goTypeToKind converts a Go type string to a TypeKind.
+func goTypeToKind(goType string) TypeKind {
+	switch goType {
+	case "int":
+		return TypeInt
+	case "int64":
+		return TypeInt64
+	case "float64":
+		return TypeFloat
+	case "bool":
+		return TypeBool
+	case "string":
+		return TypeString
+	default:
+		return TypeUnknown
+	}
 }
 
 // isPrimitiveKind returns true for types that support direct == comparison in Go.
@@ -680,7 +766,7 @@ func isPrimitiveKind(k TypeKind) bool {
 
 func isPrimitiveLiteral(e ast.Expression) bool {
 	switch e.(type) {
-	case *ast.IntLit, *ast.FloatLit, *ast.BoolLit, *ast.StringLit:
+	case *ast.IntLit, *ast.FloatLit, *ast.BoolLit, *ast.StringLit, *ast.NilLit:
 		return true
 	default:
 		return false
@@ -3063,19 +3149,25 @@ func (g *Generator) genLambdaMap(iterable ast.Expression, lambda *ast.LambdaExpr
 	// Infer element type for proper typing
 	elemType := g.inferArrayElementGoType(iterable)
 
+	// Store element type in vars BEFORE inferring return type
+	// so expressions referencing the parameter can be typed
+	prevType, wasDefined := g.vars[varName]
+	if varName != "_" {
+		g.vars[varName] = elemType
+	}
+
+	// Infer return type from the last expression in the lambda body
+	returnType := g.inferLambdaReturnType(lambda, elemType)
+
 	g.buf.WriteString("runtime.Map(")
 	g.genExpr(iterable)
 	g.buf.WriteString(", func(")
 	g.buf.WriteString(varName)
 	g.buf.WriteString(" ")
 	g.buf.WriteString(elemType)
-	g.buf.WriteString(") any {\n")
-
-	// Store element type in vars so getReceiverClassName can detect getters
-	prevType, wasDefined := g.vars[varName]
-	if varName != "_" {
-		g.vars[varName] = elemType
-	}
+	g.buf.WriteString(") ")
+	g.buf.WriteString(returnType)
+	g.buf.WriteString(" {\n")
 
 	g.indent++
 	// Generate body, last expression is return value
@@ -4111,6 +4203,7 @@ func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, a
 
 func (g *Generator) genScopedSpawnBlock(scope ast.Expression, block *ast.BlockExpr) {
 	g.genExpr(scope)
+	// Note: Spawn expects func() any - making this generic would require Task[T]
 	g.buf.WriteString(".Spawn(func() any {\n")
 
 	g.indent++
@@ -4149,11 +4242,26 @@ func (g *Generator) genSymbolToProcBlockCall(iterable ast.Expression, stp *ast.S
 	baseClass := strings.TrimPrefix(elemType, "*")
 
 	// Check if this is a user-defined class with the method
-	// If so, we can generate a direct method call (required for unexported methods)
-	// Otherwise, use runtime.CallMethod (required for primitives)
 	goMethodName := ""
 	if g.instanceMethods[baseClass] != nil {
 		goMethodName = g.instanceMethods[baseClass][stp.Method]
+	}
+
+	// Check for stdLib method on primitives
+	stdLibType := goTypeToStdLibType(elemType)
+	var stdLibMethod *MethodDef
+	if stdLibType != "" {
+		if methods, ok := stdLib[stdLibType]; ok {
+			if info, ok := methods[stp.Method]; ok {
+				stdLibMethod = &info
+			}
+		}
+	}
+
+	// Determine return type based on the method being called
+	returnType := method.returnType
+	if stdLibMethod != nil && stdLibMethod.ReturnType != "" {
+		returnType = mapType(stdLibMethod.ReturnType)
 	}
 
 	g.buf.WriteString(method.runtimeFunc)
@@ -4162,25 +4270,48 @@ func (g *Generator) genSymbolToProcBlockCall(iterable ast.Expression, stp *ast.S
 	g.buf.WriteString(", func(x ")
 	g.buf.WriteString(elemType)
 	g.buf.WriteString(") ")
-	g.buf.WriteString(method.returnType)
+	g.buf.WriteString(returnType)
 
 	if goMethodName != "" {
 		// User-defined class with known method - generate direct call
 		g.buf.WriteString(" { return x.")
 		g.buf.WriteString(goMethodName)
 		g.buf.WriteString("() })")
+	} else if stdLibMethod != nil {
+		// Primitive type with known runtime function - generate direct call
+		g.buf.WriteString(" { return ")
+		g.buf.WriteString(stdLibMethod.RuntimeFunc)
+		g.buf.WriteString("(x) })")
 	} else {
-		// Primitive type or unknown method - use runtime.CallMethod
+		// Unknown method - use runtime.CallMethod as fallback
 		g.buf.WriteString(" { return runtime.CallMethod(x, \"")
 		g.buf.WriteString(stp.Method)
 		g.buf.WriteString("\")")
 		// Add type assertion for non-any return types
-		if method.returnType != "any" {
+		if returnType != "any" {
 			g.buf.WriteString(".(")
-			g.buf.WriteString(method.returnType)
+			g.buf.WriteString(returnType)
 			g.buf.WriteString(")")
 		}
 		g.buf.WriteString(" })")
+	}
+}
+
+// goTypeToStdLibType maps Go type names to stdLib type keys.
+func goTypeToStdLibType(goType string) string {
+	switch goType {
+	case "string":
+		return "String"
+	case "int":
+		return "Int"
+	case "int64":
+		return "Int"
+	case "float64":
+		return "Float"
+	case "bool":
+		return "Bool"
+	default:
+		return ""
 	}
 }
 
@@ -4901,6 +5032,7 @@ func (g *Generator) genStdLibPropertyMethod(sel *ast.SelectorExpr) bool {
 
 func (g *Generator) genSpawnExpr(e *ast.SpawnExpr) {
 	g.needsRuntime = true
+	// Note: Spawn expects func() any - making this generic would require Task[T]
 	g.buf.WriteString("runtime.Spawn(func() any {\n")
 	g.indent++
 	if len(e.Block.Body) > 0 {

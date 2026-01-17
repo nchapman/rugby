@@ -741,3 +741,33 @@ All language features including Phase 14 now pass!
 - Semantic analyzer must track nested classes under original name for type lookups
 - Module class methods require `IsClassMethod` check to distinguish from instance methods
 - `ScopeExpr` AST node handles `::` operator for fully qualified names
+
+---
+
+## Future Optimizations
+
+Performance improvements that require larger refactoring. Not blocking but would improve generated code quality.
+
+### Make Task Generic
+
+Currently `spawn` blocks return `func() any` because `runtime.Task` is not generic:
+
+```go
+// Current
+type Task struct { result any }
+func Spawn(fn func() any) *Task
+
+// Ideal
+type Task[T any] struct { result T }
+func Spawn[T any](fn func() T) *Task[T]
+```
+
+This would eliminate type assertions when awaiting tasks and allow typed return values.
+
+**Required changes:**
+- Make `Task` struct generic in `runtime/task.go`
+- Make `Spawn` function generic
+- Make `Await` function generic (returns `T` instead of `any`)
+- Update `Scope.Spawn` method
+- Update codegen to generate typed spawn closures
+- Update codegen for await expressions

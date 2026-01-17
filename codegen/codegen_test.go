@@ -736,9 +736,8 @@ end`
 
 	output := compile(t, input)
 
-	// When passed to map, symbol-to-proc becomes a runtime.Map call with CallMethod
-	assertContains(t, output, `runtime.Map(names, func(x string)`)
-	assertContains(t, output, `runtime.CallMethod(x, "upcase")`)
+	// When passed to map, symbol-to-proc uses direct runtime function for primitives
+	assertContains(t, output, `runtime.Map(names, func(x string) string { return runtime.Upcase(x) })`)
 }
 
 func TestGenerateSymbolToProcSnakeCase(t *testing.T) {
@@ -795,8 +794,8 @@ end`
 
 	output := compile(t, input)
 
-	// Array append uses runtime.ShiftLeft
-	assertContains(t, output, `runtime.ShiftLeft(arr, 5)`)
+	// Array append uses generic runtime.Append for typed arrays
+	assertContains(t, output, `arr = runtime.Append(arr, 5)`)
 }
 
 func TestGenerateArrayAppendChained(t *testing.T) {
@@ -807,8 +806,9 @@ end`
 
 	output := compile(t, input)
 
-	// Chained appends nest ShiftLeft calls
-	assertContains(t, output, `runtime.ShiftLeft(runtime.ShiftLeft(runtime.ShiftLeft(arr, 1), 2), 3)`)
+	// Chained appends: inner uses Append (knows arr is []int),
+	// outer calls use ShiftLeft (intermediate results lose type info)
+	assertContains(t, output, `runtime.ShiftLeft(runtime.ShiftLeft(runtime.Append(arr, 1), 2), 3)`)
 }
 
 func TestGenerateArrayAppendAssignment(t *testing.T) {
@@ -819,8 +819,8 @@ end`
 
 	output := compile(t, input)
 
-	// Reassignment with append
-	assertContains(t, output, `arr = runtime.ShiftLeft(arr, 5)`)
+	// Reassignment with append uses generic Append
+	assertContains(t, output, `arr = runtime.Append(arr, 5)`)
 }
 
 func TestGenerateChannelSend(t *testing.T) {
@@ -988,8 +988,8 @@ end`
 	output := compile(t, input)
 
 	// Map generates runtime.Map() call with function literal, typed with semantic analysis
-	// Return type is any since runtime.Map returns []any
-	assertContains(t, output, `runtime.Map(arr, func(x int) any {`)
+	// Return type is inferred from the expression (x * 2 where x is int -> int)
+	assertContains(t, output, `runtime.Map(arr, func(x int) int {`)
 	assertContains(t, output, `return (x * 2)`)
 }
 
@@ -1052,9 +1052,9 @@ end`
 
 	output := compile(t, input)
 
-	// With type info, n is typed as int
+	// With type info, n is typed as int; primitives use direct ==
 	assertContains(t, output, `runtime.Select(nums, func(n int) bool {`)
-	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
+	assertContains(t, output, `((n % 2) == 0)`)
 }
 
 func TestRejectBlock(t *testing.T) {
@@ -1067,9 +1067,9 @@ end`
 
 	output := compile(t, input)
 
-	// With type info, n is typed as int
+	// With type info, n is typed as int; primitives use direct ==
 	assertContains(t, output, `runtime.Reject(nums, func(n int) bool {`)
-	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
+	assertContains(t, output, `((n % 2) == 0)`)
 }
 
 func TestReduceBlock(t *testing.T) {
@@ -1099,7 +1099,7 @@ end`
 
 	// FindPtr returns *T for optional coalescing support, n is typed
 	assertContains(t, output, `runtime.FindPtr(nums, func(n int) bool {`)
-	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
+	assertContains(t, output, `((n % 2) == 0)`)
 }
 
 func TestAnyBlock(t *testing.T) {
@@ -1112,9 +1112,9 @@ end`
 
 	output := compile(t, input)
 
-	// With type info, n is typed as int
+	// With type info, n is typed as int; primitives use direct ==
 	assertContains(t, output, `runtime.Any(nums, func(n int) bool {`)
-	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
+	assertContains(t, output, `((n % 2) == 0)`)
 }
 
 func TestAllBlock(t *testing.T) {
@@ -1321,8 +1321,8 @@ end`
 
 	output := compile(t, input)
 
-	// Map currently returns any for the callback result
-	assertContains(t, output, `runtime.Map(arr, func(x int) any {`)
+	// Map infers return type from lambda body
+	assertContains(t, output, `runtime.Map(arr, func(x int) int {`)
 	assertContains(t, output, `return (x * 2)`)
 }
 
@@ -2915,8 +2915,8 @@ end`
 
 	output := compile(t, input)
 
-	// Explicit nil check compiles using runtime.Equal
-	assertContains(t, output, "if !runtime.Equal(x, nil)")
+	// Explicit nil check uses direct comparison
+	assertContains(t, output, "if x != nil")
 }
 
 func TestOptionalReferenceTypeInCondition(t *testing.T) {
@@ -2932,8 +2932,8 @@ end`
 
 	output := compile(t, input)
 
-	// Explicit nil check compiles using runtime.Equal
-	assertContains(t, output, "if !runtime.Equal(u, nil)")
+	// Explicit nil check uses direct comparison
+	assertContains(t, output, "if u != nil")
 }
 
 func TestOptionalInElsifCondition(t *testing.T) {
@@ -2950,9 +2950,9 @@ end`
 
 	output := compile(t, input)
 
-	// Both if and elsif use explicit nil checks with runtime.Equal
-	assertContains(t, output, "if !runtime.Equal(x, nil)")
-	assertContains(t, output, "} else if !runtime.Equal(y, nil)")
+	// Both if and elsif use direct nil checks
+	assertContains(t, output, "if x != nil")
+	assertContains(t, output, "} else if y != nil")
 }
 
 func TestNonOptionalInCondition(t *testing.T) {
@@ -3185,8 +3185,8 @@ end`
 
 	// explicit error handling
 	assertContains(t, output, "n, err := runtime.StringToInt(s)")
-	// The condition uses runtime.Equal for comparison
-	assertContains(t, output, "!runtime.Equal(err, nil)")
+	// The condition uses direct comparison for nil
+	assertContains(t, output, "err != nil")
 }
 
 // --- Error Utility Tests ---

@@ -722,6 +722,13 @@ func AtIndexOpt(collection any, i int) (any, bool) {
 	return val.Index(i).Interface(), true
 }
 
+// Append adds a value to a slice and returns the new slice.
+// This is a generic typed version that avoids type assertions.
+// Ruby: arr << item
+func Append[T any](slice []T, value T) []T {
+	return append(slice, value)
+}
+
 // ShiftLeft implements the << operator for both slices and channels.
 // For slices: appends the value and returns the new slice.
 // For channels: sends the value and returns the channel.

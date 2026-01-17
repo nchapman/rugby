@@ -859,30 +859,38 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 
 // getShiftLeftTargetType returns the Go type for ShiftLeft type assertion if needed.
 // Returns empty string if no assertion is needed.
+// Note: When the slice type is known, genBinaryExpr uses runtime.Append which is generic,
+// so no type assertion is needed. This function only returns a type for the fallback
+// ShiftLeft case with unknown types.
 func (g *Generator) getShiftLeftTargetType(expr ast.Expression) string {
 	binExpr, ok := expr.(*ast.BinaryExpr)
 	if !ok || binExpr.Op != "<<" {
 		return ""
 	}
 
-	// Get the Go type of the left operand (the array/channel being appended to)
+	// Check if this is a channel - channels use native Go send syntax, no assertion needed
+	if g.typeInfo.GetTypeKind(binExpr.Left) == TypeChannel {
+		return ""
+	}
+
+	// Check if we can infer the slice type - if so, genBinaryExpr uses Append (generic)
+	if elemType := g.inferArrayElementGoType(binExpr.Left); elemType != "" && elemType != "any" {
+		// Append is generic and returns the correct type, no assertion needed
+		return ""
+	}
+
+	// Fallback: ShiftLeft returns any, so we might need a type assertion
+	// Try to get the type from typeInfo
 	goType := g.typeInfo.GetGoType(binExpr.Left)
 	if goType != "" {
-		// Handle slices
 		if strings.HasPrefix(goType, "[]") {
 			return goType
 		}
-		// Handle channels
 		if strings.HasPrefix(goType, "chan ") {
 			return goType
 		}
 	}
 
-	// Fall back to inferring element type from left operand
-	elemType := g.inferArrayElementGoType(binExpr.Left)
-	if elemType != "any" && elemType != "" {
-		return "[]" + elemType
-	}
 	return ""
 }
 
