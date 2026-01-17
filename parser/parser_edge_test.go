@@ -1570,6 +1570,36 @@ end`
 	}
 }
 
+func TestScientificNotationParsing(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected float64
+	}{
+		{"x = 1e10", 1e10},
+		{"x = 2.5e-3", 2.5e-3},
+		{"x = 1E6", 1e6},
+		{"x = 3.14e+2", 314.0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			l := lexer.New(tt.input)
+			p := New(l)
+			program := p.ParseProgram()
+			checkParserErrors(t, p)
+
+			assign := program.Declarations[0].(*ast.AssignStmt)
+			floatLit, ok := assign.Value.(*ast.FloatLit)
+			if !ok {
+				t.Fatalf("expected FloatLit, got %T", assign.Value)
+			}
+			if floatLit.Value != tt.expected {
+				t.Errorf("expected %g, got %g", tt.expected, floatLit.Value)
+			}
+		})
+	}
+}
+
 // ====================
 // Until statement
 // ====================
@@ -2017,6 +2047,45 @@ end`
 	}
 	if decl.Params[0].Type != "Array<String>" {
 		t.Errorf("expected param type 'Array<String>', got %q", decl.Params[0].Type)
+	}
+}
+
+func TestPreSizedArrayNew(t *testing.T) {
+	input := `def main
+  arr = Array<Int>.new(10, 0)
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assign, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
+
+	// Should parse as a method call on a generic type expression
+	call, ok := assign.Value.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", assign.Value)
+	}
+
+	// The function should be a selector: Array<Int>.new
+	sel, ok := call.Func.(*ast.SelectorExpr)
+	if !ok {
+		t.Fatalf("expected SelectorExpr, got %T", call.Func)
+	}
+	if sel.Sel != "new" {
+		t.Errorf("expected selector 'new', got %q", sel.Sel)
+	}
+
+	// Should have 2 arguments: size and default value
+	if len(call.Args) != 2 {
+		t.Fatalf("expected 2 args, got %d", len(call.Args))
 	}
 }
 

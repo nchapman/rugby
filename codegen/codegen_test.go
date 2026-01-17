@@ -4124,8 +4124,9 @@ end`
 
 	// Should generate safe navigation check with captured variable to avoid double evaluation
 	// Uses unique variable name (_sn0, _sn1, etc.) to handle nested expressions
+	// Now uses early return pattern: if _sn0 == nil { return nil }
 	assertContains(t, output, `_sn0 := opt`)
-	assertContains(t, output, `if _sn0 != nil`)
+	assertContains(t, output, `if _sn0 == nil`)
 	assertContains(t, output, `(*_sn0).length`)
 	assertContains(t, output, `return nil`)
 }
@@ -4140,10 +4141,13 @@ end`
 
 	output := compile(t, input)
 
-	// Should use unique variable names for each level of chained safe navigation
-	// Inner expressions are generated first, so user&.address uses _sn1, and the outer &.city uses _sn0
-	assertContains(t, output, `_sn0 :=`)
-	assertContains(t, output, `_sn1 := user`)
+	// Chained safe nav now flattens the chain preserving types:
+	// _sn0 := user; if _sn0 == nil { return nil }
+	// _sn1 := (*_sn0).address(); if _sn1 == nil { return nil }
+	// return (*_sn1).city()
+	assertContains(t, output, `_sn0 := user`)
+	assertContains(t, output, `_sn1 := (*_sn0).address()`)
+	assertContains(t, output, `(*_sn1).city()`)
 }
 
 func TestMultiAssignmentNewVariables(t *testing.T) {
@@ -5219,4 +5223,47 @@ end`
 	assertContains(t, output, `const MAX_SIZE = 1024`)
 	// Variable names use snake_case in generated Go code
 	assertContains(t, output, `buffer_size := (MAX_SIZE * 2)`)
+}
+
+// TestScientificNotation tests scientific notation float literals
+func TestScientificNotation(t *testing.T) {
+	input := `def main
+  a = 1e10
+  b = 2.5e-3
+  c = 1E6
+  d = 3.14e+2
+end`
+
+	output := compile(t, input)
+
+	// Go formats scientific notation differently
+	assertContains(t, output, `a := 1e+10`)
+	assertContains(t, output, `b := 0.0025`)
+	assertContains(t, output, `c := 1e+06`)
+	assertContains(t, output, `d := 314`)
+}
+
+// TestBitwiseShiftRight tests right shift operator codegen
+func TestBitwiseShiftRight(t *testing.T) {
+	input := `def main
+  a = 16 >> 2
+  b = 8 >> 1
+end`
+
+	output := compile(t, input)
+
+	assertContains(t, output, `runtime.ShiftRight(16, 2)`)
+	assertContains(t, output, `runtime.ShiftRight(8, 1)`)
+}
+
+// TestPreSizedArray tests Array<T>.new(size, default) codegen
+func TestPreSizedArray(t *testing.T) {
+	input := `def main
+  arr = Array<Int>.new(10, 0)
+end`
+
+	output := compile(t, input)
+
+	// Should generate runtime.Fill call with type parameter
+	assertContains(t, output, `runtime.Fill[int](0, 10)`)
 }

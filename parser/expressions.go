@@ -106,7 +106,8 @@ infixLoop:
 		case token.PLUS, token.MINUS, token.STAR, token.SLASH, token.PERCENT,
 			token.EQ, token.NE, token.LT, token.GT, token.LE, token.GE,
 			token.MATCH, token.NOTMATCH,
-			token.AND, token.OR, token.AMPAMP, token.PIPEPIPE, token.SHOVELLEFT,
+			token.AND, token.OR, token.AMPAMP, token.PIPEPIPE,
+			token.SHOVELLEFT, token.SHOVELRIGHT, // bitwise shift operators
 			token.PIPE, token.AMP: // set union (|), intersection (&)
 			p.nextToken()
 			left = p.parseInfixExpr(left)
@@ -216,9 +217,9 @@ func (p *Parser) parseIdent() ast.Expression {
 		return p.parseSetLiteral()
 	}
 
-	// Check for generic type constructors: Chan<T>.new, Task<T>
+	// Check for generic type constructors: Chan<T>.new, Task<T>, Array<T>.new
 	// Convert angle bracket syntax to square bracket syntax for uniform handling
-	if (p.curToken.Literal == "Chan" || p.curToken.Literal == "Task") && p.peekTokenIs(token.LT) {
+	if (p.curToken.Literal == "Chan" || p.curToken.Literal == "Task" || p.curToken.Literal == "Array") && p.peekTokenIs(token.LT) {
 		return p.parseGenericTypeExpr()
 	}
 
@@ -353,23 +354,29 @@ func (p *Parser) parseSetLiteral() ast.Expression {
 }
 
 // parseCallExprWithParens parses a function call with parentheses: f(a, b, c).
+// Supports multi-line argument lists by skipping newlines inside parentheses.
 func (p *Parser) parseCallExprWithParens(fn ast.Expression) ast.Expression {
 	// curToken is '('
 	call := &ast.CallExpr{Func: fn}
 
 	p.nextToken() // move past '(' to first arg or ')'
+	p.skipNewlines()
 
 	// Parse arguments
 	if !p.curTokenIs(token.RPAREN) {
 		call.Args = append(call.Args, p.parseCallArg())
+		p.skipNewlines()
 
 		for p.peekTokenIs(token.COMMA) {
 			p.nextToken() // move to ','
 			p.nextToken() // move past ',' to next arg
+			p.skipNewlines()
 			call.Args = append(call.Args, p.parseCallArg())
+			p.skipNewlines()
 		}
 
 		p.nextToken() // move past last arg to ')'
+		p.skipNewlines()
 	}
 
 	if !p.curTokenIs(token.RPAREN) {

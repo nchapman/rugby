@@ -2721,6 +2721,14 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			a.setNodeType(expr, typ)
 			return typ
 		}
+		// Special case: Array<Type> is an array type constructor for .new()
+		if ident, ok := e.Left.(*ast.Ident); ok && ident.Name == "Array" {
+			// Parse the element type from the index
+			elemType := a.parseTypeFromExpr(e.Index)
+			typ = NewArrayType(elemType)
+			a.setNodeType(expr, typ)
+			return typ
+		}
 
 		leftType := a.analyzeExpr(e.Left)
 		indexType := a.analyzeExpr(e.Index)
@@ -2790,17 +2798,38 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			unwrappedType := leftType.Elem
 			if unwrappedType.Kind != TypeUnknown && unwrappedType.Kind != TypeAny &&
 				rightType.Kind != TypeUnknown && rightType.Kind != TypeAny {
-				// Right value must be assignable to the unwrapped type (unidirectional)
-				if !a.isAssignable(unwrappedType, rightType) {
-					a.addError(&TypeMismatchError{
-						Expected: unwrappedType,
-						Got:      rightType,
-						Context:  "nil coalesce default value",
-						Line:     e.Line,
-					})
+				// Check if right is optional with same element type (for chaining: a ?? b ?? c)
+				if rightType.Kind == TypeOptional && rightType.Elem != nil {
+					// Right is also optional - check element types match
+					if !a.isAssignable(unwrappedType, rightType.Elem) {
+						a.addError(&TypeMismatchError{
+							Expected: unwrappedType,
+							Got:      rightType.Elem,
+							Context:  "nil coalesce default value",
+							Line:     e.Line,
+						})
+					}
+					// Result is optional since right side may be nil
+					typ = rightType
+				} else {
+					// Right is non-optional - must be assignable to unwrapped type
+					if !a.isAssignable(unwrappedType, rightType) {
+						a.addError(&TypeMismatchError{
+							Expected: unwrappedType,
+							Got:      rightType,
+							Context:  "nil coalesce default value",
+							Line:     e.Line,
+						})
+					}
+					// Result is unwrapped type since we have a definite fallback
+					typ = unwrappedType
 				}
+			} else if rightType.Kind == TypeOptional {
+				// Unknown left type but right is optional
+				typ = rightType
+			} else {
+				typ = unwrappedType
 			}
-			typ = unwrappedType
 		} else {
 			typ = rightType
 		}
@@ -3225,6 +3254,10 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 			}
 			// Handle Chan<Type>.new(size) constructor
 			if receiverType.Kind == TypeChan {
+				return receiverType
+			}
+			// Handle Array<Type>.new(size, default) constructor
+			if receiverType.Kind == TypeArray {
 				return receiverType
 			}
 		}

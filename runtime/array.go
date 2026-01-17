@@ -729,49 +729,85 @@ func Append[T any](slice []T, value T) []T {
 	return append(slice, value)
 }
 
-// ShiftLeft implements the << operator for both slices and channels.
+// Fill creates a new slice of the specified size, filled with the default value.
+// Ruby: Array.new(size, default)
+func Fill[T any](defaultValue T, size int) []T {
+	result := make([]T, size)
+	for i := range result {
+		result[i] = defaultValue
+	}
+	return result
+}
+
+// ShiftLeft implements the << operator for slices, channels, and integers.
 // For slices: appends the value and returns the new slice.
 // For channels: sends the value and returns the channel.
+// For integers: performs bitwise left shift.
 // This allows chaining: arr << a << b or ch << val.
-// Ruby: arr << item, ch << val
-func ShiftLeft(collection any, value any) any {
+// Ruby: arr << item, ch << val, n << bits
+func ShiftLeft(left any, right any) any {
 	// Fast paths for common slice types
-	switch s := collection.(type) {
+	switch s := left.(type) {
 	case []int:
-		if v, ok := value.(int); ok {
+		if v, ok := right.(int); ok {
 			return append(s, v)
 		}
 	case []string:
-		if v, ok := value.(string); ok {
+		if v, ok := right.(string); ok {
 			return append(s, v)
 		}
 	case []float64:
-		if v, ok := value.(float64); ok {
+		if v, ok := right.(float64); ok {
 			return append(s, v)
 		}
 	case []bool:
-		if v, ok := value.(bool); ok {
+		if v, ok := right.(bool); ok {
 			return append(s, v)
 		}
 	case []any:
-		return append(s, value)
+		return append(s, right)
+	// Integer types: bitwise left shift
+	case int:
+		return s << toIntForShift(right)
+	case int64:
+		return s << toIntForShift(right)
+	case uint:
+		return s << toIntForShift(right)
+	case uint64:
+		return s << toIntForShift(right)
 	}
 
 	// Use reflection for channels and other types
-	val := reflect.ValueOf(collection)
+	val := reflect.ValueOf(left)
 
 	switch val.Kind() {
 	case reflect.Chan:
 		// Channel send
-		val.Send(reflect.ValueOf(value))
-		return collection
+		val.Send(reflect.ValueOf(right))
+		return left
 
 	case reflect.Slice:
 		// Slice append via reflection
-		return appendToSlice(val, value)
+		return appendToSlice(val, right)
 
 	default:
-		panic(fmt.Sprintf("ShiftLeft: expected slice or channel, got %T", collection))
+		panic(fmt.Sprintf("ShiftLeft: expected slice, channel, or integer, got %T", left))
+	}
+}
+
+// toIntForShift converts a value to int for use as shift amount.
+func toIntForShift(v any) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case uint:
+		return int(n)
+	case uint64:
+		return int(n)
+	default:
+		panic(fmt.Sprintf("invalid shift amount type: %T", v))
 	}
 }
 

@@ -352,6 +352,9 @@ func (l *Lexer) NextToken() token.Token {
 		if l.peekChar() == '=' {
 			l.readChar()
 			tok = l.newToken(token.GE, ">=")
+		} else if l.peekChar() == '>' {
+			l.readChar()
+			tok = l.newToken(token.SHOVELRIGHT, ">>")
 		} else {
 			tok = l.newToken(token.GT, ">")
 		}
@@ -644,6 +647,22 @@ func (l *Lexer) readNumber() token.Token {
 	if l.ch == '.' && isDigit(l.peekChar()) {
 		isFloat = true
 		l.readChar() // consume '.'
+		for isDigit(l.ch) {
+			l.readChar()
+		}
+	}
+
+	// Handle scientific notation: e+00, e-03, E10, etc.
+	if l.ch == 'e' || l.ch == 'E' {
+		isFloat = true
+		l.readChar() // consume 'e' or 'E'
+
+		// Optional sign
+		if l.ch == '+' || l.ch == '-' {
+			l.readChar()
+		}
+
+		// Exponent digits (required)
 		for isDigit(l.ch) {
 			l.readChar()
 		}

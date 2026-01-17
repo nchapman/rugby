@@ -368,6 +368,51 @@ end`
 	}
 }
 
+func TestMultiLineFunctionCall(t *testing.T) {
+	input := `def main
+  result = some_func(
+    arg1,
+    arg2,
+    arg3
+  )
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	assign, ok := fn.Body[0].(*ast.AssignStmt)
+	if !ok {
+		t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+	}
+
+	call, ok := assign.Value.(*ast.CallExpr)
+	if !ok {
+		t.Fatalf("expected CallExpr, got %T", assign.Value)
+	}
+
+	if len(call.Args) != 3 {
+		t.Fatalf("expected 3 args, got %d", len(call.Args))
+	}
+
+	// Check each argument is parsed correctly
+	args := []string{"arg1", "arg2", "arg3"}
+	for i, argName := range args {
+		ident, ok := call.Args[i].(*ast.Ident)
+		if !ok {
+			t.Fatalf("arg[%d]: expected Ident, got %T", i, call.Args[i])
+		}
+		if ident.Name != argName {
+			t.Errorf("arg[%d]: expected %q, got %q", i, argName, ident.Name)
+		}
+	}
+}
+
 func TestOperatorPrecedence(t *testing.T) {
 	tests := []struct {
 		input    string
@@ -6164,6 +6209,10 @@ func TestTypeNameParsing_GenericTypes(t *testing.T) {
 			input:    "class Foo\n  @nested: Array<Map<String, Int>>\nend",
 			expected: "Array<Map<String, Int>>",
 		},
+		{
+			input:    "class Foo\n  @deep: Array<Array<Map<String, Int>>>\nend",
+			expected: "Array<Array<Map<String, Int>>>",
+		},
 	}
 
 	for _, tt := range tests {
@@ -6181,6 +6230,27 @@ func TestTypeNameParsing_GenericTypes(t *testing.T) {
 				t.Errorf("expected type %q, got %q", tt.expected, class.Fields[0].Type)
 			}
 		})
+	}
+}
+
+func TestNestedGenericInFunctionParam(t *testing.T) {
+	input := `def process(data: Map<String, Array<Int>>): Bool
+  true
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	fn, ok := program.Declarations[0].(*ast.FuncDecl)
+	if !ok {
+		t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+	}
+	if len(fn.Params) != 1 {
+		t.Fatalf("expected 1 param, got %d", len(fn.Params))
+	}
+	if fn.Params[0].Type != "Map<String, Array<Int>>" {
+		t.Errorf("expected type 'Map<String, Array<Int>>', got %q", fn.Params[0].Type)
 	}
 }
 

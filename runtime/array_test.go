@@ -725,6 +725,59 @@ func TestShiftLeftChannel(t *testing.T) {
 	}
 }
 
+func TestShiftRight(t *testing.T) {
+	tests := []struct {
+		left     any
+		right    any
+		expected any
+	}{
+		{16, 2, 4},    // 16 >> 2 = 4
+		{8, 1, 4},     // 8 >> 1 = 4
+		{255, 4, 15},  // 255 >> 4 = 15
+		{1024, 10, 1}, // 1024 >> 10 = 1
+		{int64(32), 3, int64(4)},
+	}
+
+	for _, tt := range tests {
+		result := ShiftRight(tt.left, tt.right)
+		if result != tt.expected {
+			t.Errorf("ShiftRight(%v, %v) = %v; want %v",
+				tt.left, tt.right, result, tt.expected)
+		}
+	}
+}
+
+func TestFill(t *testing.T) {
+	// Test creating pre-sized arrays with default values
+	intArr := Fill(0, 5)
+	if len(intArr) != 5 {
+		t.Errorf("Fill(0, 5) length = %d; want 5", len(intArr))
+	}
+	for i, v := range intArr {
+		if v != 0 {
+			t.Errorf("Fill(0, 5)[%d] = %d; want 0", i, v)
+		}
+	}
+
+	strArr := Fill("default", 3)
+	if len(strArr) != 3 {
+		t.Errorf("Fill('default', 3) length = %d; want 3", len(strArr))
+	}
+	for i, v := range strArr {
+		if v != "default" {
+			t.Errorf("Fill('default', 3)[%d] = %q; want 'default'", i, v)
+		}
+	}
+
+	// Test with non-zero default
+	arr42 := Fill(42, 4)
+	for i, v := range arr42 {
+		if v != 42 {
+			t.Errorf("Fill(42, 4)[%d] = %d; want 42", i, v)
+		}
+	}
+}
+
 func TestSliceInclusiveRange(t *testing.T) {
 	arr := []int{0, 1, 2, 3, 4}
 

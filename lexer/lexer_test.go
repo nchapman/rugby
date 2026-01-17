@@ -184,7 +184,7 @@ func TestTestingKeywords(t *testing.T) {
 }
 
 func TestNumbers(t *testing.T) {
-	input := `42 3.14 100 0.5`
+	input := `42 3.14 100 0.5 1e10 2.5e-3 1E6 3.14e+2`
 
 	tests := []struct {
 		expectedType    token.TokenType
@@ -194,6 +194,10 @@ func TestNumbers(t *testing.T) {
 		{token.FLOAT, "3.14"},
 		{token.INT, "100"},
 		{token.FLOAT, "0.5"},
+		{token.FLOAT, "1e10"},
+		{token.FLOAT, "2.5e-3"},
+		{token.FLOAT, "1E6"},
+		{token.FLOAT, "3.14e+2"},
 		{token.EOF, ""},
 	}
 
@@ -1613,6 +1617,37 @@ func TestHeredocVsShovelLeft(t *testing.T) {
 		{
 			input:    `arr<<1`,
 			expected: []token.TokenType{token.IDENT, token.SHOVELLEFT, token.INT, token.EOF},
+		},
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		for i, exp := range tt.expected {
+			tok := l.NextToken()
+			if tok.Type != exp {
+				t.Errorf("input %q: token[%d] wrong. expected=%q, got=%q",
+					tt.input, i, exp, tok.Type)
+			}
+		}
+	}
+}
+
+func TestShovelRight(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected []token.TokenType
+	}{
+		{
+			input:    `16 >> 2`,
+			expected: []token.TokenType{token.INT, token.SHOVELRIGHT, token.INT, token.EOF},
+		},
+		{
+			input:    `x >> y`,
+			expected: []token.TokenType{token.IDENT, token.SHOVELRIGHT, token.IDENT, token.EOF},
+		},
+		{
+			input:    `x>>1`,
+			expected: []token.TokenType{token.IDENT, token.SHOVELRIGHT, token.INT, token.EOF},
 		},
 	}
 

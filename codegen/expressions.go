@@ -624,6 +624,17 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 		return
 	}
 
+	// >> is always bitwise right shift
+	if e.Op == ">>" {
+		g.needsRuntime = true
+		g.buf.WriteString("runtime.ShiftRight(")
+		g.genExpr(e.Left)
+		g.buf.WriteString(", ")
+		g.genExpr(e.Right)
+		g.buf.WriteString(")")
+		return
+	}
+
 	// Handle arithmetic on any-typed values (e.g., from await)
 	if e.Op == "+" && g.hasAnyTypedOperand(e.Left, e.Right) {
 		g.needsRuntime = true
@@ -781,26 +792,48 @@ func (g *Generator) genUnaryExpr(e *ast.UnaryExpr) {
 func (g *Generator) genNilCoalesceExpr(e *ast.NilCoalesceExpr) {
 	g.needsRuntime = true
 	leftType := g.inferTypeFromExpr(e.Left)
+	rightType := g.inferTypeFromExpr(e.Right)
 
 	// Check if the left side is a safe navigation expression (returns any)
 	_, isSafeNav := e.Left.(*ast.SafeNavExpr)
 
+	// Check if right side is optional (for chaining: a ?? b ?? c)
+	isRightOptional := strings.HasSuffix(rightType, "?")
+
 	switch leftType {
 	case "Int?":
-		g.buf.WriteString("runtime.CoalesceInt(")
+		if isRightOptional {
+			g.buf.WriteString("runtime.CoalesceIntOpt(")
+		} else {
+			g.buf.WriteString("runtime.CoalesceInt(")
+		}
 	case "Int64?":
-		g.buf.WriteString("runtime.CoalesceInt64(")
+		if isRightOptional {
+			g.buf.WriteString("runtime.CoalesceInt64Opt(")
+		} else {
+			g.buf.WriteString("runtime.CoalesceInt64(")
+		}
 	case "Float?":
-		g.buf.WriteString("runtime.CoalesceFloat(")
+		if isRightOptional {
+			g.buf.WriteString("runtime.CoalesceFloatOpt(")
+		} else {
+			g.buf.WriteString("runtime.CoalesceFloat(")
+		}
 	case "String?":
 		// Use CoalesceStringAny for safe navigation (which returns any)
 		if isSafeNav {
 			g.buf.WriteString("runtime.CoalesceStringAny(")
+		} else if isRightOptional {
+			g.buf.WriteString("runtime.CoalesceStringOpt(")
 		} else {
 			g.buf.WriteString("runtime.CoalesceString(")
 		}
 	case "Bool?":
-		g.buf.WriteString("runtime.CoalesceBool(")
+		if isRightOptional {
+			g.buf.WriteString("runtime.CoalesceBoolOpt(")
+		} else {
+			g.buf.WriteString("runtime.CoalesceBool(")
+		}
 	default:
 		varName := fmt.Sprintf("_nc%d", g.tempVarCounter)
 		g.tempVarCounter++
@@ -867,45 +900,82 @@ func (g *Generator) genSymbolToProcExpr(e *ast.SymbolToProcExpr) {
 }
 
 func (g *Generator) genSafeNavExpr(e *ast.SafeNavExpr) {
-	// obj&.method -> func() any { _snN := obj; if _snN != nil { return (*_snN).method() } else { return nil } }()
-	varName := fmt.Sprintf("_sn%d", g.tempVarCounter)
-	g.tempVarCounter++
+	// Collect the entire chain of safe nav expressions
+	// For a&.b&.c, we collect [a, b, c] and the base receiver
+	chain := []string{e.Selector}
+	current := e.Receiver
+	for {
+		if sn, ok := current.(*ast.SafeNavExpr); ok {
+			chain = append([]string{sn.Selector}, chain...)
+			current = sn.Receiver
+		} else {
+			break
+		}
+	}
+	// Now 'current' is the base receiver (e.g., user.address for user.address&.city&.name)
+	// and 'chain' is [city, name]
+
+	// Generate flattened code that preserves types:
+	// func() any {
+	//   _sn0 := user.address(); if _sn0 == nil { return nil }
+	//   _sn1 := (*_sn0).city(); if _sn1 == nil { return nil }
+	//   return (*_sn1).name()
+	// }()
 
 	g.buf.WriteString("func() any { ")
-	g.buf.WriteString(varName)
+
+	// Generate code for the base receiver
+	baseVar := fmt.Sprintf("_sn%d", g.tempVarCounter)
+	g.tempVarCounter++
+
+	g.buf.WriteString(baseVar)
 	g.buf.WriteString(" := ")
 
-	// If the receiver is a selector expression, we need to call it as a method.
-	// Safe navigation is used with optional-returning getters/methods, so the receiver
-	// must be called (not just referenced as a field).
-	if sel, ok := e.Receiver.(*ast.SelectorExpr); ok {
-		// Check if genExpr will already add () for this selector (getter/method)
+	// Generate the base receiver expression
+	if sel, ok := current.(*ast.SelectorExpr); ok {
 		selectorKind := g.getSelectorKind(sel)
-		g.genExpr(e.Receiver)
-		// Only add () if genExpr didn't already handle it.
-		// genExpr adds () for SelectorMethod, SelectorGetter, and SelectorGoMethod.
-		// Underscore-prefixed selectors (e.g., _field) are raw field accesses that
-		// bypass the getter mechanism and don't need ().
+		g.genExpr(current)
 		if selectorKind != ast.SelectorMethod && selectorKind != ast.SelectorGetter &&
 			selectorKind != ast.SelectorGoMethod && !strings.HasPrefix(sel.Sel, "_") {
 			g.buf.WriteString("()")
 		}
 	} else {
-		g.genExpr(e.Receiver)
+		g.genExpr(current)
 	}
 
 	g.buf.WriteString("; if ")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" != nil { return ")
+	g.buf.WriteString(baseVar)
+	g.buf.WriteString(" == nil { return nil }; ")
 
-	// Use (*var).selector() - call it as a method
-	g.buf.WriteString("(*")
-	g.buf.WriteString(varName)
-	g.buf.WriteString(").")
-	g.buf.WriteString(snakeToCamelWithAcronyms(e.Selector))
-	g.buf.WriteString("()")
+	// Generate code for each step in the chain
+	prevVar := baseVar
+	for i, selector := range chain {
+		isLast := i == len(chain)-1
+		currentVar := fmt.Sprintf("_sn%d", g.tempVarCounter)
+		g.tempVarCounter++
 
-	g.buf.WriteString(" } else { return nil } }()")
+		if isLast {
+			// Last step: return the result
+			g.buf.WriteString("return (*")
+			g.buf.WriteString(prevVar)
+			g.buf.WriteString(").")
+			g.buf.WriteString(snakeToCamelWithAcronyms(selector))
+			g.buf.WriteString("()")
+		} else {
+			// Intermediate step: assign and check nil
+			g.buf.WriteString(currentVar)
+			g.buf.WriteString(" := (*")
+			g.buf.WriteString(prevVar)
+			g.buf.WriteString(").")
+			g.buf.WriteString(snakeToCamelWithAcronyms(selector))
+			g.buf.WriteString("(); if ")
+			g.buf.WriteString(currentVar)
+			g.buf.WriteString(" == nil { return nil }; ")
+			prevVar = currentVar
+		}
+	}
+
+	g.buf.WriteString(" }()")
 }
 
 // genScopeExpr generates code for scope resolution expressions (Module::Class or Enum::Value)
@@ -1770,6 +1840,42 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 						g.genExpr(call.Args[0])
 					}
 					g.buf.WriteString(")")
+					return
+				}
+				// Array<T>.new(size, default) -> runtime.Fill[T](size, default)
+				// Array<T>.new(size) -> make([]T, size)
+				if arrIdent, ok := indexExpr.Left.(*ast.Ident); ok && arrIdent.Name == "Array" {
+					var elemType string
+					if typeIdent, ok := indexExpr.Index.(*ast.Ident); ok {
+						elemType = typeIdent.Name
+					} else {
+						elemType = "any"
+					}
+					goType := mapType(elemType)
+
+					if len(call.Args) >= 2 {
+						// Array<T>.new(size, default) -> runtime.Fill[T](default, size)
+						g.needsRuntime = true
+						g.buf.WriteString("runtime.Fill[")
+						g.buf.WriteString(goType)
+						g.buf.WriteString("](")
+						g.genExpr(call.Args[1]) // default value
+						g.buf.WriteString(", ")
+						g.genExpr(call.Args[0]) // size
+						g.buf.WriteString(")")
+					} else if len(call.Args) == 1 {
+						// Array<T>.new(size) -> make([]T, size)
+						g.buf.WriteString("make([]")
+						g.buf.WriteString(goType)
+						g.buf.WriteString(", ")
+						g.genExpr(call.Args[0])
+						g.buf.WriteString(")")
+					} else {
+						// Array<T>.new() -> []T{}
+						g.buf.WriteString("[]")
+						g.buf.WriteString(goType)
+						g.buf.WriteString("{}")
+					}
 					return
 				}
 			}

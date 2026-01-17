@@ -1,5 +1,10 @@
 package runtime
 
+import (
+	"reflect"
+	"strings"
+)
+
 // Option is a generic optional type for storing optional values in fields,
 // arrays, and maps. For return values, Rugby uses Go's (T, bool) pattern instead.
 type Option[T any] struct {
@@ -151,9 +156,25 @@ func CoalesceInt(opt *int, def int) int {
 	return def
 }
 
+// CoalesceIntOpt allows chaining: a ?? b where both are Int?
+func CoalesceIntOpt(opt *int, def *int) *int {
+	if opt != nil {
+		return opt
+	}
+	return def
+}
+
 func CoalesceInt64(opt *int64, def int64) int64 {
 	if opt != nil {
 		return *opt
+	}
+	return def
+}
+
+// CoalesceInt64Opt allows chaining: a ?? b where both are Int64?
+func CoalesceInt64Opt(opt *int64, def *int64) *int64 {
+	if opt != nil {
+		return opt
 	}
 	return def
 }
@@ -165,9 +186,33 @@ func CoalesceFloat(opt *float64, def float64) float64 {
 	return def
 }
 
+// CoalesceFloatOpt allows chaining: a ?? b where both are Float?
+func CoalesceFloatOpt(opt *float64, def *float64) *float64 {
+	if opt != nil {
+		return opt
+	}
+	return def
+}
+
 func CoalesceString(opt *string, def string) string {
 	if opt != nil {
 		return *opt
+	}
+	return def
+}
+
+// CoalesceStringOpt allows chaining: a ?? b where both are String?
+func CoalesceStringOpt(opt *string, def *string) *string {
+	if opt != nil {
+		return opt
+	}
+	return def
+}
+
+// CoalesceBoolOpt allows chaining: a ?? b where both are Bool?
+func CoalesceBoolOpt(opt *bool, def *bool) *bool {
+	if opt != nil {
+		return opt
 	}
 	return def
 }
@@ -261,4 +306,56 @@ func OptionalEachAny(opt any, fn func(any)) {
 	if opt != nil {
 		fn(opt)
 	}
+}
+
+// SafeNavField accesses a field/method on an 'any' value for chained safe navigation.
+// The value is typically a pointer wrapped in 'any'. We use reflection to call the getter method.
+// Since Go reflection only works with exported methods, we need to check the original
+// (pointer) value for methods, not the dereferenced struct.
+func SafeNavField(obj any, fieldName string) any {
+	if obj == nil {
+		return nil
+	}
+	v := reflect.ValueOf(obj)
+	// Check for nil pointer
+	if (v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface) && v.IsNil() {
+		return nil
+	}
+
+	// Try to find and call a method on the pointer value first (methods are on *T)
+	// Try lowercase first (Rugby private classes), then uppercase (pub classes)
+	method := v.MethodByName(fieldName)
+	if !method.IsValid() {
+		// Try with uppercase first letter
+		upperName := strings.ToUpper(fieldName[:1]) + fieldName[1:]
+		method = v.MethodByName(upperName)
+	}
+	if method.IsValid() {
+		results := method.Call(nil)
+		if len(results) > 0 {
+			return results[0].Interface()
+		}
+		return nil
+	}
+
+	// If it's a pointer, get the element to access fields
+	if v.Kind() == reflect.Ptr || v.Kind() == reflect.Interface {
+		v = v.Elem()
+	}
+
+	// Try to access as a field
+	field := v.FieldByName(fieldName)
+	if !field.IsValid() {
+		// Try with underscore prefix (Rugby internal field naming)
+		field = v.FieldByName("_" + fieldName)
+	}
+	if !field.IsValid() {
+		// Try with uppercase first letter
+		upperName := strings.ToUpper(fieldName[:1]) + fieldName[1:]
+		field = v.FieldByName(upperName)
+	}
+	if field.IsValid() {
+		return field.Interface()
+	}
+	return nil
 }

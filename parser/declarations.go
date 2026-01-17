@@ -304,6 +304,18 @@ func (p *Parser) parseTypeName() string {
 		if p.curTokenIs(token.GT) {
 			typeName += ">"
 			p.nextToken() // consume '>'
+		} else if p.curTokenIs(token.SHOVELRIGHT) {
+			// Handle >> in nested generics like Array<Map<String, Int>>
+			// Treat the >> as two separate > tokens. Safe to mutate p.curToken
+			// directly because we only consume one > here; the synthetic > will
+			// be consumed by the outer parseTypeName call (recursive).
+			typeName += ">"
+			p.curToken = token.Token{
+				Type:    token.GT,
+				Literal: ">",
+				Line:    p.curToken.Line,
+				Column:  p.curToken.Column + 1,
+			}
 		} else {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '>' after generic types")
 			return typeName // Return what we have so far
@@ -546,6 +558,13 @@ func (p *Parser) isGenericTypeParamList() bool {
 			depth--
 			if depth == 0 {
 				result = true // Found matching '>'
+				goto restore
+			}
+		case token.SHOVELRIGHT:
+			// >> counts as two closing brackets for nested generics
+			depth -= 2
+			if depth <= 0 {
+				result = true
 				goto restore
 			}
 		case token.IDENT, token.COMMA, token.COLON, token.AMP:

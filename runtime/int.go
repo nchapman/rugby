@@ -108,3 +108,24 @@ func IntToString(n int) string {
 func IntToFloat(n int) float64 {
 	return float64(n)
 }
+
+// ShiftRight performs bitwise right shift (>>).
+// Works with int and any types for compatibility with dynamic typing.
+func ShiftRight(left, right any) any {
+	switch l := left.(type) {
+	case int:
+		r := toIntForShift(right)
+		return l >> r
+	case int64:
+		r := toIntForShift(right)
+		return l >> r
+	case uint:
+		r := toIntForShift(right)
+		return l >> r
+	case uint64:
+		r := toIntForShift(right)
+		return l >> r
+	default:
+		panic(fmt.Sprintf("ShiftRight: unsupported type %T", left))
+	}
+}
