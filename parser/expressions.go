@@ -124,7 +124,7 @@ infixLoop:
 			left = p.parseRangeLit(left)
 		case token.DOT:
 			// Don't chain DOT onto lambdas when parsing arguments (precedence > lowest).
-			// This ensures `arr.map -> (n) { n }.length` chains .length on the map call,
+			// This ensures `arr.map -> { |n| n }.length` chains .length on the map call,
 			// not on the lambda. Lambdas can only have .() or .call() chained on them.
 			if _, isLambda := left.(*ast.LambdaExpr); isLambda && precedence > lowest {
 				break infixLoop
@@ -153,7 +153,7 @@ infixLoop:
 			p.nextToken()
 			left = p.parseRescueExpr(left)
 		case token.ARROW:
-			// Handle trailing lambda: expr -> (params) { body }
+			// Handle trailing lambda: expr -> { |params| body }
 			// Converts SelectorExpr to CallExpr with lambda as first arg,
 			// or appends lambda to existing CallExpr args
 			switch left.(type) {
@@ -176,7 +176,7 @@ infixLoop:
 
 		// After command syntax, continue checking for method chaining and low-precedence operators.
 		// This allows:
-		//   - `arr.select -> (x) { x > 1 }.length` (method chaining after lambda)
+		//   - `arr.select -> { |x| x > 1 }.length` (method chaining after lambda)
 		//   - `puts x and y` → `(puts(x)) and y`
 		// IMPORTANT: Only chain at the lowest precedence level (outermost expression).
 		// When parsing arguments (higher precedence), we don't want to capture chaining
@@ -197,7 +197,7 @@ infixLoop:
 					p.nextToken()
 					left = p.parseInfixExpr(left)
 				case token.ARROW:
-					// Handle trailing lambda after command call: foo bar -> (x) { }
+					// Handle trailing lambda after command call: foo bar -> { |x| }
 					left = p.parseTrailingLambda(left)
 				default:
 					return left
@@ -777,8 +777,8 @@ func (p *Parser) parseSymbolToProc() ast.Expression {
 }
 
 // parseConcurrentlyExpr parses two forms:
-// 1. concurrently do |scope| ... end
-// 2. concurrently -> (scope) do ... end (lambda form)
+// 1. concurrently do |scope| ... end (preferred)
+// 2. concurrently -> do |scope| ... end (legacy lambda form)
 func (p *Parser) parseConcurrentlyExpr() ast.Expression {
 	line := p.curToken.Line
 	p.nextToken() // consume 'concurrently'
@@ -786,7 +786,7 @@ func (p *Parser) parseConcurrentlyExpr() ast.Expression {
 	var scopeVar string
 	var body []ast.Statement
 
-	// Check for lambda form: concurrently -> (scope) do ... end
+	// Check for legacy lambda form: concurrently -> do |scope| ... end
 	if p.curTokenIs(token.ARROW) {
 		lambda := p.parseLambdaExpr()
 		if lambda == nil {

@@ -1351,15 +1351,15 @@ func (p *Parser) parseSelectCase() ast.SelectCase {
 }
 
 // parseConcurrentlyStmt parses:
-// - concurrently -> (scope) do ... end (lambda form with scope param)
-// - concurrently do ... end (block form without params)
+// - concurrently do |scope| ... end (preferred, block form with scope param)
+// - concurrently -> do |scope| ... end (legacy lambda form)
 func (p *Parser) parseConcurrentlyStmt() *ast.ConcurrentlyStmt {
 	line := p.curToken.Line
 	p.nextToken() // consume 'concurrently'
 
 	stmt := &ast.ConcurrentlyStmt{Line: line}
 
-	// Check for lambda form: concurrently -> (scope) do ... end
+	// Check for legacy lambda form: concurrently -> do |scope| ... end
 	if p.curTokenIs(token.ARROW) {
 		lambda := p.parseLambdaExpr()
 		if lambda == nil {

@@ -3058,7 +3058,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 
 // analyzeLambdaWithExpectedType analyzes a lambda expression using the expected
 // function type to infer parameter and return types when not explicitly specified.
-// This enables `handler : (Int) -> Int = -> (x) { x * 2 }` to work without
+// This enables `handler : (Int) -> Int = -> { |x| x * 2 }` to work without
 // explicit type annotations on the lambda.
 func (a *Analyzer) analyzeLambdaWithExpectedType(e *ast.LambdaExpr, expectedType *Type) *Type {
 	if expectedType == nil || expectedType.Kind != TypeFunc {

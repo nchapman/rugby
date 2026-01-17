@@ -206,9 +206,9 @@ Update the parser to recognize angle bracket type parameters:
 
 ### 4.3 Lambdas
 
-- [x] Single-line `-> (x) { expr }`
-- [x] Multi-line `-> (x) do ... end`
-- [x] With return type `-> (x) -> T do ... end`
+- [x] Single-line `-> { |x| expr }`
+- [x] Multi-line `-> do |x| ... end`
+- [x] With return type `-> T { |x| expr }` or `-> T do |x| ... end`
 - [x] Calling with `.()` or `.call()`
 - [x] Lambda `return` returns from lambda (not enclosing function)
 
@@ -484,7 +484,7 @@ Update the parser to recognize angle bracket type parameters:
 
 ### 11.5 Concurrently
 
-- [x] `concurrently -> (scope) do ... end`
+- [x] `concurrently do |scope| ... end`
 - [x] `scope.spawn { }`
 - [x] Cleanup on block exit
 

@@ -286,7 +286,7 @@ func (g *Generator) genRangeLit(r *ast.RangeLit) {
 	g.buf.WriteString("}")
 }
 
-// genLambdaExpr generates code for arrow lambda expressions: -> (params) { body }
+// genLambdaExpr generates code for arrow lambda expressions: -> { |params| body }
 // Lambdas compile to Go anonymous functions (closures).
 func (g *Generator) genLambdaExpr(e *ast.LambdaExpr) {
 	// Try to get inferred types from type info (for lambdas assigned to typed variables)
@@ -1444,7 +1444,7 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				}
 			}
 		}
-		// Handle times with lambda argument (n.times -> (i) { ... })
+		// Handle times with lambda argument (n.times -> { |i| ... })
 		if sel.Sel == "times" {
 			if len(call.Args) >= 1 {
 				if lambda, ok := call.Args[0].(*ast.LambdaExpr); ok {
@@ -1453,7 +1453,7 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				}
 			}
 		}
-		// Handle upto/downto with lambda argument (n.upto(m) -> (i) { ... })
+		// Handle upto/downto with lambda argument (n.upto(m) -> { |i| ... })
 		if sel.Sel == "upto" || sel.Sel == "downto" {
 			if len(call.Args) >= 2 {
 				if lambda, ok := call.Args[1].(*ast.LambdaExpr); ok {
@@ -2547,7 +2547,7 @@ func (g *Generator) genOptionalEachBlock(receiver ast.Expression, block *ast.Blo
 	g.buf.WriteString("})")
 }
 
-// genOptionalMapLambda generates code for optional.map -> (x) { ... }
+// genOptionalMapLambda generates code for optional.map -> { |x| ... }
 // Returns *ResultType (pointer) to maintain optional semantics for nil coalescing.
 func (g *Generator) genOptionalMapLambda(receiver ast.Expression, lambda *ast.LambdaExpr, optType string) {
 	varName := "_optVal"
@@ -2606,7 +2606,7 @@ func (g *Generator) genOptionalMapLambda(receiver ast.Expression, lambda *ast.La
 	_ = goType // inner type used for lambda param binding
 }
 
-// genOptionalFlatMapLambda generates code for optional.flat_map -> (x) { ... }
+// genOptionalFlatMapLambda generates code for optional.flat_map -> { |x| ... }
 // Returns the result directly (flattened) if lambda returns an optional.
 func (g *Generator) genOptionalFlatMapLambda(receiver ast.Expression, lambda *ast.LambdaExpr, optType string) {
 	varName := "_optVal"
@@ -2667,7 +2667,7 @@ func (g *Generator) genOptionalFlatMapLambda(receiver ast.Expression, lambda *as
 	_ = goType
 }
 
-// genOptionalFilterLambda generates code for optional.filter -> (x) { ... }
+// genOptionalFilterLambda generates code for optional.filter -> { |x| ... }
 // Returns the original value if predicate is true, nil otherwise.
 func (g *Generator) genOptionalFilterLambda(receiver ast.Expression, lambda *ast.LambdaExpr, optType string) {
 	varName := "_optVal"
@@ -2716,7 +2716,7 @@ func (g *Generator) genOptionalFilterLambda(receiver ast.Expression, lambda *ast
 	g.buf.WriteString(" } }; return nil }()")
 }
 
-// genOptionalEachLambda generates code for optional.each -> (x) { ... }
+// genOptionalEachLambda generates code for optional.each -> { |x| ... }
 func (g *Generator) genOptionalEachLambda(receiver ast.Expression, lambda *ast.LambdaExpr, optType string) {
 	g.needsRuntime = true
 
@@ -2845,7 +2845,7 @@ func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) 
 }
 
 // genLambdaIterationCall generates code for iteration methods with lambda arguments.
-// For example: arr.each -> (x) { puts x } becomes a for loop calling the lambda.
+// For example: arr.each -> { |x| puts x } becomes a for loop calling the lambda.
 func (g *Generator) genLambdaIterationCall(iterable ast.Expression, method string, lambda *ast.LambdaExpr, extraArgs []ast.Expression) {
 	switch method {
 	case "each":
@@ -3052,7 +3052,7 @@ func (g *Generator) genLambdaEachWithIndex(iterable ast.Expression, lambda *ast.
 	g.buf.WriteString("}")
 }
 
-// genLambdaMap generates code for arr.map -> (x) { expr }
+// genLambdaMap generates code for arr.map -> { |x| expr }
 func (g *Generator) genLambdaMap(iterable ast.Expression, lambda *ast.LambdaExpr) {
 	g.needsRuntime = true
 	varName := "_v"
@@ -3110,7 +3110,7 @@ func (g *Generator) genLambdaMap(iterable ast.Expression, lambda *ast.LambdaExpr
 	g.buf.WriteString("})")
 }
 
-// genLambdaSelect generates code for arr.select -> (x) { condition } or map.select -> (k, v) { condition }
+// genLambdaSelect generates code for arr.select -> { |x| condition } or map.select -> { |k, v| condition }
 func (g *Generator) genLambdaSelect(iterable ast.Expression, lambda *ast.LambdaExpr) {
 	g.needsRuntime = true
 
@@ -3222,7 +3222,7 @@ func (g *Generator) genLambdaMapSelect(iterable ast.Expression, lambda *ast.Lamb
 	g.buf.WriteString("})")
 }
 
-// genLambdaReject generates code for arr.reject -> (x) { condition } or map.reject -> (k, v) { condition }
+// genLambdaReject generates code for arr.reject -> { |x| condition } or map.reject -> { |k, v| condition }
 func (g *Generator) genLambdaReject(iterable ast.Expression, lambda *ast.LambdaExpr) {
 	g.needsRuntime = true
 
@@ -3472,7 +3472,7 @@ func (g *Generator) genMapRejectBlock(mapExpr ast.Expression, block *ast.BlockEx
 	}
 }
 
-// genLambdaFind generates code for arr.find -> (x) { condition }
+// genLambdaFind generates code for arr.find -> { |x| condition }
 func (g *Generator) genLambdaFind(iterable ast.Expression, lambda *ast.LambdaExpr) {
 	g.needsRuntime = true
 	varName := "_v"
@@ -3528,7 +3528,7 @@ func (g *Generator) genLambdaFind(iterable ast.Expression, lambda *ast.LambdaExp
 	g.buf.WriteString("})")
 }
 
-// genLambdaAny generates code for arr.any? -> (x) { condition }
+// genLambdaAny generates code for arr.any? -> { |x| condition }
 func (g *Generator) genLambdaAny(iterable ast.Expression, lambda *ast.LambdaExpr) {
 	g.needsRuntime = true
 	varName := "_v"
@@ -3584,7 +3584,7 @@ func (g *Generator) genLambdaAny(iterable ast.Expression, lambda *ast.LambdaExpr
 	g.buf.WriteString("})")
 }
 
-// genLambdaAll generates code for arr.all? -> (x) { condition }
+// genLambdaAll generates code for arr.all? -> { |x| condition }
 func (g *Generator) genLambdaAll(iterable ast.Expression, lambda *ast.LambdaExpr) {
 	g.needsRuntime = true
 	varName := "_v"
@@ -3640,7 +3640,7 @@ func (g *Generator) genLambdaAll(iterable ast.Expression, lambda *ast.LambdaExpr
 	g.buf.WriteString("})")
 }
 
-// genLambdaNone generates code for arr.none? -> (x) { condition }
+// genLambdaNone generates code for arr.none? -> { |x| condition }
 func (g *Generator) genLambdaNone(iterable ast.Expression, lambda *ast.LambdaExpr) {
 	g.needsRuntime = true
 	varName := "_v"
@@ -3779,7 +3779,7 @@ func (g *Generator) genLambdaReduce(iterable ast.Expression, lambda *ast.LambdaE
 	g.buf.WriteString("})")
 }
 
-// genLambdaTimes generates code for n.times -> (i) { body }
+// genLambdaTimes generates code for n.times -> { |i| body }
 func (g *Generator) genLambdaTimes(count ast.Expression, lambda *ast.LambdaExpr) {
 	varName := "_i"
 	if len(lambda.Params) > 0 {
@@ -3812,7 +3812,7 @@ func (g *Generator) genLambdaTimes(count ast.Expression, lambda *ast.LambdaExpr)
 	g.buf.WriteString("}")
 }
 
-// genLambdaUpto generates code for start.upto(end) -> (i) { body }
+// genLambdaUpto generates code for start.upto(end) -> { |i| body }
 func (g *Generator) genLambdaUpto(start ast.Expression, lambda *ast.LambdaExpr, end ast.Expression) {
 	varName := "_i"
 	if len(lambda.Params) > 0 {
@@ -3847,7 +3847,7 @@ func (g *Generator) genLambdaUpto(start ast.Expression, lambda *ast.LambdaExpr, 
 	g.buf.WriteString("}")
 }
 
-// genLambdaDownto generates code for start.downto(end) -> (i) { body }
+// genLambdaDownto generates code for start.downto(end) -> { |i| body }
 func (g *Generator) genLambdaDownto(start ast.Expression, lambda *ast.LambdaExpr, end ast.Expression) {
 	varName := "_i"
 	if len(lambda.Params) > 0 {

@@ -181,41 +181,41 @@ Lambdas are anonymous functions using `->` syntax. Use braces `{ }` for single-l
 
 ```ruby
 # Single-line lambdas
-squares = nums.map -> (n) { n * n }
-evens = nums.select -> (n) { n.even? }
+squares = nums.map -> { |n| n * n }
+evens = nums.select -> { |n| n.even? }
 
 # Multi-line lambdas
-results = items.map -> (item) do
+results = items.map -> do |item|
   processed = transform(item)
   validate(processed)
 end
 
 # Iteration
-[1, 2, 3].each -> (n) { puts n }
+[1, 2, 3].each -> { |n| puts n }
 
 # Finding
-first_big = items.find -> (x) { x.size > 100 }
+first_big = items.find -> { |x| x.size > 100 }
 
 # Aggregation
-sum = [1, 2, 3].reduce(0) -> (acc, n) { acc + n }  # 6
+sum = [1, 2, 3].reduce(0) -> { |acc, n| acc + n }  # 6
 
 # Integer iteration
-5.times -> (i) { puts i }
-1.upto(10) -> (i) { puts i }
+5.times -> { |i| puts i }
+1.upto(10) -> { |i| puts i }
 ```
 
 **Symbol-to-proc** for concise method calls:
 
 ```ruby
-names = users.map(&:name)           # same as: users.map -> (u) { u.name }
-active = users.select(&:active?)    # same as: users.select -> (u) { u.active? }
+names = users.map(&:name)           # same as: users.map -> { |u| u.name }
+active = users.select(&:active?)    # same as: users.select -> { |u| u.active? }
 lengths = strings.map(&:length)
 ```
 
 **Calling lambdas:**
 
 ```ruby
-double = -> (x) { x * 2 }
+double = -> { |x| x * 2 }
 result = double.(5)      # 10 (preferred)
 result = double.call(5)  # 10 (alternative)
 ```
@@ -224,7 +224,7 @@ result = double.call(5)  # 10 (alternative)
 
 ```ruby
 # Lambda - return exits the lambda only
-users.each -> (u) do
+users.each -> do |u|
   return if u.inactive?  # skips this user, continues iteration
   process(u)
 end
@@ -579,7 +579,7 @@ user2 = await t2
 **Structured concurrency** with `concurrently`:
 
 ```ruby
-concurrently -> (scope) do
+concurrently do |scope|
   a = scope.spawn { fetch_a() }
   b = scope.spawn { fetch_b() }
 
@@ -643,7 +643,7 @@ import "rugby/http"
 resp = http.get("https://api.example.com/users")!
 if resp.ok?
   users = resp.json_array!
-  users.each -> (user) { puts user["name"] }
+  users.each -> { |user| puts user["name"] }
 end
 ```
 

@@ -152,7 +152,7 @@ Error binding in rescue blocks now works.
 Range indexing now slices arrays and strings.
 
 ### ~~BUG-016: concurrently expression~~ FIXED
-`concurrently -> (scope) do ... end` now works as an expression in assignment context.
+`concurrently do |scope| ... end` now works as an expression in assignment context.
 
 ### ~~BUG-008: Interface structural typing~~ FIXED
 Classes now satisfy interfaces structurally. Interface methods are generated with PascalCase for Go compatibility. Type assertions (`is_a?` and `as`) work correctly on concrete types.

@@ -387,7 +387,7 @@ func (p *Parser) parseBlocksAndChaining(expr ast.Expression) ast.Expression {
 			// Not a valid block target - break to let caller handle LBRACE as map literal
 			break
 		}
-		// Check for trailing lambda: expr -> (params) { ... }
+		// Check for trailing lambda: expr -> { |params| ... }
 		if p.peekTokenIs(token.ARROW) {
 			expr = p.parseTrailingLambda(expr)
 			continue

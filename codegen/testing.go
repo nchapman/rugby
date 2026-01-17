@@ -193,7 +193,7 @@ func (g *Generator) genItStmt(it *ast.ItStmt) {
 }
 
 // genTestStmt generates a standalone test function
-// test "math/add" -> (t) do ... end -> func TestMathAdd(t *testing.T) { ... }
+// test "math/add" do |t| ... end -> func TestMathAdd(t *testing.T) { ... }
 func (g *Generator) genTestStmt(test *ast.TestStmt) {
 	g.needsTestingImport = true
 	clear(g.vars)
