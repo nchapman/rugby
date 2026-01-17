@@ -626,8 +626,8 @@ end`
 
 	output := compile(t, input)
 
-	// Variable index uses runtime.AtIndex to support negative indices
-	assertContains(t, output, `runtime.AtIndex(arr, (i + 1))`)
+	// Variable index uses runtime.SliceAt[T] for typed arrays
+	assertContains(t, output, `runtime.SliceAt[int](arr, (i + 1))`)
 }
 
 func TestGenerateNegativeIndexLiteral(t *testing.T) {
@@ -639,9 +639,9 @@ end`
 
 	output := compile(t, input)
 
-	// Negative literal indices use runtime.AtIndex
-	assertContains(t, output, `runtime.AtIndex(arr, -1)`)
-	assertContains(t, output, `runtime.AtIndex(arr, -2)`)
+	// Negative literal indices use runtime.SliceAt[T] for typed arrays
+	assertContains(t, output, `runtime.SliceAt[int](arr, -1)`)
+	assertContains(t, output, `runtime.SliceAt[int](arr, -2)`)
 }
 
 func TestGenerateNegativeStringIndex(t *testing.T) {
@@ -665,8 +665,8 @@ end`
 
 	output := compile(t, input)
 
-	// Variable indices use runtime.AtIndex to support negative values
-	assertContains(t, output, `runtime.AtIndex(arr, i)`)
+	// Variable indices use runtime.SliceAt[T] for typed arrays
+	assertContains(t, output, `runtime.SliceAt[int](arr, i)`)
 }
 
 func TestGenerateRangeSliceInclusive(t *testing.T) {
@@ -770,10 +770,8 @@ end`
 
 	output := compile(t, input)
 
-	// Negative indices chain AtIndex calls with type assertions
-	// Inner call returns any, asserted to []int for the outer index
-	// Outer call returns any, asserted to int for the assignment
-	assertContains(t, output, `runtime.AtIndex(runtime.AtIndex(matrix, -1).([]int), -1).(int)`)
+	// Negative indices chain SliceAt calls with proper generic typing
+	assertContains(t, output, `runtime.SliceAt[int](runtime.SliceAt[[]int](matrix, -1), -1)`)
 }
 
 func TestGenerateMixedChainedIndex(t *testing.T) {
@@ -784,8 +782,8 @@ end`
 
 	output := compile(t, input)
 
-	// Positive literal uses native, negative uses AtIndex
-	assertContains(t, output, `runtime.AtIndex(matrix[0], -1)`)
+	// Positive literal uses native, negative uses SliceAt[T]
+	assertContains(t, output, `runtime.SliceAt[int](matrix[0], -1)`)
 }
 
 func TestGenerateArrayAppend(t *testing.T) {

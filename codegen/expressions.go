@@ -1393,8 +1393,7 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 		return
 	}
 
-	// For variable indices, we need runtime.AtIndex for negative index support.
-	// Add a type assertion to preserve the element type when known.
+	// For variable indices, we need runtime support for negative index handling.
 	g.needsRuntime = true
 
 	// Try to get element type from TypeInfo or from the Rugby type string
@@ -1410,14 +1409,16 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 		if g.typeInfo != nil && g.typeInfo.IsClass(elemType) {
 			goElemType = "*" + goElemType
 		}
-		g.buf.WriteString("runtime.AtIndex(")
+		// Use generic SliceAt[T] for typed slices - much faster than AtIndex
+		g.buf.WriteString("runtime.SliceAt[")
+		g.buf.WriteString(goElemType)
+		g.buf.WriteString("](")
 		g.genExpr(idx.Left)
 		g.buf.WriteString(", ")
 		g.genExpr(idx.Index)
-		g.buf.WriteString(").(")
-		g.buf.WriteString(goElemType)
 		g.buf.WriteString(")")
 	} else {
+		// Fallback to AtIndex for unknown types
 		g.buf.WriteString("runtime.AtIndex(")
 		g.genExpr(idx.Left)
 		g.buf.WriteString(", ")

@@ -606,6 +606,16 @@ func Rotate[T any](slice []T, n int) []T {
 	return slices.Concat(slice[n:], slice[:n])
 }
 
+// SliceAt is a generic function for typed slice indexing with negative index support.
+// Returns the element at index i. Negative indices count from the end.
+// This is much faster than AtIndex because it avoids type switches and reflection.
+func SliceAt[T any](s []T, i int) T {
+	if i < 0 {
+		i = len(s) + i
+	}
+	return s[i]
+}
+
 // AtIndex returns the element at the given index, supporting negative indices.
 // This is a universal function that handles both strings and slices.
 // For strings, returns the character (as string) at the index.
@@ -613,6 +623,7 @@ func Rotate[T any](slice []T, n int) []T {
 // Negative indices count from the end: -1 is last, -2 is second-to-last, etc.
 // Panics if index is out of bounds.
 // Ruby: arr[-1], str[-1]
+// DEPRECATED: Use SliceAt[T] for typed slices - it's much faster.
 func AtIndex(collection any, i int) any {
 	// Fast paths for common types to avoid reflection overhead
 	switch s := collection.(type) {
