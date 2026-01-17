@@ -4214,12 +4214,14 @@ func (a *Analyzer) areTypesComparable(left, right *Type) bool {
 		rightComp := right.Constraint == "Equatable" || right.Constraint == "Comparable" || right.Constraint == "Ordered"
 		return leftComp && rightComp
 	}
-	// nil can be compared to optional and error types
+	// nil can be compared to optional, error, array, and map types (all reference types in Go)
 	if left.Kind == TypeNil {
-		return right.Kind == TypeOptional || right.Kind == TypeError || right.Kind == TypeNil
+		return right.Kind == TypeOptional || right.Kind == TypeError || right.Kind == TypeNil ||
+			right.Kind == TypeArray || right.Kind == TypeMap
 	}
 	if right.Kind == TypeNil {
-		return left.Kind == TypeOptional || left.Kind == TypeError || left.Kind == TypeNil
+		return left.Kind == TypeOptional || left.Kind == TypeError || left.Kind == TypeNil ||
+			left.Kind == TypeArray || left.Kind == TypeMap
 	}
 	// Optional can be compared to its underlying type (e.g., String? == String)
 	if left.Kind == TypeOptional && left.Elem != nil && left.Elem.Equals(right) {
@@ -5058,6 +5060,8 @@ func (a *Analyzer) stringMethod(name string) *Symbol {
 		return NewMethod(name, []*Symbol{NewParam("old", TypeStringVal), NewParam("new", TypeStringVal)}, []*Type{TypeStringVal})
 	case "split":
 		return NewMethod(name, []*Symbol{NewParam("sep", TypeStringVal)}, []*Type{NewArrayType(TypeStringVal)})
+	case "substring":
+		return NewMethod(name, []*Symbol{NewParam("start", TypeIntVal), NewParam("end", TypeIntVal)}, []*Type{TypeStringVal})
 	case "chars", "lines":
 		return NewMethod(name, nil, []*Type{NewArrayType(TypeStringVal)})
 	case "bytes":

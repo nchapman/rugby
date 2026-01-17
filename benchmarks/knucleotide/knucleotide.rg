@@ -3,116 +3,68 @@ import "fmt"
 import "bufio"
 import "strings"
 
-# Map nucleotide character to 2-bit encoding
-# Uses character lookup instead of byte manipulation to avoid
-# type inference limitations with Go's []byte element type
-def char_to_code(ch: String): Int
-  if ch == "A" || ch == "a"
-    return 0
-  elsif ch == "C" || ch == "c"
-    return 1
-  elsif ch == "T" || ch == "t"
-    return 2
-  elsif ch == "G" || ch == "g"
-    return 3
-  end
-  0
-end
-
-# Read stdin until we find ">THREE", then return all following lines
-def read_sequence(filename: String): Array<Int>
+# Read file until we find ">THREE", then return all following lines
+def read_sequence(filename: String): String
   f, err = os.Open(filename)
   if err != nil
     panic(err)
   end
 
   scanner = bufio.NewScanner(f)
-  found_three = false
-  data = Array.new(0, 0)
+  data = strings.Builder.new
 
+  # Skip until >THREE
   while scanner.Scan
     line = scanner.Text
-    if line.length == 0
-      continue
+    if strings.HasPrefix(line, ">THREE")
+      break
     end
+  end
 
-    if !found_three
-      if line[0] == '>' && strings.HasPrefix(line, ">THREE")
-        found_three = true
-      end
-      continue
+  # Read the sequence
+  while scanner.Scan
+    line = scanner.Text
+    if line.length > 0 && line[0] != '>'
+      data.WriteString(strings.ToUpper(line))
     end
-
-    # Convert to 2-bit encoding using character lookup
-    line.chars.each -> { |ch|
-      data.push(char_to_code(ch))
-    }
   end
 
   f.Close
-  data
+  data.String
 end
 
-def count_frequencies(data: Array<Int>, size: Int): Hash<Int, Int>
-  counts: Hash<Int, Int> = {}
+def frequency(seq: String, length: Int): Hash<String, Int>
+  counts: Hash<String, Int> = {}
+  max = seq.length - length
 
   i = 0
-  while i <= data.length - size
-    key = 0
-    j = 0
-    while j < size
-      key = (key << 2) | data[i + j]
-      j += 1
-    end
-
+  while i <= max
+    # Use efficient substring function instead of range slicing
+    key = seq.substring(i, i + length)
     current = counts.fetch(key, 0)
     counts[key] = current + 1
-
     i += 1
   end
 
   counts
 end
 
-def decompress(num: Int, length: Int): String
-  chars = ["A", "C", "T", "G"]
-  result = ""
-  i = 0
-  while i < length
-    result = chars[num & 3] + result
-    num = num >> 2
-    i += 1
-  end
-  result
-end
+def write_frequencies(seq: String, length: Int): String
+  counts = frequency(seq, length)
+  total = (seq.length - length + 1).to_f
 
-def compress(sequence: String): Int
-  # Map characters to 2-bit encoding using char_to_code
-  num = 0
-  sequence.chars.each -> { |ch|
-    num = (num << 2) | char_to_code(ch)
-  }
-  num
-end
-
-def write_frequencies(data: Array<Int>, size: Int): String
-  counts = count_frequencies(data, size)
-  total = (data.length - size + 1).to_f
-
-  # Sort by count descending (would need sorting support)
-  result = ""
+  result = strings.Builder.new
   counts.each -> { |key, count|
     pct = 100.0 * count.to_f / total
-    result = result + fmt.Sprintf("%s %.3f\n", decompress(key, size), pct)
+    result.WriteString(fmt.Sprintf("%s %.3f\n", key, pct))
   }
-  result
+  result.WriteString("\n")
+  result.String
 end
 
-def write_count(data: Array<Int>, nucleotide: String): String
-  size = nucleotide.length
-  counts = count_frequencies(data, size)
-  key = compress(nucleotide)
-  count = counts.fetch(key, 0)
+def write_count(seq: String, nucleotide: String): String
+  counts = frequency(seq, nucleotide.length)
+  count = counts.fetch(nucleotide, 0)
   fmt.Sprintf("%d\t%s", count, nucleotide)
 end
 
@@ -122,13 +74,13 @@ def main
     filename = os.Args[1]
   end
 
-  data = read_sequence(filename)
+  seq = read_sequence(filename)
 
-  fmt.Println(write_frequencies(data, 1))
-  fmt.Println(write_frequencies(data, 2))
-  fmt.Println(write_count(data, "GGT"))
-  fmt.Println(write_count(data, "GGTA"))
-  fmt.Println(write_count(data, "GGTATT"))
-  fmt.Println(write_count(data, "GGTATTTTAATT"))
-  fmt.Println(write_count(data, "GGTATTTTAATTTATAGT"))
+  fmt.Print(write_frequencies(seq, 1))
+  fmt.Print(write_frequencies(seq, 2))
+  fmt.Println(write_count(seq, "GGT"))
+  fmt.Println(write_count(seq, "GGTA"))
+  fmt.Println(write_count(seq, "GGTATT"))
+  fmt.Println(write_count(seq, "GGTATTTTAATT"))
+  fmt.Println(write_count(seq, "GGTATTTTAATTTATAGT"))
 end

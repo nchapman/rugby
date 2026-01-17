@@ -1,6 +1,11 @@
 rugby
 .rugby/
 
+# Large benchmark input files (extract from reference benchmarks)
+benchmarks/**/250000_in
+benchmarks/**/2500000_in
+benchmarks/**/25000000_in
+
 # In examples/, only keep .rg and .md files (ignore compiled binaries and generated .go)
 examples/*
 !examples/*.rg

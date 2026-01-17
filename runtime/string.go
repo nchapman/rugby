@@ -49,6 +49,14 @@ func StringToFloat(s string) (float64, error) {
 	return strconv.ParseFloat(s, 64)
 }
 
+// SubString returns a substring from start to end (exclusive), using byte indices.
+// UNSAFE: Panics if indices are out of bounds or start > end.
+// This operates on bytes, not runes, so for ASCII strings this is efficient.
+// For Unicode strings, use str[start..end] syntax which uses rune semantics.
+func SubString(s string, start, end int) string {
+	return s[start:end]
+}
+
 // Split splits a string by a separator.
 // Ruby: str.split(sep)
 func Split(s, sep string) []string {

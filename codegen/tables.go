@@ -103,6 +103,7 @@ var stdLib = map[string]map[string]MethodDef{
 	},
 	"String": {
 		"split":       {RuntimeFunc: "runtime.Split", ReturnType: "Array"},
+		"substring":   {RuntimeFunc: "runtime.SubString", ReturnType: "String"},
 		"strip":       {RuntimeFunc: "runtime.Strip", ReturnType: "String"},
 		"lstrip":      {RuntimeFunc: "runtime.Lstrip", ReturnType: "String"},
 		"rstrip":      {RuntimeFunc: "runtime.Rstrip", ReturnType: "String"},

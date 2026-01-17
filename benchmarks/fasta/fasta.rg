@@ -1,6 +1,7 @@
 import "os"
-import "fmt"
+import "bufio"
 import "strconv"
+import "strings"
 
 const IM = 139968
 const IA = 3877
@@ -21,9 +22,12 @@ class Random
   end
 end
 
-def repeat_fasta(seq: String, n: Int)
+def repeat_fasta(out: *bufio.Writer, seq: String, n: Int)
   len = seq.length
   pos = 0
+
+  # Pre-extend sequence to avoid modulo in inner loop
+  seq2 = seq + seq.substring(0, LINE_WIDTH)
 
   while n > 0
     line_len = n
@@ -31,19 +35,18 @@ def repeat_fasta(seq: String, n: Int)
       line_len = LINE_WIDTH
     end
 
-    i = 0
-    while i < line_len
-      fmt.Printf("%s", seq[(pos + i) % len])
-      i += 1
-    end
-    fmt.Printf("\n")
+    out.WriteString(seq2.substring(pos, pos + line_len))
+    out.WriteString("\n")
 
-    pos = (pos + line_len) % len
+    pos += line_len
+    if pos >= len
+      pos -= len
+    end
     n -= line_len
   end
 end
 
-def random_fasta(genelist: Array<(String, Float)>, n: Int, rng: Random)
+def random_fasta(out: *bufio.Writer, genelist: Array<(String, Float)>, n: Int, rng: Random)
   # Build cumulative probabilities
   cum = 0.0
   probs = Array.new(genelist.length, 0.0)
@@ -61,6 +64,7 @@ def random_fasta(genelist: Array<(String, Float)>, n: Int, rng: Random)
       line_len = LINE_WIDTH
     end
 
+    line = strings.Builder.new
     j = 0
     while j < line_len
       r = rng.next
@@ -68,14 +72,15 @@ def random_fasta(genelist: Array<(String, Float)>, n: Int, rng: Random)
       while k < genelist.length
         if probs[k] >= r
           c, _ = genelist[k]
-          fmt.Printf("%s", c)
+          line.WriteString(c)
           break
         end
         k += 1
       end
       j += 1
     end
-    fmt.Printf("\n")
+    out.WriteString(line.String)
+    out.WriteString("\n")
 
     n -= line_len
   end
@@ -87,6 +92,8 @@ def main
     arg, _ = strconv.atoi(os.Args[1])
     n = arg
   end
+
+  out = bufio.NewWriter(os.Stdout)
 
   iub = [
     ("a", 0.27),
@@ -115,12 +122,14 @@ def main
 
   rng = Random.new(42)
 
-  fmt.Printf(">ONE Homo sapiens alu\n")
-  repeat_fasta(ALU, 2 * n)
+  out.WriteString(">ONE Homo sapiens alu\n")
+  repeat_fasta(out, ALU, 2 * n)
 
-  fmt.Printf(">TWO IUB ambiguity codes\n")
-  random_fasta(iub, 3 * n, rng)
+  out.WriteString(">TWO IUB ambiguity codes\n")
+  random_fasta(out, iub, 3 * n, rng)
 
-  fmt.Printf(">THREE Homo sapiens frequency\n")
-  random_fasta(homosapiens, 5 * n, rng)
+  out.WriteString(">THREE Homo sapiens frequency\n")
+  random_fasta(out, homosapiens, 5 * n, rng)
+
+  out.Flush
 end

@@ -29,7 +29,7 @@ BENCHMARKS=(
     "merkletrees:merkletrees:15"
     "lru:lru:10000"
     "coro-prime-sieve:coro-prime-sieve:1000"
-    "knucleotide:knucleotide:knucleotide/25000_in"
+    "knucleotide:knucleotide:knucleotide/250000_in"
     "regex-redux:regex-redux:regex-redux/100000_in"
 )
 
