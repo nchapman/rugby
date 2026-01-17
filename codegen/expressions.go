@@ -2093,6 +2093,50 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				g.genExpr(fn.X)
 				g.buf.WriteString(")")
 				return
+			case "push":
+				// push appends an element to the end, needs pointer
+				if len(call.Args) != 1 {
+					g.addError(fmt.Errorf("push requires exactly 1 argument"))
+					return
+				}
+				g.needsRuntime = true
+				switch elemType {
+				case "int":
+					g.buf.WriteString("runtime.PushInt(&")
+				case "string":
+					g.buf.WriteString("runtime.PushString(&")
+				case "float64":
+					g.buf.WriteString("runtime.PushFloat(&")
+				default:
+					g.buf.WriteString("runtime.PushAny(&")
+				}
+				g.genExpr(fn.X)
+				g.buf.WriteString(", ")
+				g.genExpr(call.Args[0])
+				g.buf.WriteString(")")
+				return
+			case "unshift":
+				// unshift prepends an element to the beginning, needs pointer
+				if len(call.Args) != 1 {
+					g.addError(fmt.Errorf("unshift requires exactly 1 argument"))
+					return
+				}
+				g.needsRuntime = true
+				switch elemType {
+				case "int":
+					g.buf.WriteString("runtime.UnshiftInt(&")
+				case "string":
+					g.buf.WriteString("runtime.UnshiftString(&")
+				case "float64":
+					g.buf.WriteString("runtime.UnshiftFloat(&")
+				default:
+					g.buf.WriteString("runtime.UnshiftAny(&")
+				}
+				g.genExpr(fn.X)
+				g.buf.WriteString(", ")
+				g.genExpr(call.Args[0])
+				g.buf.WriteString(")")
+				return
 			case "sum":
 				g.needsRuntime = true
 				if elemType == "float64" {

@@ -1484,3 +1484,83 @@ func TestPopAny(t *testing.T) {
 		t.Errorf("PopAny: remaining length %d, want 2", len(arr))
 	}
 }
+
+func TestPush(t *testing.T) {
+	arr := []int{1, 2, 3}
+	Push(&arr, 4)
+	if !reflect.DeepEqual(arr, []int{1, 2, 3, 4}) {
+		t.Errorf("Push: got %v, want [1 2 3 4]", arr)
+	}
+}
+
+func TestPushInt(t *testing.T) {
+	arr := []int{10, 20}
+	PushInt(&arr, 30)
+	if !reflect.DeepEqual(arr, []int{10, 20, 30}) {
+		t.Errorf("PushInt: got %v, want [10 20 30]", arr)
+	}
+}
+
+func TestPushString(t *testing.T) {
+	arr := []string{"a", "b"}
+	PushString(&arr, "c")
+	if !reflect.DeepEqual(arr, []string{"a", "b", "c"}) {
+		t.Errorf("PushString: got %v, want [a b c]", arr)
+	}
+}
+
+func TestPushFloat(t *testing.T) {
+	arr := []float64{1.1, 2.2}
+	PushFloat(&arr, 3.3)
+	if !reflect.DeepEqual(arr, []float64{1.1, 2.2, 3.3}) {
+		t.Errorf("PushFloat: got %v, want [1.1 2.2 3.3]", arr)
+	}
+}
+
+func TestPushAny(t *testing.T) {
+	arr := []any{1, "two"}
+	PushAny(&arr, 3.0)
+	if len(arr) != 3 || arr[2] != 3.0 {
+		t.Errorf("PushAny: got %v", arr)
+	}
+}
+
+func TestUnshift(t *testing.T) {
+	arr := []int{2, 3, 4}
+	Unshift(&arr, 1)
+	if !reflect.DeepEqual(arr, []int{1, 2, 3, 4}) {
+		t.Errorf("Unshift: got %v, want [1 2 3 4]", arr)
+	}
+}
+
+func TestUnshiftInt(t *testing.T) {
+	arr := []int{20, 30}
+	UnshiftInt(&arr, 10)
+	if !reflect.DeepEqual(arr, []int{10, 20, 30}) {
+		t.Errorf("UnshiftInt: got %v, want [10 20 30]", arr)
+	}
+}
+
+func TestUnshiftString(t *testing.T) {
+	arr := []string{"b", "c"}
+	UnshiftString(&arr, "a")
+	if !reflect.DeepEqual(arr, []string{"a", "b", "c"}) {
+		t.Errorf("UnshiftString: got %v, want [a b c]", arr)
+	}
+}
+
+func TestUnshiftFloat(t *testing.T) {
+	arr := []float64{2.2, 3.3}
+	UnshiftFloat(&arr, 1.1)
+	if !reflect.DeepEqual(arr, []float64{1.1, 2.2, 3.3}) {
+		t.Errorf("UnshiftFloat: got %v, want [1.1 2.2 3.3]", arr)
+	}
+}
+
+func TestUnshiftAny(t *testing.T) {
+	arr := []any{"two", 3.0}
+	UnshiftAny(&arr, 1)
+	if len(arr) != 3 || arr[0] != 1 {
+		t.Errorf("UnshiftAny: got %v", arr)
+	}
+}

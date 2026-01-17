@@ -566,6 +566,60 @@ func PopAny(slice *[]any) any {
 	return last
 }
 
+// Push appends an element to the end of the slice.
+// Modifies the original slice in place via pointer.
+// Ruby: arr.push(elem)
+func Push[T any](slice *[]T, elem T) {
+	*slice = append(*slice, elem)
+}
+
+// PushInt appends an element to the end of an int slice.
+func PushInt(slice *[]int, elem int) {
+	*slice = append(*slice, elem)
+}
+
+// PushString appends an element to the end of a string slice.
+func PushString(slice *[]string, elem string) {
+	*slice = append(*slice, elem)
+}
+
+// PushFloat appends an element to the end of a float64 slice.
+func PushFloat(slice *[]float64, elem float64) {
+	*slice = append(*slice, elem)
+}
+
+// PushAny appends an element to the end of an any slice.
+func PushAny(slice *[]any, elem any) {
+	*slice = append(*slice, elem)
+}
+
+// Unshift prepends an element to the beginning of the slice.
+// Modifies the original slice in place via pointer.
+// Ruby: arr.unshift(elem)
+func Unshift[T any](slice *[]T, elem T) {
+	*slice = append([]T{elem}, *slice...)
+}
+
+// UnshiftInt prepends an element to the beginning of an int slice.
+func UnshiftInt(slice *[]int, elem int) {
+	*slice = append([]int{elem}, *slice...)
+}
+
+// UnshiftString prepends an element to the beginning of a string slice.
+func UnshiftString(slice *[]string, elem string) {
+	*slice = append([]string{elem}, *slice...)
+}
+
+// UnshiftFloat prepends an element to the beginning of a float64 slice.
+func UnshiftFloat(slice *[]float64, elem float64) {
+	*slice = append([]float64{elem}, *slice...)
+}
+
+// UnshiftAny prepends an element to the beginning of an any slice.
+func UnshiftAny(slice *[]any, elem any) {
+	*slice = append([]any{elem}, *slice...)
+}
+
 // FirstN returns the first n elements.
 func FirstN[T any](slice []T, n int) []T {
 	if n <= 0 {

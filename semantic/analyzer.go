@@ -4891,8 +4891,12 @@ func (a *Analyzer) arrayMethod(name string, elemType *Type) *Symbol {
 		return method
 	case "join":
 		return NewMethod(name, []*Symbol{NewParam("sep", TypeStringVal)}, []*Type{TypeStringVal})
-	case "push", "pop", "shift", "unshift":
-		return NewMethod(name, nil, nil)
+	case "push", "unshift":
+		// push/unshift add element to array
+		return NewMethod(name, []*Symbol{NewParam("elem", elemType)}, nil)
+	case "pop", "shift":
+		// pop/shift remove and return element from array
+		return NewMethod(name, nil, []*Type{NewOptionalType(elemType)})
 	}
 	return nil
 }
