@@ -859,7 +859,7 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 
 		if s.Type != "" && g.shouldDeclare(s) {
 			// Typed declaration: var x Int? = nil
-			g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
+			g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, g.mapTypeClassAware(s.Type)))
 			g.vars[s.Name] = s.Type
 		} else if !g.shouldDeclare(s) {
 			// Reassignment: x = nil
@@ -889,7 +889,7 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 
 	if s.Type != "" && g.shouldDeclare(s) {
 		// Typed declaration: var x int = value
-		g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, mapType(s.Type)))
+		g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, g.mapTypeClassAware(s.Type)))
 		g.vars[s.Name] = s.Type // store the declared type
 	} else if s.Name == "_" || !g.shouldDeclare(s) {
 		// Blank identifier or reassignment: x = value

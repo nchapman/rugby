@@ -653,6 +653,40 @@ func (g *Generator) extractMapTypes(mapType string) (keyType, valueType string) 
 	return
 }
 
+// mapTypeClassAware converts Rugby type names to Go type names, with awareness
+// of class types. Classes in generic containers like Array<Body> need pointer
+// prefixes, resulting in []*Body instead of []Body.
+func (g *Generator) mapTypeClassAware(rubyType string) string {
+	// Handle Array<T> specially to check if T is a class
+	if strings.HasPrefix(rubyType, "Array<") && strings.HasSuffix(rubyType, ">") {
+		inner := rubyType[6 : len(rubyType)-1]
+		innerMapped := g.mapTypeClassAware(inner)
+		// If the inner type is a class, add pointer prefix
+		if g.typeInfo != nil && g.typeInfo.IsClass(inner) {
+			return "[]*" + innerMapped
+		}
+		return "[]" + innerMapped
+	}
+	// Handle Map<K, V> specially to check if V is a class
+	if strings.HasPrefix(rubyType, "Map<") && strings.HasSuffix(rubyType, ">") {
+		content := rubyType[4 : len(rubyType)-1]
+		parts := strings.Split(content, ",")
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			val := strings.TrimSpace(parts[1])
+			keyMapped := g.mapTypeClassAware(key)
+			valMapped := g.mapTypeClassAware(val)
+			// If the value type is a class, add pointer prefix
+			if g.typeInfo != nil && g.typeInfo.IsClass(val) {
+				return fmt.Sprintf("map[%s]*%s", keyMapped, valMapped)
+			}
+			return fmt.Sprintf("map[%s]%s", keyMapped, valMapped)
+		}
+	}
+	// For other types, use the regular mapType
+	return mapType(rubyType)
+}
+
 // inferExprGoType returns the Go type for an expression.
 // Uses semantic type info with mapType conversion, falls back to "any".
 func (g *Generator) inferExprGoType(expr ast.Expression) string {
