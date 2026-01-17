@@ -85,11 +85,11 @@ items : Array<String> = []
 Functions use `def` and `end`. The last expression is returned implicitly.
 
 ```ruby
-def greet(name : String) -> String
+def greet(name: String): String
   "Hello, #{name}!"
 end
 
-def add(a : Int, b : Int) -> Int
+def add(a: Int, b: Int): Int
   a + b
 end
 
@@ -100,7 +100,7 @@ puts add(2, 3)       # 5
 Multiple return values follow Go conventions:
 
 ```ruby
-def divide(a : Int, b : Int) -> (Int, Error)
+def divide(a: Int, b: Int): (Int, Error)
   return 0, errors.new("division by zero") if b == 0
   a / b, nil
 end
@@ -230,7 +230,7 @@ users.each -> do |u|
 end
 
 # For loop - full control flow
-def find_admin(users : Array<User>) -> User?
+def find_admin(users: Array<User>): User?
   for user in users
     return user if user.admin?  # returns from function
   end
@@ -248,14 +248,14 @@ class User
   property email : String
   getter age : Int
 
-  def initialize(@name : String, @email : String, @age : Int)
+  def initialize(@name: String, @email: String, @age: Int)
   end
 
-  def adult? -> Bool
+  def adult?: Bool
     @age >= 18
   end
 
-  def greeting -> String
+  def greeting: String
     "Hi, I'm #{@name}"
   end
 end
@@ -274,11 +274,11 @@ puts user.adult?    # true
 
 ```ruby
 class Admin < User
-  def initialize(name : String, email : String, age : Int, @permissions : Array<String>)
+  def initialize(name: String, email: String, age: Int, @permissions: Array<String>)
     super(name, email, age)
   end
 
-  def greeting -> String
+  def greeting: String
     "[Admin] #{@name}"
   end
 end
@@ -307,22 +307,22 @@ Interfaces define capabilities. Types satisfy interfaces implicitly (structural 
 
 ```ruby
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 class Dog
-  def speak -> String
+  def speak: String
     "Woof!"
   end
 end
 
 class Cat
-  def speak -> String
+  def speak: String
     "Meow!"
   end
 end
 
-def announce(s : Speaker)
+def announce(s: Speaker)
   puts s.speak
 end
 
@@ -334,7 +334,7 @@ Use `implements` for compile-time verification (optional but documents intent):
 
 ```ruby
 class Robot implements Speaker
-  def speak -> String
+  def speak: String
     "Beep boop"
   end
 end
@@ -346,7 +346,7 @@ Modules share behavior across classes:
 
 ```ruby
 module Greetable
-  def greet -> String
+  def greet: String
     "Hello, I'm #{@name}"
   end
 end
@@ -355,7 +355,7 @@ class User
   include Greetable
   property name : String
 
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 end
 
@@ -367,7 +367,7 @@ Modules also serve as namespaces:
 ```ruby
 module Http
   class Client
-    def get(url : String) -> Response
+    def get(url: String): Response
       # ...
     end
   end
@@ -382,12 +382,12 @@ By default, everything is internal to the package. Use `pub` to export:
 
 ```ruby
 # Internal - only usable within this package
-def helper(x : Int) -> Int
+def helper(x: Int): Int
   x * 2
 end
 
 # Exported - callable from other packages
-pub def double(x : Int) -> Int
+pub def double(x: Int): Int
   helper(x)
 end
 
@@ -409,7 +409,7 @@ Rugby uses Go's error-as-value pattern with concise syntax. The error type is `E
 **The `!` operator** propagates errors to the caller:
 
 ```ruby
-def load_config(path : String) -> (Config, Error)
+def load_config(path: String): (Config, Error)
   content = file.read(path)!          # returns error if file.read fails
   config = json.parse(content)!       # returns error if json.parse fails
   config, nil
@@ -450,7 +450,7 @@ end
 Optional types use `T?` and require explicit handling.
 
 ```ruby
-def find_user(id : Int) -> User?
+def find_user(id: Int): User?
   return nil if id < 0
   users[id]
 end
@@ -553,7 +553,7 @@ upper = strings.ToUpper("hello")
 import "os"
 import "io"
 
-def process_file(path : String) -> Error
+def process_file(path: String): Error
   f = os.open(path)!
   defer f.close()  # runs when function exits
 
