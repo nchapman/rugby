@@ -999,7 +999,9 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 	}
 
 	// Track Go interop type variables for method call snake_case -> PascalCase conversion
-	if g.isGoInteropTypeConstructor(s.Value) || g.isGoInteropCall(s.Value) {
+	isGoInteropCtor := g.isGoInteropTypeConstructor(s.Value)
+	isGoInteropCallVal := g.isGoInteropCall(s.Value)
+	if isGoInteropCtor || isGoInteropCallVal {
 		g.goInteropVars[s.Name] = true
 	} else if g.goInteropVars[s.Name] {
 		// Variable was reassigned to non-Go-interop value, remove tracking

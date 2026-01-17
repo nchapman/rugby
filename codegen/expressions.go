@@ -1441,11 +1441,12 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 		return
 	}
 
-	// For strings, always use runtime.AtIndex to return characters (not bytes)
+	// For strings, use runtime.StringIndex to return characters (not bytes)
+	// This preserves type information (returns string, not any)
 	leftType := g.inferTypeFromExpr(idx.Left)
 	if leftType == "string" || leftType == "String" {
 		g.needsRuntime = true
-		g.buf.WriteString("runtime.AtIndex(")
+		g.buf.WriteString("runtime.StringIndex(")
 		g.genExpr(idx.Left)
 		g.buf.WriteString(", ")
 		g.genExpr(idx.Index)

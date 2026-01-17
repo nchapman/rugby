@@ -33,6 +33,7 @@ const (
 	TypeInterface // user-defined interface
 	TypeFunc      // function type
 	TypeTypeParam // generic type parameter (e.g., T in def identity<T>)
+	TypeGoType    // Go package type (e.g., *bufio.Scanner)
 )
 
 // Type represents a type in the Rugby type system.
@@ -59,6 +60,11 @@ type Type struct {
 
 	// For TypeTypeParam - constraint name (e.g., "Ordered", "Numeric"), empty if unconstrained
 	Constraint string
+
+	// For Go interop types
+	IsPointer  bool   // true if this is a Go pointer type
+	GoPackage  string // Go package path (e.g., "bufio", "net/http")
+	GoTypeName string // Go type name (e.g., "Scanner", "Request")
 }
 
 // Primitive type singletons for common types.
@@ -228,6 +234,15 @@ func (t *Type) String() string {
 		return fmt.Sprintf("(%s): (%s)", strings.Join(params, ", "), strings.Join(returns, ", "))
 	case TypeTypeParam:
 		return t.Name
+	case TypeGoType:
+		prefix := ""
+		if t.IsPointer {
+			prefix = "*"
+		}
+		if t.GoPackage != "" {
+			return fmt.Sprintf("%s%s.%s", prefix, t.GoPackage, t.GoTypeName)
+		}
+		return prefix + t.GoTypeName
 	default:
 		return "unknown"
 	}
@@ -282,6 +297,10 @@ func (t *Type) Equals(other *Type) bool {
 			}
 		}
 		return true
+	case TypeGoType:
+		return t.GoPackage == other.GoPackage &&
+			t.GoTypeName == other.GoTypeName &&
+			t.IsPointer == other.IsPointer
 	default:
 		return true
 	}
@@ -410,6 +429,19 @@ func (t *Type) GoType() string {
 			fields[i] = fmt.Sprintf("_%d %s", i, elem.GoType())
 		}
 		return "struct{ " + strings.Join(fields, "; ") + " }"
+	case TypeGoType:
+		// Go package type - return as qualified name
+		prefix := ""
+		if t.IsPointer {
+			prefix = "*"
+		}
+		if t.GoPackage != "" {
+			// Get the last component of the package path for the qualifier
+			parts := strings.Split(t.GoPackage, "/")
+			qualifier := parts[len(parts)-1]
+			return prefix + qualifier + "." + t.GoTypeName
+		}
+		return prefix + t.GoTypeName
 	default:
 		return ""
 	}

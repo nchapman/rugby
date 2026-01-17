@@ -652,8 +652,8 @@ end`
 
 	output := compile(t, input)
 
-	// String negative indexing also uses runtime.AtIndex
-	assertContains(t, output, `runtime.AtIndex(s, -1)`)
+	// String indexing uses runtime.StringIndex (returns char, not byte)
+	assertContains(t, output, `runtime.StringIndex(s, -1)`)
 }
 
 func TestGenerateVariableIndex(t *testing.T) {

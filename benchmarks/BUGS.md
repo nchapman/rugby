@@ -86,6 +86,21 @@ xloc[i / 8][i % 8] = value  # Works now
 ### `[]byte.length` Method - FIXED
 Go's `[]byte` type now supports the `.length` method for consistency with other collections.
 
+### Go Type Inference - FIXED
+Rugby now uses Go's `go/types` package to introspect Go package type information at compile time. This enables proper type inference for Go interop:
+
+```ruby
+import "bufio"
+import "strings"
+
+reader = strings.NewReader("ABC")  # Type: *strings.Reader
+scanner = bufio.NewScanner(reader)  # Type: *bufio.Scanner
+line = scanner.Text()               # Type: String (from Scanner.Text() return type)
+c = line[0]                         # Type: String (proper string indexing)
+```
+
+The semantic analyzer now loads Go packages and extracts type information for functions, methods, and fields.
+
 ---
 
 ## Blocking Issues (Preventing Benchmarks)
@@ -156,16 +171,6 @@ end
 ```
 Need syntax like `property tmp1: *big.Int` or automatic pointer handling.
 
-### String Indexing Returns `any` Type
-**Affects:** knucleotide
-**Status:** When indexing into a string, the result type is `any` instead of `String`
-
-```ruby
-s = scanner.Text
-c = s[0]  # Type is 'any', not 'String'
-char_to_num(c)  # Error: cannot use any as String
-```
-
 ### Value Type Optional `.unwrap` Missing
 **Affects:** knucleotide
 **Status:** For value-type hashes, `.get(key)` returns `*int` which has no `.unwrap` method
@@ -196,7 +201,7 @@ end
 | coro-prime-sieve | ✅ | ✅ | ✅ | ✅ | Working |
 | lru | ✅ | ✅ | ✅ | ✅ | Working |
 | pidigits | ✅ | ✅ | ✅ | ❌ | Blocked: pointer type properties |
-| knucleotide | ✅ | ✅ | ✅ | ❌ | Blocked: String indexing returns `any`, `.unwrap` on value optionals |
+| knucleotide | ✅ | ✅ | ✅ | ❌ | Blocked: `.unwrap` on value optionals |
 | regex-redux | ✅ | ✅ | ✅ | ✅ | Working |
 
 **11 of 13 Rugby benchmarks working**

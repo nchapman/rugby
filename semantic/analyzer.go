@@ -55,6 +55,12 @@ type Analyzer struct {
 
 	// Track which assignment nodes declare new variables (for := vs = in codegen)
 	declarations map[ast.Node]bool
+
+	// Go package importer for type information
+	goImporter *GoImporter
+
+	// Map of imported package alias to package path (e.g., "bufio" -> "bufio")
+	goPackages map[string]string
 }
 
 // NewAnalyzer creates a new semantic analyzer.
@@ -75,6 +81,8 @@ func NewAnalyzer() *Analyzer {
 		usedSymbols:   make(map[*Symbol]bool),
 		declaredAt:    make(map[ast.Node]map[string]*Symbol),
 		declarations:  make(map[ast.Node]bool),
+		goImporter:    NewGoImporter(),
+		goPackages:    make(map[string]string),
 	}
 	a.defineBuiltins()
 	return a
@@ -116,7 +124,7 @@ func (a *Analyzer) defineBuiltins() {
 // Analyze performs semantic analysis on the program.
 // Returns the list of errors found during analysis.
 func (a *Analyzer) Analyze(program *ast.Program) []error {
-	// Register Go package imports as valid identifiers
+	// Register Go package imports as valid identifiers and load type info
 	for _, imp := range program.Imports {
 		name := imp.Alias
 		if name == "" {
@@ -124,6 +132,12 @@ func (a *Analyzer) Analyze(program *ast.Program) []error {
 			parts := strings.Split(imp.Path, "/")
 			name = parts[len(parts)-1]
 		}
+		// Track package alias -> path mapping
+		a.goPackages[name] = imp.Path
+
+		// Load Go package type information (ignore errors - package may not exist)
+		_, _ = a.goImporter.Import(imp.Path)
+
 		// Register the import as a Go package symbol in global scope
 		sym := &Symbol{
 			Name: name,
@@ -2764,6 +2778,30 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			}
 		}
 
+		// Try Go type field and method lookup for Go interop types
+		if typ == nil && receiverType.Kind == TypeGoType {
+			if typeDef := a.goImporter.LookupType(receiverType.GoPackage, receiverType.GoTypeName); typeDef != nil {
+				// Check fields first (e.g., http.Request.URL)
+				if field := typeDef.Fields[e.Sel]; field != nil {
+					typ = field.Type
+					selectorKind = ast.SelectorField
+				}
+				// Then check methods (e.g., scanner.Text())
+				if typ == nil {
+					if method := typeDef.Methods[e.Sel]; method != nil {
+						if len(method.Returns) == 1 {
+							typ = method.Returns[0]
+						} else if len(method.Returns) > 1 {
+							typ = NewTupleType(method.Returns...)
+						} else {
+							typ = TypeUnknownVal
+						}
+						selectorKind = ast.SelectorGoMethod
+					}
+				}
+			}
+		}
+
 		// Fallback: predicate methods return Bool and are treated as method calls
 		if typ == nil {
 			if strings.HasSuffix(e.Sel, "?") {
@@ -3592,6 +3630,34 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 				return NewTupleType(method.ReturnTypes...)
 			}
 			return TypeUnknownVal
+		}
+
+		// Try Go package function lookup (e.g., bufio.NewScanner)
+		if pkgIdent, ok := sel.X.(*ast.Ident); ok {
+			if pkgPath, isGoPackage := a.goPackages[pkgIdent.Name]; isGoPackage {
+				if fn := a.goImporter.LookupFunction(pkgPath, sel.Sel); fn != nil {
+					if len(fn.Returns) == 1 {
+						return fn.Returns[0]
+					} else if len(fn.Returns) > 1 {
+						return NewTupleType(fn.Returns...)
+					}
+					return TypeUnknownVal
+				}
+			}
+		}
+
+		// Try Go type method lookup (e.g., scanner.Text where scanner is *bufio.Scanner)
+		if receiverType.Kind == TypeGoType {
+			if typeDef := a.goImporter.LookupType(receiverType.GoPackage, receiverType.GoTypeName); typeDef != nil {
+				if method := typeDef.Methods[sel.Sel]; method != nil {
+					if len(method.Returns) == 1 {
+						return method.Returns[0]
+					} else if len(method.Returns) > 1 {
+						return NewTupleType(method.Returns...)
+					}
+					return TypeUnknownVal
+				}
+			}
 		}
 
 		// Fallback for unknown methods
