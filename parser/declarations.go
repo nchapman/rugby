@@ -281,10 +281,39 @@ func (p *Parser) parseFunctionType() string {
 	return result
 }
 
-// parseTypeName parses a type name (e.g., "Int", "String?")
+// parseTypeName parses a type name (e.g., "Int", "String?", "(Int, String)")
 // The ? suffix is already included in the identifier by the lexer for simple types (Int?).
 // For generics (Array<Int>), angle brackets are tokens.
+// For tuples ((Int, String)), parentheses contain comma-separated types.
 func (p *Parser) parseTypeName() string {
+	// Handle tuple types: (Type1, Type2, ...)
+	if p.curTokenIs(token.LPAREN) {
+		p.nextToken() // consume '('
+		typeName := "("
+		typeName += p.parseTypeName()
+
+		for p.curTokenIs(token.COMMA) {
+			typeName += ", "
+			p.nextToken() // consume ','
+			typeName += p.parseTypeName()
+		}
+
+		if p.curTokenIs(token.RPAREN) {
+			typeName += ")"
+			p.nextToken() // consume ')'
+		} else {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ')' after tuple type")
+			return typeName
+		}
+
+		// Check for optional suffix '?' on tuple
+		if p.curTokenIs(token.QUESTION) {
+			typeName += "?"
+			p.nextToken()
+		}
+		return typeName
+	}
+
 	typeName := p.curToken.Literal
 	p.nextToken() // consume type name
 

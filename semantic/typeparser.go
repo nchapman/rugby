@@ -77,7 +77,7 @@ func ParseTypeWithParams(s string, typeParams map[string]string) *Type {
 			return NewChanType(ParseTypeWithParams(inner, typeParams))
 		case "Task":
 			return NewTaskType(ParseTypeWithParams(inner, typeParams))
-		case "Map":
+		case "Map", "Hash":
 			parts := splitTopLevel(inner)
 			if len(parts) == 2 {
 				return NewMapType(
@@ -173,7 +173,7 @@ func ParseType(s string) *Type {
 		return NewTupleType(elems...)
 	}
 
-	// Check for generic types: Array<T>, Map<K, V>, Chan<T>, Task<T>
+	// Check for generic types: Array<T>, Map<K, V>, Chan<T>, Task<T>, Hash<K, V>
 	if idx := strings.Index(s, "<"); idx != -1 && strings.HasSuffix(s, ">") {
 		base := s[:idx]
 		inner := s[idx+1 : len(s)-1]
@@ -185,7 +185,8 @@ func ParseType(s string) *Type {
 			return NewChanType(ParseType(inner))
 		case "Task":
 			return NewTaskType(ParseType(inner))
-		case "Map":
+		case "Map", "Hash":
+			// Hash is an alias for Map (Ruby compatibility)
 			// Split on comma at top level (not inside nested brackets)
 			parts := splitTopLevel(inner)
 			if len(parts) == 2 {

@@ -667,9 +667,13 @@ func (g *Generator) mapTypeClassAware(rubyType string) string {
 		}
 		return "[]" + innerMapped
 	}
-	// Handle Map<K, V> specially to check if V is a class
-	if strings.HasPrefix(rubyType, "Map<") && strings.HasSuffix(rubyType, ">") {
-		content := rubyType[4 : len(rubyType)-1]
+	// Handle Map<K, V> and Hash<K, V> specially to check if V is a class
+	if (strings.HasPrefix(rubyType, "Map<") || strings.HasPrefix(rubyType, "Hash<")) && strings.HasSuffix(rubyType, ">") {
+		prefixLen := 4
+		if strings.HasPrefix(rubyType, "Hash<") {
+			prefixLen = 5
+		}
+		content := rubyType[prefixLen : len(rubyType)-1]
 		parts := strings.Split(content, ",")
 		if len(parts) == 2 {
 			key := strings.TrimSpace(parts[0])

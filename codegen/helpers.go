@@ -31,9 +31,14 @@ func mapType(rubyType string) string {
 		inner := rubyType[5 : len(rubyType)-1]
 		return "chan " + mapType(inner)
 	}
-	// Handle Map<K, V>
-	if strings.HasPrefix(rubyType, "Map<") && strings.HasSuffix(rubyType, ">") {
-		content := rubyType[4 : len(rubyType)-1]
+	// Handle Map<K, V> and Hash<K, V> (Hash is an alias for Map, Ruby compatibility)
+	if (strings.HasPrefix(rubyType, "Map<") || strings.HasPrefix(rubyType, "Hash<")) && strings.HasSuffix(rubyType, ">") {
+		// Find the prefix length: "Map<" is 4, "Hash<" is 5
+		prefixLen := 4
+		if strings.HasPrefix(rubyType, "Hash<") {
+			prefixLen = 5
+		}
+		content := rubyType[prefixLen : len(rubyType)-1]
 		// Simple comma split for now (assuming no nested generic commas for MVP)
 		parts := strings.Split(content, ",")
 		if len(parts) == 2 {
@@ -97,7 +102,7 @@ func mapType(rubyType string) string {
 	// Container types
 	case "Array":
 		return "[]any"
-	case "Map":
+	case "Map", "Hash":
 		return "map[any]any"
 	// Special types
 	case "Any", "any":
