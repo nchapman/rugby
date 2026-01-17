@@ -2071,7 +2071,29 @@ func (a *Analyzer) analyzeInstanceVarAssign(s *ast.InstanceVarAssign) {
 		return
 	}
 
+	// Look up the field type first for propagation to empty literals
+	var fieldType *Type
+	if classScope := a.scope.ClassScope(); classScope != nil {
+		if cls := a.classes[classScope.ClassName]; cls != nil {
+			if field := cls.GetField(s.Name); field != nil {
+				fieldType = field.Type
+			}
+		}
+	}
+
 	valueType := a.analyzeExpr(s.Value)
+
+	// For empty array/map literals, propagate the expected type to the value node
+	// This must happen AFTER analyzeExpr to overwrite the default any type
+	// This allows codegen to generate properly typed literals (e.g., map[int]Node{} not map[any]any{})
+	if fieldType != nil && fieldType.Kind != TypeUnknown {
+		if arr, ok := s.Value.(*ast.ArrayLit); ok && len(arr.Elements) == 0 {
+			a.setNodeType(arr, fieldType)
+		}
+		if mp, ok := s.Value.(*ast.MapLit); ok && len(mp.Entries) == 0 {
+			a.setNodeType(mp, fieldType)
+		}
+	}
 
 	// If the field exists but has unknown type, infer it from the assigned value
 	if classScope := a.scope.ClassScope(); classScope != nil {

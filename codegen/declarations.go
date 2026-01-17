@@ -21,9 +21,13 @@ func (g *Generator) mapParamType(rubyType string) string {
 		inner := rubyType[5 : len(rubyType)-1]
 		return "chan " + g.mapParamType(inner)
 	}
-	// Handle Map<K, V> - recursively convert key and value types
-	if strings.HasPrefix(rubyType, "Map<") && strings.HasSuffix(rubyType, ">") {
-		content := rubyType[4 : len(rubyType)-1]
+	// Handle Map<K, V> and Hash<K, V> - recursively convert key and value types
+	if (strings.HasPrefix(rubyType, "Map<") || strings.HasPrefix(rubyType, "Hash<")) && strings.HasSuffix(rubyType, ">") {
+		prefixLen := 4
+		if strings.HasPrefix(rubyType, "Hash<") {
+			prefixLen = 5
+		}
+		content := rubyType[prefixLen : len(rubyType)-1]
 		parts := strings.Split(content, ",")
 		if len(parts) == 2 {
 			key := strings.TrimSpace(parts[0])
@@ -641,11 +645,12 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			}
 			// Determine field type: explicit annotation takes precedence,
 			// then inferred type from semantic analysis, then fallback to any
+			// Use mapParamType to properly handle class types as pointers
 			var goType string
 			if field.Type != "" {
-				goType = mapType(field.Type)
+				goType = g.mapParamType(field.Type)
 			} else if inferredType := g.typeInfo.GetFieldType(className, field.Name); inferredType != "" && inferredType != "unknown" {
-				goType = mapType(inferredType)
+				goType = g.mapParamType(inferredType)
 			} else {
 				goType = "any"
 			}
@@ -761,7 +766,8 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 
 func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, pub bool) {
 	recv := receiverName(className)
-	goType := mapType(acc.Type)
+	// Use mapParamType to properly handle class types as pointers in maps/arrays
+	goType := g.mapParamType(acc.Type)
 	// Internal field has underscore prefix to avoid conflict with method name
 	internalField := "_" + acc.Name
 
