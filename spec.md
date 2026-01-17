@@ -296,12 +296,23 @@ Rugby is statically typed with inference.
 | `Bytes`  | `[]byte`  | Mutable byte slice |
 | `Rune`   | `rune`    | Unicode code point |
 
+**Numeric literals:**
+```ruby
+42          # decimal
+0xFF        # hexadecimal (0x or 0X prefix)
+0b1010      # binary (0b or 0B prefix)
+0o755       # octal (0o or 0O prefix)
+3.14        # float
+1_000_000   # underscores for readability (optional)
+```
+
 ### 5.2 Composite Types
 
 | Rugby        | Go          | Notes |
 |--------------|-------------|-------|
 | `Array<T>`   | `[]T`       | Dynamic array (slice) |
 | `Map<K, V>`  | `map[K]V`   | Hash map |
+| `Hash<K, V>` | `map[K]V`   | Alias for Map (Ruby compatibility) |
 | `Set<T>`     | `map[T]struct{}` | Unique values |
 | `(T, U)`     | `struct` or multiple returns | Tuple type |
 | `T?`         | `(T, bool)` or `runtime.Option[T]` | Optional (tuple for returns, struct for storage) |
@@ -921,7 +932,7 @@ loop do                  # infinite loop
 end
 ```
 
-Control: `break` (exit loop), `next` (skip to next iteration), `return` (exit function)
+Control: `break` (exit loop), `next`/`continue` (skip to next iteration), `return` (exit function)
 
 ### 9.8 Statement Modifiers
 
@@ -2041,15 +2052,21 @@ end
 ### 17.4 Tasks (`spawn` and `await`)
 
 ```ruby
+# Block syntax (for inline expressions)
 t = spawn { expensive_work() }  # Task<T>, runs immediately
 result = await t                # blocks until complete
+
+# Direct call syntax (for named functions)
+spawn worker(ch, value)         # fire-and-forget, no Task returned
+spawn process_batch(items)      # calls function in new goroutine
 
 # With errors
 t = spawn { os.read_file(path) }  # Task<(Bytes, Error)>
 data = await(t)!                  # parentheses required for !
 ```
 
-- `spawn` returns `Task<T>` where `T` is the block's return type
+- `spawn { expr }` returns `Task<T>` where `T` is the block's return type
+- `spawn function(args)` is fire-and-forget (no return value)
 - `await` blocks until completion; awaiting twice is a compile error
 - Panics in tasks terminate the program (Go semantics)
 
