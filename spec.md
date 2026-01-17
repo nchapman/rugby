@@ -145,10 +145,11 @@ instance_var   = "@" identifier
 ### 4.3 Lambdas
 
 ```ruby
--> (x) { x * 2 }       # single-line lambda
--> (x) do              # multiline lambda
+-> { |x| x * 2 }       # single-line lambda
+-> do |x|              # multiline lambda
   x * 2
 end
+-> { puts "hi" }       # parameterless lambda
 ```
 
 See Section 10.6 for full lambda documentation.
@@ -418,7 +419,7 @@ foo(bar, {a: 1})     # Explicit: map as second arg to foo
 
 # Lambdas use arrow syntax
 foo -> { expr }      # Lambda argument
-foo -> (x) { x * 2 } # Lambda with parameter
+foo -> { |x| x * 2 } # Lambda with parameter
 ```
 
 When in doubt, use parentheses to be explicit.
@@ -492,9 +493,7 @@ end
 
 def map_values<K, V, R>(m : Map<K, V>, f : (V) -> R) -> Map<K, R>
   result = Map<K, R>{}
-  for k, v in m
-    result[k] = f.(v)
-  end
+  m.each -> { |k, v| result[k] = f.(v) }
   result
 end
 ```
@@ -507,12 +506,12 @@ class Box<T>
   end
 
   def map<R>(f : (T) -> R) -> Box<R>
-    Box<R>.new(f(@value))
+    Box<R>.new(f.(@value))
   end
 end
 
 box = Box<Int>.new(42)
-str_box = box.map -> (n) { n.to_s }
+str_box = box.map -> { |n| n.to_s }
 ```
 
 ### 6.3 Generic Interfaces
@@ -540,7 +539,7 @@ end
 
 # Built-in constraints
 def sum<T : Numeric>(values : Array<T>) -> T
-  values.reduce(T.zero) -> (acc, v) { acc + v }
+  values.reduce(T.zero) -> { |acc, v| acc + v }
 end
 ```
 
@@ -673,10 +672,10 @@ Assigning a value to an optional makes it present; assigning `nil` makes it abse
 | `nil?` / `absent?` | Is value absent? |
 | `unwrap` | Unwrap, panic if absent |
 | `unwrap_or(default)` | Unwrap or return default |
-| `map -> (x) { }` | Transform if present -> `R?` |
-| `flat_map -> (x) { }` | Transform if present, flatten -> `R?` |
-| `each -> (x) { }` | Execute lambda if present |
-| `filter -> (x) { }` | Keep if predicate true -> `T?` |
+| `map -> { |x| }` | Transform if present -> `R?` |
+| `flat_map -> { |x| }` | Transform if present, flatten -> `R?` |
+| `each -> { |x| }` | Execute lambda if present |
+| `filter -> { |x| }` | Keep if predicate true -> `T?` |
 
 ### 8.3 Unwrapping Patterns
 
@@ -1030,36 +1029,40 @@ log(:debug, *items)
 
 ### 10.6 Lambdas
 
-Lambdas are anonymous functions. Use `{ }` for single-line and `do...end` for multiline:
+Lambdas are anonymous functions created with `->`. Parameters use Ruby's block syntax `|params|` inside the braces or `do...end`:
 
 ```ruby
-# Single-line
-double = -> (x : Int) { x * 2 }
-users.map -> (u) { u.name }
+# Single-line (braces)
+double = -> { |x : Int| x * 2 }
+users.map -> { |u| u.name }
 
-# Multiline
-process = -> (data : String) do
+# Multiline (do...end)
+process = -> do |data : String|
   parsed = parse(data)
   validate(parsed)
   transform(parsed)
 end
 
-users.each -> (u) do
+users.each -> do |u|
   puts u.name
 end
 
+# Parameterless lambdas
+callback = -> { puts "done" }
+3.times -> { puts "hi" }
+
 # With explicit return type
-handler = -> (req : Request) -> Response do
+handler = -> do |req : Request| -> Response
   process(req)
 end
 
 # Multiple parameters
-map.each -> (k, v) { puts "#{k}: #{v}" }
+map.each -> { |k, v| puts "#{k}: #{v}" }
 ```
 
 **Calling lambdas:**
 ```ruby
-double = -> (x) { x * 2 }
+double = -> { |x| x * 2 }
 result = double.(5)     # 10 (preferred)
 result = double.call(5) # 10 (alternative)
 ```
@@ -1072,7 +1075,7 @@ Both `.()` and `.call()` compile to the same Go code. Use `.()` for conciseness.
 
 ```ruby
 # Lambda iteration - return skips to next item
-users.each -> (u) do
+users.each -> do |u|
   return if u.inactive?  # skips this user, continues iteration
   process(u)
 end
@@ -1121,7 +1124,7 @@ puts counter.()  # 3
 ```ruby
 # Capture by reference (default)
 multiplier = 2
-scale = -> (x : Int) { x * multiplier }
+scale = -> { |x : Int| x * multiplier }
 scale.(5)       # 10
 multiplier = 3
 scale.(5)       # 15
@@ -1141,7 +1144,7 @@ The `&:method` syntax creates a lambda that calls the named method on its argume
 ```ruby
 # These are equivalent
 names = users.map(&:name)
-names = users.map -> (u) { u.name }
+names = users.map -> { |u| u.name }
 
 # Works with any method
 active = users.select(&:active?)
@@ -1149,7 +1152,7 @@ emails = users.map(&:email).select(&:present?)
 lengths = strings.map(&:length)
 ```
 
-This is purely syntactic sugar—`&:name` compiles to `-> (x) { x.name }`.
+This is purely syntactic sugar—`&:name` compiles to `-> { |x| x.name }`.
 
 **Rules:**
 - The method must exist on the element type
@@ -1165,11 +1168,7 @@ type Callback = () -> Void
 type Handler = (Request) -> (Response, Error)
 
 def filter<T>(items : Array<T>, pred : Predicate<T>) -> Array<T>
-  result = Array<T>{}
-  for item in items
-    result << item if pred.(item)
-  end
-  result
+  items.select -> { |item| pred.(item) }
 end
 ```
 
@@ -1187,7 +1186,7 @@ foo.bar baz        # foo.bar(baz)
 - Arguments end at newline, `do`, or `and`/`or`
 - `foo -1` -> `foo(-1)`, `foo - 1` -> binary subtraction
 - `foo [1]` -> array arg, `foo[1]` -> indexing
-- Maps need parens: `foo({a: 1})` (braces are for map literals and lambdas)
+- Maps need parens: `foo({a: 1})` (braces without `->` are map literals)
 
 ---
 
@@ -2059,9 +2058,9 @@ data = await(t)!                  # parentheses required for !
 Scoped concurrency that ensures cleanup when the block exits:
 
 ```ruby
-concurrently -> (scope) do
-  a = scope.spawn { fetch_a() }
-  b = scope.spawn { fetch_b() }
+concurrently do |scope|
+  a = scope.spawn -> { fetch_a() }
+  b = scope.spawn -> { fetch_b() }
 
   x = await a
   y = await b
@@ -2070,7 +2069,7 @@ end
 ```
 
 **Rules:**
-- `scope.spawn` creates tasks owned by the scope
+- `scope.spawn` creates tasks owned by the scope (takes a lambda)
 - On block exit, the scope cancels `scope.ctx` and waits for all tasks
 - Tasks cannot outlive their scope (compile error if task handle escapes)
 - `concurrently` is an expression; returns the block's last value
@@ -2078,9 +2077,9 @@ end
 **With errors:**
 
 ```ruby
-result, err = concurrently -> (scope) do
-  a = scope.spawn { fetch_a() }
-  b = scope.spawn { fetch_b() }
+result, err = concurrently do |scope|
+  a = scope.spawn -> { fetch_a() }
+  b = scope.spawn -> { fetch_b() }
 
   val_a = await(a)!
   val_b = await(b)!
@@ -2117,7 +2116,7 @@ rw.write_unlock
 # WaitGroup
 wg = WaitGroup.new
 wg.add(3)
-3.times do
+3.times -> do
   go do
     # work
     wg.done
@@ -2127,7 +2126,7 @@ wg.wait
 
 # Once
 once = Once.new
-once.do do
+once.do -> do
   # executed exactly once
 end
 ```
@@ -2150,9 +2149,9 @@ end
 **Simple parallel fetch:**
 ```ruby
 def fetch_both(url1 : String, url2 : String) -> (String, String, Error)
-  concurrently -> (scope) do
-    t1 = scope.spawn { http.get(url1) }
-    t2 = scope.spawn { http.get(url2) }
+  concurrently do |scope|
+    t1 = scope.spawn -> { http.get(url1) }
+    t2 = scope.spawn -> { http.get(url2) }
 
     r1 = await(t1)!
     r2 = await(t2)!
@@ -2210,8 +2209,8 @@ end
 | `Chan<T>.new(n)` | `make(chan T, n)` |
 | `spawn { expr }` | goroutine + channel for result |
 | `await t` | receive from task's channel |
-| `concurrently do \|s\| ... end` | `context.WithCancel` + `sync.WaitGroup` |
-| `scope.spawn { ... }` | goroutine tracked by WaitGroup |
+| `concurrently do \|scope\| ... end` | `context.WithCancel` + `sync.WaitGroup` |
+| `scope.spawn -> { ... }` | goroutine tracked by WaitGroup |
 | `scope.ctx` | `context.Context` |
 | `Mutex` | `sync.Mutex` |
 | `RWMutex` | `sync.RWMutex` |
@@ -2325,31 +2324,31 @@ The `rugby/runtime` package provides Ruby-like methods for Go types.
 ### 19.1 Array Methods (`Array<T>`)
 
 **Iteration:**
-* `each -> (x) { }` -> `for _, x := range arr { ... }`
-* `each_with_index -> (x, i) { }` -> `for i, x := range arr { ... }`
+* `each -> { |x| }` -> `for _, x := range arr { ... }`
+* `each_with_index -> { |x, i| }` -> `for i, x := range arr { ... }`
 
 **Transformation:**
-* `map -> (x) { }` -> `runtime.Map(arr, fn)` -> `[]R`
-* `select -> (x) { }` / `filter -> (x) { }` -> `runtime.Select(arr, fn)` -> `[]T`
-* `reject -> (x) { }` -> `runtime.Reject(arr, fn)` -> `[]T`
+* `map -> { |x| }` -> `runtime.Map(arr, fn)` -> `[]R`
+* `select -> { |x| }` / `filter -> { |x| }` -> `runtime.Select(arr, fn)` -> `[]T`
+* `reject -> { |x| }` -> `runtime.Reject(arr, fn)` -> `[]T`
 * `compact` -> `runtime.Compact(arr)` -> filters nil/zero values
 * `flatten` -> `runtime.Flatten(arr)` -> flattens nested arrays
 * `uniq` -> `runtime.Uniq(arr)` -> removes duplicates
 
 **Search:**
-* `find -> (x) { }` / `detect -> (x) { }` -> `runtime.Find(arr, fn)` -> `T?`
-* `find_index -> (x) { }` -> `runtime.FindIndex(arr, fn)` -> `Int?`
-* `any? -> (x) { }` -> `runtime.Any(arr, fn)` -> `Bool`
-* `all? -> (x) { }` -> `runtime.All(arr, fn)` -> `Bool`
-* `none? -> (x) { }` -> `runtime.None(arr, fn)` -> `Bool`
+* `find -> { |x| }` / `detect -> { |x| }` -> `runtime.Find(arr, fn)` -> `T?`
+* `find_index -> { |x| }` -> `runtime.FindIndex(arr, fn)` -> `Int?`
+* `any? -> { |x| }` -> `runtime.Any(arr, fn)` -> `Bool`
+* `all? -> { |x| }` -> `runtime.All(arr, fn)` -> `Bool`
+* `none? -> { |x| }` -> `runtime.None(arr, fn)` -> `Bool`
 * `include?(val)` / `contains?(val)` -> `runtime.Contains(arr, val)` -> `Bool`
 * `index(val)` -> `runtime.Index(arr, val)` -> `Int?`
 
 **Aggregation:**
-* `reduce(init) -> (acc, x) { }` -> `runtime.Reduce(arr, init, fn)` -> `R`
+* `reduce(init) -> { |acc, x| }` -> `runtime.Reduce(arr, init, fn)` -> `R`
 * `sum` -> `runtime.Sum(arr)` (numeric arrays)
 * `min` / `max` -> `runtime.Min(arr)` / `runtime.Max(arr)` -> `T?`
-* `min_by -> (x) { }` / `max_by -> (x) { }` -> `runtime.MinBy` / `runtime.MaxBy` -> `T?`
+* `min_by -> { |x| }` / `max_by -> { |x| }` -> `runtime.MinBy` / `runtime.MaxBy` -> `T?`
 
 **Access:**
 * `first` -> `runtime.First(arr)` -> `T?`
@@ -2373,19 +2372,19 @@ arr = arr << item     # reassign to capture result
 * `unshift(item)` -> prepends item
 * `reverse!` -> `runtime.ReverseInPlace(arr)`
 * `sort!` -> `runtime.SortInPlace(arr)`
-* `sort_by! -> (x) { }` -> `runtime.SortByInPlace(arr, fn)`
+* `sort_by! -> { |x| }` -> `runtime.SortByInPlace(arr, fn)`
 
 **Non-mutating (returns copy):**
 * `reversed` -> `runtime.Reversed(arr)` -> new slice
 * `sorted` -> `runtime.Sorted(arr)` -> new slice
-* `sorted_by -> (x) { }` -> `runtime.SortedBy(arr, fn)` -> new slice
+* `sorted_by -> { |x| }` -> `runtime.SortedBy(arr, fn)` -> new slice
 
 ### 19.2 Map Methods (`Map<K, V>`)
 
 **Iteration:**
-* `each -> (k, v) { }` -> `runtime.MapEach(m, fn)`
-* `each_key -> (k) { }` -> `runtime.MapEachKey(m, fn)`
-* `each_value -> (v) { }` -> `runtime.MapEachValue(m, fn)`
+* `each -> { |k, v| }` -> `runtime.MapEach(m, fn)`
+* `each_key -> { |k| }` -> `runtime.MapEachKey(m, fn)`
+* `each_value -> { |v| }` -> `runtime.MapEachValue(m, fn)`
 
 **Access:**
 * `keys` -> `runtime.Keys(m)` -> `[]K`
@@ -2397,9 +2396,9 @@ arr = arr << item     # reassign to capture result
 * `get(k)` -> `runtime.Get(m, k)` -> `V?`
 
 **Transformation:**
-* `select -> (k, v) { }` -> `runtime.MapSelect(m, fn)` -> `Map<K, V>`
-* `reject -> (k, v) { }` -> `runtime.MapReject(m, fn)` -> `Map<K, V>`
-* `map_values -> (v) { }` -> `runtime.MapValues(m, fn)` -> `Map<K, R>`
+* `select -> { |k, v| }` -> `runtime.MapSelect(m, fn)` -> `Map<K, V>`
+* `reject -> { |k, v| }` -> `runtime.MapReject(m, fn)` -> `Map<K, V>`
+* `map_values -> { |v| }` -> `runtime.MapValues(m, fn)` -> `Map<K, R>`
 * `merge(other)` -> `runtime.Merge(m, other)` -> `Map<K, V>`
 
 **Mutation:**
@@ -2455,9 +2454,9 @@ arr = arr << item     # reassign to capture result
 * `**` (power) -> `runtime.Pow(base, exp)` or `math.Pow`
 
 **Iteration:**
-* `times -> (i) { }` -> `runtime.Times(n, fn)`
-* `upto(max) -> (i) { }` -> `runtime.Upto(n, max, fn)`
-* `downto(min) -> (i) { }` -> `runtime.Downto(n, min, fn)`
+* `times -> { |i| }` -> `runtime.Times(n, fn)`
+* `upto(max) -> { |i| }` -> `runtime.Upto(n, max, fn)`
+* `downto(min) -> { |i| }` -> `runtime.Downto(n, min, fn)`
 
 **Conversion:**
 * `to_s` -> `strconv.Itoa(n)` (inlined)
@@ -2687,7 +2686,7 @@ end
 
 # Rugby - lambdas return from the lambda only
 def find_user
-  users.find -> (u) { u.active? }  # use find instead
+  users.find -> { |u| u.active? }  # use find instead
 end
 
 # For control flow affecting the enclosing function, use for loops
@@ -2733,7 +2732,7 @@ for i in 0..5
 end
 
 # Lambdas for transformation
-items.map -> (i) { i * 2 }
+items.map -> { |i| i * 2 }
 ```
 
 ---
@@ -2813,7 +2812,7 @@ for item in items
 end
 
 # Or with index
-items.each_with_index -> (item, i) { puts "#{i}: #{item}" }
+items.each_with_index -> { |item, i| puts "#{i}: #{item}" }
 ```
 
 ### 23.6 Method Chaining
@@ -2825,9 +2824,9 @@ mapped := Map(filtered, transform)
 result := Reduce(mapped, initial, accumulate)
 
 // Rugby - natural chaining
-result = items.select -> (x) { predicate(x) }
-              .map -> (x) { transform(x) }
-              .reduce(initial) -> (acc, x) { accumulate(acc, x) }
+result = items.select -> { |x| predicate(x) }
+              .map -> { |x| transform(x) }
+              .reduce(initial) -> { |acc, x| accumulate(acc, x) }
 ```
 
 ---
@@ -2885,13 +2884,13 @@ expr           = literal | ident | instance_var | class_var
                | member_expr | lambda_expr
                | if_expr | case_expr | case_type_expr | "(" expr ")" ;
 
-lambda_body    = "do" { statement } "end"
-               | "{" expr "}" ;
+lambda_body    = "do" [ "|" params "|" ] { statement } "end"
+               | "{" [ "|" params "|" ] expr "}" ;
 
-lambda_expr    = "->" [ "(" [ params ] ")" ] [ "->" type ] lambda_body ;
+lambda_expr    = "->" [ "->" type ] lambda_body ;
 ```
 
-**Note:** Symbol-to-proc syntax (`&:method`) is syntactic sugar that desugars to `-> (x) { x.method }` during parsing and is not shown in the grammar above.
+**Note:** Symbol-to-proc syntax (`&:method`) is syntactic sugar that desugars to `-> { |x| x.method }` during parsing and is not shown in the grammar above.
 
 ---
 
@@ -2980,8 +2979,8 @@ func loadConfig(path string) (Config, Error) {
 
 ```ruby
 # Rugby
-names = users.select -> (u) { u.active? }
-             .map -> (u) { u.name }
+names = users.select -> { |u| u.active? }
+             .map -> { |u| u.name }
              .sorted
 ```
 

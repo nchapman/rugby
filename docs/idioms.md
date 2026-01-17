@@ -43,9 +43,9 @@ Lambdas are Rugby's bread and butter for transformation. Prefer them over manual
 
 ```ruby
 # Good - expressive and clear
-names = users.map -> (u) { u.name }
-active = users.select -> (u) { u.active? }
-total = orders.reduce(0) -> (sum, o) { sum + o.amount }
+names = users.map -> { |u| u.name }
+active = users.select -> { |u| u.active? }
+total = orders.reduce(0) -> { |sum, o| sum + o.amount }
 
 # Avoid - verbose and imperative
 names = []
@@ -58,10 +58,10 @@ Use `do...end` for multi-line lambdas, braces for single-line:
 
 ```ruby
 # Single line - braces
-squares = nums.map -> (n) { n * n }
+squares = nums.map -> { |n| n * n }
 
 # Multi-line - do...end
-results = items.map -> (item) do
+results = items.map -> do |item|
   processed = transform(item)
   validate(processed)
 end
@@ -70,8 +70,8 @@ end
 The symbol-to-proc shorthand keeps things concise:
 
 ```ruby
-names = users.map(&:name)           # same as: users.map -> (u) { u.name }
-active = users.select(&:active?)    # same as: users.select -> (u) { u.active? }
+names = users.map(&:name)           # same as: users.map -> { |u| u.name }
+active = users.select(&:active?)    # same as: users.select -> { |u| u.active? }
 emails = users.reject(&:empty?)
 ```
 
@@ -81,8 +81,8 @@ Lambdas are for data transformation. `return` inside a lambda returns from the l
 
 ```ruby
 # Lambdas for transformation
-active = users.select -> (u) { u.active? }
-admin = users.find -> (u) { u.admin? }
+active = users.select -> { |u| u.active? }
+admin = users.find -> { |u| u.admin? }
 
 # For loops when you need break/next/return
 def find_first_problem(items : Array<Item>) -> Item?
@@ -177,7 +177,7 @@ Parentheses are optional. Use them with arguments, drop them for no-arg calls:
 ```ruby
 # With arguments - use parens
 process(item)
-users.each -> (u) { send_email(u) }
+users.each -> { |u| send_email(u) }
 notify_subscribers(event)
 
 # No arguments - drop parens
@@ -246,9 +246,9 @@ result = await task
 ### Parallel operations with cleanup
 
 ```ruby
-concurrently -> (scope) do
-  user_task = scope.spawn { fetch_user(id) }
-  orders_task = scope.spawn { fetch_orders(id) }
+concurrently do |scope|
+  user_task = scope.spawn -> { fetch_user(id) }
+  orders_task = scope.spawn -> { fetch_orders(id) }
 
   user = await(user_task)
   orders = await(orders_task)
@@ -410,7 +410,7 @@ class ApiClient
     resp = http.get("#{@base_url}/users")!
     data = resp.json!
 
-    data.map -> (raw) do
+    data.map -> do |raw|
       User.new(
         name: raw["name"].as(String),
         email: raw["email"].as(String)
@@ -430,7 +430,7 @@ def main
   active = users.select(&:active?)
 
   puts "Found #{active.length} active users:"
-  active.each -> (u) { puts "  - #{u.name}" }  # can't use &: here (needs arg)
+  active.each -> { |u| puts "  - #{u.name}" }
 end
 ```
 
