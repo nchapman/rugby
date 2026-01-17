@@ -514,3 +514,155 @@ end`
 		t.Errorf("expected at least 2 type errors, got %d errors total: %v", typeErrors, errors)
 	}
 }
+
+// ====================
+// Error hints tests
+// ====================
+
+// expectErrorWithHint verifies that an error contains both the message and a hint
+func expectErrorWithHint(t *testing.T, input string, expectedMsg string, expectedHint string) {
+	t.Helper()
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	if len(p.ParseErrors()) == 0 {
+		t.Errorf("expected error containing %q with hint %q, got no errors", expectedMsg, expectedHint)
+		return
+	}
+
+	foundMsg := false
+	foundHint := false
+	for _, err := range p.ParseErrors() {
+		if strings.Contains(err.Message, expectedMsg) {
+			foundMsg = true
+		}
+		if strings.Contains(err.Hint, expectedHint) {
+			foundHint = true
+		}
+	}
+
+	if !foundMsg {
+		t.Errorf("expected error message containing %q, got: %v", expectedMsg, p.ParseErrors())
+	}
+	if !foundHint {
+		t.Errorf("expected hint containing %q, got: %v", expectedHint, p.ParseErrors())
+	}
+}
+
+func TestIfMissingEndHint(t *testing.T) {
+	input := `def main
+  if true
+    puts "test"
+`
+	expectErrorWithHint(t, input, "expected 'end' to close if", "every 'if' needs a matching 'end'")
+}
+
+func TestWhileMissingEndHint(t *testing.T) {
+	input := `def main
+  while true
+    puts "loop"
+`
+	expectErrorWithHint(t, input, "expected 'end' to close while", "every 'while' needs a matching 'end'")
+}
+
+func TestForMissingEndHint(t *testing.T) {
+	input := `def main
+  for x in items
+    puts x
+`
+	expectErrorWithHint(t, input, "expected 'end' to close for", "every 'for' needs a matching 'end'")
+}
+
+func TestFunctionMissingEndHint(t *testing.T) {
+	input := `def greet(name : String)
+  puts name
+`
+	expectErrorWithHint(t, input, "expected 'end' to close function", "every 'def' needs a matching 'end'")
+}
+
+func TestClassMissingEndHint(t *testing.T) {
+	input := `class User
+  def initialize
+  end
+`
+	expectErrorWithHint(t, input, "expected 'end' to close class", "every 'class' needs a matching 'end'")
+}
+
+func TestInterfaceMissingEndHint(t *testing.T) {
+	input := `interface Drawable
+  def draw
+`
+	expectErrorWithHint(t, input, "expected 'end' to close interface", "every 'interface' needs a matching 'end'")
+}
+
+func TestModuleMissingEndHint(t *testing.T) {
+	input := `module Utils
+  def helper
+  end
+`
+	expectErrorWithHint(t, input, "expected 'end' to close module", "every 'module' needs a matching 'end'")
+}
+
+func TestEnumMissingEndHint(t *testing.T) {
+	input := `enum Status
+  Active
+  Inactive
+`
+	expectErrorWithHint(t, input, "expected 'end' to close enum", "every 'enum' needs a matching 'end'")
+}
+
+func TestStructMissingEndHint(t *testing.T) {
+	input := `struct Point
+  x : Int
+  y : Int
+`
+	expectErrorWithHint(t, input, "expected 'end' to close struct", "every 'struct' needs a matching 'end'")
+}
+
+func TestLambdaMissingBodyHint(t *testing.T) {
+	input := `def main
+  f = ->
+`
+	expectErrorWithHint(t, input, "expected '{' or 'do' for lambda body", "lambdas need a body")
+}
+
+func TestSpawnMissingBlockHint(t *testing.T) {
+	input := `def main
+  spawn 42
+end`
+	expectErrorWithHint(t, input, "expected block after 'spawn'", "use 'spawn { expr }' or 'spawn do ... end'")
+}
+
+func TestConcurrentlyMissingBlockHint(t *testing.T) {
+	input := `def main
+  concurrently 42
+end`
+	expectErrorWithHint(t, input, "expected 'do' or '->' after 'concurrently'", "use 'concurrently do |scope| ... end'")
+}
+
+func TestLoopMissingDoHint(t *testing.T) {
+	input := `def main
+  loop
+    puts "forever"
+  end
+end`
+	expectErrorWithHint(t, input, "expected 'do' after 'loop'", "use 'loop do ... end'")
+}
+
+func TestUnlessMissingEndHint(t *testing.T) {
+	input := `def main
+  unless false
+    puts "test"
+`
+	expectErrorWithHint(t, input, "expected 'end' after unless block", "every 'unless' needs a matching 'end'")
+}
+
+func TestCaseTypeMissingEndHint(t *testing.T) {
+	input := `def main
+  case_type x
+  when Int
+    puts "int"
+`
+	expectErrorWithHint(t, input, "expected 'end' to close case_type", "every 'case_type' needs a matching 'end'")
+}

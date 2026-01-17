@@ -505,7 +505,9 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close function")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close function",
+			"every 'def' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -696,7 +698,9 @@ func (p *Parser) parseClassDeclWithDoc(doc *ast.CommentGroup) *ast.ClassDecl {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close class")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close class",
+			"every 'class' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -801,7 +805,9 @@ func (p *Parser) parseInterfaceDeclWithDoc(doc *ast.CommentGroup) *ast.Interface
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close interface")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close interface",
+			"every 'interface' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -1237,7 +1243,9 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close method")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close method",
+			"every 'def' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -1298,7 +1306,9 @@ func (p *Parser) parseModuleDeclWithDoc(doc *ast.CommentGroup) *ast.ModuleDecl {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close module")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close module",
+			"every 'module' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -1470,7 +1480,9 @@ func (p *Parser) parseEnumDeclWithDoc(doc *ast.CommentGroup) *ast.EnumDecl {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close enum")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close enum",
+			"every 'enum' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -1561,7 +1573,9 @@ func (p *Parser) parseStructDeclWithDoc(doc *ast.CommentGroup) *ast.StructDecl {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close struct")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close struct",
+			"every 'struct' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'

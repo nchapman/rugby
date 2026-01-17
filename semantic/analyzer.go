@@ -278,8 +278,9 @@ func (a *Analyzer) validateInterfaceImplementations() {
 			iface := a.interfaces[ifaceName]
 			if iface == nil {
 				a.addError(&UndefinedError{
-					Name: ifaceName,
-					Line: cls.Line,
+					Name:       ifaceName,
+					Line:       cls.Line,
+					Candidates: a.findSimilarInterface(ifaceName),
 				})
 				continue
 			}
@@ -1545,7 +1546,11 @@ func (a *Analyzer) analyzeCompoundAssign(s *ast.CompoundAssignStmt) {
 	// Variable must exist
 	existing := a.scope.Lookup(s.Name)
 	if existing == nil {
-		a.addError(&UndefinedError{Name: s.Name})
+		a.addError(&UndefinedError{
+			Name:       s.Name,
+			Line:       s.Line,
+			Candidates: a.findSimilar(s.Name),
+		})
 		return
 	}
 
@@ -1679,8 +1684,9 @@ func (a *Analyzer) analyzeSelectorAssign(s *ast.SelectorAssignStmt) {
 
 			// Neither field nor custom setter found
 			a.addError(&UndefinedError{
-				Name: s.Field,
-				Line: s.Line,
+				Name:       s.Field,
+				Line:       s.Line,
+				Candidates: a.findSimilarField(s.Field, cls),
 			})
 		}
 	}
@@ -2681,7 +2687,11 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 					// Return the enum type
 					typ = &Type{Kind: TypeClass, Name: modIdent.Name}
 				} else {
-					a.addError(&UndefinedError{Name: modIdent.Name + "::" + e.Right, Line: modIdent.Line})
+					a.addError(&UndefinedError{
+						Name:       modIdent.Name + "::" + e.Right,
+						Line:       modIdent.Line,
+						Candidates: a.findSimilarEnumValue(e.Right, enumDecl),
+					})
 					typ = TypeUnknownVal
 				}
 			} else if _, isModule := a.modules[modIdent.Name]; isModule {
@@ -4179,6 +4189,64 @@ func levenshtein(a, b string) int {
 	}
 
 	return matrix[len(a)][len(b)]
+}
+
+// findSimilarInMap finds similar names from a map of symbols.
+func (a *Analyzer) findSimilarInMap(name string, m map[string]*Symbol) []string {
+	var candidates []string
+	for n := range m {
+		if isSimilar(name, n) {
+			candidates = append(candidates, n)
+		}
+	}
+	return candidates
+}
+
+// findSimilarInterface finds similar interface names.
+func (a *Analyzer) findSimilarInterface(name string) []string {
+	return a.findSimilarInMap(name, a.interfaces)
+}
+
+// findSimilarField finds similar field names in a class.
+func (a *Analyzer) findSimilarField(name string, cls *Symbol) []string {
+	if cls == nil {
+		return nil
+	}
+	seen := make(map[string]bool)
+	var candidates []string
+	for _, field := range cls.Fields {
+		if isSimilar(name, field.Name) && !seen[field.Name] {
+			seen[field.Name] = true
+			candidates = append(candidates, field.Name)
+		}
+	}
+	// Also check methods (for setters)
+	for _, method := range cls.Methods {
+		methodName := method.Name
+		// Strip "=" suffix for setter methods
+		if len(methodName) > 1 && methodName[len(methodName)-1] == '=' {
+			methodName = methodName[:len(methodName)-1]
+		}
+		if isSimilar(name, methodName) && !seen[methodName] {
+			seen[methodName] = true
+			candidates = append(candidates, methodName)
+		}
+	}
+	return candidates
+}
+
+// findSimilarEnumValue finds similar enum value names.
+func (a *Analyzer) findSimilarEnumValue(name string, enumDecl *ast.EnumDecl) []string {
+	if enumDecl == nil {
+		return nil
+	}
+	var candidates []string
+	for _, v := range enumDecl.Values {
+		if isSimilar(name, v.Name) {
+			candidates = append(candidates, v.Name)
+		}
+	}
+	return candidates
 }
 
 // Helper methods

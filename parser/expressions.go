@@ -729,7 +729,9 @@ func (p *Parser) parseSpawnExpr() ast.Expression {
 	} else if p.curTokenIs(token.LBRACE) {
 		block = p.parseBlock(token.RBRACE)
 	} else {
-		p.errorAt(line, p.curToken.Column, "expected block after 'spawn'")
+		p.errorAtWithHint(line, p.curToken.Column,
+			"expected block after 'spawn'",
+			"use 'spawn { expr }' or 'spawn do ... end'")
 		return nil
 	}
 
@@ -814,7 +816,9 @@ func (p *Parser) parseConcurrentlyExpr() ast.Expression {
 		}
 		body = block.Body
 	} else {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' or '->' after 'concurrently'")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'do' or '->' after 'concurrently'",
+			"use 'concurrently do |scope| ... end'")
 		return nil
 	}
 
@@ -1038,7 +1042,9 @@ func (p *Parser) parseLambdaExpr() ast.Expression {
 		}
 
 		if !p.curTokenIs(token.RBRACE) {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '}' to close lambda body")
+			p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+				"expected '}' to close lambda body",
+				"brace-style lambdas: -> { |x| body }")
 			return nil
 		}
 		// Don't advance past '}' - let the caller handle it
@@ -1064,12 +1070,16 @@ func (p *Parser) parseLambdaExpr() ast.Expression {
 		}
 
 		if !p.curTokenIs(token.END) {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close lambda body")
+			p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+				"expected 'end' to close lambda body",
+				"do-style lambdas: -> do |x| body end")
 			return nil
 		}
 		// Don't advance past 'end' - let the caller handle it
 	} else {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '{' or 'do' for lambda body")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected '{' or 'do' for lambda body",
+			"lambdas need a body: -> { expr } or -> do ... end")
 		return nil
 	}
 

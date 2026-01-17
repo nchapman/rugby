@@ -40,6 +40,16 @@ func (p *Parser) errorAt(line, col int, msg string) {
 	})
 }
 
+// errorAtWithHint adds a parse error at a specific position with a suggestion.
+func (p *Parser) errorAtWithHint(line, col int, msg, hint string) {
+	p.errors = append(p.errors, ParseError{
+		Line:    line,
+		Column:  col,
+		Message: msg,
+		Hint:    hint,
+	})
+}
+
 // errorWithHint adds a parse error with a suggestion for fixing it.
 func (p *Parser) errorWithHint(msg, hint string) {
 	p.errors = append(p.errors, ParseError{

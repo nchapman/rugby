@@ -3388,3 +3388,198 @@ end`,
 		})
 	}
 }
+
+// ====================
+// "Did you mean?" suggestion tests
+// ====================
+
+func TestUndefinedErrorSuggestionsInterface(t *testing.T) {
+	input := `
+interface Displayable
+  def display
+end
+
+class Widget implements Displayble
+  def display
+    puts "widget"
+  end
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+
+	// Should have an error for undefined "Displayble"
+	var undefErr *UndefinedError
+	for _, err := range errs {
+		if u, ok := err.(*UndefinedError); ok && u.Name == "Displayble" {
+			undefErr = u
+			break
+		}
+	}
+
+	if undefErr == nil {
+		t.Fatalf("expected UndefinedError for 'Displayble', got: %v", errs)
+	}
+
+	// Check that "Displayable" is suggested
+	if !slices.Contains(undefErr.Candidates, "Displayable") {
+		t.Errorf("expected 'Displayable' in candidates, got: %v", undefErr.Candidates)
+	}
+}
+
+func TestUndefinedErrorSuggestionsClass(t *testing.T) {
+	input := `
+class UserProfile
+end
+
+def main
+  x = Userprofle.new
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+
+	// Should have an error for undefined "Userprofle"
+	var undefErr *UndefinedError
+	for _, err := range errs {
+		if u, ok := err.(*UndefinedError); ok && u.Name == "Userprofle" {
+			undefErr = u
+			break
+		}
+	}
+
+	if undefErr == nil {
+		t.Fatalf("expected UndefinedError for 'Userprofle', got: %v", errs)
+	}
+
+	// Check that "UserProfile" is suggested
+	if !slices.Contains(undefErr.Candidates, "UserProfile") {
+		t.Errorf("expected 'UserProfile' in candidates, got: %v", undefErr.Candidates)
+	}
+}
+
+func TestUndefinedErrorSuggestionsEnumValue(t *testing.T) {
+	input := `
+enum Status
+  Pending
+  Approved
+  Rejected
+end
+
+def main
+  s = Status::Aproved
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+
+	// Should have an error for undefined "Status::Aproved"
+	var undefErr *UndefinedError
+	for _, err := range errs {
+		if u, ok := err.(*UndefinedError); ok && u.Name == "Status::Aproved" {
+			undefErr = u
+			break
+		}
+	}
+
+	if undefErr == nil {
+		t.Fatalf("expected UndefinedError for 'Status::Aproved', got: %v", errs)
+	}
+
+	// Check that "Approved" is suggested
+	if !slices.Contains(undefErr.Candidates, "Approved") {
+		t.Errorf("expected 'Approved' in candidates, got: %v", undefErr.Candidates)
+	}
+}
+
+func TestUndefinedErrorMessageIncludesSuggestion(t *testing.T) {
+	input := `
+interface Displayable
+  def display
+end
+
+class Widget implements Displayble
+  def display
+    puts "widget"
+  end
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+
+	// Find the error and check the message includes "did you mean"
+	found := false
+	for _, err := range errs {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "Displayble") && strings.Contains(errMsg, "did you mean") {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		t.Errorf("expected error message with 'did you mean' suggestion, got: %v", errs)
+	}
+}
+
+// ====================
+// PositionedError interface tests
+// ====================
+
+func TestSemanticErrorsImplementPositionedError(t *testing.T) {
+	// Test that semantic errors return correct position info
+	input := `
+def main
+  undefined_var
+end
+`
+	p := parse(t, input)
+	program := p.ParseProgram()
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parse errors: %v", p.Errors())
+	}
+
+	a := NewAnalyzer()
+	errs := a.Analyze(program)
+
+	if len(errs) == 0 {
+		t.Fatal("expected at least one error")
+	}
+
+	// Check that the error has position info
+	undefErr, ok := errs[0].(*UndefinedError)
+	if !ok {
+		t.Fatalf("expected UndefinedError, got %T", errs[0])
+	}
+
+	line, col := undefErr.Position()
+	if line <= 0 {
+		t.Errorf("expected positive line number, got %d", line)
+	}
+	// Column may be 0 if not set, but line should be set
+	_ = col
+}

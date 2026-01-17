@@ -454,7 +454,9 @@ func (p *Parser) parseIfStmt() *ast.IfStmt {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close if")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close if",
+			"every 'if' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -518,7 +520,9 @@ func (p *Parser) parseUnlessStmt() *ast.IfStmt {
 
 	// Expect 'end'
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' after unless block")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' after unless block",
+			"every 'unless' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -584,7 +588,9 @@ func (p *Parser) parseCaseStmt() *ast.CaseStmt {
 
 	// Validate that case has at least one when clause
 	if len(stmt.WhenClauses) == 0 {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "case statement requires at least one 'when' clause")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"case statement requires at least one 'when' clause",
+			"use 'case x when value then ... end'")
 		return nil
 	}
 
@@ -607,7 +613,9 @@ func (p *Parser) parseCaseStmt() *ast.CaseStmt {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close case")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close case",
+			"every 'case' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -704,7 +712,9 @@ func (p *Parser) parseCaseTypeStmt() *ast.CaseTypeStmt {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close case_type")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close case_type",
+			"every 'case_type' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -735,7 +745,9 @@ func (p *Parser) parseWhileStmt() *ast.WhileStmt {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close while")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close while",
+			"every 'while' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -766,7 +778,9 @@ func (p *Parser) parseUntilStmt() *ast.UntilStmt {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close until")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close until",
+			"every 'until' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -781,7 +795,9 @@ func (p *Parser) parseLoopStmt() *ast.LoopStmt {
 
 	// Expect 'do' after 'loop'
 	if !p.curTokenIs(token.DO) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after 'loop'")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'do' after 'loop'",
+			"use 'loop do ... end' for infinite loops")
 		return nil
 	}
 	p.nextToken() // consume 'do'
@@ -802,7 +818,9 @@ func (p *Parser) parseLoopStmt() *ast.LoopStmt {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close loop")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close loop",
+			"every 'loop do' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -816,7 +834,9 @@ func (p *Parser) parseForStmt() *ast.ForStmt {
 	p.nextToken() // consume 'for'
 
 	if !p.curTokenIs(token.IDENT) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected variable name after 'for'")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected variable name after 'for'",
+			"use 'for x in collection' or 'for k, v in map'")
 		return nil
 	}
 
@@ -835,7 +855,9 @@ func (p *Parser) parseForStmt() *ast.ForStmt {
 	}
 
 	if !p.curTokenIs(token.IN) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'in' after loop variable")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'in' after loop variable",
+			"use 'for x in collection'")
 		return nil
 	}
 	p.nextToken() // consume 'in'
@@ -857,7 +879,9 @@ func (p *Parser) parseForStmt() *ast.ForStmt {
 	}
 
 	if !p.curTokenIs(token.END) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'end' to close for")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'end' to close for",
+			"every 'for' needs a matching 'end'")
 		return nil
 	}
 	p.nextToken() // consume 'end'
@@ -1385,7 +1409,9 @@ func (p *Parser) parseConcurrentlyStmt() *ast.ConcurrentlyStmt {
 
 	// Block form: concurrently do |scope| ... end
 	if !p.curTokenIs(token.DO) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' or '->' after 'concurrently'")
+		p.errorAtWithHint(p.curToken.Line, p.curToken.Column,
+			"expected 'do' or '->' after 'concurrently'",
+			"use 'concurrently do |scope| ... end'")
 		return nil
 	}
 	p.nextToken() // consume 'do'

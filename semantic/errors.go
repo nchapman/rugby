@@ -19,6 +19,8 @@ func (e *Error) Error() string {
 	return e.Message
 }
 
+func (e *Error) Position() (int, int) { return e.Line, e.Column }
+
 // UndefinedError is returned when a symbol is not defined.
 type UndefinedError struct {
 	Name       string
@@ -38,6 +40,8 @@ func (e *UndefinedError) Error() string {
 	return msg
 }
 
+func (e *UndefinedError) Position() (int, int) { return e.Line, e.Column }
+
 // TypeMismatchError is returned when types don't match.
 type TypeMismatchError struct {
 	Expected *Type
@@ -54,6 +58,8 @@ func (e *TypeMismatchError) Error() string {
 	}
 	return msg
 }
+
+func (e *TypeMismatchError) Position() (int, int) { return e.Line, e.Column }
 
 // ArityMismatchError is returned when argument count doesn't match parameter count.
 type ArityMismatchError struct {
@@ -72,10 +78,13 @@ func (e *ArityMismatchError) Error() string {
 	return msg
 }
 
+func (e *ArityMismatchError) Position() (int, int) { return e.Line, e.Column }
+
 // CircularInheritanceError is returned when class inheritance creates a cycle.
 type CircularInheritanceError struct {
-	Cycle []string // class names in the cycle (e.g., ["A", "B", "A"])
-	Line  int
+	Cycle  []string // class names in the cycle (e.g., ["A", "B", "A"])
+	Line   int
+	Column int
 }
 
 func (e *CircularInheritanceError) Error() string {
@@ -85,6 +94,8 @@ func (e *CircularInheritanceError) Error() string {
 	}
 	return msg
 }
+
+func (e *CircularInheritanceError) Position() (int, int) { return e.Line, e.Column }
 
 // formatCycle formats a cycle path like "A -> B -> A"
 func formatCycle(cycle []string) string {
@@ -96,8 +107,9 @@ func formatCycle(cycle []string) string {
 
 // CircularTypeAliasError is returned when type aliases form a cycle.
 type CircularTypeAliasError struct {
-	Name string
-	Line int
+	Name   string
+	Line   int
+	Column int
 }
 
 func (e *CircularTypeAliasError) Error() string {
@@ -108,10 +120,13 @@ func (e *CircularTypeAliasError) Error() string {
 	return msg
 }
 
+func (e *CircularTypeAliasError) Position() (int, int) { return e.Line, e.Column }
+
 // DuplicateTypeAliasError is returned when a type alias is defined twice.
 type DuplicateTypeAliasError struct {
-	Name string
-	Line int
+	Name   string
+	Line   int
+	Column int
 }
 
 func (e *DuplicateTypeAliasError) Error() string {
@@ -122,11 +137,14 @@ func (e *DuplicateTypeAliasError) Error() string {
 	return msg
 }
 
+func (e *DuplicateTypeAliasError) Position() (int, int) { return e.Line, e.Column }
+
 // TypeAliasConflictError is returned when a type alias conflicts with an existing type.
 type TypeAliasConflictError struct {
 	Name     string
 	Conflict string // "class", "interface", "module"
 	Line     int
+	Column   int
 }
 
 func (e *TypeAliasConflictError) Error() string {
@@ -136,6 +154,8 @@ func (e *TypeAliasConflictError) Error() string {
 	}
 	return msg
 }
+
+func (e *TypeAliasConflictError) Position() (int, int) { return e.Line, e.Column }
 
 // ReturnOutsideFunctionError is returned for return statements outside functions.
 type ReturnOutsideFunctionError struct {
@@ -151,6 +171,8 @@ func (e *ReturnOutsideFunctionError) Error() string {
 	return msg
 }
 
+func (e *ReturnOutsideFunctionError) Position() (int, int) { return e.Line, e.Column }
+
 // ReturnInsideBlockError is returned for return statements inside iterator blocks.
 type ReturnInsideBlockError struct {
 	Line   int
@@ -164,6 +186,8 @@ func (e *ReturnInsideBlockError) Error() string {
 	}
 	return msg
 }
+
+func (e *ReturnInsideBlockError) Position() (int, int) { return e.Line, e.Column }
 
 // BreakOutsideLoopError is returned for break statements outside loops.
 type BreakOutsideLoopError struct {
@@ -179,6 +203,8 @@ func (e *BreakOutsideLoopError) Error() string {
 	return msg
 }
 
+func (e *BreakOutsideLoopError) Position() (int, int) { return e.Line, e.Column }
+
 // BreakInsideBlockError is returned for break statements inside iterator blocks.
 type BreakInsideBlockError struct {
 	Line   int
@@ -192,6 +218,8 @@ func (e *BreakInsideBlockError) Error() string {
 	}
 	return msg
 }
+
+func (e *BreakInsideBlockError) Position() (int, int) { return e.Line, e.Column }
 
 // NextInsideBlockError is returned for next statements inside iterator blocks.
 type NextInsideBlockError struct {
@@ -207,6 +235,8 @@ func (e *NextInsideBlockError) Error() string {
 	return msg
 }
 
+func (e *NextInsideBlockError) Position() (int, int) { return e.Line, e.Column }
+
 // NextOutsideLoopError is returned for next statements outside loops.
 type NextOutsideLoopError struct {
 	Line   int
@@ -220,6 +250,8 @@ func (e *NextOutsideLoopError) Error() string {
 	}
 	return msg
 }
+
+func (e *NextOutsideLoopError) Position() (int, int) { return e.Line, e.Column }
 
 // SelfOutsideClassError is returned when 'self' is used outside a class.
 type SelfOutsideClassError struct {
@@ -235,6 +267,8 @@ func (e *SelfOutsideClassError) Error() string {
 	return msg
 }
 
+func (e *SelfOutsideClassError) Position() (int, int) { return e.Line, e.Column }
+
 // InstanceVarOutsideClassError is returned when instance variables are used outside a class.
 type InstanceVarOutsideClassError struct {
 	Name   string
@@ -249,6 +283,8 @@ func (e *InstanceVarOutsideClassError) Error() string {
 	}
 	return msg
 }
+
+func (e *InstanceVarOutsideClassError) Position() (int, int) { return e.Line, e.Column }
 
 // StructFieldMutationError is returned when trying to mutate a struct field (structs are immutable).
 type StructFieldMutationError struct {
@@ -266,6 +302,8 @@ func (e *StructFieldMutationError) Error() string {
 	return msg
 }
 
+func (e *StructFieldMutationError) Position() (int, int) { return e.Line, e.Column }
+
 // InstanceStateInClassMethodError is returned when instance state (self, @var) is accessed in a class method.
 type InstanceStateInClassMethodError struct {
 	What   string // "self" or "@varname"
@@ -280,6 +318,8 @@ func (e *InstanceStateInClassMethodError) Error() string {
 	}
 	return msg
 }
+
+func (e *InstanceStateInClassMethodError) Position() (int, int) { return e.Line, e.Column }
 
 // OperatorTypeMismatchError is returned when operator operands have incompatible types.
 type OperatorTypeMismatchError struct {
@@ -298,6 +338,8 @@ func (e *OperatorTypeMismatchError) Error() string {
 	return msg
 }
 
+func (e *OperatorTypeMismatchError) Position() (int, int) { return e.Line, e.Column }
+
 // UnaryTypeMismatchError reports a type error in a unary expression.
 type UnaryTypeMismatchError struct {
 	Op          string
@@ -315,11 +357,14 @@ func (e *UnaryTypeMismatchError) Error() string {
 	return msg
 }
 
+func (e *UnaryTypeMismatchError) Position() (int, int) { return e.Line, e.Column }
+
 // ReturnTypeMismatchError reports when a returned value doesn't match the declared return type.
 type ReturnTypeMismatchError struct {
 	Expected *Type
 	Got      *Type
 	Line     int
+	Column   int
 }
 
 func (e *ReturnTypeMismatchError) Error() string {
@@ -330,6 +375,8 @@ func (e *ReturnTypeMismatchError) Error() string {
 	return msg
 }
 
+func (e *ReturnTypeMismatchError) Position() (int, int) { return e.Line, e.Column }
+
 // ArgumentTypeMismatchError reports when an argument type doesn't match the parameter type.
 type ArgumentTypeMismatchError struct {
 	FuncName  string
@@ -338,6 +385,7 @@ type ArgumentTypeMismatchError struct {
 	Got       *Type
 	ArgIndex  int
 	Line      int
+	Column    int
 }
 
 func (e *ArgumentTypeMismatchError) Error() string {
@@ -351,11 +399,14 @@ func (e *ArgumentTypeMismatchError) Error() string {
 	return msg
 }
 
+func (e *ArgumentTypeMismatchError) Position() (int, int) { return e.Line, e.Column }
+
 // ConditionTypeMismatchError reports when a condition expression is not Bool.
 type ConditionTypeMismatchError struct {
 	Got     *Type
 	Context string // "if", "while", "until"
 	Line    int
+	Column  int
 }
 
 func (e *ConditionTypeMismatchError) Error() string {
@@ -366,10 +417,13 @@ func (e *ConditionTypeMismatchError) Error() string {
 	return msg
 }
 
+func (e *ConditionTypeMismatchError) Position() (int, int) { return e.Line, e.Column }
+
 // IndexTypeMismatchError reports when an array/string index is not Int.
 type IndexTypeMismatchError struct {
-	Got  *Type
-	Line int
+	Got    *Type
+	Line   int
+	Column int
 }
 
 func (e *IndexTypeMismatchError) Error() string {
@@ -380,12 +434,15 @@ func (e *IndexTypeMismatchError) Error() string {
 	return msg
 }
 
+func (e *IndexTypeMismatchError) Position() (int, int) { return e.Line, e.Column }
+
 // InterfaceNotImplementedError reports when a class doesn't implement an interface.
 type InterfaceNotImplementedError struct {
 	ClassName     string
 	InterfaceName string
 	MissingMethod string
 	Line          int
+	Column        int
 }
 
 func (e *InterfaceNotImplementedError) Error() string {
@@ -397,6 +454,8 @@ func (e *InterfaceNotImplementedError) Error() string {
 	return msg
 }
 
+func (e *InterfaceNotImplementedError) Position() (int, int) { return e.Line, e.Column }
+
 // MethodSignatureMismatchError reports when a method signature doesn't match interface.
 type MethodSignatureMismatchError struct {
 	ClassName     string
@@ -405,6 +464,7 @@ type MethodSignatureMismatchError struct {
 	Expected      string
 	Got           string
 	Line          int
+	Column        int
 }
 
 func (e *MethodSignatureMismatchError) Error() string {
@@ -416,10 +476,13 @@ func (e *MethodSignatureMismatchError) Error() string {
 	return msg
 }
 
+func (e *MethodSignatureMismatchError) Position() (int, int) { return e.Line, e.Column }
+
 // BangOnNonErrorError reports when ! is used on a non-error expression.
 type BangOnNonErrorError struct {
-	Got  *Type
-	Line int
+	Got    *Type
+	Line   int
+	Column int
 }
 
 func (e *BangOnNonErrorError) Error() string {
@@ -430,9 +493,12 @@ func (e *BangOnNonErrorError) Error() string {
 	return msg
 }
 
+func (e *BangOnNonErrorError) Position() (int, int) { return e.Line, e.Column }
+
 // BangOutsideErrorFunctionError reports when ! is used in a function that doesn't return error.
 type BangOutsideErrorFunctionError struct {
-	Line int
+	Line   int
+	Column int
 }
 
 func (e *BangOutsideErrorFunctionError) Error() string {
@@ -443,11 +509,14 @@ func (e *BangOutsideErrorFunctionError) Error() string {
 	return msg
 }
 
+func (e *BangOutsideErrorFunctionError) Position() (int, int) { return e.Line, e.Column }
+
 // MethodRequiresArgumentsError reports when a method requiring arguments is called without them.
 type MethodRequiresArgumentsError struct {
 	MethodName string
 	ParamCount int
 	Line       int
+	Column     int
 }
 
 func (e *MethodRequiresArgumentsError) Error() string {
@@ -458,10 +527,13 @@ func (e *MethodRequiresArgumentsError) Error() string {
 	return msg
 }
 
+func (e *MethodRequiresArgumentsError) Position() (int, int) { return e.Line, e.Column }
+
 // ConflictingVisibilityError reports when a method has both pub and private modifiers.
 type ConflictingVisibilityError struct {
 	MethodName string
 	Line       int
+	Column     int
 }
 
 func (e *ConflictingVisibilityError) Error() string {
@@ -472,11 +544,14 @@ func (e *ConflictingVisibilityError) Error() string {
 	return msg
 }
 
+func (e *ConflictingVisibilityError) Position() (int, int) { return e.Line, e.Column }
+
 // PrivateMethodAccessError reports when a private method is called from outside its class.
 type PrivateMethodAccessError struct {
 	MethodName string
 	ClassName  string
 	Line       int
+	Column     int
 }
 
 func (e *PrivateMethodAccessError) Error() string {
@@ -486,3 +561,5 @@ func (e *PrivateMethodAccessError) Error() string {
 	}
 	return msg
 }
+
+func (e *PrivateMethodAccessError) Position() (int, int) { return e.Line, e.Column }
