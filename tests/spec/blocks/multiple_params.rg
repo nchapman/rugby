@@ -7,13 +7,13 @@
 
 # each_with_index passes element and index
 names = ["Alice", "Bob", "Charlie"]
-names.each_with_index -> (name, i) do
+names.each_with_index -> do |name, i|
   puts "#{i}: #{name}"
 end
 
 # reduce passes accumulator and element
 numbers = [1, 2, 3, 4, 5]
-sum = numbers.reduce(0) -> (acc, n) do
+sum = numbers.reduce(0) -> do |acc, n|
   acc + n
 end
 puts sum
@@ -22,7 +22,7 @@ puts sum
 # (output deliberately suppressed since Go map order is non-deterministic)
 scores = {"Alice" => 100, "Bob" => 85}
 count = 0
-scores.each -> (name, score) do
+scores.each -> do |name, score|
   # Use both variables to avoid unused warning
   if score > 0
     if name.length > 0

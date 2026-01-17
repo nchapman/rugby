@@ -9,19 +9,19 @@ def main
   puts greet.()
 
   # Lambda with one param
-  double = -> (x : Int) { x * 2 }
+  double = -> { |x : Int| x * 2 }
   puts double.(5)
 
   # Lambda with multiple params
-  add = -> (a : Int, b : Int) { a + b }
+  add = -> { |a : Int, b : Int| a + b }
   puts add.(3, 4)
 
   # Lambda with return type annotation
-  triple = -> (x : Int) -> Int { x * 3 }
+  triple = -> Int { |x : Int| x * 3 }
   puts triple.(10)
 
   # Multiline lambda with do...end
-  calculate = -> (x : Int) do
+  calculate = -> do |x : Int|
     y = x * 2
     y + 1
   end
@@ -29,7 +29,7 @@ def main
 
   # Lambda capturing outer variable (closure)
   multiplier = 3
-  scale = -> (x : Int) { x * multiplier }
+  scale = -> { |x : Int| x * multiplier }
   puts scale.(4)
 end
 

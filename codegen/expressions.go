@@ -318,16 +318,28 @@ func (g *Generator) genLambdaExpr(e *ast.LambdaExpr) {
 
 	// Generate return type
 	if e.ReturnType != "" {
+		// Explicit return type annotation takes precedence
 		g.buf.WriteString(" ")
 		g.buf.WriteString(mapType(e.ReturnType))
-	} else if inferredReturnType != "" {
-		// Use inferred return type
+	} else if g.forceAnyLambdaReturn && len(e.Body) > 0 && g.lambdaBodyNeedsReturn(e.Body) {
+		// Go interop context: use 'any' for implicit returns since Go func types are not covariant
+		g.buf.WriteString(" any")
+	} else if inferredReturnType != "" && len(inferredParamTypes) > 0 {
+		// Return type inferred from explicit function type context (variable declaration, etc.)
+		// Use inferred type when param types are also inferred (the whole function type came from annotation)
+		g.buf.WriteString(" ")
+		g.buf.WriteString(inferredReturnType)
+	} else if inferredReturnType != "" && len(e.Params) == 0 {
+		// Zero-param lambda with inferred return type (likely from function return type context)
 		g.buf.WriteString(" ")
 		g.buf.WriteString(inferredReturnType)
 	} else if len(e.Body) > 0 && g.lambdaBodyNeedsReturn(e.Body) {
-		// If no return type but body ends with an expression that should be returned,
-		// use 'any' as return type to allow implicit returns
+		// Implicit return without explicit type context - use any for safety
 		g.buf.WriteString(" any")
+	} else if inferredReturnType != "" {
+		// Use inferred return type for lambdas without implicit returns
+		g.buf.WriteString(" ")
+		g.buf.WriteString(inferredReturnType)
 	}
 	// Note: if body ends with a non-expression statement (assignment, control flow, etc.),
 	// we don't add a return type, producing func() { ... } for Go interop compatibility
@@ -1379,6 +1391,29 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		return
 	}
 
+	// Check if receiver is an optional type with lambda argument - needs special handling
+	if sel, ok := call.Func.(*ast.SelectorExpr); ok {
+		receiverType := g.inferTypeFromExpr(sel.X)
+		if isOptionalType(receiverType) && len(call.Args) >= 1 {
+			if lambda, ok := call.Args[0].(*ast.LambdaExpr); ok {
+				switch sel.Sel {
+				case "map":
+					g.genOptionalMapLambda(sel.X, lambda, receiverType)
+					return
+				case "flat_map":
+					g.genOptionalFlatMapLambda(sel.X, lambda, receiverType)
+					return
+				case "filter":
+					g.genOptionalFilterLambda(sel.X, lambda, receiverType)
+					return
+				case "each":
+					g.genOptionalEachLambda(sel.X, lambda, receiverType)
+					return
+				}
+			}
+		}
+	}
+
 	if sel, ok := call.Func.(*ast.SelectorExpr); ok {
 		if bm, isBlockMethod := blockMethods[sel.Sel]; isBlockMethod {
 			if len(call.Args) >= 1 {
@@ -2166,13 +2201,24 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		g.genExpr(call.Func)
 	}
 
+	// Check if this is a Go interop method call - lambda args need 'any' return type
+	isGoInteropMethodCall := false
+	if fn, ok := call.Func.(*ast.SelectorExpr); ok {
+		isGoInteropMethodCall = g.isGoInterop(fn.X)
+	}
+
 	g.buf.WriteString("(")
+	savedForceAny := g.forceAnyLambdaReturn
+	if isGoInteropMethodCall {
+		g.forceAnyLambdaReturn = true
+	}
 	for i, arg := range call.Args {
 		if i > 0 {
 			g.buf.WriteString(", ")
 		}
 		g.genExpr(arg)
 	}
+	g.forceAnyLambdaReturn = savedForceAny
 	g.buf.WriteString(")")
 }
 
@@ -2501,6 +2547,206 @@ func (g *Generator) genOptionalEachBlock(receiver ast.Expression, block *ast.Blo
 	g.buf.WriteString("})")
 }
 
+// genOptionalMapLambda generates code for optional.map -> (x) { ... }
+// Returns *ResultType (pointer) to maintain optional semantics for nil coalescing.
+func (g *Generator) genOptionalMapLambda(receiver ast.Expression, lambda *ast.LambdaExpr, optType string) {
+	varName := "_optVal"
+	lambdaParam := "_"
+	if len(lambda.Params) > 0 {
+		lambdaParam = lambda.Params[0].Name
+	}
+
+	// Determine the inner type (without ?)
+	innerType := strings.TrimSuffix(optType, "?")
+	goType := mapType(innerType)
+
+	// Infer the lambda's return type from its last expression
+	lambdaReturnGoType := "string" // default fallback
+	if len(lambda.Body) > 0 {
+		if exprStmt, ok := lambda.Body[len(lambda.Body)-1].(*ast.ExprStmt); ok {
+			if inferredType := g.inferTypeFromExpr(exprStmt.Expr); inferredType != "" {
+				lambdaReturnGoType = mapType(inferredType)
+			}
+		}
+	}
+
+	// Generate: func() *ResultType { if opt := receiver; opt != nil { result := lambda(*opt); return &result }; return nil }()
+	g.buf.WriteString("func() *")
+	g.buf.WriteString(lambdaReturnGoType)
+	g.buf.WriteString(" { if ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.genExpr(receiver)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" != nil { ")
+	g.buf.WriteString(lambdaParam)
+	g.buf.WriteString(" := *")
+	g.buf.WriteString(varName)
+	// Declare _ to avoid unused variable if lambdaParam is used
+	if lambdaParam != "_" {
+		g.buf.WriteString("; _ = ")
+		g.buf.WriteString(lambdaParam)
+	}
+	g.buf.WriteString("; _result := ")
+
+	// Generate lambda body - last expression is the result
+	if len(lambda.Body) > 0 {
+		lastStmt := lambda.Body[len(lambda.Body)-1]
+		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
+			g.genExpr(exprStmt.Expr)
+		} else {
+			g.buf.WriteString("\"\"") // fallback
+		}
+	} else {
+		g.buf.WriteString("\"\"")
+	}
+
+	g.buf.WriteString("; return &_result }; return nil }()")
+	_ = goType // inner type used for lambda param binding
+}
+
+// genOptionalFlatMapLambda generates code for optional.flat_map -> (x) { ... }
+// Returns the result directly (flattened) if lambda returns an optional.
+func (g *Generator) genOptionalFlatMapLambda(receiver ast.Expression, lambda *ast.LambdaExpr, optType string) {
+	varName := "_optVal"
+	lambdaParam := "_"
+	if len(lambda.Params) > 0 {
+		lambdaParam = lambda.Params[0].Name
+	}
+
+	// Determine the inner type (without ?)
+	innerType := strings.TrimSuffix(optType, "?")
+	goType := mapType(innerType)
+
+	// For flat_map, the lambda returns an optional (*R), and we return that directly
+	// Generate: func() *R { if opt := receiver; opt != nil { return lambda(*opt) }; return nil }()
+	g.buf.WriteString("func() ")
+
+	// Infer return type from lambda - assume it returns an optional (pointer type)
+	lambdaReturnGoType := "*string" // default fallback
+	if len(lambda.Body) > 0 {
+		if exprStmt, ok := lambda.Body[len(lambda.Body)-1].(*ast.ExprStmt); ok {
+			if inferredType := g.inferTypeFromExpr(exprStmt.Expr); inferredType != "" {
+				// The lambda should return an optional T?, which is *T in Go
+				inferredGoType := mapType(strings.TrimSuffix(inferredType, "?"))
+				lambdaReturnGoType = "*" + inferredGoType
+			}
+		}
+	}
+	g.buf.WriteString(lambdaReturnGoType)
+	g.buf.WriteString(" { if ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.genExpr(receiver)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" != nil { ")
+	g.buf.WriteString(lambdaParam)
+	g.buf.WriteString(" := *")
+	g.buf.WriteString(varName)
+	if lambdaParam != "_" {
+		g.buf.WriteString("; _ = ")
+		g.buf.WriteString(lambdaParam)
+	}
+	g.buf.WriteString("; return ")
+
+	// Generate lambda body - last expression is the result (should be an optional)
+	if len(lambda.Body) > 0 {
+		lastStmt := lambda.Body[len(lambda.Body)-1]
+		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
+			g.genExpr(exprStmt.Expr)
+		} else {
+			g.buf.WriteString("nil")
+		}
+	} else {
+		g.buf.WriteString("nil")
+	}
+
+	g.buf.WriteString(" }; return nil }()")
+	_ = goType
+}
+
+// genOptionalFilterLambda generates code for optional.filter -> (x) { ... }
+// Returns the original value if predicate is true, nil otherwise.
+func (g *Generator) genOptionalFilterLambda(receiver ast.Expression, lambda *ast.LambdaExpr, optType string) {
+	varName := "_optVal"
+	lambdaParam := "_"
+	if len(lambda.Params) > 0 {
+		lambdaParam = lambda.Params[0].Name
+	}
+
+	// Determine the inner type (without ?)
+	innerType := strings.TrimSuffix(optType, "?")
+	goType := mapType(innerType)
+
+	// Generate: func() *T { if opt := receiver; opt != nil && predicate(*opt) { return opt }; return nil }()
+	g.buf.WriteString("func() *")
+	g.buf.WriteString(goType)
+	g.buf.WriteString(" { if ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" := ")
+	g.genExpr(receiver)
+	g.buf.WriteString("; ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" != nil { ")
+	g.buf.WriteString(lambdaParam)
+	g.buf.WriteString(" := *")
+	g.buf.WriteString(varName)
+	if lambdaParam != "_" {
+		g.buf.WriteString("; _ = ")
+		g.buf.WriteString(lambdaParam)
+	}
+	g.buf.WriteString("; if ")
+
+	// Generate lambda body - last expression should be a boolean predicate
+	if len(lambda.Body) > 0 {
+		lastStmt := lambda.Body[len(lambda.Body)-1]
+		if exprStmt, ok := lastStmt.(*ast.ExprStmt); ok {
+			g.genExpr(exprStmt.Expr)
+		} else {
+			g.buf.WriteString("true")
+		}
+	} else {
+		g.buf.WriteString("true")
+	}
+
+	g.buf.WriteString(" { return ")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" } }; return nil }()")
+}
+
+// genOptionalEachLambda generates code for optional.each -> (x) { ... }
+func (g *Generator) genOptionalEachLambda(receiver ast.Expression, lambda *ast.LambdaExpr, optType string) {
+	g.needsRuntime = true
+
+	varName := "_"
+	if len(lambda.Params) > 0 {
+		varName = lambda.Params[0].Name
+	}
+
+	// Determine the inner type (without ?)
+	innerType := strings.TrimSuffix(optType, "?")
+	goType := mapType(innerType)
+
+	g.buf.WriteString("runtime.OptionalEachString(")
+	g.genExpr(receiver)
+	g.buf.WriteString(", func(")
+	g.buf.WriteString(varName)
+	g.buf.WriteString(" ")
+	g.buf.WriteString(goType)
+	g.buf.WriteString(") {\n")
+
+	g.indent++
+	for _, stmt := range lambda.Body {
+		g.genStatement(stmt)
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
 func (g *Generator) genEachBlock(iterable ast.Expression, block *ast.BlockExpr) {
 	if _, ok := iterable.(*ast.RangeLit); ok {
 		g.genRangeEachBlock(iterable, block)
@@ -2701,12 +2947,48 @@ func (g *Generator) genLambdaEach(iterable ast.Expression, lambda *ast.LambdaExp
 		}
 	}
 
-	// Generate: for _, v := range iterable { lambda(v) }
+	// Check for set iteration (single parameter iterating over keys)
+	// Sets are map[T]struct{}, so we iterate with `for k := range` not `for _, v := range`
+	rugbyType := g.inferTypeFromExpr(iterable)
+	isSetIteration := rugbyType == "Set" || strings.HasPrefix(rugbyType, "Set<")
+
 	varName := "_v"
 	if len(lambda.Params) > 0 {
 		varName = lambda.Params[0].Name
 	}
 
+	if isSetIteration {
+		// Extract element type from Set<T> or use any for plain Set
+		elemType := "any"
+		if strings.HasPrefix(rugbyType, "Set<") && strings.HasSuffix(rugbyType, ">") {
+			inner := rugbyType[4 : len(rugbyType)-1]
+			elemType = mapType(inner)
+		}
+
+		// For sets, iterate over keys: for k := range set
+		g.buf.WriteString("for ")
+		g.buf.WriteString(varName)
+		g.buf.WriteString(" := range ")
+		g.genExpr(iterable)
+		g.buf.WriteString(" {\n")
+
+		prevInInlinedLambda := g.inInlinedLambda
+		g.inInlinedLambda = true
+		g.scopedVar(varName, elemType, func() {
+			g.indent++
+			for _, stmt := range lambda.Body {
+				g.genStatement(stmt)
+			}
+			g.indent--
+		})
+		g.inInlinedLambda = prevInInlinedLambda
+
+		g.writeIndent()
+		g.buf.WriteString("}")
+		return
+	}
+
+	// Generate: for _, v := range iterable { lambda(v) }
 	elemType := g.inferArrayElementGoType(iterable)
 
 	g.buf.WriteString("for _, ")
@@ -4665,6 +4947,7 @@ func (g *Generator) genConcurrentlyExpr(e *ast.ConcurrentlyExpr) {
 		scopeVar = "_scope"
 	}
 	g.vars[scopeVar] = "Scope"
+	g.goInteropVars[scopeVar] = true // Mark as Go interop for PascalCase method calls
 
 	// Create scope object
 	g.writeIndent()

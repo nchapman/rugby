@@ -1,9 +1,9 @@
 #@ run-pass
 #@ check-output
 #
-# Test that values of type 'any' can be indexed
+# Test that values of type 'Any' can be indexed
 
-def get_post -> any
+def get_post -> Any
   { "title" => "Hello", "body" => "World" }
 end
 

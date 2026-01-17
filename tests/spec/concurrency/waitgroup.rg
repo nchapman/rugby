@@ -11,7 +11,7 @@ wg = sync.WaitGroup.new
 
 count = 0
 
-3.times -> (i) do
+3.times -> do |i|
   wg.add(1)
   go do
     sleep 0.01

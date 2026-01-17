@@ -31,7 +31,7 @@ def main
 
   # Use alias for array type
   names : Strings = ["Bob", "Carol"]
-  names.each -> (n) { puts n }
+  names.each -> { |n| puts n }
 
   # Use chained alias
   second_id : ID = 100

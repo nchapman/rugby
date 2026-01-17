@@ -1653,7 +1653,7 @@ end`
 // ====================
 
 func TestTestStatementSimple(t *testing.T) {
-	input := `test "handles edge case" do
+	input := `test "handles edge case" do |t|
   assert true
 end`
 	l := lexer.New(input)
@@ -1675,7 +1675,7 @@ end`
 
 func TestDescribeWithIt(t *testing.T) {
 	input := `describe "Math" do
-  it "adds numbers" do
+  it "adds numbers" do |t|
     assert 1 + 1 == 2
   end
 end`
@@ -1702,11 +1702,11 @@ end`
 
 func TestBeforeStatement(t *testing.T) {
 	input := `describe "User" do
-  before do
+  before do |t|
     @user = User.new("test")
   end
 
-  it "has a name" do
+  it "has a name" do |t|
     assert @user.name == "test"
   end
 end`
@@ -1730,11 +1730,11 @@ end`
 
 func TestAfterStatement(t *testing.T) {
 	input := `describe "Database" do
-  after do
+  after do |t|
     cleanup_db()
   end
 
-  it "connects" do
+  it "connects" do |t|
     assert true
   end
 end`
@@ -1794,7 +1794,7 @@ end`
 
 func TestBraceBlockWithParams(t *testing.T) {
 	input := `def main
-  items.each { |x, i| puts x }
+  items.each -> { |x, i| puts x }
 end`
 	l := lexer.New(input)
 	p := New(l)
@@ -1813,19 +1813,23 @@ end`
 	if !ok {
 		t.Fatalf("expected CallExpr, got %T", stmt.Expr)
 	}
-	if call.Block == nil {
-		t.Fatal("expected Block, got nil")
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg (lambda), got %d", len(call.Args))
 	}
-	if len(call.Block.Params) != 2 {
-		t.Errorf("expected 2 block params, got %d", len(call.Block.Params))
+	lambda, ok := call.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Fatalf("expected LambdaExpr, got %T", call.Args[0])
+	}
+	if len(lambda.Params) != 2 {
+		t.Errorf("expected 2 lambda params, got %d", len(lambda.Params))
 	}
 }
 
 func TestDoBlockWithParams(t *testing.T) {
 	input := `def main
-  items.each do |x|
+  items.each -> { |x|
     puts x
-  end
+  }
 end`
 	l := lexer.New(input)
 	p := New(l)
@@ -1844,14 +1848,18 @@ end`
 	if !ok {
 		t.Fatalf("expected CallExpr, got %T", stmt.Expr)
 	}
-	if call.Block == nil {
-		t.Fatal("expected Block, got nil")
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg (lambda), got %d", len(call.Args))
 	}
-	if len(call.Block.Params) != 1 {
-		t.Fatalf("expected 1 block param, got %d", len(call.Block.Params))
+	lambda, ok := call.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Fatalf("expected LambdaExpr, got %T", call.Args[0])
 	}
-	if call.Block.Params[0] != "x" {
-		t.Errorf("expected param 'x', got %q", call.Block.Params[0])
+	if len(lambda.Params) != 1 {
+		t.Fatalf("expected 1 lambda param, got %d", len(lambda.Params))
+	}
+	if lambda.Params[0].Name != "x" {
+		t.Errorf("expected param 'x', got %q", lambda.Params[0].Name)
 	}
 }
 
@@ -2195,8 +2203,8 @@ end`
 func TestMultilineMethodChaining(t *testing.T) {
 	input := `def main
   result = [1, 2, 3]
-    .select { |n| n > 1 }
-    .map { |n| n * 2 }
+    .select -> { |n| n > 1 }
+    .map -> { |n| n * 2 }
 end`
 	l := lexer.New(input)
 	p := New(l)
@@ -2211,13 +2219,17 @@ end`
 	if !ok {
 		t.Fatalf("expected AssignStmt, got %T", decl.Body[0])
 	}
-	// The final expression should be a CallExpr (map with block)
+	// The final expression should be a CallExpr (map with lambda arg)
 	call, ok := assign.Value.(*ast.CallExpr)
 	if !ok {
 		t.Fatalf("expected CallExpr, got %T", assign.Value)
 	}
-	if call.Block == nil {
-		t.Error("expected CallExpr to have a block")
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg (lambda), got %d", len(call.Args))
+	}
+	_, ok = call.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Errorf("expected LambdaExpr arg, got %T", call.Args[0])
 	}
 	// The function should be a SelectorExpr (.map)
 	sel, ok := call.Func.(*ast.SelectorExpr)
@@ -2227,20 +2239,24 @@ end`
 	if sel.Sel != "map" {
 		t.Errorf("expected selector 'map', got %q", sel.Sel)
 	}
-	// The receiver should be another CallExpr (.select with block)
+	// The receiver should be another CallExpr (.select with lambda arg)
 	innerCall, ok := sel.X.(*ast.CallExpr)
 	if !ok {
 		t.Fatalf("expected inner CallExpr, got %T", sel.X)
 	}
-	if innerCall.Block == nil {
-		t.Error("expected inner CallExpr to have a block")
+	if len(innerCall.Args) != 1 {
+		t.Fatalf("expected 1 arg (lambda), got %d", len(innerCall.Args))
+	}
+	_, ok = innerCall.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Errorf("expected inner LambdaExpr arg, got %T", innerCall.Args[0])
 	}
 }
 
 func TestStringInterpolationWithBlock(t *testing.T) {
 	input := `def main
   nums = [1, 2, 3]
-  puts "Doubled: #{nums.map { |n| n * 2 }}"
+  puts "Doubled: #{nums.map -> { |n| n * 2 }}"
 end`
 	l := lexer.New(input)
 	p := New(l)
@@ -2267,15 +2283,17 @@ end`
 	if !ok {
 		t.Fatalf("expected InterpolatedString, got %T", call.Args[0])
 	}
-	// Check that the interpolation contains a CallExpr with a block
+	// Check that the interpolation contains a CallExpr with a lambda arg
 	found := false
 	for _, part := range interp.Parts {
-		if callExpr, ok := part.(*ast.CallExpr); ok && callExpr.Block != nil {
-			found = true
-			break
+		if callExpr, ok := part.(*ast.CallExpr); ok && len(callExpr.Args) > 0 {
+			if _, isLambda := callExpr.Args[0].(*ast.LambdaExpr); isLambda {
+				found = true
+				break
+			}
 		}
 	}
 	if !found {
-		t.Error("expected interpolation to contain a CallExpr with a block")
+		t.Error("expected interpolation to contain a CallExpr with a lambda")
 	}
 }

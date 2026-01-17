@@ -5,18 +5,18 @@
 # Lambda variables should have proper types inferred from the iterable
 
 nums = [1, 2, 3]
-nums.each -> (n) do
+nums.each -> do |n|
   puts n * 10
 end
 
 # Works with strings too
 words = ["hello", "world"]
-words.each -> (w) do
+words.each -> do |w|
   puts w.upcase
 end
 
 # Works with each_with_index
-[10, 20, 30].each_with_index -> (val, i) do
+[10, 20, 30].each_with_index -> do |val, i|
   puts val + i
 end
 

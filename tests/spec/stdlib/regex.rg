@@ -16,7 +16,7 @@ puts match
 
 # find_all - get all matches
 matches = regex.find_all("\\d+", "a1b2c3")
-matches.each -> (m) { puts m }
+matches.each -> { |m| puts m }
 
 # replace - replace all matches
 result = regex.replace("hello world", "\\w+", "X")

@@ -11,9 +11,9 @@ def compute_b -> Int
   20
 end
 
-result = concurrently -> (scope) do
-  a = scope.spawn { compute_a }
-  b = scope.spawn { compute_b }
+result = concurrently do |scope|
+  a = scope.spawn -> { compute_a }
+  b = scope.spawn -> { compute_b }
 
   x = await a
   y = await b

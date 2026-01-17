@@ -19,7 +19,7 @@ puts 5.clamp(1, 3)
 puts 2.clamp(1, 3)
 
 # Iteration
-3.times -> (i) { puts i }
+3.times -> { |i| puts i }
 
 # Conversion
 puts n.to_s

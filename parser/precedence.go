@@ -59,6 +59,7 @@ var precedences = map[token.TokenType]int{
 	token.AMPDOT:           safeNav, // &. (safe navigation)
 	token.DOT:              member,
 	token.COLONCOLON:       member, // :: (scope resolution)
+	token.ARROW:            call,   // -> (trailing lambda, binds to preceding call)
 }
 
 // peekPrecedence returns the precedence of the peek token.

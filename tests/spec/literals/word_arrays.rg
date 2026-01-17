@@ -5,11 +5,11 @@
 
 # Basic word array
 words = %w[foo bar baz]
-words.each -> (w) { puts w }
+words.each -> { |w| puts w }
 
 # Word array with different delimiters
 colors = %w(red green blue)
-colors.each -> (c) { puts c }
+colors.each -> { |c| puts c }
 
 # Using word arrays
 fruits = %w[apple banana cherry]

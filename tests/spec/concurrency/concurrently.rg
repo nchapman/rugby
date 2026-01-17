@@ -8,12 +8,8 @@
 
 # Simple concurrently block
 result = concurrently do |scope|
-  a = scope.spawn do
-    10
-  end
-  b = scope.spawn do
-    20
-  end
+  a = scope.spawn -> { 10 }
+  b = scope.spawn -> { 20 }
 
   await(a) + await(b)
 end

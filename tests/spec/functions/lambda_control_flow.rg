@@ -6,7 +6,7 @@
 # Lambda return skips to next item (doesn't exit enclosing function)
 def process_with_lambda(items : Array<Int>) -> Int
   sum = 0
-  items.each -> (n) do
+  items.each -> do |n|
     return if n < 0  # skips this item
     sum += n
   end

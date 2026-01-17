@@ -9,8 +9,9 @@ import (
 )
 
 // parseBlockCall parses a block attached to a method call.
-// Converts expr.method or expr.method(args) followed by do |params| ... end
-// or {|params| ... } into a CallExpr with a Block attached.
+// Converts expr.method or expr.method(args) followed by do ... end
+// or { ... } into a CallExpr with a Block attached.
+// Blocks can have parameters with |params| syntax: expr.method do |x| ... end
 func (p *Parser) parseBlockCall(expr ast.Expression) ast.Expression {
 	p.nextToken() // move to 'do' or '{'
 
@@ -30,10 +31,10 @@ func (p *Parser) parseBlockCall(expr ast.Expression) ast.Expression {
 	// Convert expression to CallExpr with block
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:
-		// arr.each do |x| -> CallExpr{Func: SelectorExpr{arr, "each"}, Block: ...}
+		// arr.each do ... end -> CallExpr{Func: SelectorExpr{arr, "each"}, Block: ...}
 		return &ast.CallExpr{Func: e, Block: block}
 	case *ast.CallExpr:
-		// arr.method(args) do |x| -> just attach block to existing call
+		// scope.spawn do ... end -> just attach block to existing call
 		e.Block = block
 		return e
 	default:
@@ -43,7 +44,7 @@ func (p *Parser) parseBlockCall(expr ast.Expression) ast.Expression {
 }
 
 // parseTrailingLambda parses a lambda attached to a method call.
-// Converts expr.method or expr.method(args) followed by -> (params) { ... }
+// Converts expr.method or expr.method(args) followed by -> { |params| ... }
 // into a CallExpr with the lambda appended as an argument.
 func (p *Parser) parseTrailingLambda(expr ast.Expression) ast.Expression {
 	// Parse the lambda expression (curToken is before ARROW)
@@ -56,10 +57,10 @@ func (p *Parser) parseTrailingLambda(expr ast.Expression) ast.Expression {
 	// Append lambda as an argument to the CallExpr
 	switch e := expr.(type) {
 	case *ast.SelectorExpr:
-		// arr.each -> (x) { } -> CallExpr{Func: SelectorExpr{arr, "each"}, Args: [lambda]}
+		// arr.each -> { |x| } -> CallExpr{Func: SelectorExpr{arr, "each"}, Args: [lambda]}
 		return &ast.CallExpr{Func: e, Args: []ast.Expression{lambda}}
 	case *ast.CallExpr:
-		// arr.reduce(0) -> (acc, x) { } -> append lambda to existing args
+		// arr.reduce(0) -> { |acc, x| } -> append lambda to existing args
 		e.Args = append(e.Args, lambda)
 		return e
 	default:
@@ -68,21 +69,27 @@ func (p *Parser) parseTrailingLambda(expr ast.Expression) ast.Expression {
 	}
 }
 
-// parseBlock parses a block: do |params| ... end  OR  {|params| ... }
+// parseBlock parses a block: do ... end  OR  { ... }
 // Assumes curToken is 'do' or '{'. terminator specifies the closing token (END or RBRACE).
+// Blocks can have parameters: do |x| ... end or { |x| ... }
 func (p *Parser) parseBlock(terminator token.TokenType) *ast.BlockExpr {
 	p.nextToken() // move past 'do' or '{'
 
 	block := &ast.BlockExpr{}
 
-	// Parse optional parameters: |var| or |var1, var2|
+	// Parse optional |params| at the start of the block
 	if p.curTokenIs(token.PIPE) {
-		p.nextToken() // move past first '|'
-
+		p.nextToken() // consume '|'
 		seen := make(map[string]bool)
 
-		// Parse parameter list
-		if p.curTokenIs(token.IDENT) {
+		// Parse parameters until closing '|'
+		for !p.curTokenIs(token.PIPE) && !p.curTokenIs(token.EOF) {
+			if !p.curTokenIs(token.IDENT) {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected parameter name")
+				p.skipTo(terminator)
+				return nil
+			}
+
 			name := p.curToken.Literal
 			if seen[name] {
 				p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("duplicate block parameter name %q", name))
@@ -93,31 +100,22 @@ func (p *Parser) parseBlock(terminator token.TokenType) *ast.BlockExpr {
 			block.Params = append(block.Params, name)
 			p.nextToken()
 
-			for p.curTokenIs(token.COMMA) {
-				p.nextToken() // move past ','
-				if !p.curTokenIs(token.IDENT) {
-					p.errorAt(p.curToken.Line, p.curToken.Column, "expected parameter name after comma")
-					p.skipTo(terminator)
-					return nil
-				}
-				name := p.curToken.Literal
-				if seen[name] {
-					p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("duplicate block parameter name %q", name))
-					p.skipTo(terminator)
-					return nil
-				}
-				seen[name] = true
-				block.Params = append(block.Params, name)
-				p.nextToken()
+			// Handle comma between parameters
+			if p.curTokenIs(token.COMMA) {
+				p.nextToken() // consume ','
+			} else if !p.curTokenIs(token.PIPE) {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected ',' or '|' after parameter")
+				p.skipTo(terminator)
+				return nil
 			}
 		}
 
 		if !p.curTokenIs(token.PIPE) {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '|' after block parameters")
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '|' to close parameters")
 			p.skipTo(terminator)
 			return nil
 		}
-		p.nextToken() // move past closing '|'
+		p.nextToken() // consume closing '|'
 	}
 
 	p.skipNewlines()

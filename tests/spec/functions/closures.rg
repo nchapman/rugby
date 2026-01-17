@@ -15,7 +15,7 @@ puts counter.()
 
 # Capture by reference
 multiplier = 2
-scale = -> (x : Int) { x * multiplier }
+scale = -> { |x : Int| x * multiplier }
 puts scale.(5)
 
 multiplier = 3

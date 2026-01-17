@@ -46,7 +46,7 @@ class TodoList
   end
 
   def find(id : Int) -> Todo?
-    @todos.find { |t| t.id == id }
+    @todos.find -> { |t| t.id == id }
   end
 
   def complete(id : Int) -> Bool
@@ -60,7 +60,7 @@ class TodoList
 
   def remove(id : Int) -> Bool
     original_length = @todos.length
-    @todos = @todos.reject { |t| t.id == id }
+    @todos = @todos.reject -> { |t| t.id == id }
     @todos.length < original_length
   end
 
@@ -83,7 +83,7 @@ class TodoList
   end
 
   def save(path : String) -> Error
-    data = @todos.map { |t| t.to_map }
+    data = @todos.map -> { |t| t.to_map }
     content = json.pretty(data)!
     file.write(path, content)
   end
@@ -93,7 +93,7 @@ def print_todos(todos : Array<Todo>, label : String)
   puts "\n#{label}:"
   return puts "  (none)" if todos.empty?
 
-  todos.each do |todo|
+  todos.each -> do |todo|
     status = todo.completed ? "[x]" : "[ ]"
     puts "  #{status} ##{todo.id}: #{todo.title}"
   end

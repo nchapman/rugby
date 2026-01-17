@@ -6,7 +6,7 @@
 
 # Numeric constraint with T.zero
 def sum<T : Numeric>(values : Array<T>) -> T
-  values.reduce(T.zero) -> (acc, v) { acc + v }
+  values.reduce(T.zero) -> { |acc, v| acc + v }
 end
 
 nums = [1, 2, 3, 4, 5]
@@ -22,7 +22,7 @@ puts max("apple", "banana")
 
 # Equatable constraint
 def contains<T : Equatable>(arr : Array<T>, val : T) -> Bool
-  arr.any? -> (x) { x == val }
+  arr.any? -> { |x| x == val }
 end
 
 puts contains([1, 2, 3], 2)

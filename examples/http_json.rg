@@ -39,7 +39,7 @@ def main
   puts "Found #{posts.length} posts"
 
   # Show first 3 post titles (using times loop to avoid range slice limitation)
-  3.times do |i|
+  3.times -> do |i|
     if i < posts.length
       puts "- #{posts[i]["title"]}"
     end

@@ -6,17 +6,17 @@
 arr = [1, 2, 3, 4, 5]
 
 # map
-doubled = arr.map -> (x) { x * 2 }
+doubled = arr.map -> { |x| x * 2 }
 puts doubled[0]
 puts doubled[4]
 
 # select / filter
-evens = arr.select -> (x) { x % 2 == 0 }
+evens = arr.select -> { |x| x % 2 == 0 }
 puts evens.length
 puts evens[0]
 
 # reject
-odds = arr.reject -> (x) { x % 2 == 0 }
+odds = arr.reject -> { |x| x % 2 == 0 }
 puts odds.length
 
 # compact (filter nil/zero)

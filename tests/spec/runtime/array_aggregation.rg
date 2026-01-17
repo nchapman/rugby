@@ -6,10 +6,10 @@
 arr = [1, 2, 3, 4, 5]
 
 # reduce
-sum = arr.reduce(0) -> (acc, x) { acc + x }
+sum = arr.reduce(0) -> { |acc, x| acc + x }
 puts sum
 
-product = arr.reduce(1) -> (acc, x) { acc * x }
+product = arr.reduce(1) -> { |acc, x| acc * x }
 puts product
 
 # sum (numeric arrays)

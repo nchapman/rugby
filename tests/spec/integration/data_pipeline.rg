@@ -25,38 +25,38 @@ people = [
 
 # Pipeline 1: Filter engineers over 27
 puts "Engineers over 27:"
-engineers = people.select -> (p) { p.department == "Engineering" && p.age > 27 }
+engineers = people.select -> { |p| p.department == "Engineering" && p.age > 27 }
 engineer_names = engineers.map(&:name)
-engineer_names.each -> (name) { puts "  #{name}" }
+engineer_names.each -> { |name| puts "  #{name}" }
 
 # Pipeline 2: Calculate total age of marketing team
 puts "Marketing team:"
-marketing = people.select -> (p) { p.department == "Marketing" }
+marketing = people.select -> { |p| p.department == "Marketing" }
 puts "  Count: #{marketing.length}"
-sum = marketing.reduce(0) -> (acc, p) { acc + p.age }
+sum = marketing.reduce(0) -> { |acc, p| acc + p.age }
 puts "  Total age: #{sum}"
 puts "  Average age: #{sum / marketing.length}"
 
 # Pipeline 3: Count by department
 puts "Department counts:"
 departments = people.map(&:department)
-eng_count = departments.select -> (d) { d == "Engineering" }.length
-mkt_count = departments.select -> (d) { d == "Marketing" }.length
+eng_count = departments.select -> { |d| d == "Engineering" }.length
+mkt_count = departments.select -> { |d| d == "Marketing" }.length
 puts "  Engineering: #{eng_count}"
 puts "  Marketing: #{mkt_count}"
 
 # Pipeline 4: Check conditions with any?/all?
 puts "Team checks:"
-has_senior = people.any? -> (p) { p.age >= 35 }
-all_adults = people.all? -> (p) { p.age >= 18 }
-none_retired = people.none? -> (p) { p.age >= 65 }
+has_senior = people.any? -> { |p| p.age >= 35 }
+all_adults = people.all? -> { |p| p.age >= 18 }
+none_retired = people.none? -> { |p| p.age >= 65 }
 puts "  Has senior (35+): #{has_senior}"
 puts "  All adults (18+): #{all_adults}"
 puts "  None retired (65+): #{none_retired}"
 
 # Pipeline 5: Find specific person
 puts "Find operations:"
-carol = people.find -> (p) { p.name == "Carol" }
+carol = people.find -> { |p| p.name == "Carol" }
 if let found = carol
   puts "  Found Carol, age #{found.age}"
 end

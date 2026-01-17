@@ -4,14 +4,14 @@
 # Test: Section 4.3/10.6 - Multi-line lambdas with do...end
 
 # Multi-line lambda
-process = -> (x : Int) do
+process = -> do |x : Int|
   doubled = x * 2
   doubled + 1
 end
 puts process.(5)
 
 # Lambda with explicit return type
-handler = -> (s : String) -> String do
+handler = -> String do |s : String|
   prefix = ">> "
   prefix + s
 end
@@ -19,7 +19,7 @@ puts handler.("hello")
 
 # Multi-line in iteration
 items = [1, 2, 3]
-items.each -> (n) do
+items.each -> do |n|
   result = n * 10
   puts result
 end

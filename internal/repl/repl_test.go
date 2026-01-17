@@ -68,12 +68,12 @@ func TestCalculateBlockDepth(t *testing.T) {
 		{"for closed", "for x in items\n  puts(x)\nend", 0},
 
 		// Blocks with do
-		{"do opens block", "items.each do |x|", 1},
-		{"do closed", "items.each do |x|\n  puts(x)\nend", 0},
+		{"do opens block", "items.each -> do |x|", 1},
+		{"do closed", "items.each -> do |x|\n  puts(x)\nend", 0},
 
 		// Braces
-		{"open brace", "items.map { |x|", 1},
-		{"closed brace", "items.map { |x| x * 2 }", 0},
+		{"open brace", "items.map -> { |x|", 1},
+		{"closed brace", "items.map -> { |x| x * 2 }", 0},
 
 		// Complex nesting
 		{"mixed nesting", "def foo\n  if bar\n    while baz", 3},
@@ -132,7 +132,7 @@ func TestIsExpression(t *testing.T) {
 		// Edge cases
 		{"puts with parens", "puts(x)", false},
 		// each with block IS an expression (returns the array)
-		{"each with block", "arr.each { |x| puts(x) }", true},
+		{"each with block", "arr.each -> { |x| puts(x) }", true},
 	}
 
 	for _, tt := range tests {

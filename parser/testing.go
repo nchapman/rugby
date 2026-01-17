@@ -84,14 +84,14 @@ func (p *Parser) parseItStmt() *ast.ItStmt {
 	name := p.curToken.Literal
 	p.nextToken() // consume string
 
-	// Expect 'do'
+	// Expect 'do' for block syntax
 	if !p.curTokenIs(token.DO) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after it description")
 		return nil
 	}
 	p.nextToken() // consume 'do'
 
-	// Parse optional block parameter |t|
+	// Parse optional |t| parameter
 	if p.curTokenIs(token.PIPE) {
 		p.nextToken() // consume '|'
 		if p.curTokenIs(token.IDENT) {
@@ -101,16 +101,13 @@ func (p *Parser) parseItStmt() *ast.ItStmt {
 			}
 			p.nextToken()
 		}
-		// Handle additional parameters or commas
-		for !p.curTokenIs(token.PIPE) && !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.EOF) {
-			p.nextToken()
-		}
 		if !p.curTokenIs(token.PIPE) {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected closing '|' for block parameter")
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '|' to close parameter")
 			return nil
 		}
-		p.nextToken() // consume closing '|'
+		p.nextToken() // consume '|'
 	}
+
 	p.skipNewlines()
 
 	stmt := &ast.ItStmt{Name: name, Line: line}
@@ -151,14 +148,14 @@ func (p *Parser) parseTestStmt() *ast.TestStmt {
 	name := p.curToken.Literal
 	p.nextToken() // consume string
 
-	// Expect 'do'
+	// Expect 'do' for block syntax
 	if !p.curTokenIs(token.DO) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after test name")
 		return nil
 	}
 	p.nextToken() // consume 'do'
 
-	// Parse optional block parameter |t|
+	// Parse optional |t| parameter
 	if p.curTokenIs(token.PIPE) {
 		p.nextToken() // consume '|'
 		if p.curTokenIs(token.IDENT) {
@@ -168,15 +165,13 @@ func (p *Parser) parseTestStmt() *ast.TestStmt {
 			}
 			p.nextToken()
 		}
-		for !p.curTokenIs(token.PIPE) && !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.EOF) {
-			p.nextToken()
-		}
 		if !p.curTokenIs(token.PIPE) {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected closing '|' for block parameter")
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '|' to close parameter")
 			return nil
 		}
-		p.nextToken() // consume closing '|'
+		p.nextToken() // consume '|'
 	}
+
 	p.skipNewlines()
 
 	stmt := &ast.TestStmt{Name: name, Line: line}
@@ -217,14 +212,14 @@ func (p *Parser) parseTableStmt() *ast.TableStmt {
 	name := p.curToken.Literal
 	p.nextToken() // consume string
 
-	// Expect 'do'
+	// Expect 'do' for block syntax
 	if !p.curTokenIs(token.DO) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after table name")
 		return nil
 	}
 	p.nextToken() // consume 'do'
 
-	// Parse optional block parameter |tt|
+	// Parse optional |tt| parameter
 	if p.curTokenIs(token.PIPE) {
 		p.nextToken() // consume '|'
 		if p.curTokenIs(token.IDENT) {
@@ -234,14 +229,13 @@ func (p *Parser) parseTableStmt() *ast.TableStmt {
 			}
 			p.nextToken()
 		}
-		// Handle additional parameters or commas
-		for !p.curTokenIs(token.PIPE) && !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.EOF) {
-			p.nextToken()
+		if !p.curTokenIs(token.PIPE) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '|' to close parameter")
+			return nil
 		}
-		if p.curTokenIs(token.PIPE) {
-			p.nextToken() // consume closing '|'
-		}
+		p.nextToken() // consume '|'
 	}
+
 	p.skipNewlines()
 
 	stmt := &ast.TableStmt{Name: name, Line: line}
@@ -274,14 +268,14 @@ func (p *Parser) parseBeforeStmt() *ast.BeforeStmt {
 	line := p.curToken.Line
 	p.nextToken() // consume 'before'
 
-	// Expect 'do'
+	// Expect 'do' for block syntax
 	if !p.curTokenIs(token.DO) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after 'before'")
 		return nil
 	}
 	p.nextToken() // consume 'do'
 
-	// Parse optional block parameter |t|
+	// Parse optional |t| parameter
 	if p.curTokenIs(token.PIPE) {
 		p.nextToken() // consume '|'
 		if p.curTokenIs(token.IDENT) {
@@ -291,14 +285,13 @@ func (p *Parser) parseBeforeStmt() *ast.BeforeStmt {
 			}
 			p.nextToken()
 		}
-		// Handle additional parameters or commas
-		for !p.curTokenIs(token.PIPE) && !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.EOF) {
-			p.nextToken()
+		if !p.curTokenIs(token.PIPE) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '|' to close parameter")
+			return nil
 		}
-		if p.curTokenIs(token.PIPE) {
-			p.nextToken() // consume closing '|'
-		}
+		p.nextToken() // consume '|'
 	}
+
 	p.skipNewlines()
 
 	stmt := &ast.BeforeStmt{Line: line}
@@ -326,36 +319,35 @@ func (p *Parser) parseBeforeStmt() *ast.BeforeStmt {
 	return stmt
 }
 
-// parseAfterStmt parses an after hook: after do |t, ctx| ... end
+// parseAfterStmt parses an after hook: after do |t| ... end
 func (p *Parser) parseAfterStmt() *ast.AfterStmt {
 	line := p.curToken.Line
 	p.nextToken() // consume 'after'
 
-	// Expect 'do'
+	// Expect 'do' for block syntax
 	if !p.curTokenIs(token.DO) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after 'after'")
 		return nil
 	}
 	p.nextToken() // consume 'do'
 
-	// Parse optional block parameters |t| or |t, ctx|
+	// Parse optional |t| parameter
 	if p.curTokenIs(token.PIPE) {
 		p.nextToken() // consume '|'
 		if p.curTokenIs(token.IDENT) {
 			paramName := p.curToken.Literal
 			if paramName != "t" {
-				p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("after block first parameter must be 't', got %q", paramName))
+				p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("after block parameter must be 't', got %q", paramName))
 			}
 			p.nextToken()
 		}
-		// Handle additional parameters (ctx) or commas
-		for !p.curTokenIs(token.PIPE) && !p.curTokenIs(token.NEWLINE) && !p.curTokenIs(token.EOF) {
-			p.nextToken()
+		if !p.curTokenIs(token.PIPE) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '|' to close parameter")
+			return nil
 		}
-		if p.curTokenIs(token.PIPE) {
-			p.nextToken() // consume closing '|'
-		}
+		p.nextToken() // consume '|'
 	}
+
 	p.skipNewlines()
 
 	stmt := &ast.AfterStmt{Line: line}

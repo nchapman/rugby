@@ -43,13 +43,13 @@ def main
 
   # Start workers
   puts "Starting #{num_workers} workers..."
-  num_workers.times do |i|
+  num_workers.times -> do |i|
     go worker(i + 1, jobs, results)
   end
 
   # Send jobs
   puts "Sending #{num_jobs} jobs..."
-  num_jobs.times do |i|
+  num_jobs.times -> do |i|
     job = Job.new(i + 1, "task-#{i + 1}")
     jobs << job
   end

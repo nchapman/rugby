@@ -1525,9 +1525,9 @@ end`
 
 func TestEachBlock(t *testing.T) {
 	input := `def main
-  arr.each do |x|
+  arr.each -> { |x|
     puts(x)
-  end
+  }
 end`
 
 	l := lexer.New(input)
@@ -1561,24 +1561,30 @@ end`
 		t.Errorf("expected selector 'each', got %q", sel.Sel)
 	}
 
-	if call.Block == nil {
-		t.Fatal("expected block, got nil")
+	// Arrow lambda puts the lambda in Args, not Block
+	if len(call.Args) != 1 {
+		t.Fatal("expected 1 lambda argument, got", len(call.Args))
 	}
 
-	if len(call.Block.Params) != 1 || call.Block.Params[0] != "x" {
-		t.Errorf("expected block params [x], got %v", call.Block.Params)
+	lambda, ok := call.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Fatalf("expected LambdaExpr, got %T", call.Args[0])
 	}
 
-	if len(call.Block.Body) != 1 {
-		t.Errorf("expected 1 body statement, got %d", len(call.Block.Body))
+	if len(lambda.Params) != 1 || lambda.Params[0].Name != "x" {
+		t.Errorf("expected lambda params [x], got %v", lambda.Params)
+	}
+
+	if len(lambda.Body) != 1 {
+		t.Errorf("expected 1 body statement, got %d", len(lambda.Body))
 	}
 }
 
 func TestEachWithIndexBlock(t *testing.T) {
 	input := `def main
-  arr.each_with_index do |v, i|
+  arr.each_with_index -> { |v, i|
     puts(v)
-  end
+  }
 end`
 
 	l := lexer.New(input)
@@ -1612,32 +1618,38 @@ end`
 		t.Errorf("expected selector 'each_with_index', got %q", sel.Sel)
 	}
 
-	if call.Block == nil {
-		t.Fatal("expected block, got nil")
+	// Arrow lambda puts the lambda in Args, not Block
+	if len(call.Args) != 1 {
+		t.Fatal("expected 1 lambda argument, got", len(call.Args))
 	}
 
-	if len(call.Block.Params) != 2 {
-		t.Fatalf("expected 2 block params, got %d", len(call.Block.Params))
+	lambda, ok := call.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Fatalf("expected LambdaExpr, got %T", call.Args[0])
 	}
 
-	if call.Block.Params[0] != "v" {
-		t.Errorf("expected first param 'v', got %q", call.Block.Params[0])
+	if len(lambda.Params) != 2 {
+		t.Fatalf("expected 2 lambda params, got %d", len(lambda.Params))
 	}
 
-	if call.Block.Params[1] != "i" {
-		t.Errorf("expected second param 'i', got %q", call.Block.Params[1])
+	if lambda.Params[0].Name != "v" {
+		t.Errorf("expected first param 'v', got %q", lambda.Params[0].Name)
 	}
 
-	if len(call.Block.Body) != 1 {
-		t.Errorf("expected 1 body statement, got %d", len(call.Block.Body))
+	if lambda.Params[1].Name != "i" {
+		t.Errorf("expected second param 'i', got %q", lambda.Params[1].Name)
+	}
+
+	if len(lambda.Body) != 1 {
+		t.Errorf("expected 1 body statement, got %d", len(lambda.Body))
 	}
 }
 
 func TestMapBlock(t *testing.T) {
 	input := `def main
-  result = arr.map do |x|
+  result = arr.map -> { |x|
     x * 2
-  end
+  }
 end`
 
 	l := lexer.New(input)
@@ -1666,20 +1678,25 @@ end`
 		t.Errorf("expected selector 'map', got %q", sel.Sel)
 	}
 
-	if call.Block == nil {
-		t.Fatal("expected block, got nil")
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg (lambda), got %d", len(call.Args))
 	}
 
-	if len(call.Block.Params) != 1 || call.Block.Params[0] != "x" {
-		t.Errorf("expected block params [x], got %v", call.Block.Params)
+	lambda, ok := call.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Fatalf("expected LambdaExpr, got %T", call.Args[0])
+	}
+
+	if len(lambda.Params) != 1 || lambda.Params[0].Name != "x" {
+		t.Errorf("expected lambda params [x], got %v", lambda.Params)
 	}
 }
 
 func TestBlockWithNoParams(t *testing.T) {
 	input := `def main
-  items.each do ||
+  items.each -> {
     puts("hello")
-  end
+  }
 end`
 
 	l := lexer.New(input)
@@ -1699,20 +1716,25 @@ end`
 		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
 	}
 
-	if call.Block == nil {
-		t.Fatal("expected block, got nil")
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg (lambda), got %d", len(call.Args))
 	}
 
-	if len(call.Block.Params) != 0 {
-		t.Errorf("expected 0 block params, got %v", call.Block.Params)
+	lambda, ok := call.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Fatalf("expected LambdaExpr, got %T", call.Args[0])
+	}
+
+	if len(lambda.Params) != 0 {
+		t.Errorf("expected 0 lambda params, got %v", lambda.Params)
 	}
 }
 
 func TestGenericBlockOnAnyMethod(t *testing.T) {
 	input := `def main
-  items.custom_method do |x, y, z|
+  items.custom_method -> { |x, y, z|
     puts(x)
-  end
+  }
 end`
 
 	l := lexer.New(input)
@@ -1741,27 +1763,32 @@ end`
 		t.Errorf("expected selector 'custom_method', got %q", sel.Sel)
 	}
 
-	if call.Block == nil {
-		t.Fatal("expected block, got nil")
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg (lambda), got %d", len(call.Args))
 	}
 
-	if len(call.Block.Params) != 3 {
-		t.Fatalf("expected 3 block params, got %d", len(call.Block.Params))
+	lambda, ok := call.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Fatalf("expected LambdaExpr, got %T", call.Args[0])
+	}
+
+	if len(lambda.Params) != 3 {
+		t.Fatalf("expected 3 lambda params, got %d", len(lambda.Params))
 	}
 
 	expectedParams := []string{"x", "y", "z"}
 	for i, expected := range expectedParams {
-		if call.Block.Params[i] != expected {
-			t.Errorf("expected param %d to be %q, got %q", i, expected, call.Block.Params[i])
+		if lambda.Params[i].Name != expected {
+			t.Errorf("expected param %d to be %q, got %q", i, expected, lambda.Params[i].Name)
 		}
 	}
 }
 
 func TestDuplicateBlockParameter(t *testing.T) {
 	input := `def main
-  items.each do |x, x|
+  items.each -> { |x, x|
     puts(x)
-  end
+  }
 end`
 
 	l := lexer.New(input)
@@ -1773,18 +1800,18 @@ end`
 	}
 
 	errMsg := p.Errors()[0]
-	if !strings.Contains(errMsg, "duplicate block parameter") {
-		t.Errorf("expected error about duplicate block parameter, got: %s", errMsg)
+	if !strings.Contains(errMsg, "duplicate lambda parameter") {
+		t.Errorf("expected error about duplicate lambda parameter, got: %s", errMsg)
 	}
 }
 
 func TestNestedBlocks(t *testing.T) {
 	input := `def main
-  matrix.each do |row|
-    row.each do |x|
+  matrix.each -> { |row|
+    row.each -> { |x|
       puts(x)
-    end
-  end
+    }
+  }
 end`
 
 	l := lexer.New(input)
@@ -1804,22 +1831,27 @@ end`
 		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
 	}
 
-	if outerCall.Block == nil {
-		t.Fatal("expected outer block, got nil")
+	if len(outerCall.Args) != 1 {
+		t.Fatalf("expected 1 arg (lambda), got %d", len(outerCall.Args))
 	}
 
-	if len(outerCall.Block.Params) != 1 || outerCall.Block.Params[0] != "row" {
-		t.Errorf("expected outer block params [row], got %v", outerCall.Block.Params)
+	outerLambda, ok := outerCall.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Fatalf("expected LambdaExpr, got %T", outerCall.Args[0])
+	}
+
+	if len(outerLambda.Params) != 1 || outerLambda.Params[0].Name != "row" {
+		t.Errorf("expected outer lambda params [row], got %v", outerLambda.Params)
 	}
 
 	// Inner block should be in the body
-	if len(outerCall.Block.Body) != 1 {
-		t.Fatalf("expected 1 statement in outer block, got %d", len(outerCall.Block.Body))
+	if len(outerLambda.Body) != 1 {
+		t.Fatalf("expected 1 statement in outer lambda, got %d", len(outerLambda.Body))
 	}
 
-	innerExprStmt, ok := outerCall.Block.Body[0].(*ast.ExprStmt)
+	innerExprStmt, ok := outerLambda.Body[0].(*ast.ExprStmt)
 	if !ok {
-		t.Fatalf("expected inner ExprStmt, got %T", outerCall.Block.Body[0])
+		t.Fatalf("expected inner ExprStmt, got %T", outerLambda.Body[0])
 	}
 
 	innerCall, ok := innerExprStmt.Expr.(*ast.CallExpr)
@@ -1827,134 +1859,17 @@ end`
 		t.Fatalf("expected inner CallExpr, got %T", innerExprStmt.Expr)
 	}
 
-	if innerCall.Block == nil {
-		t.Fatal("expected inner block, got nil")
+	if len(innerCall.Args) != 1 {
+		t.Fatalf("expected 1 arg (lambda), got %d", len(innerCall.Args))
 	}
 
-	if len(innerCall.Block.Params) != 1 || innerCall.Block.Params[0] != "x" {
-		t.Errorf("expected inner block params [x], got %v", innerCall.Block.Params)
-	}
-}
-
-func TestBraceBlockSyntax(t *testing.T) {
-	input := `def main
-  arr.each {|x| puts(x) }
-end`
-
-	l := lexer.New(input)
-	p := New(l)
-	program := p.ParseProgram()
-	checkParserErrors(t, p)
-
-	fn := program.Declarations[0].(*ast.FuncDecl)
-
-	exprStmt, ok := fn.Body[0].(*ast.ExprStmt)
+	innerLambda, ok := innerCall.Args[0].(*ast.LambdaExpr)
 	if !ok {
-		t.Fatalf("expected ExprStmt, got %T", fn.Body[0])
+		t.Fatalf("expected inner LambdaExpr, got %T", innerCall.Args[0])
 	}
 
-	call, ok := exprStmt.Expr.(*ast.CallExpr)
-	if !ok {
-		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
-	}
-
-	sel, ok := call.Func.(*ast.SelectorExpr)
-	if !ok {
-		t.Fatalf("expected SelectorExpr, got %T", call.Func)
-	}
-
-	if sel.Sel != "each" {
-		t.Errorf("expected selector 'each', got %q", sel.Sel)
-	}
-
-	if call.Block == nil {
-		t.Fatal("expected block, got nil")
-	}
-
-	if len(call.Block.Params) != 1 || call.Block.Params[0] != "x" {
-		t.Errorf("expected block params [x], got %v", call.Block.Params)
-	}
-
-	if len(call.Block.Body) != 1 {
-		t.Errorf("expected 1 body statement, got %d", len(call.Block.Body))
-	}
-}
-
-func TestBraceBlockMultipleParams(t *testing.T) {
-	input := `def main
-  arr.each_with_index {|v, i| puts(v) }
-end`
-
-	l := lexer.New(input)
-	p := New(l)
-	program := p.ParseProgram()
-	checkParserErrors(t, p)
-
-	fn := program.Declarations[0].(*ast.FuncDecl)
-	exprStmt := fn.Body[0].(*ast.ExprStmt)
-	call := exprStmt.Expr.(*ast.CallExpr)
-
-	if call.Block == nil {
-		t.Fatal("expected block, got nil")
-	}
-
-	if len(call.Block.Params) != 2 {
-		t.Fatalf("expected 2 block params, got %d", len(call.Block.Params))
-	}
-
-	if call.Block.Params[0] != "v" || call.Block.Params[1] != "i" {
-		t.Errorf("expected block params [v, i], got %v", call.Block.Params)
-	}
-}
-
-func TestBraceBlockNoParams(t *testing.T) {
-	input := `def main
-  3.times {|| puts("hello") }
-end`
-
-	l := lexer.New(input)
-	p := New(l)
-	program := p.ParseProgram()
-	checkParserErrors(t, p)
-
-	fn := program.Declarations[0].(*ast.FuncDecl)
-	exprStmt := fn.Body[0].(*ast.ExprStmt)
-	call := exprStmt.Expr.(*ast.CallExpr)
-
-	if call.Block == nil {
-		t.Fatal("expected block, got nil")
-	}
-
-	if len(call.Block.Params) != 0 {
-		t.Errorf("expected 0 block params, got %v", call.Block.Params)
-	}
-}
-
-func TestBraceBlockWithMethodArgs(t *testing.T) {
-	input := `def main
-  arr.reduce(0) {|acc, x| acc + x }
-end`
-
-	l := lexer.New(input)
-	p := New(l)
-	program := p.ParseProgram()
-	checkParserErrors(t, p)
-
-	fn := program.Declarations[0].(*ast.FuncDecl)
-	exprStmt := fn.Body[0].(*ast.ExprStmt)
-	call := exprStmt.Expr.(*ast.CallExpr)
-
-	// Should have one argument (the initial value)
-	if len(call.Args) != 1 {
-		t.Fatalf("expected 1 arg, got %d", len(call.Args))
-	}
-
-	if call.Block == nil {
-		t.Fatal("expected block, got nil")
-	}
-
-	if len(call.Block.Params) != 2 {
-		t.Fatalf("expected 2 block params, got %d", len(call.Block.Params))
+	if len(innerLambda.Params) != 1 || innerLambda.Params[0].Name != "x" {
+		t.Errorf("expected inner lambda params [x], got %v", innerLambda.Params)
 	}
 }
 
@@ -3888,9 +3803,9 @@ end`
 }
 
 func TestBareScriptWithBlock(t *testing.T) {
-	input := `[1, 2, 3].each do |x|
+	input := `[1, 2, 3].each -> { |x|
   puts(x)
-end`
+}`
 
 	l := lexer.New(input)
 	p := New(l)
@@ -3911,12 +3826,17 @@ end`
 		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
 	}
 
-	if call.Block == nil {
-		t.Fatal("expected block, got nil")
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg (lambda), got %d", len(call.Args))
 	}
 
-	if len(call.Block.Params) != 1 || call.Block.Params[0] != "x" {
-		t.Errorf("expected block params [x], got %v", call.Block.Params)
+	lambda, ok := call.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Fatalf("expected LambdaExpr, got %T", call.Args[0])
+	}
+
+	if len(lambda.Params) != 1 || lambda.Params[0].Name != "x" {
+		t.Errorf("expected lambda params [x], got %v", lambda.Params)
 	}
 }
 
@@ -4889,9 +4809,9 @@ end`
 
 func TestCommandSyntaxWithBlock(t *testing.T) {
 	// Command syntax followed by do block
-	input := `arr.each do |x|
+	input := `arr.each -> { |x|
   puts x
-end`
+}`
 
 	l := lexer.New(input)
 	p := New(l)
@@ -4901,12 +4821,17 @@ end`
 	exprStmt := program.Declarations[0].(*ast.ExprStmt)
 	call := exprStmt.Expr.(*ast.CallExpr)
 
-	if call.Block == nil {
-		t.Fatal("expected block on call")
+	if len(call.Args) != 1 {
+		t.Fatalf("expected 1 arg (lambda), got %d", len(call.Args))
 	}
 
-	if len(call.Block.Params) != 1 {
-		t.Errorf("expected 1 block param, got %d", len(call.Block.Params))
+	lambda, ok := call.Args[0].(*ast.LambdaExpr)
+	if !ok {
+		t.Fatalf("expected LambdaExpr, got %T", call.Args[0])
+	}
+
+	if len(lambda.Params) != 1 {
+		t.Errorf("expected 1 lambda param, got %d", len(lambda.Params))
 	}
 }
 
@@ -5140,10 +5065,11 @@ func TestCommandSyntaxWithAndOr(t *testing.T) {
 }
 
 func TestCommandSyntaxWithTrailingBlock(t *testing.T) {
-	// `foo bar do |x| puts x end` should parse as `foo(bar) { |x| puts(x) }`
-	input := `foo bar do |x|
+	// Arrow lambda syntax as separate argument
+	// `foo(bar, -> { |x| puts x })`
+	input := `foo(bar, -> { |x|
   puts x
-end`
+})`
 
 	l := lexer.New(input)
 	p := New(l)
@@ -5156,14 +5082,19 @@ end`
 		t.Fatalf("expected CallExpr, got %T", exprStmt.Expr)
 	}
 
-	// Should have 1 arg (bar)
-	if len(call.Args) != 1 {
-		t.Errorf("expected 1 arg, got %d", len(call.Args))
+	// Should have 2 args: bar (ident) and lambda
+	if len(call.Args) != 2 {
+		t.Fatalf("expected 2 args, got %d", len(call.Args))
 	}
 
-	// Should have a block
-	if call.Block == nil {
-		t.Error("expected block on call")
+	// Second arg should be a lambda
+	lambda, ok := call.Args[1].(*ast.LambdaExpr)
+	if !ok {
+		t.Fatalf("expected LambdaExpr as second arg, got %T", call.Args[1])
+	}
+
+	if len(lambda.Params) != 1 {
+		t.Errorf("expected 1 lambda param, got %d", len(lambda.Params))
 	}
 }
 

@@ -47,7 +47,7 @@ def main
 
   # Test each iteration
   sum = 0
-  Set{10, 20, 30}.each do |x|
+  Set{10, 20, 30}.each -> do |x|
     sum = sum + x
   end
   puts sum

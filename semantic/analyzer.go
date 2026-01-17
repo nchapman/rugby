@@ -8,6 +8,12 @@ import (
 	"github.com/nchapman/rugby/ast"
 )
 
+// isLambdaArg checks if an expression is a lambda expression.
+func isLambdaArg(expr ast.Expression) bool {
+	_, ok := expr.(*ast.LambdaExpr)
+	return ok
+}
+
 // typeAliasInfo stores information about a type alias for error reporting.
 type typeAliasInfo struct {
 	Type string // underlying type
@@ -3295,25 +3301,45 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 				a.checkArgumentTypes(methodName, method, argTypes)
 			}
 
-			// Special handling for optional.map { } - return type is Optional[BlockReturnType]
-			if receiverType.Kind == TypeOptional && sel.Sel == "map" && call.Block != nil {
-				blockReturnType := a.inferBlockReturnType(call.Block)
-				typ := NewOptionalType(blockReturnType)
-				a.setNodeType(call, typ)
-				return typ
+			// Special handling for optional.map - return type is Optional[BlockReturnType]
+			if receiverType.Kind == TypeOptional && sel.Sel == "map" {
+				var returnType *Type
+				if call.Block != nil {
+					returnType = a.inferBlockReturnType(call.Block)
+				} else if len(call.Args) > 0 {
+					if lambda, ok := call.Args[0].(*ast.LambdaExpr); ok {
+						returnType = a.inferLambdaReturnType(lambda)
+					}
+				}
+				if returnType != nil {
+					typ := NewOptionalType(returnType)
+					a.setNodeType(call, typ)
+					return typ
+				}
 			}
 
-			// Special handling for optional.filter { } - return type is same optional type T?
-			if receiverType.Kind == TypeOptional && sel.Sel == "filter" && call.Block != nil {
-				a.setNodeType(call, receiverType)
-				return receiverType
+			// Special handling for optional.filter - return type is same optional type T?
+			if receiverType.Kind == TypeOptional && sel.Sel == "filter" {
+				if call.Block != nil || (len(call.Args) > 0 && isLambdaArg(call.Args[0])) {
+					a.setNodeType(call, receiverType)
+					return receiverType
+				}
 			}
 
-			// Special handling for optional.flat_map { } - return type is block return type (should be R?)
-			if receiverType.Kind == TypeOptional && sel.Sel == "flat_map" && call.Block != nil {
-				typ := a.inferBlockReturnType(call.Block)
-				a.setNodeType(call, typ)
-				return typ
+			// Special handling for optional.flat_map - return type is block return type (should be R?)
+			if receiverType.Kind == TypeOptional && sel.Sel == "flat_map" {
+				var returnType *Type
+				if call.Block != nil {
+					returnType = a.inferBlockReturnType(call.Block)
+				} else if len(call.Args) > 0 {
+					if lambda, ok := call.Args[0].(*ast.LambdaExpr); ok {
+						returnType = a.inferLambdaReturnType(lambda)
+					}
+				}
+				if returnType != nil {
+					a.setNodeType(call, returnType)
+					return returnType
+				}
 			}
 
 			// Special handling for array.map { } - return type is Array[BlockReturnType]
@@ -3590,6 +3616,18 @@ func (a *Analyzer) inferBlockReturnType(block *ast.BlockExpr) *Type {
 
 	// The return value is the last expression in the block
 	lastStmt := block.Body[len(block.Body)-1]
+	return a.inferStmtReturnType(lastStmt)
+}
+
+// inferLambdaReturnType returns the type that a lambda expression produces.
+// This is the type of the last expression in the lambda body.
+func (a *Analyzer) inferLambdaReturnType(lambda *ast.LambdaExpr) *Type {
+	if lambda == nil || len(lambda.Body) == 0 {
+		return TypeAnyVal
+	}
+
+	// The return value is the last expression in the lambda
+	lastStmt := lambda.Body[len(lambda.Body)-1]
 	return a.inferStmtReturnType(lastStmt)
 }
 
@@ -4784,7 +4822,10 @@ func (a *Analyzer) optionalMethod(name string, innerType *Type) *Symbol {
 	case "unwrap":
 		return NewMethod(name, nil, []*Type{innerType})
 	case "map", "each", "filter", "flat_map":
-		return NewMethod(name, nil, nil) // Block methods
+		// Block/lambda methods - allow 0 args (block) or 1 arg (lambda)
+		method := NewMethod(name, nil, nil)
+		method.Variadic = true
+		return method
 	}
 	return nil
 }

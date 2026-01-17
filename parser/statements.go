@@ -1350,32 +1350,58 @@ func (p *Parser) parseSelectCase() ast.SelectCase {
 	return selectCase
 }
 
-// parseConcurrentlyStmt parses: concurrently do |scope| ... end
+// parseConcurrentlyStmt parses:
+// - concurrently -> (scope) do ... end (lambda form with scope param)
+// - concurrently do ... end (block form without params)
 func (p *Parser) parseConcurrentlyStmt() *ast.ConcurrentlyStmt {
 	line := p.curToken.Line
 	p.nextToken() // consume 'concurrently'
 
 	stmt := &ast.ConcurrentlyStmt{Line: line}
 
-	// Expect 'do' keyword
+	// Check for lambda form: concurrently -> (scope) do ... end
+	if p.curTokenIs(token.ARROW) {
+		lambda := p.parseLambdaExpr()
+		if lambda == nil {
+			return nil
+		}
+		lambdaExpr, ok := lambda.(*ast.LambdaExpr)
+		if !ok {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected lambda expression after 'concurrently ->'")
+			return nil
+		}
+		// Extract scope variable from lambda params
+		if len(lambdaExpr.Params) > 0 {
+			stmt.ScopeVar = lambdaExpr.Params[0].Name
+		}
+		stmt.Body = lambdaExpr.Body
+		// parseLambdaExpr leaves 'end' unconsumed, so consume it
+		if p.curTokenIs(token.END) {
+			p.nextToken()
+		}
+		p.skipNewlines()
+		return stmt
+	}
+
+	// Block form: concurrently do |scope| ... end
 	if !p.curTokenIs(token.DO) {
-		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' after 'concurrently'")
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected 'do' or '->' after 'concurrently'")
 		return nil
 	}
 	p.nextToken() // consume 'do'
 
-	// Parse optional scope parameter: |scope|
+	// Parse optional |scope| parameter
 	if p.curTokenIs(token.PIPE) {
 		p.nextToken() // consume '|'
 		if p.curTokenIs(token.IDENT) {
 			stmt.ScopeVar = p.curToken.Literal
-			p.nextToken() // consume scope var name
+			p.nextToken()
 		}
 		if !p.curTokenIs(token.PIPE) {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '|' after scope parameter")
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected '|' to close parameter")
 			return nil
 		}
-		p.nextToken() // consume '|'
+		p.nextToken() // consume closing '|'
 	}
 	p.skipNewlines()
 

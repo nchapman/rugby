@@ -183,6 +183,7 @@ type Generator struct {
 	loopDepth                    int                          // nesting depth of loops (for break/next)
 	inInlinedLambda              bool                         // true when inside an inlined lambda (each/times); return -> continue
 	inMainFunc                   bool                         // true when generating code inside main() function
+	forceAnyLambdaReturn         bool                         // true when lambda args to Go interop should use 'any' return type
 	errors                       []error                      // collected errors during generation
 	tempVarCounter               int                          // counter for generating unique temp variable names
 	typeInfo                     TypeInfo                     // type info from semantic analysis (required)

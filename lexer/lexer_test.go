@@ -412,6 +412,7 @@ func TestMapSyntax(t *testing.T) {
 }
 
 func TestBlockSyntax(t *testing.T) {
+	// Block syntax: do |x| ... end
 	input := `do |x| end`
 
 	tests := []struct {
@@ -886,9 +887,9 @@ func TestOrAssignVsBlockPipes(t *testing.T) {
 			expected: []token.TokenType{token.IDENT, token.SLASHASSIGN, token.INT, token.EOF},
 		},
 		{
-			name:     "block pipes (|| is now PIPEPIPE operator)",
-			input:    "do || end",
-			expected: []token.TokenType{token.DO, token.PIPEPIPE, token.END, token.EOF},
+			name:     "block without params",
+			input:    "do end",
+			expected: []token.TokenType{token.DO, token.END, token.EOF},
 		},
 		{
 			name:     "block with params",

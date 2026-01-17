@@ -2,6 +2,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/nchapman/rugby/ast"
 	"github.com/nchapman/rugby/token"
 )
@@ -150,6 +152,16 @@ infixLoop:
 		case token.RESCUE:
 			p.nextToken()
 			left = p.parseRescueExpr(left)
+		case token.ARROW:
+			// Handle trailing lambda: expr -> (params) { body }
+			// Converts SelectorExpr to CallExpr with lambda as first arg,
+			// or appends lambda to existing CallExpr args
+			switch left.(type) {
+			case *ast.SelectorExpr, *ast.CallExpr:
+				left = p.parseTrailingLambda(left)
+			default:
+				break infixLoop
+			}
 		default:
 			break infixLoop
 		}
@@ -184,6 +196,9 @@ infixLoop:
 				case token.AND, token.OR, token.AMPAMP, token.PIPEPIPE:
 					p.nextToken()
 					left = p.parseInfixExpr(left)
+				case token.ARROW:
+					// Handle trailing lambda after command call: foo bar -> (x) { }
+					left = p.parseTrailingLambda(left)
 				default:
 					return left
 				}
@@ -982,63 +997,33 @@ func (p *Parser) parseLambdaCall(lambda ast.Expression) ast.Expression {
 // parseLambdaExpr parses arrow lambda expressions:
 //
 //	-> { expr }                    # no params
-//	-> (x) { x * 2 }               # one param
-//	-> (x, y) { x + y }            # multiple params
-//	-> (x : Int) -> Int { x * 2 }  # with type annotations
-//	-> (x) do ... end              # multiline form
+//	-> { |x| x * 2 }               # one param
+//	-> { |x, y| x + y }            # multiple params
+//	-> Int { |x : Int| x * 2 }     # with type annotations
+//	-> do |x| ... end              # multiline form
 func (p *Parser) parseLambdaExpr() ast.Expression {
 	line := p.curToken.Line
 	p.nextToken() // consume '->'
 
 	lambda := &ast.LambdaExpr{Line: line}
 
-	// Parse optional parameter list
-	if p.curTokenIs(token.LPAREN) {
-		p.nextToken() // consume '('
-
-		// Parse parameters until ')'
-		for !p.curTokenIs(token.RPAREN) && !p.curTokenIs(token.EOF) {
-			if !p.curTokenIs(token.IDENT) {
-				p.errorAt(p.curToken.Line, p.curToken.Column, "expected parameter name")
-				return nil
-			}
-
-			param := &ast.Param{Name: p.curToken.Literal}
-			p.nextToken()
-
-			// Optional type annotation
-			if p.curTokenIs(token.COLON) {
-				p.nextToken() // consume ':'
-				param.Type = p.parseTypeName()
-			}
-
-			lambda.Params = append(lambda.Params, param)
-
-			// Handle comma or end of params
-			if p.curTokenIs(token.COMMA) {
-				p.nextToken() // consume ','
-			} else if !p.curTokenIs(token.RPAREN) {
-				p.errorAt(p.curToken.Line, p.curToken.Column, "expected ',' or ')' after parameter")
-				return nil
-			}
-		}
-
-		if !p.curTokenIs(token.RPAREN) {
-			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ')' after parameters")
-			return nil
-		}
-		p.nextToken() // consume ')'
-	}
-
-	// Parse optional return type: -> Type
-	if p.curTokenIs(token.ARROW) {
-		p.nextToken() // consume '->'
+	// Check for optional return type: -> ReturnType { ... }
+	// Return type annotation appears before the block
+	// e.g., -> Int { |n| n * n } or -> String do |s| s.upcase end
+	if !p.curTokenIs(token.LBRACE) && !p.curTokenIs(token.DO) {
 		lambda.ReturnType = p.parseTypeName()
 	}
 
-	// Parse body: { ... } or do ... end
+	// Parse body: { |params| ... } or do |params| ... end
 	if p.curTokenIs(token.LBRACE) {
 		p.nextToken() // consume '{'
+
+		// Parse optional |params| at the start of the lambda body
+		if p.curTokenIs(token.PIPE) {
+			if !p.parseLambdaParams(lambda) {
+				return nil
+			}
+		}
 
 		// Skip any leading newlines
 		p.skipNewlines()
@@ -1059,6 +1044,14 @@ func (p *Parser) parseLambdaExpr() ast.Expression {
 		// Don't advance past '}' - let the caller handle it
 	} else if p.curTokenIs(token.DO) {
 		p.nextToken() // consume 'do'
+
+		// Parse optional |params| at the start of the lambda body
+		if p.curTokenIs(token.PIPE) {
+			if !p.parseLambdaParams(lambda) {
+				return nil
+			}
+		}
+
 		p.skipNewlines()
 
 		// Parse body statements until 'end'
@@ -1081,4 +1074,55 @@ func (p *Parser) parseLambdaExpr() ast.Expression {
 	}
 
 	return lambda
+}
+
+// parseLambdaParams parses |params| inside a lambda body.
+// Supports type annotations: |x : Int, y : String|
+// Returns false if parsing failed.
+func (p *Parser) parseLambdaParams(lambda *ast.LambdaExpr) bool {
+	p.nextToken() // consume '|'
+
+	seen := make(map[string]bool)
+
+	// Parse parameters until closing '|'
+	for !p.curTokenIs(token.PIPE) && !p.curTokenIs(token.EOF) {
+		if !p.curTokenIs(token.IDENT) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected parameter name")
+			return false
+		}
+
+		name := p.curToken.Literal
+		if seen[name] {
+			p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("duplicate lambda parameter name %q", name))
+			return false
+		}
+		seen[name] = true
+
+		param := &ast.Param{Name: name}
+		p.nextToken()
+
+		// Optional type annotation
+		if p.curTokenIs(token.COLON) {
+			p.nextToken() // consume ':'
+			param.Type = p.parseTypeName()
+		}
+
+		lambda.Params = append(lambda.Params, param)
+
+		// Handle comma between parameters
+		if p.curTokenIs(token.COMMA) {
+			p.nextToken() // consume ','
+		} else if !p.curTokenIs(token.PIPE) {
+			p.errorAt(p.curToken.Line, p.curToken.Column, "expected ',' or '|' after parameter")
+			return false
+		}
+	}
+
+	if !p.curTokenIs(token.PIPE) {
+		p.errorAt(p.curToken.Line, p.curToken.Column, "expected '|' to close parameters")
+		return false
+	}
+	p.nextToken() // consume closing '|'
+
+	return true
 }

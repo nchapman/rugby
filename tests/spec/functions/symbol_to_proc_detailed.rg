@@ -21,7 +21,7 @@ users = [
   User.new("Charlie", true)
 ]
 
-# &:name creates -> (u) { u.name }
+# &:name creates -> { |u| u.name }
 names = users.map(&:name)
 puts names[0]
 puts names[1]

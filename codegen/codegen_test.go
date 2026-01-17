@@ -950,7 +950,7 @@ end`
 func TestGenerateEachBlock(t *testing.T) {
 	input := `def main
   arr = [1, 2, 3]
-  arr.each do |x|
+  arr.each -> do |x|
     puts(x)
   end
 end`
@@ -965,7 +965,7 @@ end`
 func TestGenerateEachWithIndex(t *testing.T) {
 	input := `def main
   arr = [1, 2, 3]
-  arr.each_with_index do |v, i|
+  arr.each_with_index -> do |v, i|
     puts(v)
   end
 end`
@@ -980,7 +980,7 @@ end`
 func TestGenerateMapBlock(t *testing.T) {
 	input := `def main
   arr = [1, 2, 3]
-  result = arr.map do |x|
+  result = arr.map -> do |x|
     x * 2
   end
 end`
@@ -996,15 +996,15 @@ end`
 func TestBlockWithNoParams(t *testing.T) {
 	input := `def main
   items = [1, 2, 3]
-  items.each do ||
+  items.each -> do
     puts("hello")
   end
 end`
 
 	output := compile(t, input)
 
-	// Block with no params should use _ for the parameter
-	assertContains(t, output, `for _, _ := range items {`)
+	// Block with no params should use _v for the unnamed parameter
+	assertContains(t, output, `for _, _v := range items {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
@@ -1014,7 +1014,7 @@ func TestBlockOnMethodCall(t *testing.T) {
 end
 
 def main
-  getItems().each do |x|
+  getItems().each -> do |x|
     puts(x)
   end
 end`
@@ -1028,8 +1028,8 @@ end`
 func TestNestedBlocks(t *testing.T) {
 	input := `def main
   matrix = [[1, 2], [3, 4]]
-  matrix.each do |row|
-    row.each do |x|
+  matrix.each -> do |row|
+    row.each -> do |x|
       puts(x)
     end
   end
@@ -1045,7 +1045,7 @@ end`
 func TestSelectBlock(t *testing.T) {
 	input := `def main
   nums = [1, 2, 3, 4, 5]
-  evens = nums.select do |n|
+  evens = nums.select -> do |n|
     n % 2 == 0
   end
 end`
@@ -1054,13 +1054,13 @@ end`
 
 	// With type info, n is typed as int
 	assertContains(t, output, `runtime.Select(nums, func(n int) bool {`)
-	assertContains(t, output, `return ((n % 2) == 0)`)
+	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
 }
 
 func TestRejectBlock(t *testing.T) {
 	input := `def main
   nums = [1, 2, 3, 4, 5]
-  odds = nums.reject do |n|
+  odds = nums.reject -> do |n|
     n % 2 == 0
   end
 end`
@@ -1069,13 +1069,13 @@ end`
 
 	// With type info, n is typed as int
 	assertContains(t, output, `runtime.Reject(nums, func(n int) bool {`)
-	assertContains(t, output, `return ((n % 2) == 0)`)
+	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
 }
 
 func TestReduceBlock(t *testing.T) {
 	input := `def main
   nums = [1, 2, 3, 4, 5]
-  sum = nums.reduce(0) do |acc, n|
+  sum = nums.reduce(0) -> do |acc, n|
     acc + n
   end
 end`
@@ -1090,7 +1090,7 @@ end`
 func TestFindBlock(t *testing.T) {
 	input := `def main
   nums = [1, 2, 3, 4, 5]
-  first_even = nums.find do |n|
+  first_even = nums.find -> do |n|
     n % 2 == 0
   end
 end`
@@ -1099,13 +1099,13 @@ end`
 
 	// FindPtr returns *T for optional coalescing support, n is typed
 	assertContains(t, output, `runtime.FindPtr(nums, func(n int) bool {`)
-	assertContains(t, output, `return ((n % 2) == 0)`)
+	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
 }
 
 func TestAnyBlock(t *testing.T) {
 	input := `def main
   nums = [1, 2, 3, 4, 5]
-  has_even = nums.any? do |n|
+  has_even = nums.any? -> do |n|
     n % 2 == 0
   end
 end`
@@ -1114,13 +1114,13 @@ end`
 
 	// With type info, n is typed as int
 	assertContains(t, output, `runtime.Any(nums, func(n int) bool {`)
-	assertContains(t, output, `return ((n % 2) == 0)`)
+	assertContains(t, output, `runtime.Equal((n % 2), 0)`)
 }
 
 func TestAllBlock(t *testing.T) {
 	input := `def main
   nums = [1, 2, 3, 4, 5]
-  all_positive = nums.all? do |n|
+  all_positive = nums.all? -> do |n|
     n > 0
   end
 end`
@@ -1135,7 +1135,7 @@ end`
 func TestNoneBlock(t *testing.T) {
 	input := `def main
   nums = [1, 2, 3, 4, 5]
-  no_negatives = nums.none? do |n|
+  no_negatives = nums.none? -> do |n|
     n < 0
   end
 end`
@@ -1171,41 +1171,44 @@ end`
 
 func TestTimesBlock(t *testing.T) {
 	input := `def main
-  5.times do |i|
+  5.times -> do |i|
     puts(i)
   end
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Times(5, func(i int) {`)
+	// times now generates a native for loop
+	assertContains(t, output, `for i := 0; i < 5; i++ {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
 func TestTimesBlockWithExpression(t *testing.T) {
 	input := `def main
   n = 5
-  n.times do |i|
+  n.times -> do |i|
     puts(i)
   end
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Times(n, func(i int) {`)
+	// times now generates a native for loop
+	assertContains(t, output, `for i := 0; i < n; i++ {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
 func TestUptoBlock(t *testing.T) {
 	input := `def main
-  1.upto(5) do |i|
+  1.upto(5) -> do |i|
     puts(i)
   end
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Upto(1, 5, func(i int) {`)
+	// upto now generates a native for loop
+	assertContains(t, output, `for i := 1; i <= 5; i++ {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
@@ -1213,27 +1216,29 @@ func TestUptoBlockWithVariables(t *testing.T) {
 	input := `def main
   start = 1
   finish = 5
-  start.upto(finish) do |i|
+  start.upto(finish) -> do |i|
     puts(i)
   end
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Upto(start, finish, func(i int) {`)
+	// upto with variables generates a native for loop
+	assertContains(t, output, `for i := start; i <= finish; i++ {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
 func TestDowntoBlock(t *testing.T) {
 	input := `def main
-  5.downto(1) do |i|
+  5.downto(1) -> do |i|
     puts(i)
   end
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Downto(5, 1, func(i int) {`)
+	// downto now generates a native for loop
+	assertContains(t, output, `for i := 5; i >= 1; i-- {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
@@ -1241,61 +1246,64 @@ func TestDowntoBlockWithVariables(t *testing.T) {
 	input := `def main
   high = 5
   low = 1
-  high.downto(low) do |i|
+  high.downto(low) -> do |i|
     puts(i)
   end
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Downto(high, low, func(i int) {`)
+	// downto with variables generates a native for loop
+	assertContains(t, output, `for i := high; i >= low; i-- {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
 func TestTimesBlockNoParam(t *testing.T) {
 	input := `def main
-  3.times do ||
+  3.times -> do
     puts("hello")
   end
 end`
 
 	output := compile(t, input)
 
-	// Should generate runtime.Times with _ parameter
-	assertContains(t, output, `runtime.Times(3, func(_ int) {`)
+	// times with no param generates a native for loop with unused variable
+	assertContains(t, output, `for _i := 0; _i < 3; _i++ {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
 func TestUptoBlockNoParam(t *testing.T) {
 	input := `def main
-  1.upto(3) do ||
+  1.upto(3) -> do
     puts("hello")
   end
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Upto(1, 3, func(_ int) {`)
+	// upto with no param generates a native for loop with unused variable
+	assertContains(t, output, `for _i := 1; _i <= 3; _i++ {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
 func TestDowntoBlockNoParam(t *testing.T) {
 	input := `def main
-  3.downto(1) do ||
+  3.downto(1) -> do
     puts("hello")
   end
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Downto(3, 1, func(_ int) {`)
+	// downto with no param generates a native for loop with unused variable
+	assertContains(t, output, `for _i := 3; _i >= 1; _i-- {`)
 	assertContains(t, output, `runtime.Puts("hello")`)
 }
 
 func TestBraceBlockCodegen(t *testing.T) {
 	input := `def main
   arr = [1, 2, 3]
-  arr.each { |x| puts(x) }
+  arr.each -> { |x| puts(x) }
 end`
 
 	output := compile(t, input)
@@ -1307,7 +1315,7 @@ end`
 func TestBraceBlockMapCodegen(t *testing.T) {
 	input := `def main
   arr = [1, 2, 3]
-  result = arr.map { |x| x * 2 }
+  result = arr.map -> { |x| x * 2 }
   puts result
 end`
 
@@ -1320,12 +1328,13 @@ end`
 
 func TestBraceBlockTimesCodegen(t *testing.T) {
 	input := `def main
-  5.times { |i| puts(i) }
+  5.times -> { |i| puts(i) }
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.Times(5, func(i int) {`)
+	// times now generates a native for loop
+	assertContains(t, output, `for i := 0; i < 5; i++ {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
@@ -2690,16 +2699,17 @@ end`
 	assertContains(t, output, `runtime.RangeContains(runtime.Range{Start: 1, End: 10, Exclusive: false}, 5)`)
 }
 
-func TestRangeEachBlock(t *testing.T) {
+func TestRangeForIteration(t *testing.T) {
+	// Use for-in which is the idiomatic way to iterate over a range
 	input := `def main
-  (1..5).each do |i|
+  for i in 1..5
     puts(i)
   end
 end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.RangeEach(runtime.Range{Start: 1, End: 5, Exclusive: false}, func(i int) {`)
+	assertContains(t, output, `for i := 1; i <= 5; i++ {`)
 	assertContains(t, output, `runtime.Puts(i)`)
 }
 
@@ -3425,7 +3435,7 @@ end`
 }
 
 func TestBareScriptWithBlock(t *testing.T) {
-	input := `[1, 2, 3].each do |x|
+	input := `[1, 2, 3].each -> do |x|
   puts(x)
 end`
 

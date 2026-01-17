@@ -124,9 +124,9 @@ end
 # concurrently - structured concurrency with cleanup
 def concurrently_demo
   result = concurrently do |scope|
-    t1 = scope.spawn { compute(10) }
-    t2 = scope.spawn { compute(20) }
-    t3 = scope.spawn { compute(30) }
+    t1 = scope.spawn -> { compute(10) }
+    t2 = scope.spawn -> { compute(20) }
+    t3 = scope.spawn -> { compute(30) }
 
     r1 = await t1
     r2 = await t2

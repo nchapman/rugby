@@ -18,7 +18,7 @@ puts m["key"]
 # Type alias for function type
 type Handler = (Int) -> Int
 
-double : Handler = -> (x) { x * 2 }
+double : Handler = -> { |x| x * 2 }
 puts double.(5)
 
 #@ expect:

@@ -15,11 +15,11 @@ func TestGeneratedCodeModernization(t *testing.T) {
 end
 
 def process(items : any)
-  items.each do |item|
+  items.each -> do |item|
     puts(item)
   end
 
-  items.map do |x|
+  items.map -> do |x|
     x * 2
   end
 end
@@ -85,7 +85,7 @@ end
 
 def main
   nums = [1, 2, 3, 4, 5]
-  nums.each do |n|
+  nums.each -> do |n|
     puts double(n)
   end
 end`
