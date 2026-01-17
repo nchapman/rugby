@@ -407,7 +407,8 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 	line := p.curToken.Line
 	p.nextToken() // consume 'def'
 
-	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+	// Allow identifiers and certain keywords as function names
+	if !p.isValidMethodName() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected function name after def")
 		return nil
 	}
@@ -838,7 +839,8 @@ func (p *Parser) parseInterfaceDeclWithDoc(doc *ast.CommentGroup) *ast.Interface
 func (p *Parser) parseMethodSig() *ast.MethodSig {
 	p.nextToken() // consume 'def'
 
-	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+	// Allow identifiers and certain keywords as method names
+	if !p.isValidMethodName() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected method name after def")
 		return nil
 	}
@@ -1141,7 +1143,7 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 	}
 
 	// Accept regular identifiers or operator tokens (== for custom equality)
-	// Also accept test keywords (describe, it, before, after) as method names
+	// Also accept certain keywords as method names (Ruby allows this)
 	var methodName string
 	switch p.curToken.Type {
 	case token.IDENT:
@@ -1157,6 +1159,10 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 		p.nextToken()
 	case token.DESCRIBE, token.IT, token.BEFORE, token.AFTER:
 		// Allow test keywords as method names
+		methodName = p.curToken.Literal
+		p.nextToken()
+	case token.NEXT, token.BREAK, token.RETURN, token.TYPE, token.CLASS, token.MODULE, token.END:
+		// Allow common keywords as method names (Ruby-style flexibility)
 		methodName = p.curToken.Literal
 		p.nextToken()
 	default:

@@ -80,6 +80,43 @@ func (p *Parser) peekTokenAfterIs(t token.TokenType) bool {
 	return result
 }
 
+// isValidMethodName checks if the current token can be used as a method name.
+// Ruby allows most keywords to be used as method names, but we must exclude
+// Go reserved keywords (break, return, type, etc.) since they can't be used
+// as identifiers in generated Go code.
+func (p *Parser) isValidMethodName() bool {
+	switch p.curToken.Type {
+	case token.IDENT, token.ANY:
+		return true
+	// Test keywords allowed as method names
+	case token.DESCRIBE, token.IT, token.BEFORE, token.AFTER:
+		return true
+	// Rugby keywords that are NOT Go reserved keywords
+	// Note: break, return, type, class, continue are Go reserved keywords
+	case token.NEXT, token.MODULE, token.END, token.LOOP, token.UNLESS, token.ELSIF,
+		token.UNTIL, token.RESCUE, token.PANIC, token.NIL, token.PUB, token.PRIVATE,
+		token.GETTER, token.SETTER, token.PROPERTY, token.IMPLEMENTS:
+		return true
+	default:
+		return false
+	}
+}
+
+// isValidSelectorName checks if the current token can be used as a selector (after '.').
+// Includes all valid method names plus some language-specific keywords.
+func (p *Parser) isValidSelectorName() bool {
+	if p.isValidMethodName() {
+		return true
+	}
+	// Additional keywords allowed as selectors (for Ruby-style method calls and Go interop)
+	switch p.curToken.Type {
+	case token.AS, token.SELECT, token.SPAWN, token.AWAIT, token.DO:
+		return true
+	default:
+		return false
+	}
+}
+
 // skipNewlines skips over consecutive newline tokens.
 func (p *Parser) skipNewlines() {
 	for p.curTokenIs(token.NEWLINE) {
