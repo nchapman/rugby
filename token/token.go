@@ -178,6 +178,7 @@ var keywords = map[string]TokenType{
 	"in":           IN,
 	"break":        BREAK,
 	"next":         NEXT,
+	"continue":     NEXT, // alias for next
 	"return":       RETURN,
 	"panic":        PANIC,
 	"rescue":       RESCUE,

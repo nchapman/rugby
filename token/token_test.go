@@ -32,6 +32,7 @@ func TestLookupIdent_Keywords(t *testing.T) {
 		// Jump statements
 		{"break", BREAK},
 		{"next", NEXT},
+		{"continue", NEXT}, // alias for next
 		{"return", RETURN},
 		{"panic", PANIC},
 		{"rescue", RESCUE},
