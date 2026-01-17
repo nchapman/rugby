@@ -404,6 +404,22 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 		g.buf.WriteString(" = ")
 	}
 
+	// Check if the value is a tuple variable (stored as a struct)
+	// If so, generate field access for each element
+	if ident, ok := s.Value.(*ast.Ident); ok {
+		if varType, exists := g.vars[ident.Name]; exists && isTupleType(varType) {
+			// Generate tuple field access: t._0, t._1, ...
+			for i := range len(s.Names) {
+				if i > 0 {
+					g.buf.WriteString(", ")
+				}
+				g.buf.WriteString(fmt.Sprintf("%s._%d", ident.Name, i))
+			}
+			g.buf.WriteString("\n")
+			return
+		}
+	}
+
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
 }
@@ -921,6 +937,9 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 		g.buf.WriteString(".(")
 		g.buf.WriteString(goType)
 		g.buf.WriteString(")")
+	} else if tupleLit, ok := s.Value.(*ast.TupleLit); ok && isTupleType(targetType) {
+		// Tuple literal assigned to tuple type: generate struct literal
+		g.genTupleLitAsStruct(tupleLit, targetType)
 	} else {
 		g.genExpr(s.Value)
 	}

@@ -1356,6 +1356,26 @@ func (a *Analyzer) analyzeAssign(s *ast.AssignStmt) {
 		// Resolve interface and struct types
 		a.resolveType(declaredType)
 
+		// Check for tuple type with function call - not supported, must destructure
+		if declaredType.Kind == TypeTuple {
+			isFunctionCall := false
+			if _, ok := s.Value.(*ast.CallExpr); ok {
+				isFunctionCall = true
+			} else if ident, ok := s.Value.(*ast.Ident); ok {
+				// Check if this is a no-arg function being called implicitly
+				if fn := a.scope.Lookup(ident.Name); fn != nil && fn.Kind == SymFunction {
+					isFunctionCall = true
+				}
+			}
+			if isFunctionCall {
+				a.addError(&TupleAssignmentError{
+					VarName: s.Name,
+					Line:    s.Line,
+				})
+				return
+			}
+		}
+
 		if declaredType.Kind == TypeArray && declaredType.Elem != nil && declaredType.Elem.Kind == TypeAny {
 			if arr, ok := s.Value.(*ast.ArrayLit); ok {
 				// Analyze array literal allowing heterogeneous elements
@@ -2554,6 +2574,33 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 	case *ast.SelectorExpr:
 		receiverType := a.analyzeExpr(e.X)
 		var selectorKind ast.SelectorKind
+
+		// Check for tuple field access (not allowed - must use destructuring)
+		if receiverType != nil && receiverType.Kind == TypeTuple {
+			// Check if selector looks like a tuple field (_0, _1, _2, etc.)
+			if len(e.Sel) >= 2 && e.Sel[0] == '_' {
+				isDigits := true
+				for _, c := range e.Sel[1:] {
+					if c < '0' || c > '9' {
+						isDigits = false
+						break
+					}
+				}
+				if isDigits {
+					// Try to get line from the receiver expression
+					line := 0
+					if ident, ok := e.X.(*ast.Ident); ok {
+						line = ident.Line
+					}
+					a.addError(&TupleFieldAccessError{
+						Field: e.Sel,
+						Line:  line,
+					})
+					typ = TypeUnknownVal
+					break
+				}
+			}
+		}
 
 		// Check if receiver is a Go package (for Go interop)
 		isGoPackage := false

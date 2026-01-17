@@ -21,6 +21,11 @@ func mapType(rubyType string) string {
 		return mapFunctionType(rubyType)
 	}
 
+	// Handle tuple types: (Type1, Type2, ...)
+	if strings.HasPrefix(rubyType, "(") && strings.HasSuffix(rubyType, ")") && !strings.Contains(rubyType, "): ") {
+		return mapTupleType(rubyType)
+	}
+
 	// Handle Array<T>
 	if strings.HasPrefix(rubyType, "Array<") && strings.HasSuffix(rubyType, ">") {
 		inner := rubyType[6 : len(rubyType)-1]
@@ -149,6 +154,36 @@ func mapFunctionType(rubyType string) string {
 	goReturn := mapType(returnStr)
 
 	return fmt.Sprintf("func(%s) %s", strings.Join(goParams, ", "), goReturn)
+}
+
+// mapTupleType converts a Rugby tuple type to a Go anonymous struct type.
+// Examples:
+//   - "(String, Int)" → "struct{ _0 string; _1 int }"
+//   - "(String, Float, Bool)" → "struct{ _0 string; _1 float64; _2 bool }"
+func mapTupleType(rubyType string) string {
+	// Strip outer parentheses
+	inner := rubyType[1 : len(rubyType)-1]
+	if inner == "" {
+		return "struct{}"
+	}
+
+	// Split by comma at top level (handling nested types)
+	parts := splitTopLevelCommas(inner)
+	fields := make([]string, len(parts))
+	for i, part := range parts {
+		goType := mapType(strings.TrimSpace(part))
+		fields[i] = fmt.Sprintf("_%d %s", i, goType)
+	}
+
+	return "struct{ " + strings.Join(fields, "; ") + " }"
+}
+
+// isTupleType checks if a type annotation represents a tuple type.
+// Tuple types look like "(Type1, Type2, ...)" but NOT function types like "(T1): T2".
+func isTupleType(typeName string) bool {
+	return strings.HasPrefix(typeName, "(") &&
+		strings.HasSuffix(typeName, ")") &&
+		!strings.Contains(typeName, "): ")
 }
 
 // splitTopLevelCommas splits a string by commas, but only at the top level

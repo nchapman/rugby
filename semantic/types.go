@@ -400,6 +400,16 @@ func (t *Type) GoType() string {
 			sig += " (" + strings.Join(returns, ", ") + ")"
 		}
 		return sig
+	case TypeTuple:
+		// Generate anonymous struct for tuple: struct{ _0 T0; _1 T1; ... }
+		if len(t.Elements) == 0 {
+			return "struct{}"
+		}
+		fields := make([]string, len(t.Elements))
+		for i, elem := range t.Elements {
+			fields[i] = fmt.Sprintf("_%d %s", i, elem.GoType())
+		}
+		return "struct{ " + strings.Join(fields, "; ") + " }"
 	default:
 		return ""
 	}

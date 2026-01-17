@@ -563,3 +563,37 @@ func (e *PrivateMethodAccessError) Error() string {
 }
 
 func (e *PrivateMethodAccessError) Position() (int, int) { return e.Line, e.Column }
+
+// TupleFieldAccessError reports when trying to access tuple fields directly instead of destructuring.
+type TupleFieldAccessError struct {
+	Field  string
+	Line   int
+	Column int
+}
+
+func (e *TupleFieldAccessError) Error() string {
+	msg := fmt.Sprintf("cannot access tuple element '%s' directly; use destructuring instead: a, b = tuple", e.Field)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+func (e *TupleFieldAccessError) Position() (int, int) { return e.Line, e.Column }
+
+// TupleAssignmentError reports when trying to assign a multi-return function to a tuple variable.
+type TupleAssignmentError struct {
+	VarName string
+	Line    int
+	Column  int
+}
+
+func (e *TupleAssignmentError) Error() string {
+	msg := fmt.Sprintf("cannot assign multi-return function to tuple variable '%s'; use destructuring instead: a, b = func()", e.VarName)
+	if e.Line > 0 {
+		return fmt.Sprintf("line %d: %s", e.Line, msg)
+	}
+	return msg
+}
+
+func (e *TupleAssignmentError) Position() (int, int) { return e.Line, e.Column }

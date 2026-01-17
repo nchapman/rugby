@@ -1270,6 +1270,22 @@ func (g *Generator) genTupleLit(t *ast.TupleLit) {
 	}
 }
 
+// genTupleLitAsStruct generates a Go anonymous struct literal for a tuple.
+// Used when assigning a tuple literal to a variable with a tuple type annotation.
+// Example: x: (String, Int) = ("hello", 42) -> var x struct{ _0 string; _1 int } = struct{ _0 string; _1 int }{"hello", 42}
+func (g *Generator) genTupleLitAsStruct(t *ast.TupleLit, tupleType string) {
+	goType := mapTupleType(tupleType)
+	g.buf.WriteString(goType)
+	g.buf.WriteString("{")
+	for i, elem := range t.Elements {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.genExpr(elem)
+	}
+	g.buf.WriteString("}")
+}
+
 // genSetLit generates Go code for a set literal: Set{1, 2, 3} -> map[int]struct{}{1: {}, 2: {}, 3: {}}
 func (g *Generator) genSetLit(s *ast.SetLit) {
 	// Determine element type from type hint or first element
