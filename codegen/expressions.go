@@ -1470,12 +1470,17 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 
 	// Try to get element type from TypeInfo or from the Rugby type string
 	elemType := g.typeInfo.GetElementType(idx.Left)
-	if elemType == "" {
+	if elemType == "" || elemType == "unknown" || strings.Contains(elemType, "unknown") {
 		// Fallback: extract from type string like "Array<Int>"
 		elemType = extractArrayElementType(leftType)
 	}
+	if elemType == "" || elemType == "unknown" || strings.Contains(elemType, "unknown") {
+		// Additional fallback: for nested index expressions (2D arrays),
+		// try to infer from the identifier's type in g.vars
+		elemType = g.inferIndexedElementType(idx.Left)
+	}
 
-	if elemType != "" && elemType != "any" {
+	if elemType != "" && elemType != "any" && elemType != "unknown" && !strings.Contains(elemType, "unknown") {
 		goElemType := mapType(elemType)
 		// Classes are reference types - need pointer prefix in Go
 		if g.typeInfo != nil && g.typeInfo.IsClass(elemType) {
@@ -1497,6 +1502,30 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 		g.genExpr(idx.Index)
 		g.buf.WriteString(")")
 	}
+}
+
+// inferIndexedElementType attempts to infer the element type for an indexed expression.
+// For example, for xloc[i] where xloc has type Array<Array<Float>>,
+// this returns "Array<Float>" (the element type after one level of indexing).
+func (g *Generator) inferIndexedElementType(expr ast.Expression) string {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		// Get the variable's type from semantic analysis and extract element type
+		if rugbyType := g.typeInfo.GetRugbyType(e); rugbyType != "" && rugbyType != "unknown" {
+			return extractArrayElementType(rugbyType)
+		}
+	case *ast.IndexExpr:
+		// For nested indexing, first get the collection's type, then extract element type
+		collType := g.inferTypeFromExpr(e.Left)
+		if collType != "" {
+			// Extract element type from the collection type
+			elemType := extractArrayElementType(collType)
+			if elemType != "" {
+				return elemType
+			}
+		}
+	}
+	return ""
 }
 
 func (g *Generator) genRangeSlice(collection ast.Expression, r *ast.RangeLit) {
@@ -1571,6 +1600,31 @@ func (g *Generator) shouldUseNativeIndex(expr ast.Expression) bool {
 	default:
 		return false
 	}
+}
+
+// extractGenericTypeString recursively extracts a type string from an IndexExpr AST node.
+// For Array<Int>, returns "Array<Int>". For Array<Array<Float>>, returns "Array<Array<Float>>".
+// This handles nested generic types that the semantic analyzer may not fully resolve.
+func extractGenericTypeString(idx *ast.IndexExpr) string {
+	baseIdent, ok := idx.Left.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+
+	// Simple case: Array<Int> where Index is an Ident
+	if typeParamIdent, ok := idx.Index.(*ast.Ident); ok {
+		return baseIdent.Name + "<" + typeParamIdent.Name + ">"
+	}
+
+	// Nested case: Array<Array<Float>> where Index is another IndexExpr
+	if nestedIdx, ok := idx.Index.(*ast.IndexExpr); ok {
+		innerType := extractGenericTypeString(nestedIdx)
+		if innerType != "" {
+			return baseIdent.Name + "<" + innerType + ">"
+		}
+	}
+
+	return ""
 }
 
 // extractArrayElementType extracts the element type from a Rugby type string.

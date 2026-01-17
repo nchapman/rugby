@@ -910,10 +910,20 @@ func (p *Parser) canStartCommandArg(expr ast.Expression) bool {
 	// Prefix operators - only if followed immediately by their operand (no space after)
 	// This handles `foo -1` (command with unary minus) vs `foo - 1` (binary)
 	case token.MINUS, token.NOT, token.BANG:
-		// For command syntax, treat prefix operators as arg starters
-		// The SpaceBefore check above ensures there's space before the operator
-		// For BANG, this handles `puts !false` (logical NOT, not error unwrap)
-		return true
+		// For command syntax, treat prefix operators as arg starters only if
+		// the operand follows without space (unary prefix, not binary).
+		// `foo -1` → command (space before -, no space after)
+		// `foo - 1` → binary (space on both sides)
+		// Use lexer lookahead to check the token after the operator
+		state := p.l.SaveState()
+		savedCur := p.curToken
+		savedPeek := p.peekToken
+		p.nextToken() // move to the operator
+		nextHasSpace := p.peekToken.SpaceBefore
+		p.l.RestoreState(state)
+		p.curToken = savedCur
+		p.peekToken = savedPeek
+		return !nextHasSpace
 	}
 	return false
 }

@@ -848,20 +848,46 @@ func (g *Generator) getSelectorKind(sel *ast.SelectorExpr) ast.SelectorKind {
 // Primary source is TypeInfo from semantic analysis. Fallback is minimal
 // literal type detection for robustness.
 func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
+	// First, handle special cases that can provide more accurate types than semantic analysis
+	switch e := expr.(type) {
+	case *ast.CallExpr:
+		// Constructor call: ClassName.new(...) -> ClassName
+		// Handles both non-generic (Foo.new) and generic (Array<T>.new) constructors
+		if sel, ok := e.Func.(*ast.SelectorExpr); ok && sel.Sel == "new" {
+			if ident, ok := sel.X.(*ast.Ident); ok {
+				return ident.Name
+			}
+			// Handle generic types: Array<T>.new, Hash<K,V>.new, etc.
+			// sel.X is an IndexExpr where Left is the base type and Index is the type param
+			if idx, ok := sel.X.(*ast.IndexExpr); ok {
+				if typeStr := extractGenericTypeString(idx); typeStr != "" {
+					return typeStr
+				}
+			}
+		}
+	}
+
 	// Primary: use semantic type info
 	// GetRugbyType returns the full type including generics (e.g., "Array<Int>", "String?")
 	// Note: "any" is a valid type that should be returned
-	if rugbyType := g.typeInfo.GetRugbyType(expr); rugbyType != "" && rugbyType != "unknown" {
+	rugbyType := g.typeInfo.GetRugbyType(expr)
+	if rugbyType != "" && rugbyType != "unknown" && !strings.Contains(rugbyType, "unknown") {
 		return rugbyType
 	}
 
 	// For identifiers, check codegen's variable tracking as fallback
-	// This handles cases where the semantic analyzer doesn't have type info for the specific node
-	// (e.g., when a variable's type was tracked during assignment but the reference is a new node)
+	// This handles cases where:
+	// - The semantic analyzer doesn't have type info for the specific node
+	// - The semantic analyzer has incomplete type info (e.g., Array<unknown>)
 	if ident, ok := expr.(*ast.Ident); ok {
-		if varType, ok := g.vars[ident.Name]; ok && varType != "" {
+		if varType, ok := g.vars[ident.Name]; ok && varType != "" && !strings.Contains(varType, "unknown") {
 			return varType
 		}
+	}
+
+	// If semantic type is partially known (contains "unknown"), still use it as fallback
+	if rugbyType != "" && rugbyType != "unknown" {
+		return rugbyType
 	}
 
 	// Minimal fallback: literal type detection only
@@ -888,14 +914,9 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 	case *ast.SetLit:
 		return "Set"
 	case *ast.CallExpr:
-		// Constructor call: ClassName.new(...) -> ClassName
-		// Note: Doesn't handle chained calls or explicit type params yet
-		if sel, ok := e.Func.(*ast.SelectorExpr); ok {
-			if sel.Sel == "new" {
-				if ident, ok := sel.X.(*ast.Ident); ok {
-					return ident.Name
-				}
-			}
+		// Note: Constructor calls (ClassName.new) are handled by early check at top of function
+		// Here we only handle struct method calls for return type inference
+		if sel, ok := e.Func.(*ast.SelectorExpr); ok && sel.Sel != "new" {
 			// Struct method call: p.moved(...) -> look up method return type
 			receiverType := g.inferTypeFromExpr(sel.X)
 			if g.structs != nil {
@@ -953,6 +974,12 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 					}
 				}
 			}
+		}
+	case *ast.IndexExpr:
+		// For array/slice indexing, get element type from collection type
+		collType := g.inferTypeFromExpr(e.Left)
+		if collType != "" {
+			return extractArrayElementType(collType)
 		}
 	}
 	return "" // unknown - semantic analysis should have provided the type

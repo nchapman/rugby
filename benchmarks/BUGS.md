@@ -75,6 +75,14 @@ spawn { filter(input, ch1, prime) }  # uses captured value
 ch = ch1             # reassignment doesn't affect spawned goroutine
 ```
 
+### 2D Array Indexing - FIXED
+Nested array indexing now works with variable indices. The type inference correctly extracts element types from nested generic types like `Array<Array<Float>>`.
+
+```ruby
+xloc = Array<Array<Float>>.new(size, Array<Float>.new(8, 0.0))
+xloc[i / 8][i % 8] = value  # Works now
+```
+
 ---
 
 ## Blocking Issues (Preventing Benchmarks)
@@ -132,15 +140,6 @@ class Leaf
 end
 ```
 
-### 2D Array Indexing
-**Affects:** mandelbrot
-**Status:** Nested array indexing has type inference issues
-
-```ruby
-xloc = Array<Array<Float>>.new(size, Array<Float>.new(8, 0.0))
-xloc[i / 8][i % 8] = value  # Error: undefined: unknown
-```
-
 ### Pointer Types in Properties
 **Affects:** pidigits
 **Status:** Cannot declare pointer type properties, and value vs pointer mismatch
@@ -178,14 +177,14 @@ len = bytes.length  # Error: type []byte has no field or method Length
 | fannkuch-redux | ✅ | ✅ | ✅ | ✅ | Working |
 | merkletrees | ✅ | ✅ | ✅ | ✅ | Working |
 | fasta | ✅ | ✅ | ✅ | ✅ | Working |
-| mandelbrot | ✅ | ✅ | - | ❌ | Blocked: 2D arrays |
+| mandelbrot | ✅ | ✅ | - | ✅ | Working |
 | coro-prime-sieve | ✅ | ✅ | ✅ | ✅ | Working |
 | lru | ✅ | ✅ | ✅ | ❌ | Blocked: Hash type issues |
 | pidigits | ✅ | ✅ | ✅ | ❌ | Blocked: pointer type properties |
 | knucleotide | ✅ | ✅ | ✅ | ❌ | Blocked: Hash type inference |
 | regex-redux | ✅ | ✅ | ✅ | ❌ | Blocked: []byte.length |
 
-**8 of 13 Rugby benchmarks working**
+**9 of 13 Rugby benchmarks working**
 
 ## Notes
 
