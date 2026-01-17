@@ -614,6 +614,13 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 			g.buf.WriteString(")")
 			return
 		}
+		// Check if left operand is an integer - use native Go bitwise shift
+		if g.isIntegerType(e.Left) {
+			g.genExpr(e.Left)
+			g.buf.WriteString(" << ")
+			g.genExpr(e.Right)
+			return
+		}
 		// Fallback to runtime.ShiftLeft for unknown types
 		g.needsRuntime = true
 		g.buf.WriteString("runtime.ShiftLeft(")
@@ -626,6 +633,14 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 
 	// >> is always bitwise right shift
 	if e.Op == ">>" {
+		// Check if left operand is an integer - use native Go bitwise shift
+		if g.isIntegerType(e.Left) {
+			g.genExpr(e.Left)
+			g.buf.WriteString(" >> ")
+			g.genExpr(e.Right)
+			return
+		}
+		// Fallback to runtime.ShiftRight for unknown types
 		g.needsRuntime = true
 		g.buf.WriteString("runtime.ShiftRight(")
 		g.genExpr(e.Left)
@@ -667,6 +682,28 @@ func (g *Generator) genBinaryExpr(e *ast.BinaryExpr) {
 // hasAnyTypedOperand returns true if BOTH operands have type any (interface{})
 // We require both because if only one is any, it's likely due to generic typing
 // (like reduce's accumulator) where codegen infers concrete types.
+// isIntegerType returns true if the expression is known to be an integer type.
+// This includes integer literals and variables/expressions typed as Int.
+func (g *Generator) isIntegerType(expr ast.Expression) bool {
+	// Integer literals are always integers
+	if _, ok := expr.(*ast.IntLit); ok {
+		return true
+	}
+
+	// Check inferred type
+	inferredType := g.inferTypeFromExpr(expr)
+	if inferredType == "Int" || inferredType == "int" {
+		return true
+	}
+
+	// Check semantic type info
+	if goType := g.typeInfo.GetGoType(expr); goType == "int" {
+		return true
+	}
+
+	return false
+}
+
 func (g *Generator) hasAnyTypedOperand(left, right ast.Expression) bool {
 	leftKind := g.typeInfo.GetTypeKind(left)
 	rightKind := g.typeInfo.GetTypeKind(right)

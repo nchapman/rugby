@@ -5268,8 +5268,9 @@ end`
 
 	output := compile(t, input)
 
-	assertContains(t, output, `runtime.ShiftRight(16, 2)`)
-	assertContains(t, output, `runtime.ShiftRight(8, 1)`)
+	// Integer shifts now use native Go operators
+	assertContains(t, output, `16 >> 2`)
+	assertContains(t, output, `8 >> 1`)
 }
 
 // TestPreSizedArray tests Array<T>.new(size, default) codegen
