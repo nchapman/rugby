@@ -156,33 +156,29 @@ class Leaf
 end
 ```
 
-### Pointer Types in Properties
+### Pointer Types in Properties - FIXED
 **Affects:** pidigits
-**Status:** Cannot declare pointer type properties, and value vs pointer mismatch
+**Status:** Pointer type syntax `*big.Int` now supported in property declarations and type annotations.
 
 ```ruby
 class PiState
-  property tmp1: big.Int  # Declares value type
+  property tmp1: *big.Int  # Now works with pointer syntax
 
   def initialize
-    @tmp1 = big.NewInt(0)  # Error: *big.Int cannot be assigned to big.Int
+    @tmp1 = big.NewInt(0)  # Correctly assigns *big.Int
   end
 end
 ```
-Need syntax like `property tmp1: *big.Int` or automatic pointer handling.
 
-### Value Type Optional `.unwrap` Missing
+### Value Type Hash Access - WORKAROUND
 **Affects:** knucleotide
-**Status:** For value-type hashes, `.get(key)` returns `*int` which has no `.unwrap` method
+**Status:** Use `.fetch(key, default)` pattern instead of `.get(key).unwrap`
 
 ```ruby
 counts: Hash<Int, Int> = {}
-maybe_count = counts.get(key)  # Returns *int
-if maybe_count != nil
-  count = maybe_count.unwrap  # Error: *int has no method Unwrap
-end
+count = counts.fetch(key, 0)  # Returns value or default
 ```
-**Workaround:** Use pointer dereference syntax when available, or use Go's direct map access which returns zero for missing keys.
+The knucleotide benchmark was rewritten to use character lookup instead of byte manipulation to avoid type inference limitations with Go's `[]byte` element type.
 
 ---
 
@@ -200,11 +196,11 @@ end
 | mandelbrot | ✅ | ✅ | - | ✅ | Working |
 | coro-prime-sieve | ✅ | ✅ | ✅ | ✅ | Working |
 | lru | ✅ | ✅ | ✅ | ✅ | Working |
-| pidigits | ✅ | ✅ | ✅ | ❌ | Blocked: pointer type properties |
-| knucleotide | ✅ | ✅ | ✅ | ❌ | Blocked: `.unwrap` on value optionals |
+| pidigits | ✅ | ✅ | ✅ | ✅ | Working |
+| knucleotide | ✅ | ✅ | ✅ | ✅ | Working |
 | regex-redux | ✅ | ✅ | ✅ | ✅ | Working |
 
-**11 of 13 Rugby benchmarks working**
+**All 13 Rugby benchmarks working! 🎉**
 
 ## Notes
 
