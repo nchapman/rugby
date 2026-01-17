@@ -24,7 +24,7 @@ def main
 
   # Clean the input - remove headers and newlines
   clean_re = regexp.MustCompile("(>[^\n]+)?\n")
-  bytes = clean_re.ReplaceAllLiteral(bytes, "")
+  bytes = clean_re.ReplaceAllLiteral(bytes, "".bytes)
   cleaned_len = bytes.length
 
   # Variant patterns to count
@@ -62,7 +62,7 @@ def main
 
   substitutions.each -> { |pattern, replacement|
     re = regexp.MustCompile(pattern)
-    bytes = re.ReplaceAll(bytes, replacement)
+    bytes = re.ReplaceAll(bytes, replacement.bytes)
   }
 
   fmt.Printf("\n%d\n%d\n%d\n", original_len, cleaned_len, bytes.length)

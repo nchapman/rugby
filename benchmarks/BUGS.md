@@ -83,6 +83,9 @@ xloc = Array<Array<Float>>.new(size, Array<Float>.new(8, 0.0))
 xloc[i / 8][i % 8] = value  # Works now
 ```
 
+### `[]byte.length` Method - FIXED
+Go's `[]byte` type now supports the `.length` method for consistency with other collections.
+
 ---
 
 ## Blocking Issues (Preventing Benchmarks)
@@ -153,14 +156,28 @@ end
 ```
 Need syntax like `property tmp1: *big.Int` or automatic pointer handling.
 
-### `[]byte` Missing `.length` Method
-**Affects:** regex-redux
-**Status:** Go's `[]byte` type doesn't have `.length` method
+### String Indexing Returns `any` Type
+**Affects:** knucleotide
+**Status:** When indexing into a string, the result type is `any` instead of `String`
 
 ```ruby
-bytes, _ = ioutil.ReadAll(f)
-len = bytes.length  # Error: type []byte has no field or method Length
+s = scanner.Text
+c = s[0]  # Type is 'any', not 'String'
+char_to_num(c)  # Error: cannot use any as String
 ```
+
+### Value Type Optional `.unwrap` Missing
+**Affects:** knucleotide
+**Status:** For value-type hashes, `.get(key)` returns `*int` which has no `.unwrap` method
+
+```ruby
+counts: Hash<Int, Int> = {}
+maybe_count = counts.get(key)  # Returns *int
+if maybe_count != nil
+  count = maybe_count.unwrap  # Error: *int has no method Unwrap
+end
+```
+**Workaround:** Use pointer dereference syntax when available, or use Go's direct map access which returns zero for missing keys.
 
 ---
 
@@ -179,10 +196,10 @@ len = bytes.length  # Error: type []byte has no field or method Length
 | coro-prime-sieve | ✅ | ✅ | ✅ | ✅ | Working |
 | lru | ✅ | ✅ | ✅ | ✅ | Working |
 | pidigits | ✅ | ✅ | ✅ | ❌ | Blocked: pointer type properties |
-| knucleotide | ✅ | ✅ | ✅ | ❌ | Blocked: Hash type inference |
-| regex-redux | ✅ | ✅ | ✅ | ❌ | Blocked: []byte.length |
+| knucleotide | ✅ | ✅ | ✅ | ❌ | Blocked: String indexing returns `any`, `.unwrap` on value optionals |
+| regex-redux | ✅ | ✅ | ✅ | ✅ | Working |
 
-**10 of 13 Rugby benchmarks working**
+**11 of 13 Rugby benchmarks working**
 
 ## Notes
 
