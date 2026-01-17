@@ -1,0 +1,7 @@
+# Compiled binaries
+*_go
+*_rs
+*_rg
+
+# Rugby build cache
+.rugby/
