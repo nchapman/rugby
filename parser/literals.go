@@ -12,9 +12,10 @@ import (
 )
 
 // parseIntLiteral parses an integer literal.
+// Supports decimal, hex (0x), binary (0b), and octal (0o) literals.
 func (p *Parser) parseIntLiteral() ast.Expression {
 	line, col := p.curToken.Line, p.curToken.Column
-	val, err := strconv.ParseInt(p.curToken.Literal, 10, 64)
+	val, err := strconv.ParseInt(p.curToken.Literal, 0, 64)
 	if err != nil {
 		p.errorAt(line, col, fmt.Sprintf("invalid integer %s", p.curToken.Literal))
 		return nil

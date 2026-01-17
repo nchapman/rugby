@@ -640,6 +640,47 @@ func (l *Lexer) readNumber() token.Token {
 	startLine, startCol := l.line, l.column
 	isFloat := false
 
+	// Handle hex (0x), binary (0b), and octal (0o) literals
+	if l.ch == '0' {
+		nextCh := l.peekChar()
+		if nextCh == 'x' || nextCh == 'X' {
+			l.readChar() // consume '0'
+			l.readChar() // consume 'x' or 'X'
+			if !isHexDigit(l.ch) {
+				return token.Token{Type: token.ILLEGAL, Literal: "invalid hex literal: expected digit after 0x", Line: startLine, Column: startCol}
+			}
+			for isHexDigit(l.ch) {
+				l.readChar()
+			}
+			literal := l.input[pos:l.pos]
+			return token.Token{Type: token.INT, Literal: literal, Line: startLine, Column: startCol}
+		}
+		if nextCh == 'b' || nextCh == 'B' {
+			l.readChar() // consume '0'
+			l.readChar() // consume 'b' or 'B'
+			if l.ch != '0' && l.ch != '1' {
+				return token.Token{Type: token.ILLEGAL, Literal: "invalid binary literal: expected 0 or 1 after 0b", Line: startLine, Column: startCol}
+			}
+			for l.ch == '0' || l.ch == '1' {
+				l.readChar()
+			}
+			literal := l.input[pos:l.pos]
+			return token.Token{Type: token.INT, Literal: literal, Line: startLine, Column: startCol}
+		}
+		if nextCh == 'o' || nextCh == 'O' {
+			l.readChar() // consume '0'
+			l.readChar() // consume 'o' or 'O'
+			if l.ch < '0' || l.ch > '7' {
+				return token.Token{Type: token.ILLEGAL, Literal: "invalid octal literal: expected 0-7 after 0o", Line: startLine, Column: startCol}
+			}
+			for l.ch >= '0' && l.ch <= '7' {
+				l.readChar()
+			}
+			literal := l.input[pos:l.pos]
+			return token.Token{Type: token.INT, Literal: literal, Line: startLine, Column: startCol}
+		}
+	}
+
 	for isDigit(l.ch) {
 		l.readChar()
 	}
@@ -850,6 +891,10 @@ func isLetter(ch byte) bool {
 
 func isDigit(ch byte) bool {
 	return '0' <= ch && ch <= '9'
+}
+
+func isHexDigit(ch byte) bool {
+	return isDigit(ch) || ('a' <= ch && ch <= 'f') || ('A' <= ch && ch <= 'F')
 }
 
 // getClosingDelimiter returns the closing delimiter for paired delimiters,

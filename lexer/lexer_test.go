@@ -218,6 +218,67 @@ func TestNumbers(t *testing.T) {
 	}
 }
 
+func TestHexBinaryOctalNumbers(t *testing.T) {
+	input := `0x80 0xFF 0xABCD 0b1010 0b11111111 0o755 0o17 0XFF 0B1010 0O755`
+
+	tests := []struct {
+		expectedType    token.TokenType
+		expectedLiteral string
+	}{
+		{token.INT, "0x80"},
+		{token.INT, "0xFF"},
+		{token.INT, "0xABCD"},
+		{token.INT, "0b1010"},
+		{token.INT, "0b11111111"},
+		{token.INT, "0o755"},
+		{token.INT, "0o17"},
+		{token.INT, "0XFF"},   // uppercase X
+		{token.INT, "0B1010"}, // uppercase B
+		{token.INT, "0O755"},  // uppercase O
+		{token.EOF, ""},
+	}
+
+	l := New(input)
+
+	for i, tt := range tests {
+		tok := l.NextToken()
+
+		if tok.Type != tt.expectedType {
+			t.Fatalf("tests[%d] - tokentype wrong. expected=%q, got=%q",
+				i, tt.expectedType, tok.Type)
+		}
+
+		if tok.Literal != tt.expectedLiteral {
+			t.Fatalf("tests[%d] - literal wrong. expected=%q, got=%q",
+				i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}
+
+func TestInvalidNumberLiterals(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected token.TokenType
+	}{
+		{"0x", token.ILLEGAL},  // hex with no digits
+		{"0b", token.ILLEGAL},  // binary with no digits
+		{"0o", token.ILLEGAL},  // octal with no digits
+		{"0xG", token.ILLEGAL}, // hex with invalid digit
+		{"0b2", token.ILLEGAL}, // binary with invalid digit
+		{"0o8", token.ILLEGAL}, // octal with invalid digit
+	}
+
+	for _, tt := range tests {
+		l := New(tt.input)
+		tok := l.NextToken()
+
+		if tok.Type != tt.expected {
+			t.Errorf("input %q: expected token type %q, got %q (literal: %q)",
+				tt.input, tt.expected, tok.Type, tok.Literal)
+		}
+	}
+}
+
 func TestComments(t *testing.T) {
 	input := `x = 5 # this is a comment
 y = 10`
