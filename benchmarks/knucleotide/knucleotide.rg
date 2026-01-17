@@ -28,7 +28,7 @@ def read_sequence(filename: String): Array<Int>
 
   scanner = bufio.NewScanner(f)
   found_three = false
-  data = Array<Int>.new(0, 0)
+  data = Array.new(0, 0)
 
   while scanner.Scan
     line = scanner.Text

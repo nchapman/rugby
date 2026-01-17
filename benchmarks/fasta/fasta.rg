@@ -46,7 +46,7 @@ end
 def random_fasta(genelist: Array<(String, Float)>, n: Int, rng: Random)
   # Build cumulative probabilities
   cum = 0.0
-  probs = Array<Float>.new(genelist.length, 0.0)
+  probs = Array.new(genelist.length, 0.0)
   i = 0
   while i < genelist.length
     _, p = genelist[i]

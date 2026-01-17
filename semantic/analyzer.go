@@ -3393,7 +3393,13 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 	var selectorReceiverType *Type
 	var selectorMethodName string
 	if sel, ok := call.Func.(*ast.SelectorExpr); ok {
-		selectorReceiverType = a.analyzeExpr(sel.X)
+		// Special case: bare Array.new() - don't analyze 'Array' as an identifier
+		// Type will be inferred from the default value argument later
+		if ident, ok := sel.X.(*ast.Ident); ok && ident.Name == "Array" && sel.Sel == "new" {
+			selectorReceiverType = TypeUnknownVal
+		} else {
+			selectorReceiverType = a.analyzeExpr(sel.X)
+		}
 		selectorMethodName = sel.Sel
 	}
 
@@ -3485,6 +3491,32 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 			// Handle Array<Type>.new(size, default) constructor
 			if receiverType.Kind == TypeArray {
 				return receiverType
+			}
+			// Handle bare Array.new(size, default) - infer type from default value
+			if ident, ok := sel.X.(*ast.Ident); ok && ident.Name == "Array" {
+				if len(call.Args) >= 2 {
+					// Infer element type from the second argument (default value)
+					// Exclude nil, unknown, and any since they don't provide useful type info
+					defaultType := argTypes[1]
+					if defaultType != nil && defaultType.Kind != TypeUnknown &&
+						defaultType.Kind != TypeAny && defaultType.Kind != TypeNil {
+						resultType := NewArrayType(defaultType)
+						a.setNodeType(call, resultType)
+						return resultType
+					}
+				}
+				// Array.new(size) without default -> Array<any>
+				if len(call.Args) >= 1 {
+					resultType := NewArrayType(TypeAnyVal)
+					a.setNodeType(call, resultType)
+					return resultType
+				}
+				// Array.new() with no args is an error
+				a.addError(&Error{
+					Line:    ident.Line,
+					Message: "Array.new() requires at least a size argument",
+				})
+				return TypeUnknownVal
 			}
 		}
 

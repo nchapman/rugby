@@ -36,7 +36,7 @@ def times_trans(v: Array<Float>, u: Array<Float>, n: Int)
 end
 
 def a_times_transp(v: Array<Float>, u: Array<Float>, n: Int)
-  x = Array<Float>.new(n, 0.0)
+  x = Array.new(n, 0.0)
   times(x, u, n)
   times_trans(v, x, n)
 end
@@ -48,8 +48,8 @@ def main
     n = arg
   end
 
-  u = Array<Float>.new(n, 1.0)
-  v = Array<Float>.new(n, 1.0)
+  u = Array.new(n, 1.0)
+  v = Array.new(n, 1.0)
 
   10.times -> {
     a_times_transp(v, u, n)

@@ -4,10 +4,10 @@ import "strconv"
 import "crypto/md5"
 
 def mbrot8(cr: Array<Float>, ci: Float): Int
-  zr = Array<Float>.new(8, 0.0)
-  zi = Array<Float>.new(8, 0.0)
-  tr = Array<Float>.new(8, 0.0)
-  ti = Array<Float>.new(8, 0.0)
+  zr = Array.new(8, 0.0)
+  zi = Array.new(8, 0.0)
+  tr = Array.new(8, 0.0)
+  ti = Array.new(8, 0.0)
 
   10.times -> {
     5.times -> {
@@ -88,7 +88,7 @@ def main
 
   fmt.Printf("P4\n%d %d\n", size, size)
 
-  pixels = Array<Int>.new(size * chunk_size, 0)
+  pixels = Array.new(size * chunk_size, 0)
   chunk_id = 0
   while chunk_id < size
     ci = chunk_id.to_f * inv - 1.0

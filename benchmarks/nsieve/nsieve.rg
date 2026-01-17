@@ -3,7 +3,7 @@ import "fmt"
 import "strconv"
 
 def nsieve(n: Int)
-  flags = Array<Bool>.new(n, false)
+  flags = Array.new(n, false)
   count = 0
 
   i = 2

@@ -2068,6 +2068,40 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		}
 
 		if fn.Sel == "new" {
+			// Handle bare Array.new(size, default) or Array.new(size) with inferred type
+			if ident, ok := fn.X.(*ast.Ident); ok && ident.Name == "Array" {
+				if len(call.Args) >= 2 {
+					// Get inferred element type from semantic analysis
+					elemType := g.typeInfo.GetElementType(call)
+					if elemType != "" && elemType != "unknown" {
+						// Use mapParamType to handle class types as pointers
+						goType := g.mapParamType(elemType)
+						g.needsRuntime = true
+						g.buf.WriteString("runtime.Fill[")
+						g.buf.WriteString(goType)
+						g.buf.WriteString("](")
+						g.genExpr(call.Args[1]) // default value
+						g.buf.WriteString(", ")
+						g.genExpr(call.Args[0]) // size
+						g.buf.WriteString(")")
+						return
+					}
+					// Fallback: use []any when type inference fails
+					g.needsRuntime = true
+					g.buf.WriteString("runtime.Fill[any](")
+					g.genExpr(call.Args[1])
+					g.buf.WriteString(", ")
+					g.genExpr(call.Args[0])
+					g.buf.WriteString(")")
+					return
+				} else if len(call.Args) == 1 {
+					// Array.new(size) -> make([]any, size)
+					g.buf.WriteString("make([]any, ")
+					g.genExpr(call.Args[0])
+					g.buf.WriteString(")")
+					return
+				}
+			}
 			// Only treat as Rugby class constructor if NOT a Go import
 			// (errors.new should become errors.New, not newerrors)
 			if ident, ok := fn.X.(*ast.Ident); ok && !g.imports[ident.Name] {

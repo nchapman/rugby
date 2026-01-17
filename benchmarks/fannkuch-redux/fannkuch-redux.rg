@@ -3,9 +3,9 @@ import "fmt"
 import "strconv"
 
 def fannkuch(n: Int): (Int, Int)
-  perm = Array<Int>.new(n, 0)
-  perm1 = Array<Int>.new(n, 0)
-  count = Array<Int>.new(n, 0)
+  perm = Array.new(n, 0)
+  perm1 = Array.new(n, 0)
+  count = Array.new(n, 0)
 
   # Initialize perm1 to [0, 1, 2, ..., n-1]
   i = 0
