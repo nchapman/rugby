@@ -1,7 +1,7 @@
 #@ run-pass
 #@ check-output
 #
-# Test spawn with direct function call (without block syntax)
+# Test spawn with block syntax
 
 def worker(ch: Chan<Int>, value: Int)
   ch << value * 2
@@ -10,9 +10,9 @@ end
 def main
   ch = Chan<Int>.new(2)  # buffered channel
 
-  # Direct call form (new syntax)
-  spawn worker(ch, 5)
-  spawn worker(ch, 10)
+  # Block form - spawns a goroutine that calls worker
+  spawn { worker(ch, 5) }
+  spawn { worker(ch, 10) }
 
   # Read results
   a = ch.receive

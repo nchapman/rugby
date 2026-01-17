@@ -29,7 +29,7 @@ def main
   end
 
   ch = Chan<Int>.new(1)
-  spawn generate(ch)
+  spawn { generate(ch) }
 
   i = 0
   while i < n
@@ -37,8 +37,11 @@ def main
     fmt.Printf("%d\n", prime)
 
     if i < n - 1
+      # Capture current channel before reassignment
+      # (spawn captures variables by reference, so we need a local copy)
+      input = ch
       ch1 = Chan<Int>.new(1)
-      spawn filter(ch, ch1, prime)
+      spawn { filter(input, ch1, prime) }
       ch = ch1
     end
     i += 1

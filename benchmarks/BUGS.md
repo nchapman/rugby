@@ -40,9 +40,6 @@ Can now use `next` as both a method name and property name.
 ### Interface Return Types - FIXED
 Functions with interface return type can now return implementing classes.
 
-### `spawn` Direct Call Syntax - FIXED
-`spawn function(args)` now works without requiring block syntax.
-
 ### `continue` Keyword - FIXED
 `continue` now works in loops.
 
@@ -65,6 +62,17 @@ Tuple literals in arrays now generate proper struct literals, and tuple destruct
 # Works now:
 arr = [("a", 0.27), ("b", 0.12)]  # Array of tuples
 _, p = genelist[i]                # Destructure from array index
+```
+
+### Spawn Closure Semantics - CLARIFIED
+`spawn` now requires block syntax (`spawn { }` or `spawn do ... end`) to make closure capture semantics explicit. Variables are captured by reference (like Ruby blocks). Use local variables to capture values:
+
+```ruby
+# Correct pattern when variable will be reassigned:
+input = ch           # capture current value
+ch1 = Chan<Int>.new(1)
+spawn { filter(input, ch1, prime) }  # uses captured value
+ch = ch1             # reassignment doesn't affect spawned goroutine
 ```
 
 ---
@@ -124,30 +132,6 @@ class Leaf
 end
 ```
 
-### `spawn` Captures Variables by Reference
-**Affects:** coro-prime-sieve
-**Status:** Closure captures variables by reference, causing deadlock when variable is reassigned
-
-```ruby
-ch = Chan<Int>.new(1)
-spawn generate(ch)
-
-while i < n
-  prime = ch.receive
-  ch1 = Chan<Int>.new(1)
-  spawn filter(ch, ch1, prime)  # ch captured by reference!
-  ch = ch1  # This changes ch before goroutine runs, causing deadlock
-end
-```
-
-Generated Go code shows the issue:
-```go
-runtime.SpawnVoid(func() {
-    filter(ch, ch1, prime)  // ch is captured, not passed by value
-})
-ch = ch1  // Modifies ch before goroutine executes
-```
-
 ### 2D Array Indexing
 **Affects:** mandelbrot
 **Status:** Nested array indexing has type inference issues
@@ -195,13 +179,13 @@ len = bytes.length  # Error: type []byte has no field or method Length
 | merkletrees | ✅ | ✅ | ✅ | ✅ | Working |
 | fasta | ✅ | ✅ | ✅ | ✅ | Working |
 | mandelbrot | ✅ | ✅ | - | ❌ | Blocked: 2D arrays |
-| coro-prime-sieve | ✅ | ✅ | ✅ | ❌ | Blocked: spawn closure capture |
+| coro-prime-sieve | ✅ | ✅ | ✅ | ✅ | Working |
 | lru | ✅ | ✅ | ✅ | ❌ | Blocked: Hash type issues |
 | pidigits | ✅ | ✅ | ✅ | ❌ | Blocked: pointer type properties |
 | knucleotide | ✅ | ✅ | ✅ | ❌ | Blocked: Hash type inference |
 | regex-redux | ✅ | ✅ | ✅ | ❌ | Blocked: []byte.length |
 
-**7 of 13 Rugby benchmarks working**
+**8 of 13 Rugby benchmarks working**
 
 ## Notes
 
@@ -228,7 +212,7 @@ fmt.Printf("%c", seq[i])  # Error: %c expects rune, not string
 - Lambda syntax `-> { |i| ... }`
 - `Hash<K, V>` type alias with `{}` literal
 - `continue` in loops
-- `spawn func(args)` direct call syntax
+- `spawn { ... }` block syntax for goroutines
 - `Chan<T>` channels with `<<` send and `.receive`
 - Interface return types
 - Tuple types `(T1, T2)` with array literal and destructuring support

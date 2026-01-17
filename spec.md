@@ -2052,21 +2052,31 @@ end
 ### 17.4 Tasks (`spawn` and `await`)
 
 ```ruby
-# Block syntax (for inline expressions)
+# Block syntax with braces
 t = spawn { expensive_work() }  # Task<T>, runs immediately
 result = await t                # blocks until complete
 
-# Direct call syntax (for named functions)
-spawn worker(ch, value)         # fire-and-forget, no Task returned
-spawn process_batch(items)      # calls function in new goroutine
+# Block syntax with do/end
+spawn do
+  worker(ch, value)
+end
 
 # With errors
 t = spawn { os.read_file(path) }  # Task<(Bytes, Error)>
 data = await(t)!                  # parentheses required for !
 ```
 
+Spawn always requires a block (`{ }` or `do ... end`) to make closure semantics explicit. Variables from the enclosing scope are captured by reference:
+
+```ruby
+# When reassigning captured variables, use a local copy:
+input = ch           # capture current value
+ch1 = Chan<Int>.new
+spawn { filter(input, ch1, prime) }  # input won't change
+ch = ch1             # reassigning ch doesn't affect the spawned goroutine
+```
+
 - `spawn { expr }` returns `Task<T>` where `T` is the block's return type
-- `spawn function(args)` is fire-and-forget (no return value)
 - `await` blocks until completion; awaiting twice is a compile error
 - Panics in tasks terminate the program (Go semantics)
 

@@ -1123,13 +1123,12 @@ type IncludeStmt struct {
 func (i *IncludeStmt) node()     {}
 func (i *IncludeStmt) stmtNode() {}
 
-// SpawnExpr represents spawning a concurrent task: spawn { expr } or spawn func(args)
-// Returns Task<T> where T is the block's return type (for block form)
-// Returns nothing for direct call form (fire-and-forget)
+// SpawnExpr represents spawning a concurrent task: spawn { expr } or spawn do ... end
+// Returns Task<T> where T is the block's return type.
+// Variables from the enclosing scope are captured by reference (closure semantics).
 type SpawnExpr struct {
-	Block        *BlockExpr // the block to execute concurrently
-	Line         int        // source line number
-	IsDirectCall bool       // true if using direct call syntax: spawn func(args)
+	Block *BlockExpr // the block to execute concurrently
+	Line  int        // source line number
 }
 
 func (s *SpawnExpr) node()     {}

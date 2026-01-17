@@ -5394,8 +5394,14 @@ func (g *Generator) genStdLibPropertyMethod(sel *ast.SelectorExpr) bool {
 func (g *Generator) genSpawnExpr(e *ast.SpawnExpr) {
 	g.needsRuntime = true
 
-	// Direct call form: spawn function(args) - fire-and-forget
-	if e.IsDirectCall {
+	// spawn { expr } or spawn do ... end
+	// Variables from enclosing scope are captured by reference (closure semantics)
+
+	// Check if the block has a void return type (last expression returns nothing)
+	isVoid := g.isBlockVoid(e.Block.Body)
+
+	if isVoid {
+		// Void block - use SpawnVoid (fire-and-forget)
 		g.buf.WriteString("runtime.SpawnVoid(func() {\n")
 		g.indent++
 		for _, stmt := range e.Block.Body {
@@ -5404,40 +5410,71 @@ func (g *Generator) genSpawnExpr(e *ast.SpawnExpr) {
 		g.indent--
 		g.writeIndent()
 		g.buf.WriteString("})")
-		return
-	}
+	} else {
+		// Value-returning block - use Spawn and return Task<T>
+		returnType := g.inferBlockBodyReturnType(e.Block.Body)
 
-	// Block form: spawn { expr } or spawn do ... end - returns Task<T>
-	returnType := g.inferBlockBodyReturnType(e.Block.Body)
-
-	g.buf.WriteString("runtime.Spawn(func() ")
-	g.buf.WriteString(returnType)
-	g.buf.WriteString(" {\n")
-	g.indent++
-	if len(e.Block.Body) > 0 {
-		for i, stmt := range e.Block.Body {
-			if i == len(e.Block.Body)-1 {
-				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
-					g.writeIndent()
-					g.buf.WriteString("return ")
-					g.genExpr(exprStmt.Expr)
-					g.buf.WriteString("\n")
+		g.buf.WriteString("runtime.Spawn(func() ")
+		g.buf.WriteString(returnType)
+		g.buf.WriteString(" {\n")
+		g.indent++
+		if len(e.Block.Body) > 0 {
+			for i, stmt := range e.Block.Body {
+				if i == len(e.Block.Body)-1 {
+					if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+						g.writeIndent()
+						g.buf.WriteString("return ")
+						g.genExpr(exprStmt.Expr)
+						g.buf.WriteString("\n")
+					} else {
+						g.genStatement(stmt)
+						g.writeIndent()
+						g.genZeroReturn(returnType)
+					}
 				} else {
 					g.genStatement(stmt)
-					g.writeIndent()
-					g.genZeroReturn(returnType)
 				}
-			} else {
-				g.genStatement(stmt)
 			}
+		} else {
+			g.writeIndent()
+			g.genZeroReturn(returnType)
 		}
-	} else {
+		g.indent--
 		g.writeIndent()
-		g.genZeroReturn(returnType)
+		g.buf.WriteString("})")
 	}
-	g.indent--
-	g.writeIndent()
-	g.buf.WriteString("})")
+}
+
+// isBlockVoid returns true if the block's last expression returns void (no value).
+func (g *Generator) isBlockVoid(body []ast.Statement) bool {
+	if len(body) == 0 {
+		return true
+	}
+
+	lastStmt := body[len(body)-1]
+	exprStmt, ok := lastStmt.(*ast.ExprStmt)
+	if !ok {
+		// Not an expression statement (e.g., assignment, if, while)
+		return true
+	}
+
+	// Check if the expression is a void function call
+	call, ok := exprStmt.Expr.(*ast.CallExpr)
+	if !ok {
+		return false // Other expressions (literals, etc.) have values
+	}
+
+	// Check if this is a user-defined function with no return type
+	if ident, ok := call.Func.(*ast.Ident); ok {
+		if fn, exists := g.functions[ident.Name]; exists {
+			// Function is defined - check if it has a return type
+			return len(fn.ReturnTypes) == 0
+		}
+	}
+
+	// For unknown functions, check type inference
+	returnType := g.inferExprGoTypeDeep(call)
+	return returnType == ""
 }
 
 // genZeroReturn generates a return statement with the zero value for the given type.
