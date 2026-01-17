@@ -103,8 +103,6 @@ func FormatErrors(errs []ParseError) string {
 // synchronize skips tokens until we reach a statement boundary.
 // This enables error recovery by jumping to a known good position
 // where parsing can resume.
-//
-//nolint:unused // Available for future error recovery improvements
 func (p *Parser) synchronize() {
 	p.nextToken()
 
@@ -115,12 +113,15 @@ func (p *Parser) synchronize() {
 			return
 		}
 
-		// These tokens typically start statements and are good sync points
+		// These tokens typically start statements/declarations and are good sync points
 		switch p.curToken.Type {
 		case token.DEF, token.CLASS, token.INTERFACE, token.MODULE,
 			token.IF, token.UNLESS, token.WHILE, token.UNTIL,
 			token.FOR, token.CASE, token.CASETYPE, token.RETURN,
-			token.BREAK, token.NEXT, token.END:
+			token.BREAK, token.NEXT, token.END,
+			// Top-level declaration starters
+			token.IMPORT, token.PUB, token.CONST, token.TYPE,
+			token.ENUM, token.STRUCT, token.DESCRIBE, token.TEST, token.TABLE:
 			return
 		}
 
@@ -131,7 +132,7 @@ func (p *Parser) synchronize() {
 // syncToEnd skips tokens until we reach 'end' or EOF.
 // Used when a block is malformed but we need to continue parsing.
 //
-//nolint:unused // Available for future error recovery improvements
+//nolint:unused // Reserved for future block-level recovery
 func (p *Parser) syncToEnd() {
 	depth := 1
 	for !p.curTokenIs(token.EOF) && depth > 0 {

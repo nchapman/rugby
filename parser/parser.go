@@ -643,6 +643,8 @@ func (p *Parser) ParseProgram() *ast.Program {
 		case token.IMPORT:
 			if imp := p.parseImport(); imp != nil {
 				program.Imports = append(program.Imports, imp)
+			} else {
+				p.synchronize()
 			}
 		case token.PUB:
 			pubLine := p.curToken.Line
@@ -653,36 +655,50 @@ func (p *Parser) ParseProgram() *ast.Program {
 				if fn := p.parseFuncDeclWithDoc(doc); fn != nil {
 					fn.Pub = true
 					program.Declarations = append(program.Declarations, fn)
+				} else {
+					p.synchronize()
 				}
 			case token.CLASS:
 				if cls := p.parseClassDeclWithDoc(doc); cls != nil {
 					cls.Pub = true
 					program.Declarations = append(program.Declarations, cls)
+				} else {
+					p.synchronize()
 				}
 			case token.INTERFACE:
 				if iface := p.parseInterfaceDeclWithDoc(doc); iface != nil {
 					iface.Pub = true
 					program.Declarations = append(program.Declarations, iface)
+				} else {
+					p.synchronize()
 				}
 			case token.MODULE:
 				if mod := p.parseModuleDeclWithDoc(doc); mod != nil {
 					mod.Pub = true
 					program.Declarations = append(program.Declarations, mod)
+				} else {
+					p.synchronize()
 				}
 			case token.TYPE:
 				if typeAlias := p.parseTypeAliasDeclWithDoc(doc); typeAlias != nil {
 					typeAlias.Pub = true
 					program.Declarations = append(program.Declarations, typeAlias)
+				} else {
+					p.synchronize()
 				}
 			case token.ENUM:
 				if enumDecl := p.parseEnumDeclWithDoc(doc); enumDecl != nil {
 					enumDecl.Pub = true
 					program.Declarations = append(program.Declarations, enumDecl)
+				} else {
+					p.synchronize()
 				}
 			case token.STRUCT:
 				if structDecl := p.parseStructDeclWithDoc(doc); structDecl != nil {
 					structDecl.Pub = true
 					program.Declarations = append(program.Declarations, structDecl)
+				} else {
+					p.synchronize()
 				}
 			default:
 				p.errorAt(p.curToken.Line, p.curToken.Column, "'pub' must be followed by 'def', 'class', 'interface', 'module', 'type', 'enum', or 'struct'")
@@ -691,46 +707,68 @@ func (p *Parser) ParseProgram() *ast.Program {
 		case token.DEF:
 			if fn := p.parseFuncDecl(); fn != nil {
 				program.Declarations = append(program.Declarations, fn)
+			} else {
+				p.synchronize()
 			}
 		case token.CLASS:
 			if cls := p.parseClassDecl(); cls != nil {
 				program.Declarations = append(program.Declarations, cls)
+			} else {
+				p.synchronize()
 			}
 		case token.INTERFACE:
 			if iface := p.parseInterfaceDecl(); iface != nil {
 				program.Declarations = append(program.Declarations, iface)
+			} else {
+				p.synchronize()
 			}
 		case token.MODULE:
 			if mod := p.parseModuleDecl(); mod != nil {
 				program.Declarations = append(program.Declarations, mod)
+			} else {
+				p.synchronize()
 			}
 		case token.TYPE:
 			if typeAlias := p.parseTypeAliasDecl(); typeAlias != nil {
 				program.Declarations = append(program.Declarations, typeAlias)
+			} else {
+				p.synchronize()
 			}
 		case token.ENUM:
 			if enumDecl := p.parseEnumDecl(); enumDecl != nil {
 				program.Declarations = append(program.Declarations, enumDecl)
+			} else {
+				p.synchronize()
 			}
 		case token.STRUCT:
 			if structDecl := p.parseStructDecl(); structDecl != nil {
 				program.Declarations = append(program.Declarations, structDecl)
+			} else {
+				p.synchronize()
 			}
 		case token.CONST:
 			if constDecl := p.parseConstDecl(); constDecl != nil {
 				program.Declarations = append(program.Declarations, constDecl)
+			} else {
+				p.synchronize()
 			}
 		case token.DESCRIBE:
 			if desc := p.parseDescribeStmt(); desc != nil {
 				program.Declarations = append(program.Declarations, desc)
+			} else {
+				p.synchronize()
 			}
 		case token.TEST:
 			if test := p.parseTestStmt(); test != nil {
 				program.Declarations = append(program.Declarations, test)
+			} else {
+				p.synchronize()
 			}
 		case token.TABLE:
 			if table := p.parseTableStmt(); table != nil {
 				program.Declarations = append(program.Declarations, table)
+			} else {
+				p.synchronize()
 			}
 		default:
 			// Top-level statement

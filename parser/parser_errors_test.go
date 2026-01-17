@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/nchapman/rugby/ast"
 	"github.com/nchapman/rugby/lexer"
 )
 
@@ -665,4 +666,106 @@ func TestCaseTypeMissingEndHint(t *testing.T) {
     puts "int"
 `
 	expectErrorWithHint(t, input, "expected 'end' to close case_type", "every 'case_type' needs a matching 'end'")
+}
+
+// ====================
+// Multi-error recovery tests
+// ====================
+
+func TestMultipleDeclarationErrors(t *testing.T) {
+	// Multiple functions with the same type error
+	// Parser should recover and report errors for all three
+	input := `def foo(a : )
+end
+
+def bar(b : )
+end
+
+def baz(c : )
+end`
+	l := lexer.New(input)
+	p := New(l)
+	p.ParseProgram()
+
+	errors := p.Errors()
+	typeErrors := 0
+	for _, err := range errors {
+		if strings.Contains(err, "expected type") {
+			typeErrors++
+		}
+	}
+
+	if typeErrors < 3 {
+		t.Errorf("expected at least 3 type errors, got %d: %v", typeErrors, errors)
+	}
+}
+
+func TestRecoveryAfterBadFunction(t *testing.T) {
+	// Invalid function followed by valid function
+	// Parser should recover and still parse the valid function
+	input := `def broken(x : )
+end
+
+def valid(y : Int) -> Int
+  y * 2
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+
+	// Should have at least one error for the broken function
+	if len(p.Errors()) == 0 {
+		t.Error("expected at least one error for the broken function")
+	}
+
+	// Should have parsed the valid function
+	if len(program.Declarations) < 1 {
+		t.Errorf("expected at least 1 declaration (the valid function), got %d", len(program.Declarations))
+	}
+
+	// Verify the valid function was parsed correctly
+	foundValid := false
+	for _, decl := range program.Declarations {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name == "valid" {
+			foundValid = true
+			if len(fn.Params) != 1 || fn.Params[0].Name != "y" {
+				t.Error("valid function was not parsed correctly")
+			}
+		}
+	}
+	if !foundValid {
+		t.Error("valid function was not found in declarations")
+	}
+}
+
+func TestRecoveryAfterBadClass(t *testing.T) {
+	// Invalid class followed by valid function
+	// Parser should recover and still parse the valid function
+	input := `class Broken
+  def initialize(x : )
+  end
+end
+
+def valid_func
+  puts "hello"
+end`
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+
+	// Should have at least one error for the broken class
+	if len(p.Errors()) == 0 {
+		t.Error("expected at least one error for the broken class")
+	}
+
+	// Should have parsed the valid function
+	foundValid := false
+	for _, decl := range program.Declarations {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name == "valid_func" {
+			foundValid = true
+		}
+	}
+	if !foundValid {
+		t.Error("valid_func was not found in declarations after class error")
+	}
 }
