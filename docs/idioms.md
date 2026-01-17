@@ -8,7 +8,7 @@ Rugby uses Ruby-style naming throughout:
 
 ```ruby
 # Functions and methods: snake_case
-def fetch_user(id : Int) -> User?
+def fetch_user(id: Int): User?
   db.find_by_id(id)
 end
 
@@ -19,7 +19,7 @@ end
 
 # Types and classes: CamelCase
 class UserAccount
-  property email : String
+  property email: String
 end
 
 # Variables: snake_case
@@ -45,7 +45,7 @@ Lambdas are Rugby's bread and butter for transformation. Prefer them over manual
 # Good - expressive and clear
 names = users.map -> { |u| u.name }
 active = users.select -> { |u| u.active? }
-total = orders.reduce(0) -> { |sum, o| sum + o.amount }
+total = orders.reduce(0): { |sum, o| sum + o.amount }
 
 # Avoid - verbose and imperative
 names = []
@@ -85,7 +85,7 @@ active = users.select -> { |u| u.active? }
 admin = users.find -> { |u| u.admin? }
 
 # For loops when you need break/next/return
-def find_first_problem(items : Array<Item>) -> Item?
+def find_first_problem(items: Array<Item>): Item?
   for item in items
     next if item.ok?
     return item  # returns from function
@@ -129,7 +129,7 @@ Rugby offers three patterns. Choose based on context:
 When errors should bubble up to the caller:
 
 ```ruby
-def load_config(path : String) -> (Config, Error)
+def load_config(path: String): (Config, Error)
   data = file.read(path)!
   json.parse(data)!
 end
@@ -309,15 +309,15 @@ Fields can be declared three ways:
 
 ```ruby
 class User
-  @role : String                    # explicit declaration
+  @role: String                    # explicit declaration
 
-  def initialize(@name : String)    # parameter promotion (declares + assigns)
+  def initialize(@name: String)    # parameter promotion (declares + assigns)
     @created_at = time.now          # inferred from initialize
   end
 end
 ```
 
-Parameter promotion (`@name : String` in the signature) is the most concise - it declares the field and assigns the argument in one go.
+Parameter promotion (`@name: String` in the signature) is the most concise - it declares the field and assigns the argument in one go.
 
 ### Accessors
 
@@ -325,9 +325,9 @@ Use `getter`, `setter`, and `property` to generate accessor methods:
 
 ```ruby
 class User
-  getter id : Int           # def id -> Int
-  setter status : String    # def status=(v : String)
-  property name : String    # both getter and setter
+  getter id: Int           # def id: Int
+  setter status: String    # def status=(v: String)
+  property name: String    # both getter and setter
 end
 
 user = User.new(1, "active", "Alice")
@@ -341,7 +341,7 @@ Use `pub` to export classes and methods:
 
 ```ruby
 pub class User              # exported (Go: User)
-  pub getter name : String  # exported accessor
+  pub getter name: String  # exported accessor
 
   def internal_method       # package-private (Go: internalMethod)
     # ...
@@ -353,7 +353,7 @@ end
 
 ```ruby
 class Admin < User                    # single inheritance
-  def initialize(name : String, @permissions : Array<String>)
+  def initialize(name: String, @permissions: Array<String>)
     super(name)                       # call parent initializer
   end
 
@@ -403,10 +403,10 @@ import "rugby/json"
 import "rugby/file"
 
 class ApiClient
-  def initialize(@base_url : String, @timeout : Int = 30)
+  def initialize(@base_url: String, @timeout: Int = 30)
   end
 
-  def fetch_users -> (Array<User>, Error)
+  def fetch_users: (Array<User>, Error)
     resp = http.get("#{@base_url}/users")!
     data = resp.json!
 

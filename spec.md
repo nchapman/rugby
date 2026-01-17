@@ -63,7 +63,7 @@ Rugby files can contain executable statements at the top level without an explic
 puts "Hello, world!"
 
 # With functions - definitions are lifted, calls execute in order
-def greet(name : String)
+def greet(name: String)
   puts "Hello, #{name}!"
 end
 
@@ -315,7 +315,7 @@ Rugby is statically typed with inference.
 
 ```ruby
 type UserID = Int64
-type Handler = (Request) -> Response
+type Handler = (Request): Response
 type StringMap = Map<String, String>
 ```
 
@@ -327,7 +327,7 @@ Tuples are fixed-size, heterogeneous collections used primarily for multiple ret
 
 ```ruby
 # Tuple types in function signatures
-def parse(s : String) -> (Int, Bool)
+def parse(s: String): (Int, Bool)
   # ...
 end
 
@@ -341,7 +341,7 @@ x, y, w, h = get_bounds()
 first, _ = get_pair()  # ignore second element
 
 # Typed tuple variables
-coords : (Int, Int) = get_point()
+coords: (Int, Int) = get_point()
 ```
 
 **Rules:**
@@ -357,7 +357,7 @@ nums = [1, 2, 3]
 words = %w{foo bar baz}        # ["foo", "bar", "baz"]
 words = %W{hello #{name}}      # interpolated: ["hello", "world"]
 all = [1, *rest, 4]            # splat: [1, 2, 3, 4]
-empty : Array<Int> = []        # typed empty array
+empty: Array<Int> = []         # typed empty array
 ```
 
 Word arrays support any delimiter: `%w{...}`, `%w(...)`, `%w[...]`, `%w<...>`, `%w|...|`
@@ -367,7 +367,7 @@ Word arrays support any delimiter: `%w{...}`, `%w(...)`, `%w[...]`, `%w<...>`, `
 [1, 2, 3]           # Array<Int>
 ["a", "b"]          # Array<String>
 [1, "two", 3.0]     # Error: mixed types require explicit Array<Any>
-[1, "two"] : Array<Any>  # OK: explicit any
+[1, "two"]: Array<Any>   # OK: explicit any
 ```
 
 ### 5.6 Indexing
@@ -405,7 +405,7 @@ m = {"name" => "Alice", "age" => 30}  # hash rocket
 m = {name: "Alice", age: 30}          # symbol shorthand (same result)
 m = {name:, age:}                     # implicit value (uses variables)
 m = {**defaults, **overrides}         # double splat merges maps
-empty : Map<String, Int> = {}         # typed empty map
+empty: Map<String, Int> = {}          # typed empty map
 ```
 
 **Braces disambiguation:**
@@ -483,15 +483,15 @@ Rugby supports generic types and functions.
 ### 6.1 Generic Functions
 
 ```ruby
-def identity<T>(x : T) -> T
+def identity<T>(x: T): T
   x
 end
 
-def swap<T, U>(a : T, b : U) -> (U, T)
+def swap<T, U>(a: T, b: U): (U, T)
   b, a
 end
 
-def map_values<K, V, R>(m : Map<K, V>, f : (V) -> R) -> Map<K, R>
+def map_values<K, V, R>(m: Map<K, V>, f : (V): R): Map<K, R>
   result = Map<K, R>{}
   m.each -> { |k, v| result[k] = f.(v) }
   result
@@ -502,10 +502,10 @@ end
 
 ```ruby
 class Box<T>
-  def initialize(@value : T)
+  def initialize(@value: T)
   end
 
-  def map<R>(f : (T) -> R) -> Box<R>
+  def map<R>(f : (T): R): Box<R>
     Box<R>.new(f.(@value))
   end
 end
@@ -518,8 +518,8 @@ str_box = box.map -> { |n| n.to_s }
 
 ```ruby
 interface Container<T>
-  def get -> T?
-  def put(value : T)
+  def get: T?
+  def put(value: T)
 end
 ```
 
@@ -527,19 +527,19 @@ end
 
 ```ruby
 # Constrain to types implementing an interface
-def sort<T : Comparable>(arr : Array<T>) -> Array<T>
+def sort<T: Comparable>(arr: Array<T>): Array<T>
   # ...
 end
 
 # Multiple constraints
-def process<T : Readable & Closeable>(resource : T)
+def process<T: Readable & Closeable>(resource: T)
   data = resource.read
   resource.close
 end
 
 # Built-in constraints
-def sum<T : Numeric>(values : Array<T>) -> T
-  values.reduce(T.zero) -> { |acc, v| acc + v }
+def sum<T: Numeric>(values: Array<T>): T
+  values.reduce(T.zero): { |acc, v| acc + v }
 end
 ```
 
@@ -558,7 +558,7 @@ identity("hello")   # T inferred as String
 
 # Explicit when needed
 Box<Int>.new(42)
-result : Array<String> = []
+result: Array<String> = []
 ```
 
 ---
@@ -649,16 +649,16 @@ port = config.get("port") ?? 8080
 **Important: `??` checks presence, not truthiness:**
 ```ruby
 # ?? only checks if value is present, not if it's "truthy"
-count : Int? = 0
+count: Int? = 0
 count ?? 10        # Returns 0 (0 IS present)
 
-flag : Bool? = false
+flag: Bool? = false
 flag ?? true       # Returns false (false IS present)
 
-name : String? = ""
+name: String? = ""
 name ?? "default"  # Returns "" (empty string IS present)
 
-missing : Int? = nil
+missing: Int? = nil
 missing ?? 10      # Returns 10 (no value present)
 ```
 
@@ -728,12 +728,12 @@ Variables bound in `if let` are scoped to the `if` block and do not affect outer
 `nil` is valid only for `T?` (optional) and `Error` types:
 
 ```ruby
-def find_user(id : Int) -> User?
+def find_user(id: Int): User?
   return nil if id < 0
   User.new("Alice")
 end
 
-x : Int = nil  # ERROR: use Int?
+x: Int = nil  # ERROR: use Int?
 
 err = save()
 if err == nil
@@ -749,17 +749,17 @@ end
 
 ```ruby
 x = expr       # declares (new) or assigns (existing)
-x : Int = 5    # explicit type annotation
+x: Int = 5    # explicit type annotation
 x += 5         # compound: +=, -=, *=, /=, %=, &=, |=, ^=
 x ||= default  # assign if absent (x must be T?)
 ```
 
 **`||=` semantics:**
 ```ruby
-name : String? = nil
+name: String? = nil
 name ||= "Anonymous"  # assigns "Anonymous" (was absent)
 
-name : String? = ""
+name: String? = ""
 name ||= "Anonymous"  # keeps "" (empty string IS present)
 ```
 
@@ -776,7 +776,7 @@ const VALID_STATES = %w{pending active done}
 const PI = 3.14159
 
 # Typed constants
-const TIMEOUT : Int64 = 30
+const TIMEOUT: Int64 = 30
 
 # Computed constants (must be compile-time evaluable)
 const BUFFER_SIZE = MAX_SIZE * 2
@@ -802,7 +802,7 @@ _, second, _ = triple
 {name: n, age: a} = user_data  # rename
 
 # In function parameters
-def process({name:, age:} : UserData)
+def process({name:, age:}: UserData)
   puts "#{name} is #{age}"
 end
 ```
@@ -877,11 +877,11 @@ Use `case_type` for type-based dispatch (compiles to Go type switch):
 
 ```ruby
 case_type obj
-when s : String
+when s: String
   "string: #{s}"
-when n : Int
+when n: Int
   "int: #{n}"
-when arr : Array<Int>
+when arr: Array<Int>
   "int array of #{arr.length}"
 else
   "unknown type"
@@ -952,11 +952,11 @@ def add(a, b)
   a + b                          # implicit return (last expression)
 end
 
-def add(a : Int, b : Int) -> Int # explicit types
+def add(a: Int, b: Int): Int # explicit types
   a + b
 end
 
-def find_user(id) -> User?
+def find_user(id): User?
   return nil if id < 0           # explicit early return
   users[id]
 end
@@ -965,7 +965,7 @@ end
 ### 10.2 Multiple Return Values
 
 ```ruby
-def parse(s) -> (Int, Bool)
+def parse(s): (Int, Bool)
   return 0, false if s.empty?
   s.to_i, true
 end
@@ -978,7 +978,7 @@ n, _ = parse("42")      # ignore second with _
 ### 10.3 Default Parameters
 
 ```ruby
-def connect(host : String, port : Int = 8080, timeout : Int = 30)
+def connect(host: String, port: Int = 8080, timeout: Int = 30)
   # ...
 end
 
@@ -992,7 +992,7 @@ Default values must be compile-time constants or literals.
 ### 10.4 Named Parameters
 
 ```ruby
-def fetch(url : String, headers: Map<String, String> = {},
+def fetch(url: String, headers: Map<String, String> = {},
           timeout: Int = 30, retry: Bool = true)
   # ...
 end
@@ -1010,7 +1010,7 @@ fetch("https://example.com", retry: false, headers: {"Auth" => token})
 ### 10.5 Variadic Functions
 
 ```ruby
-def log(level : Symbol, *messages : String)
+def log(level: Symbol, *messages: String)
   for msg in messages
     puts "[#{level}] #{msg}"
   end
@@ -1018,7 +1018,7 @@ end
 
 log(:info, "Starting", "Loading config", "Ready")
 
-def format(template : String, *args : Any) -> String
+def format(template: String, *args: Any): String
   sprintf(template, *args)
 end
 
@@ -1033,11 +1033,11 @@ Lambdas are anonymous functions created with `->`. Parameters use Ruby's block s
 
 ```ruby
 # Single-line (braces)
-double = -> { |x : Int| x * 2 }
+double = -> { |x: Int| x * 2 }
 users.map -> { |u| u.name }
 
 # Multiline (do...end)
-process = -> do |data : String|
+process = -> do |data: String|
   parsed = parse(data)
   validate(parsed)
   transform(parsed)
@@ -1052,7 +1052,7 @@ callback = -> { puts "done" }
 3.times -> { puts "hi" }
 
 # With explicit return type
-handler = -> do |req : Request| -> Response
+handler = -> do |req: Request|: Response
   process(req)
 end
 
@@ -1090,7 +1090,7 @@ end
 
 **Passing lambdas to functions:**
 ```ruby
-def with_retry(attempts : Int, action : () -> Bool) -> Bool
+def with_retry(attempts: Int, action : (): Bool): Bool
   for i in 0...attempts
     return true if action.()
   end
@@ -1105,7 +1105,7 @@ with_retry(3, -> { fetch_data() })
 Lambdas capture variables from their enclosing scope:
 
 ```ruby
-def make_counter -> () -> Int
+def make_counter -> (): Int
   count = 0
   -> { count += 1 }
 end
@@ -1124,13 +1124,13 @@ puts counter.()  # 3
 ```ruby
 # Capture by reference (default)
 multiplier = 2
-scale = -> { |x : Int| x * multiplier }
+scale = -> { |x: Int| x * multiplier }
 scale.(5)       # 10
 multiplier = 3
 scale.(5)       # 15
 
 # Common gotcha in loops - use explicit capture
-funcs = Array<() -> Int>{}
+funcs = Array<(): Int>{}
 for i in 0..3
   i_copy = i  # capture current value
   funcs << -> { i_copy }
@@ -1162,12 +1162,12 @@ This is purely syntactic sugar—`&:name` compiles to `-> { |x| x.name }`.
 ### 10.9 Function Types
 
 ```ruby
-type Predicate<T> = (T) -> Bool
-type Transform<T, R> = (T) -> R
-type Callback = () -> Void
-type Handler = (Request) -> (Response, Error)
+type Predicate<T> = (T): Bool
+type Transform<T, R> = (T): R
+type Callback = (): Void
+type Handler = (Request): (Response, Error)
 
-def filter<T>(items : Array<T>, pred : Predicate<T>) -> Array<T>
+def filter<T>(items: Array<T>, pred: Predicate<T>): Array<T>
   items.select -> { |item| pred.(item) }
 end
 ```
@@ -1196,13 +1196,13 @@ foo.bar baz        # foo.bar(baz)
 
 ```ruby
 class User
-  @email : String               # explicit field declaration
+  @email: String               # explicit field declaration
 
-  def initialize(@name : String, @age : Int)
+  def initialize(@name: String, @age: Int)
     @email = "unknown"          # inferred field
   end
 
-  def greet -> String
+  def greet: String
     "Hello, #{@name}"
   end
 end
@@ -1213,15 +1213,15 @@ u = User.new("Alice", 30)
 ### 11.2 Instance Variables
 
 Instance variables are introduced via:
-1. **Explicit declaration:** `@field : Type` at class level
-2. **Parameter promotion:** `def initialize(@field : Type)`
+1. **Explicit declaration:** `@field: Type` at class level
+2. **Parameter promotion:** `def initialize(@field: Type)`
 3. **First assignment in `initialize`**
 
 ```ruby
 class User
-  @role : String                # explicit declaration
+  @role: String                # explicit declaration
 
-  def initialize(@name : String) # parameter promotion
+  def initialize(@name: String) # parameter promotion
     @age = 0                     # inferred from initialize
   end
 end
@@ -1236,13 +1236,13 @@ end
 ### 11.3 Accessors
 
 ```ruby
-getter age : Int        # declares @age + generates def age -> Int
-setter name : String    # declares @name + generates def name=(v)
-property email : String # both getter and setter
+getter age: Int        # declares @age + generates def age: Int
+setter name: String    # declares @name + generates def name=(v)
+property email: String # both getter and setter
 
 # With visibility
-pub getter id : Int
-pub property name : String
+pub getter id: Int
+pub property name: String
 ```
 
 **Field access:**
@@ -1254,16 +1254,16 @@ pub property name : String
 
 ```ruby
 class Temperature
-  def initialize(@celsius : Float)
+  def initialize(@celsius: Float)
   end
 
-  getter celsius : Float
+  getter celsius: Float
 
-  def fahrenheit -> Float
+  def fahrenheit: Float
     @celsius * 9 / 5 + 32
   end
 
-  def fahrenheit=(f : Float)
+  def fahrenheit=(f: Float)
     @celsius = (f - 32) * 5 / 9
   end
 end
@@ -1275,15 +1275,15 @@ end
 class User
   @@count = 0  # class variable
 
-  def initialize(@name : String)
+  def initialize(@name: String)
     @@count += 1
   end
 
-  def self.count -> Int
+  def self.count: Int
     @@count
   end
 
-  def self.create(name : String) -> User
+  def self.create(name: String): User
     User.new(name)
   end
 end
@@ -1301,20 +1301,20 @@ user = User.create("Alice")
 
 ```ruby
 class Animal
-  def initialize(@name : String)
+  def initialize(@name: String)
   end
 
-  def speak -> String
+  def speak: String
     "..."
   end
 end
 
 class Dog < Animal
-  def initialize(name : String, @breed : String)
+  def initialize(name: String, @breed: String)
     super(name)
   end
 
-  def speak -> String
+  def speak: String
     "Woof!"
   end
 end
@@ -1337,13 +1337,13 @@ Rugby does not have abstract classes. Use interfaces for abstraction and modules
 ```ruby
 # Define the contract
 interface Shape
-  def area -> Float
-  def perimeter -> Float
+  def area: Float
+  def perimeter: Float
 end
 
 # Shared behavior via module
 module Describable
-  def describe -> String
+  def describe: String
     "Area: #{area}, Perimeter: #{perimeter}"
   end
 end
@@ -1352,14 +1352,14 @@ end
 class Circle implements Shape
   include Describable
 
-  def initialize(@radius : Float)
+  def initialize(@radius: Float)
   end
 
-  def area -> Float
+  def area: Float
     Math::PI * @radius ** 2
   end
 
-  def perimeter -> Float
+  def perimeter: Float
     2 * Math::PI * @radius
   end
 end
@@ -1377,8 +1377,8 @@ Structs are lightweight value types for data without behavior.
 
 ```ruby
 struct Point
-  x : Int
-  y : Int
+  x: Int
+  y: Int
 end
 
 p = Point{x: 10, y: 20}
@@ -1396,9 +1396,9 @@ Structs automatically provide:
 
 ```ruby
 struct User
-  id : Int64
-  name : String
-  email : String
+  id: Int64
+  name: String
+  email: String
 end
 
 u1 = User{id: 1, name: "Alice", email: "alice@example.com"}
@@ -1415,16 +1415,16 @@ Structs can have methods, but they receive value (not pointer) receivers:
 
 ```ruby
 struct Point
-  x : Int
-  y : Int
+  x: Int
+  y: Int
 
-  def distance_to(other : Point) -> Float
+  def distance_to(other: Point): Float
     dx = (other.x - @x).to_f
     dy = (other.y - @y).to_f
     Math.sqrt(dx ** 2 + dy ** 2)
   end
 
-  def translate(dx : Int, dy : Int) -> Point
+  def translate(dx: Int, dy: Int): Point
     Point{x: @x + dx, y: @y + dy}  # returns new struct
   end
 end
@@ -1436,14 +1436,14 @@ Structs are **immutable by design**. Attempting to modify a field is a compile e
 
 ```ruby
 struct Point
-  x : Int
-  y : Int
+  x: Int
+  y: Int
 
-  def try_move(dx : Int)
+  def try_move(dx: Int)
     @x += dx  # ERROR: cannot modify struct field
   end
 
-  def moved(dx : Int, dy : Int) -> Point
+  def moved(dx: Int, dy: Int): Point
     Point{x: @x + dx, y: @y + dy}  # OK: return new struct
   end
 end
@@ -1477,11 +1477,11 @@ Use classes for: entities with identity, objects with behavior, mutable state.
 
 ```ruby
 interface Reader
-  def read(buf : Bytes) -> (Int, Error)
+  def read(buf: Bytes): (Int, Error)
 end
 
 interface Writer
-  def write(data : Bytes) -> (Int, Error)
+  def write(data: Bytes): (Int, Error)
 end
 
 # Interface composition
@@ -1489,7 +1489,7 @@ interface ReadWriter < Reader, Writer
 end
 
 interface Closer
-  def close -> Error
+  def close: Error
 end
 
 interface ReadWriteCloser < Reader, Writer, Closer
@@ -1502,22 +1502,22 @@ Classes satisfy interfaces automatically if they have matching methods:
 
 ```ruby
 interface Speaker
-  def speak -> String
+  def speak: String
 end
 
 class Dog
-  def speak -> String
+  def speak: String
     "Woof!"
   end
 end
 
 class Cat
-  def speak -> String
+  def speak: String
     "Meow!"
   end
 end
 
-def announce(s : Speaker)
+def announce(s: Speaker)
   puts s.speak
 end
 
@@ -1531,11 +1531,11 @@ Use `implements` for compile-time verification:
 
 ```ruby
 class FileReader implements Reader, Closer
-  def read(buf : Bytes) -> (Int, Error)
+  def read(buf: Bytes): (Int, Error)
     # ...
   end
 
-  def close -> Error
+  def close: Error
     # ...
   end
 end
@@ -1557,9 +1557,9 @@ end
 
 # Type switch
 case_type obj
-when s : String
+when s: String
   puts "string: #{s}"
-when w : Writer
+when w: Writer
   w.write("data")
 else
   puts "unknown"
@@ -1571,11 +1571,11 @@ end
 `Any` represents Go's empty interface `any` (or `interface{}`):
 
 ```ruby
-def debug(value : Any)
+def debug(value: Any)
   p value
 end
 
-items : Array<Any> = [1, "two", 3.0]
+items: Array<Any> = [1, "two", 3.0]
 ```
 
 **Rules:**
@@ -1596,11 +1596,11 @@ items : Array<Any> = [1, "two", 3.0]
 
 ```ruby
 module Loggable
-  def log(msg : String)
+  def log(msg: String)
     puts "[LOG] #{msg}"
   end
 
-  def debug(msg : String)
+  def debug(msg: String)
     puts "[DEBUG] #{msg}"
   end
 end
@@ -1624,8 +1624,8 @@ Modules can define instance variables that become part of including classes:
 
 ```ruby
 module Timestamped
-  @created_at : Time?
-  @updated_at : Time?
+  @created_at: Time?
+  @updated_at: Time?
 
   def touch
     now = Time.now
@@ -1651,17 +1651,17 @@ Modules also serve as namespaces:
 ```ruby
 module Http
   class Client
-    def get(url : String) -> Response
+    def get(url: String): Response
       # ...
     end
   end
 
   class Response
-    getter status : Int
-    getter body : String
+    getter status: Int
+    getter body: String
   end
 
-  def self.get(url : String) -> Response
+  def self.get(url: String): Response
     Client.new.get(url)
   end
 end
@@ -1743,7 +1743,7 @@ end
 ```ruby
 class User
   # Public - accessible from anywhere (with pub)
-  pub def name -> String
+  pub def name: String
     @name
   end
 
@@ -1789,16 +1789,16 @@ Rugby follows Go's philosophy: **errors are values**, returned explicitly and ha
 ### 16.1 Error Signatures
 
 ```ruby
-def read_file(path : String) -> (Bytes, Error)
+def read_file(path: String): (Bytes, Error)
   os.read_file(path)
 end
 
-def write_file(path : String, data : Bytes) -> Error
+def write_file(path: String, data: Bytes): Error
   os.write_file(path, data)
 end
 ```
 
-**The `Error` type:** Rugby uses `Error` (PascalCase) which compiles to Go's `error` interface. Any type with an `error -> String` method satisfies this interface.
+**The `Error` type:** Rugby uses `Error` (PascalCase) which compiles to Go's `error` interface. Any type with an `error: String` method satisfies this interface.
 
 ### 16.2 Creating Errors
 
@@ -1817,38 +1817,38 @@ return nil, fmt.errorf("load config: %w", err)
 
 ```ruby
 class ValidationError
-  def initialize(@field : String, @message : String)
+  def initialize(@field: String, @message: String)
   end
 
-  def error -> String
+  def error: String
     "#{@field}: #{@message}"
   end
 end
 
 class NotFoundError
-  def initialize(@resource : String, @id : Any)
+  def initialize(@resource: String, @id: Any)
   end
 
-  def error -> String
+  def error: String
     "#{@resource} not found: #{@id}"
   end
 end
 
-def find_user(id : Int) -> (User, Error)
+def find_user(id: Int): (User, Error)
   user = db.find(id)
   return nil, NotFoundError.new("User", id) if user.nil?
   user, nil
 end
 ```
 
-Any type with an `error -> String` method satisfies the `error` interface.
+Any type with an `error: String` method satisfies the `error` interface.
 
 ### 16.4 Postfix Bang Operator (`!`)
 
 Propagates errors to the caller (like Rust's `?`):
 
 ```ruby
-def load_config(path : String) -> (Config, Error)
+def load_config(path: String): (Config, Error)
   data = os.read_file(path)!
   config = parse_json(data)!
   config, nil
@@ -1919,7 +1919,7 @@ end
 ### 16.8 Error Wrapping
 
 ```ruby
-def load_user(id : Int) -> (User, Error)
+def load_user(id: Int): (User, Error)
   data, err = db.query(sql, id)
   if err != nil
     return nil, fmt.errorf("load_user(%d): %w", id, err)
@@ -1966,7 +1966,7 @@ def fetch_config -> (Config, Error)
 end
 
 # Wrap and propagate
-def load_user(id : Int) -> (User, Error)
+def load_user(id: Int): (User, Error)
   row = db.query_row(sql, id) rescue => err do
     return nil, fmt.errorf("load_user(%d): %w", id, err)
   end
@@ -1974,7 +1974,7 @@ def load_user(id : Int) -> (User, Error)
 end
 
 # Cleanup with defer
-def process_file(path : String) -> Error
+def process_file(path: String): Error
   f = os.open(path)!
   defer f.close()
 
@@ -2148,7 +2148,7 @@ end
 
 **Simple parallel fetch:**
 ```ruby
-def fetch_both(url1 : String, url2 : String) -> (String, String, Error)
+def fetch_both(url1: String, url2: String): (String, String, Error)
   concurrently do |scope|
     t1 = scope.spawn -> { http.get(url1) }
     t2 = scope.spawn -> { http.get(url2) }
@@ -2163,7 +2163,7 @@ end
 
 **Worker pool with channels:**
 ```ruby
-def process_items(items : Array<Item>)
+def process_items(items: Array<Item>)
   work = Chan<Item>.new(100)
   done = Chan<Bool>.new
 
@@ -2270,7 +2270,7 @@ resp = http.`Get`(url)  # use backticks for exact Go name
 ```ruby
 import "net/http"
 
-def fetch(url : String) -> (String, Error)
+def fetch(url: String): (String, Error)
   resp, err = http.Get(url)
   return "", err if err != nil
   defer resp.Body.Close()
@@ -2283,7 +2283,7 @@ end
 ### 18.5 Defer
 
 ```ruby
-def process_file(path : String) -> Error
+def process_file(path: String): Error
   f = os.open(path)!
   defer f.close()
 
@@ -2309,7 +2309,7 @@ class MyReader
   def initialize(@inner : io.Reader)
   end
 
-  def read(p : Bytes) -> (Int, Error)
+  def read(p: Bytes): (Int, Error)
     @inner.read(p)
   end
 end
@@ -2345,7 +2345,7 @@ The `rugby/runtime` package provides Ruby-like methods for Go types.
 * `index(val)` -> `runtime.Index(arr, val)` -> `Int?`
 
 **Aggregation:**
-* `reduce(init) -> { |acc, x| }` -> `runtime.Reduce(arr, init, fn)` -> `R`
+* `reduce(init): { |acc, x| }` -> `runtime.Reduce(arr, init, fn)` -> `R`
 * `sum` -> `runtime.Sum(arr)` (numeric arrays)
 * `min` / `max` -> `runtime.Min(arr)` / `runtime.Max(arr)` -> `T?`
 * `min_by -> { |x| }` / `max_by -> { |x| }` -> `runtime.MinBy` / `runtime.MaxBy` -> `T?`
@@ -2451,12 +2451,12 @@ arr = arr << item     # reassign to capture result
 **Math:**
 * `abs` -> `runtime.Abs(n)`
 * `clamp(min, max)` -> `runtime.Clamp(n, min, max)`
-* `**` (power) -> `runtime.Pow(base, exp)` or `math.Pow`
+* `**` (power): `runtime.Pow(base, exp)` or `math.Pow`
 
 **Iteration:**
 * `times -> { |i| }` -> `runtime.Times(n, fn)`
-* `upto(max) -> { |i| }` -> `runtime.Upto(n, max, fn)`
-* `downto(min) -> { |i| }` -> `runtime.Downto(n, min, fn)`
+* `upto(max): { |i| }` -> `runtime.Upto(n, max, fn)`
+* `downto(min): { |i| }` -> `runtime.Downto(n, min, fn)`
 
 **Conversion:**
 * `to_s` -> `strconv.Itoa(n)` (inlined)
@@ -2635,7 +2635,7 @@ add(1, 2)      # 3
 add("a", "b")  # "ab"
 
 # Rugby - parameters must be typed
-def add(a : Int, b : Int) -> Int
+def add(a: Int, b: Int): Int
   a + b
 end
 add(1, 2)      # 3
@@ -2654,7 +2654,7 @@ User.class_eval { ... }
 
 # Rugby - no runtime modification
 class User
-  property name : String  # explicit accessor
+  property name: String  # explicit accessor
 
   def greet
     "Hello"
@@ -2712,7 +2712,7 @@ end
 
 # Rugby - use extension methods (future) or wrapper
 module StringExt
-  def shout(s : String) -> String
+  def shout(s: String): String
     s.upcase + "!"
   end
 end
@@ -2748,7 +2748,7 @@ func add(a, b int) int {
 }
 
 // Rugby
-def add(a : Int, b : Int) -> Int
+def add(a: Int, b: Int): Int
   a + b
 end
 ```
@@ -2762,7 +2762,7 @@ func double(x int) int {
 }
 
 // Rugby - last expression is return value
-def double(x : Int) -> Int
+def double(x: Int): Int
   x * 2
 end
 ```
@@ -2777,7 +2777,7 @@ func find(id int) *User {
 if user := find(1); user != nil { ... }
 
 // Rugby - explicit optional type
-def find(id : Int) -> User?
+def find(id: Int): User?
   nil
 end
 if let user = find(1)
@@ -2826,7 +2826,7 @@ result := Reduce(mapped, initial, accumulate)
 // Rugby - natural chaining
 result = items.select -> { |x| predicate(x) }
               .map -> { |x| transform(x) }
-              .reduce(initial) -> { |acc, x| accumulate(acc, x) }
+              .reduce(initial): { |acc, x| accumulate(acc, x) }
 ```
 
 ---
@@ -2847,7 +2847,7 @@ const_decl     = "const" IDENT [ ":" type ] "=" expr ;
 type_decl      = "type" TYPE_NAME "=" type ;
 
 func_decl      = [ "pub" ] "def" [ "self." ] ident [ type_params ]
-                 "(" [ params ] ")" [ "->" type ] { statement } "end" ;
+                 "(" [ params ] ")" [ ":" type ] { statement } "end" ;
 
 class_decl     = [ "pub" ] "class" TYPE_NAME
                  [ type_params ] [ "<" TYPE_NAME ]
@@ -2868,7 +2868,7 @@ enum_decl      = [ "pub" ] "enum" TYPE_NAME [ type_params ]
 
 type           = TYPE_NAME [ type_args ] [ "?" ]
                | "(" type { "," type } ")"
-               | "(" [ type { "," type } ] ")" "->" type ;
+               | "(" [ type { "," type } ] ")" ":" type ;
 
 type_params    = "<" type_param { "," type_param } ">" ;
 type_param     = TYPE_NAME [ ":" type { "&" type } ] ;
@@ -2887,7 +2887,7 @@ expr           = literal | ident | instance_var | class_var
 lambda_body    = "do" [ "|" params "|" ] { statement } "end"
                | "{" [ "|" params "|" ] expr "}" ;
 
-lambda_expr    = "->" [ "->" type ] lambda_body ;
+lambda_expr    = "->" [ ":" type ] lambda_body ;
 ```
 
 **Note:** Symbol-to-proc syntax (`&:method`) is syntactic sugar that desugars to `-> { |x| x.method }` during parsing and is not shown in the grammar above.
@@ -2900,7 +2900,7 @@ lambda_expr    = "->" [ "->" type ] lambda_body ;
 
 ```ruby
 # Rugby
-def greet(name : String) -> String
+def greet(name: String): String
   "Hello, #{name}!"
 end
 ```
@@ -2917,14 +2917,14 @@ func greet(name string) string {
 ```ruby
 # Rugby
 class Counter
-  def initialize(@count : Int = 0)
+  def initialize(@count: Int = 0)
   end
 
   def inc
     @count += 1
   end
 
-  def value -> Int
+  def value: Int
     @count
   end
 end
@@ -2953,7 +2953,7 @@ func (c *Counter) Value() int {
 
 ```ruby
 # Rugby
-def load_config(path : String) -> (Config, Error)
+def load_config(path: String): (Config, Error)
   data = os.read_file(path)!
   config = parse_json(data)!
   config, nil
