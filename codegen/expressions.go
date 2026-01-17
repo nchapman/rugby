@@ -1211,12 +1211,33 @@ func (g *Generator) genArrayLit(arr *ast.ArrayLit) {
 	// Determine array type using semantic type info or fallback inference
 	arrayType := g.getArrayType(arr)
 
+	// Extract element type for tuple elements
+	// If array type is []struct{...}, we need to generate tuple literals as struct literals
+	// Handle both "[]struct{" and "[]struct{ " (with space)
+	elemType := ""
+	if strings.HasPrefix(arrayType, "[]struct{") || strings.HasPrefix(arrayType, "[]struct ") {
+		elemType = arrayType[2:] // Remove "[]" prefix
+	}
+
 	g.buf.WriteString(arrayType + "{")
 	for i, elem := range arr.Elements {
 		if i > 0 {
 			g.buf.WriteString(", ")
 		}
-		g.genExpr(elem)
+		// If element is a tuple literal and we have a struct element type, generate as struct
+		if tupleLit, ok := elem.(*ast.TupleLit); ok && elemType != "" {
+			g.buf.WriteString(elemType)
+			g.buf.WriteString("{")
+			for j, tupleElem := range tupleLit.Elements {
+				if j > 0 {
+					g.buf.WriteString(", ")
+				}
+				g.genExpr(tupleElem)
+			}
+			g.buf.WriteString("}")
+		} else {
+			g.genExpr(elem)
+		}
 	}
 	g.buf.WriteString("}")
 }

@@ -3881,17 +3881,33 @@ func (a *Analyzer) checkBinaryExpr(op string, left, right *Type) *Type {
 		return a.inferBinaryType(op, left, right)
 
 	case "|":
-		// Set union
+		// Set union or bitwise OR
 		if left.Kind == TypeSet && right.Kind == TypeSet {
 			return left // Union returns same set type
+		}
+		// Bitwise OR for integers
+		if a.isInteger(left) && a.isInteger(right) {
+			return a.inferBinaryType(op, left, right)
 		}
 		a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
 		return TypeUnknownVal
 
 	case "&":
-		// Set intersection
+		// Set intersection or bitwise AND
 		if left.Kind == TypeSet && right.Kind == TypeSet {
 			return left // Intersection returns same set type
+		}
+		// Bitwise AND for integers
+		if a.isInteger(left) && a.isInteger(right) {
+			return a.inferBinaryType(op, left, right)
+		}
+		a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
+		return TypeUnknownVal
+
+	case "^":
+		// Bitwise XOR for integers
+		if a.isInteger(left) && a.isInteger(right) {
+			return a.inferBinaryType(op, left, right)
 		}
 		a.addError(&OperatorTypeMismatchError{Op: op, LeftType: left, RightType: right})
 		return TypeUnknownVal
@@ -3934,6 +3950,15 @@ func (a *Analyzer) inferBinaryType(op string, left, right *Type) *Type {
 			return TypeAnyVal
 		}
 		return TypeUnknownVal
+	case "&", "|", "^":
+		// Bitwise operators return integer type
+		if left.Kind == TypeInt64 || right.Kind == TypeInt64 {
+			return TypeInt64Val
+		}
+		if left.Kind == TypeInt {
+			return TypeIntVal
+		}
+		return TypeUnknownVal
 	default:
 		return TypeUnknownVal
 	}
@@ -3951,6 +3976,11 @@ func (a *Analyzer) isNumeric(t *Type) bool {
 		return t.Constraint == "Numeric" || t.Constraint == "Ordered"
 	}
 	return false
+}
+
+// isInteger returns true if the type is an integer type (Int, Int64).
+func (a *Analyzer) isInteger(t *Type) bool {
+	return t.Kind == TypeInt || t.Kind == TypeInt64
 }
 
 // isOrdered returns true if the type supports ordering comparison (<, >, etc.).

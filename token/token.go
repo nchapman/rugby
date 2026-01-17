@@ -56,6 +56,7 @@ const (
 	AMPAMP           TokenType = "&&"
 	AMPDOT           TokenType = "&."
 	PIPEPIPE         TokenType = "||"
+	CARET            TokenType = "^"
 
 	// Delimiters
 	LPAREN      TokenType = "("

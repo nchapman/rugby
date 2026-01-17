@@ -286,6 +286,8 @@ func (l *Lexer) NextToken() token.Token {
 		} else {
 			tok = l.newToken(token.AMP, "&")
 		}
+	case '^':
+		tok = l.newToken(token.CARET, "^")
 	case '=':
 		if l.peekChar() == '=' {
 			l.readChar()

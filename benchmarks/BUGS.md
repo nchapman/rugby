@@ -55,6 +55,18 @@ Functions with interface return type can now return implementing classes.
 ### Array `push` Method - FIXED
 `arr.push(val)` now works correctly.
 
+### Bitwise AND/OR/XOR Operators - FIXED
+`&`, `|`, and `^` operators now work for integer types (bitwise AND, OR, XOR).
+
+### Tuple Destructuring and Literals - FIXED
+Tuple literals in arrays now generate proper struct literals, and tuple destructuring from array index now works.
+
+```ruby
+# Works now:
+arr = [("a", 0.27), ("b", 0.12)]  # Array of tuples
+_, p = genelist[i]                # Destructure from array index
+```
+
 ---
 
 ## Blocking Issues (Preventing Benchmarks)
@@ -112,21 +124,6 @@ class Leaf
 end
 ```
 
-### Tuple Destructuring and Literals Incomplete
-**Affects:** fasta, regex-redux
-**Status:** Tuple type annotations work, but destructuring and array literals don't
-
-```ruby
-# Type annotations work:
-def foo(items: Array<(String, Float)>)  # OK
-
-# Destructuring from array index doesn't work:
-_, p = genelist[i]  # Error: runtime.SliceAt returns 1 value
-
-# Tuple literals in arrays don't work:
-arr = [("a", 0.27), ("b", 0.12)]  # Error: cannot use "a" as struct{_0 string; _1 float64}
-```
-
 ### `spawn` Captures Variables by Reference
 **Affects:** coro-prime-sieve
 **Status:** Closure captures variables by reference, causing deadlock when variable is reassigned
@@ -149,14 +146,6 @@ runtime.SpawnVoid(func() {
     filter(ch, ch1, prime)  // ch is captured, not passed by value
 })
 ch = ch1  // Modifies ch before goroutine executes
-```
-
-### Bitwise AND Not Supported
-**Affects:** knucleotide
-**Status:** `&` operator not supported for Int types
-
-```ruby
-val = (c >> 1) & 3  # Error: cannot use '&' with types Int and Int
 ```
 
 ### 2D Array Indexing
@@ -204,15 +193,25 @@ len = bytes.length  # Error: type []byte has no field or method Length
 | spectral-norm | ✅ | ✅ | ✅ | ✅ | Working |
 | fannkuch-redux | ✅ | ✅ | ✅ | ✅ | Working |
 | merkletrees | ✅ | ✅ | ✅ | ✅ | Working |
-| fasta | ✅ | ✅ | ✅ | ❌ | Blocked: tuple destructuring/literals |
+| fasta | ✅ | ✅ | ✅ | ✅ | Working |
 | mandelbrot | ✅ | ✅ | - | ❌ | Blocked: 2D arrays |
 | coro-prime-sieve | ✅ | ✅ | ✅ | ❌ | Blocked: spawn closure capture |
 | lru | ✅ | ✅ | ✅ | ❌ | Blocked: Hash type issues |
 | pidigits | ✅ | ✅ | ✅ | ❌ | Blocked: pointer type properties |
-| knucleotide | ✅ | ✅ | ✅ | ❌ | Blocked: bitwise AND |
-| regex-redux | ✅ | ✅ | ✅ | ❌ | Blocked: tuples, []byte.length |
+| knucleotide | ✅ | ✅ | ✅ | ❌ | Blocked: Hash type inference |
+| regex-redux | ✅ | ✅ | ✅ | ❌ | Blocked: []byte.length |
 
-**6 of 13 Rugby benchmarks working**
+**7 of 13 Rugby benchmarks working**
+
+## Notes
+
+### String Indexing Returns String, Not Rune
+String indexing `str[i]` returns a single-character `String`, not a `rune`. This follows Ruby semantics.
+When using `fmt.Printf`, use `%s` instead of `%c`:
+```ruby
+fmt.Printf("%s", seq[i])  # Correct: prints character as string
+fmt.Printf("%c", seq[i])  # Error: %c expects rune, not string
+```
 
 ## Idiomatic Rugby Features Used
 
@@ -220,7 +219,8 @@ len = bytes.length  # Error: type []byte has no field or method Length
 - `Array<T>.new(n, default)` - Pre-sized array allocation
 - `n.times -> { }` - Block iteration
 - `iterations.times -> { }` - Loop with block
-- `1 << n` - Bitwise shift operators
+- `1 << n`, `n >> 1` - Bitwise shift operators
+- `a & b`, `a | b`, `a ^ b` - Bitwise AND, OR, XOR operators
 - `0x80`, `0b1010` - Hex and binary literals
 - Multi-line `Body.new(...)` calls
 - `property`, `getter` class declarations
@@ -231,3 +231,4 @@ len = bytes.length  # Error: type []byte has no field or method Length
 - `spawn func(args)` direct call syntax
 - `Chan<T>` channels with `<<` send and `.receive`
 - Interface return types
+- Tuple types `(T1, T2)` with array literal and destructuring support

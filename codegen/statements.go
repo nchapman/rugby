@@ -371,8 +371,6 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 		return
 	}
 
-	g.writeIndent()
-
 	// Determine effective names (replace unused variables with _)
 	effectiveNames := make([]string, len(s.Names))
 	for i, name := range s.Names {
@@ -389,7 +387,44 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 	// Use semantic analysis to determine if this is a declaration
 	isDeclaration := g.shouldDeclare(s)
 
-	// Generate names
+	// Check if the value is a tuple type (stored as a struct)
+	// If so, we need to destructure it using field access
+
+	// Check if value is an identifier with known tuple type
+	if ident, ok := s.Value.(*ast.Ident); ok {
+		if varType, exists := g.vars[ident.Name]; exists && isTupleType(varType) {
+			g.genTupleDestructure(effectiveNames, ident.Name, isDeclaration, len(s.Names))
+			return
+		}
+	}
+
+	// Check if value expression has a tuple type (e.g., arr[i] where arr is Array<(T1, T2)>)
+	// Only use tuple destructuring for non-call expressions - function calls return
+	// multiple values directly, while array indexing returns a tuple struct.
+	if isTupleType(valueType) {
+		// For identifiers, only use tuple destructuring if they're known variables.
+		// Unknown identifiers might be function calls without parentheses, which
+		// return multiple values and should use standard multi-assignment.
+		if ident, ok := s.Value.(*ast.Ident); ok {
+			if _, isVar := g.vars[ident.Name]; isVar {
+				g.genTupleDestructure(effectiveNames, ident.Name, isDeclaration, len(s.Names))
+				return
+			}
+			// Not a known variable - might be a function call, fall through to
+			// standard multi-assignment
+		} else if _, isCall := s.Value.(*ast.CallExpr); isCall {
+			// Function calls return multiple values directly in Go, not structs.
+			// Fall through to standard multi-assignment.
+		} else {
+			// For complex expressions (like arr[i]), use a temporary variable
+			// to avoid evaluating the expression multiple times
+			g.genTupleDestructureFromExpr(s, effectiveNames, isDeclaration)
+			return
+		}
+	}
+
+	// Standard multi-assignment (e.g., from function returning multiple values)
+	g.writeIndent()
 	for i, name := range effectiveNames {
 		if i > 0 {
 			g.buf.WriteString(", ")
@@ -397,31 +432,76 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 		g.buf.WriteString(name)
 	}
 
-	// Use := if any variable is new, = if all are already declared
 	if isDeclaration {
 		g.buf.WriteString(" := ")
 	} else {
 		g.buf.WriteString(" = ")
 	}
 
-	// Check if the value is a tuple variable (stored as a struct)
-	// If so, generate field access for each element
-	if ident, ok := s.Value.(*ast.Ident); ok {
-		if varType, exists := g.vars[ident.Name]; exists && isTupleType(varType) {
-			// Generate tuple field access: t._0, t._1, ...
-			for i := range len(s.Names) {
-				if i > 0 {
-					g.buf.WriteString(", ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+}
+
+// genTupleDestructure generates code to destructure a tuple variable
+// Example: a, b := tuple._0, tuple._1
+func (g *Generator) genTupleDestructure(names []string, varName string, isDeclaration bool, count int) {
+	g.writeIndent()
+	for i, name := range names {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.buf.WriteString(name)
+	}
+
+	// For tuple destructuring, check if any non-blank variable is new
+	// If so, we need to use :=
+	if !isDeclaration {
+		for _, name := range names {
+			if name != "_" {
+				if _, exists := g.vars[name]; !exists {
+					isDeclaration = true
+					break
 				}
-				g.buf.WriteString(fmt.Sprintf("%s._%d", ident.Name, i))
 			}
-			g.buf.WriteString("\n")
-			return
 		}
 	}
 
+	if isDeclaration {
+		g.buf.WriteString(" := ")
+		// Track the new variables
+		for _, name := range names {
+			if name != "_" {
+				g.vars[name] = "" // type will be inferred
+			}
+		}
+	} else {
+		g.buf.WriteString(" = ")
+	}
+
+	for i := range count {
+		if i > 0 {
+			g.buf.WriteString(", ")
+		}
+		g.buf.WriteString(fmt.Sprintf("%s._%d", varName, i))
+	}
+	g.buf.WriteString("\n")
+}
+
+// genTupleDestructureFromExpr generates code to destructure a tuple from an expression
+// Example: _tmp := expr; a, b := _tmp._0, _tmp._1
+func (g *Generator) genTupleDestructureFromExpr(s *ast.MultiAssignStmt, names []string, isDeclaration bool) {
+	// First, store the expression in a temporary variable
+	tempVar := fmt.Sprintf("_tuple%d", g.tempVarCounter)
+	g.tempVarCounter++
+
+	g.writeIndent()
+	g.buf.WriteString(tempVar)
+	g.buf.WriteString(" := ")
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
+
+	// Then destructure from the temporary variable
+	g.genTupleDestructure(names, tempVar, isDeclaration, len(s.Names))
 }
 
 // genSplatDestructuring handles splat patterns: first, *rest = items or *head, last = items

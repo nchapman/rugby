@@ -765,12 +765,17 @@ func (b *Builder) Build(files []string, outputName string) error {
 		outputName = strings.TrimSuffix(base, filepath.Ext(base))
 	}
 
-	// Get absolute output path (in cwd)
-	cwd, err := os.Getwd()
-	if err != nil {
-		return err
+	// Get absolute output path
+	var outputPath string
+	if filepath.IsAbs(outputName) {
+		outputPath = outputName
+	} else {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		outputPath = filepath.Join(cwd, outputName)
 	}
-	outputPath := filepath.Join(cwd, outputName)
 
 	// Run go build
 	if err := b.GoBuild(result.GenFiles, outputPath); err != nil {

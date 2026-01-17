@@ -33,7 +33,7 @@ def repeat_fasta(seq: String, n: Int)
 
     i = 0
     while i < line_len
-      fmt.Printf("%c", seq[(pos + i) % len])
+      fmt.Printf("%s", seq[(pos + i) % len])
       i += 1
     end
     fmt.Printf("\n")

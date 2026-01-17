@@ -226,6 +226,7 @@ func TestTokenType_StringValues(t *testing.T) {
 		{QUESTIONQUESTION, "??"},
 		{AMP, "&"},
 		{AMPDOT, "&."},
+		{CARET, "^"},
 
 		// Delimiters
 		{LPAREN, "("},

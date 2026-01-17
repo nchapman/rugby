@@ -108,7 +108,7 @@ infixLoop:
 			token.MATCH, token.NOTMATCH,
 			token.AND, token.OR, token.AMPAMP, token.PIPEPIPE,
 			token.SHOVELLEFT, token.SHOVELRIGHT, // bitwise shift operators
-			token.PIPE, token.AMP: // set union (|), intersection (&)
+			token.PIPE, token.AMP, token.CARET: // bitwise/set operators
 			p.nextToken()
 			left = p.parseInfixExpr(left)
 		case token.QUESTION:

@@ -5283,3 +5283,40 @@ end`
 	// Should generate runtime.Fill call with type parameter
 	assertContains(t, output, `runtime.Fill[int](0, 10)`)
 }
+
+// TestTupleArrayIndexDestructuring tests destructuring tuples from array indexing
+func TestTupleArrayIndexDestructuring(t *testing.T) {
+	input := `def main
+  items: Array<(String, Float)> = [("a", 0.27), ("c", 0.12)]
+  _, p = items[0]
+  puts p
+end`
+
+	output := compile(t, input)
+
+	// Should use temp variable and field access for tuple destructuring
+	assertContains(t, output, `_tuple`)
+	assertContains(t, output, `._0`)
+	assertContains(t, output, `._1`)
+}
+
+// TestTupleFunctionCallNotDestructured tests that function calls returning tuples
+// use standard multi-value assignment, not struct destructuring
+func TestTupleFunctionCallNotDestructured(t *testing.T) {
+	input := `def get_pair: (Int, String)
+  return 42, "hello"
+end
+
+def main
+  a, b = get_pair
+  puts a
+  puts b
+end`
+
+	output := compile(t, input)
+
+	// Should use direct multi-value assignment (no temp variable)
+	assertContains(t, output, `a, b := getPair()`)
+	// Should NOT contain tuple field access for the function call
+	assertNotContains(t, output, `getPair()._0`)
+}
