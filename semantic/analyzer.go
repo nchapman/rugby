@@ -288,7 +288,32 @@ func (a *Analyzer) validateInterfaceImplementations() {
 			// Check each interface method is implemented (including inherited methods)
 			for methodName, ifaceMethod := range iface.Methods {
 				clsMethod := a.getClassMethod(cls.Name, methodName)
+
+				// If no explicit method, check if a getter satisfies this interface method.
+				// A getter can satisfy an interface method if:
+				// - The interface method has 0 parameters
+				// - The interface method has 1 return type
+				// - The getter field's type matches the return type
 				if clsMethod == nil {
+					if len(ifaceMethod.Params) == 0 && len(ifaceMethod.ReturnTypes) == 1 {
+						field := a.getClassField(cls.Name, methodName)
+						if field != nil && field.HasGetter {
+							// Check if the field type matches the interface method's return type
+							if a.typesMatch(ifaceMethod.ReturnTypes[0], field.Type) {
+								continue // Getter satisfies this interface method
+							}
+							// Getter exists but wrong type
+							a.addError(&MethodSignatureMismatchError{
+								ClassName:     cls.Name,
+								InterfaceName: ifaceName,
+								MethodName:    methodName,
+								Expected:      a.formatMethodSignature(ifaceMethod),
+								Got:           fmt.Sprintf("() %s", field.Type),
+								Line:          cls.Line,
+							})
+							continue
+						}
+					}
 					a.addError(&InterfaceNotImplementedError{
 						ClassName:     cls.Name,
 						InterfaceName: ifaceName,
@@ -1108,7 +1133,7 @@ func (a *Analyzer) analyzeFuncDecl(f *ast.FuncDecl) {
 	fnScope.TypeParams = typeParams // Store type parameters for T.zero, etc.
 	fnScope.ReturnTypes = make([]*Type, len(f.ReturnTypes))
 	for i, rt := range f.ReturnTypes {
-		fnScope.ReturnTypes[i] = ParseTypeWithParams(rt, typeParams)
+		fnScope.ReturnTypes[i] = a.resolveType(ParseTypeWithParams(rt, typeParams))
 	}
 
 	// Add parameters to scope
@@ -1269,7 +1294,7 @@ func (a *Analyzer) analyzeStructMethod(m *ast.MethodDecl) {
 	methodScope.StructName = a.scope.StructName
 	methodScope.ReturnTypes = make([]*Type, len(m.ReturnTypes))
 	for i, rt := range m.ReturnTypes {
-		methodScope.ReturnTypes[i] = ParseType(rt)
+		methodScope.ReturnTypes[i] = a.resolveType(ParseType(rt))
 	}
 
 	// Add parameters to scope
@@ -1295,7 +1320,7 @@ func (a *Analyzer) analyzeMethodDecl(m *ast.MethodDecl) {
 	methodScope.IsClassMethod = m.IsClassMethod
 	methodScope.ReturnTypes = make([]*Type, len(m.ReturnTypes))
 	for i, rt := range m.ReturnTypes {
-		methodScope.ReturnTypes[i] = ParseType(rt)
+		methodScope.ReturnTypes[i] = a.resolveType(ParseType(rt))
 	}
 
 	// Add parameters
@@ -4103,7 +4128,22 @@ func (a *Analyzer) classImplementsInterface(className, interfaceName string) boo
 	// Check each interface method is implemented by the class (including inherited methods)
 	for methodName, ifaceMethod := range iface.Methods {
 		clsMethod := a.getClassMethod(className, methodName)
+
+		// If no explicit method, check if a getter satisfies this interface method.
+		// A getter can satisfy an interface method if:
+		// - The interface method has 0 parameters
+		// - The interface method has 1 return type
+		// - The getter field's type matches the return type
 		if clsMethod == nil {
+			if len(ifaceMethod.Params) == 0 && len(ifaceMethod.ReturnTypes) == 1 {
+				field := a.getClassField(className, methodName)
+				if field != nil && field.HasGetter {
+					// Check if the field type matches the interface method's return type
+					if a.typesMatch(ifaceMethod.ReturnTypes[0], field.Type) {
+						continue // Getter satisfies this interface method
+					}
+				}
+			}
 			return false
 		}
 

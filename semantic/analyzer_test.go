@@ -1212,6 +1212,60 @@ end`,
 end`,
 			wantErr: true,
 		},
+		{
+			name: "return class as interface type - structural typing",
+			input: `
+interface Speaker
+  def speak: String
+end
+
+class Dog
+  def speak: String
+    "woof"
+  end
+end
+
+def getAnimal: Speaker
+  return Dog.new
+end`,
+			wantErr: false, // Dog structurally implements Speaker
+		},
+		{
+			name: "return class that doesn't implement interface",
+			input: `
+interface Speaker
+  def speak: String
+end
+
+class Cat
+  def meow: String
+    "meow"
+  end
+end
+
+def getAnimal: Speaker
+  return Cat.new
+end`,
+			wantErr: true, // Cat doesn't have speak method
+		},
+		{
+			name: "return class with getter as interface type",
+			input: `
+interface HasValue
+  def value: Int
+end
+
+class Leaf
+  getter value: Int
+  def initialize(@value: Int)
+  end
+end
+
+def makeLeaf(n: Int): HasValue
+  Leaf.new(n)
+end`,
+			wantErr: false, // Getter satisfies interface method
+		},
 	}
 
 	for _, tt := range tests {
@@ -2560,6 +2614,37 @@ class Dog < Animal implements Speaker
 end`,
 			wantErr: true,
 			errMsg:  "missing method 'speak'",
+		},
+		{
+			name: "getter satisfies interface method",
+			input: `
+interface HasValue
+  def value: Int
+end
+
+class Leaf implements HasValue
+  getter value: Int
+
+  def initialize(@value: Int)
+  end
+end`,
+			wantErr: false,
+		},
+		{
+			name: "getter with wrong type fails interface",
+			input: `
+interface HasValue
+  def value: Int
+end
+
+class Leaf implements HasValue
+  getter value: String
+
+  def initialize(@value: String)
+  end
+end`,
+			wantErr: true,
+			errMsg:  "wrong signature",
 		},
 	}
 
