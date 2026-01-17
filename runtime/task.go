@@ -6,20 +6,20 @@ import (
 	"sync"
 )
 
-// Task represents a concurrent computation that will produce a value.
+// Task represents a concurrent computation that will produce a value of type T.
 // Tasks are created with Spawn and consumed with Await.
-type Task struct {
-	result chan any
+type Task[T any] struct {
+	result chan T
 	done   chan struct{}
-	value  any
+	value  T
 	once   sync.Once
 }
 
 // Spawn creates a new Task that executes the given function concurrently.
 // The function is executed immediately in a goroutine.
-func Spawn(fn func() any) *Task {
-	t := &Task{
-		result: make(chan any, 1),
+func Spawn[T any](fn func() T) *Task[T] {
+	t := &Task[T]{
+		result: make(chan T, 1),
 		done:   make(chan struct{}),
 	}
 
@@ -33,7 +33,7 @@ func Spawn(fn func() any) *Task {
 
 // Await blocks until the task completes and returns its value.
 // Awaiting a completed task returns immediately.
-func Await(t *Task) any {
+func Await[T any](t *Task[T]) T {
 	t.once.Do(func() {
 		t.value = <-t.result
 	})
@@ -57,12 +57,14 @@ func NewScope() *Scope {
 	}
 }
 
-// Spawn creates a new task within this scope.
+// ScopeSpawn creates a new task within the given scope.
 // The task will be awaited when the scope exits.
-func (s *Scope) Spawn(fn func() any) *Task {
+// Note: This is a standalone function because Go doesn't support generic methods
+// on non-generic types.
+func ScopeSpawn[T any](s *Scope, fn func() T) *Task[T] {
 	s.wg.Add(1)
-	t := &Task{
-		result: make(chan any, 1),
+	t := &Task[T]{
+		result: make(chan T, 1),
 		done:   make(chan struct{}),
 	}
 

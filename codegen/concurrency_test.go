@@ -220,9 +220,9 @@ func TestScopedSpawnBlock(t *testing.T) {
 end`
 	code := compileRelaxed(t, input)
 
-	// Should generate scope.Spawn(func() any { ... })
-	if !strings.Contains(code, "scope.Spawn(func() any {") {
-		t.Errorf("expected 'scope.Spawn(func() any {', got:\n%s", code)
+	// Should generate runtime.ScopeSpawn(scope, func() T { ... })
+	if !strings.Contains(code, "runtime.ScopeSpawn(scope, func() any {") {
+		t.Errorf("expected 'runtime.ScopeSpawn(scope, func() any {', got:\n%s", code)
 	}
 }
 
@@ -426,8 +426,8 @@ func TestScopedSpawnWithMultiStatements(t *testing.T) {
 end`
 	code := compileRelaxed(t, input)
 
-	if !strings.Contains(code, "scope.Spawn(func() any {") {
-		t.Errorf("expected 'scope.Spawn(func() any {', got:\n%s", code)
+	if !strings.Contains(code, "runtime.ScopeSpawn(scope, func() any {") {
+		t.Errorf("expected 'runtime.ScopeSpawn(scope, func() any {', got:\n%s", code)
 	}
 	// Should have return for last expression
 	if !strings.Contains(code, "return b") {

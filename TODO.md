@@ -744,30 +744,26 @@ All language features including Phase 14 now pass!
 
 ---
 
-## Future Optimizations
+## Completed Optimizations
 
-Performance improvements that require larger refactoring. Not blocking but would improve generated code quality.
+### Make Task Generic ✅ (2026-01-16)
 
-### Make Task Generic
-
-Currently `spawn` blocks return `func() any` because `runtime.Task` is not generic:
+Made `Task[T]`, `Spawn[T]`, and `Await[T]` generic to eliminate type assertions:
 
 ```go
-// Current
+// Before
 type Task struct { result any }
 func Spawn(fn func() any) *Task
+func Await(t *Task) any
 
-// Ideal
+// After
 type Task[T any] struct { result T }
 func Spawn[T any](fn func() T) *Task[T]
+func Await[T any](t *Task[T]) T
 ```
 
-This would eliminate type assertions when awaiting tasks and allow typed return values.
-
-**Required changes:**
-- Make `Task` struct generic in `runtime/task.go`
-- Make `Spawn` function generic
-- Make `Await` function generic (returns `T` instead of `any`)
-- Update `Scope.Spawn` method
-- Update codegen to generate typed spawn closures
-- Update codegen for await expressions
+Changes made:
+- `runtime/task.go`: Made `Task`, `Spawn`, `Await` generic
+- `runtime/task.go`: Changed `Scope.Spawn` to standalone `ScopeSpawn[T]` function (Go doesn't support generic methods on non-generic types)
+- `codegen/expressions.go`: Updated `genSpawnExpr`, `genScopedSpawnBlock`, added `genScopedSpawnLambda` to infer and generate typed closures
+- Tests updated to use new API

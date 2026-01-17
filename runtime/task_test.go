@@ -28,6 +28,44 @@ func TestSpawnAwaitString(t *testing.T) {
 	}
 }
 
+// Test with concrete types to validate generics work correctly
+func TestSpawnWithConcreteInt(t *testing.T) {
+	task := Spawn(func() int {
+		return 42
+	})
+
+	result := Await(task)
+	// result is int, no type assertion needed
+	if result != 42 {
+		t.Errorf("expected 42, got %d", result)
+	}
+}
+
+func TestSpawnWithConcreteString(t *testing.T) {
+	task := Spawn(func() string {
+		return "hello"
+	})
+
+	result := Await(task)
+	// result is string, no type assertion needed
+	if result != "hello" {
+		t.Errorf("expected 'hello', got %s", result)
+	}
+}
+
+func TestScopeSpawnWithConcreteType(t *testing.T) {
+	scope := NewScope()
+	task := ScopeSpawn(scope, func() int {
+		return 100
+	})
+
+	result := Await(task)
+	if result != 100 {
+		t.Errorf("expected 100, got %d", result)
+	}
+	scope.Wait()
+}
+
 func TestSpawnAwaitMultiple(t *testing.T) {
 	t1 := Spawn(func() any { return 1 })
 	t2 := Spawn(func() any { return 2 })
@@ -65,11 +103,11 @@ func TestScope(t *testing.T) {
 	scope := NewScope()
 
 	var count int32
-	t1 := scope.Spawn(func() any {
+	t1 := ScopeSpawn(scope, func() any {
 		atomic.AddInt32(&count, 1)
 		return nil
 	})
-	t2 := scope.Spawn(func() any {
+	t2 := ScopeSpawn(scope, func() any {
 		atomic.AddInt32(&count, 1)
 		return nil
 	})
@@ -242,9 +280,9 @@ func TestScopeWithManyTasks(t *testing.T) {
 	var count int32
 	const numTasks = 100
 
-	tasks := make([]*Task, numTasks)
+	tasks := make([]*Task[any], numTasks)
 	for i := range numTasks {
-		tasks[i] = scope.Spawn(func() any {
+		tasks[i] = ScopeSpawn(scope, func() any {
 			atomic.AddInt32(&count, 1)
 			return nil
 		})
@@ -266,15 +304,15 @@ func TestScopedTasksRunConcurrently(t *testing.T) {
 	scope := NewScope()
 	start := time.Now()
 
-	t1 := scope.Spawn(func() any {
+	t1 := ScopeSpawn(scope, func() any {
 		time.Sleep(30 * time.Millisecond)
 		return 1
 	})
-	t2 := scope.Spawn(func() any {
+	t2 := ScopeSpawn(scope, func() any {
 		time.Sleep(30 * time.Millisecond)
 		return 2
 	})
-	t3 := scope.Spawn(func() any {
+	t3 := ScopeSpawn(scope, func() any {
 		time.Sleep(30 * time.Millisecond)
 		return 3
 	})
@@ -372,7 +410,7 @@ func TestMultipleSpawnersOnSameScope(t *testing.T) {
 	for range 3 {
 		go func() {
 			for range 10 {
-				scope.Spawn(func() any {
+				ScopeSpawn(scope, func() any {
 					atomic.AddInt32(&count, 1)
 					return nil
 				})
@@ -395,7 +433,7 @@ func TestMultipleSpawnersOnSameScope(t *testing.T) {
 }
 
 func TestAwaitReturnsCorrectValueForEachTask(t *testing.T) {
-	tasks := make([]*Task, 10)
+	tasks := make([]*Task[any], 10)
 	for i := range 10 {
 		val := i // Capture loop variable
 		tasks[i] = Spawn(func() any {
@@ -498,7 +536,7 @@ func TestScopeSpawnWithClosure(t *testing.T) {
 
 	for _, v := range values {
 		val := v // Capture
-		scope.Spawn(func() any {
+		ScopeSpawn(scope, func() any {
 			atomic.AddInt32(&sum, int32(val))
 			return nil
 		})

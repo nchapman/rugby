@@ -1548,6 +1548,18 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				}
 			}
 		}
+		// Handle scope.spawn(lambda) -> runtime.ScopeSpawn(scope, lambda)
+		if sel.Sel == "spawn" {
+			receiverType := g.inferTypeFromExpr(sel.X)
+			if receiverType == "Scope" || receiverType == "*Scope" {
+				if len(call.Args) >= 1 {
+					if lambda, ok := call.Args[0].(*ast.LambdaExpr); ok {
+						g.genScopedSpawnLambda(sel.X, lambda)
+						return
+					}
+				}
+			}
+		}
 	}
 
 	if sel, ok := call.Func.(*ast.SelectorExpr); ok {
@@ -4202,9 +4214,17 @@ func (g *Generator) genDowntoBlock(start ast.Expression, block *ast.BlockExpr, a
 }
 
 func (g *Generator) genScopedSpawnBlock(scope ast.Expression, block *ast.BlockExpr) {
+	g.needsRuntime = true
+
+	// Infer return type from block body for generic ScopeSpawn[T]
+	returnType := g.inferBlockBodyReturnType(block.Body)
+
+	// Generate: runtime.ScopeSpawn(scope, func() T { ... })
+	g.buf.WriteString("runtime.ScopeSpawn(")
 	g.genExpr(scope)
-	// Note: Spawn expects func() any - making this generic would require Task[T]
-	g.buf.WriteString(".Spawn(func() any {\n")
+	g.buf.WriteString(", func() ")
+	g.buf.WriteString(returnType)
+	g.buf.WriteString(" {\n")
 
 	g.indent++
 	if len(block.Body) > 0 {
@@ -4218,7 +4238,7 @@ func (g *Generator) genScopedSpawnBlock(scope ast.Expression, block *ast.BlockEx
 				} else {
 					g.genStatement(stmt)
 					g.writeIndent()
-					g.buf.WriteString("return nil\n")
+					g.genZeroReturn(returnType)
 				}
 			} else {
 				g.genStatement(stmt)
@@ -4226,7 +4246,49 @@ func (g *Generator) genScopedSpawnBlock(scope ast.Expression, block *ast.BlockEx
 		}
 	} else {
 		g.writeIndent()
-		g.buf.WriteString("return nil\n")
+		g.genZeroReturn(returnType)
+	}
+	g.indent--
+
+	g.writeIndent()
+	g.buf.WriteString("})")
+}
+
+// genScopedSpawnLambda generates code for scope.spawn(lambda) -> runtime.ScopeSpawn(scope, lambda)
+func (g *Generator) genScopedSpawnLambda(scope ast.Expression, lambda *ast.LambdaExpr) {
+	g.needsRuntime = true
+
+	// Infer return type from lambda body for generic ScopeSpawn[T]
+	returnType := g.inferBlockBodyReturnType(lambda.Body)
+
+	// Generate: runtime.ScopeSpawn(scope, func() T { ... })
+	g.buf.WriteString("runtime.ScopeSpawn(")
+	g.genExpr(scope)
+	g.buf.WriteString(", func() ")
+	g.buf.WriteString(returnType)
+	g.buf.WriteString(" {\n")
+
+	g.indent++
+	if len(lambda.Body) > 0 {
+		for i, stmt := range lambda.Body {
+			if i == len(lambda.Body)-1 {
+				if exprStmt, ok := stmt.(*ast.ExprStmt); ok {
+					g.writeIndent()
+					g.buf.WriteString("return ")
+					g.genExpr(exprStmt.Expr)
+					g.buf.WriteString("\n")
+				} else {
+					g.genStatement(stmt)
+					g.writeIndent()
+					g.genZeroReturn(returnType)
+				}
+			} else {
+				g.genStatement(stmt)
+			}
+		}
+	} else {
+		g.writeIndent()
+		g.genZeroReturn(returnType)
 	}
 	g.indent--
 
@@ -5032,8 +5094,13 @@ func (g *Generator) genStdLibPropertyMethod(sel *ast.SelectorExpr) bool {
 
 func (g *Generator) genSpawnExpr(e *ast.SpawnExpr) {
 	g.needsRuntime = true
-	// Note: Spawn expects func() any - making this generic would require Task[T]
-	g.buf.WriteString("runtime.Spawn(func() any {\n")
+
+	// Infer return type from block body for generic Spawn[T]
+	returnType := g.inferBlockBodyReturnType(e.Block.Body)
+
+	g.buf.WriteString("runtime.Spawn(func() ")
+	g.buf.WriteString(returnType)
+	g.buf.WriteString(" {\n")
 	g.indent++
 	if len(e.Block.Body) > 0 {
 		for i, stmt := range e.Block.Body {
@@ -5046,7 +5113,7 @@ func (g *Generator) genSpawnExpr(e *ast.SpawnExpr) {
 				} else {
 					g.genStatement(stmt)
 					g.writeIndent()
-					g.buf.WriteString("return nil\n")
+					g.genZeroReturn(returnType)
 				}
 			} else {
 				g.genStatement(stmt)
@@ -5054,11 +5121,24 @@ func (g *Generator) genSpawnExpr(e *ast.SpawnExpr) {
 		}
 	} else {
 		g.writeIndent()
-		g.buf.WriteString("return nil\n")
+		g.genZeroReturn(returnType)
 	}
 	g.indent--
 	g.writeIndent()
 	g.buf.WriteString("})")
+}
+
+// genZeroReturn generates a return statement with the zero value for the given type.
+func (g *Generator) genZeroReturn(returnType string) {
+	if returnType == "any" {
+		g.buf.WriteString("return nil\n")
+	} else {
+		g.buf.WriteString("var _zero ")
+		g.buf.WriteString(returnType)
+		g.buf.WriteString("\n")
+		g.writeIndent()
+		g.buf.WriteString("return _zero\n")
+	}
 }
 
 func (g *Generator) genAwaitExpr(e *ast.AwaitExpr) {
