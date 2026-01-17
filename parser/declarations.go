@@ -129,7 +129,8 @@ func (p *Parser) parseTypedParam(seen map[string]bool) *ast.Param {
 	if p.curTokenIs(token.LPAREN) {
 		// Function type: (Int) -> Int
 		paramType = p.parseFunctionType()
-	} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
+	} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) || p.curTokenIs(token.STAR) {
+		// Regular type, any type, or pointer type (*big.Int)
 		paramType = p.parseTypeName()
 	} else {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
@@ -220,7 +221,7 @@ func (p *Parser) parseDestructuringParam(seen map[string]bool) *ast.Param {
 	p.nextToken() // consume ':'
 
 	var paramType string
-	if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
+	if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) || p.curTokenIs(token.STAR) {
 		paramType = p.parseTypeName()
 	} else {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
@@ -269,10 +270,10 @@ func (p *Parser) parseFunctionType() string {
 	result += ": "
 	p.nextToken() // consume ':'
 
-	// Parse return type (which could itself be a function type)
+	// Parse return type (which could itself be a function type or pointer type)
 	if p.curTokenIs(token.LPAREN) {
 		result += p.parseFunctionType()
-	} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
+	} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) || p.curTokenIs(token.STAR) {
 		result += p.parseTypeName()
 	} else {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected return type")
@@ -286,6 +287,12 @@ func (p *Parser) parseFunctionType() string {
 // For generics (Array<Int>), angle brackets are tokens.
 // For tuples ((Int, String)), parentheses contain comma-separated types.
 func (p *Parser) parseTypeName() string {
+	// Handle pointer types: *Type (e.g., *big.Int for Go interop)
+	if p.curTokenIs(token.STAR) {
+		p.nextToken() // consume '*'
+		return "*" + p.parseTypeName()
+	}
+
 	// Handle tuple types: (Type1, Type2, ...)
 	if p.curTokenIs(token.LPAREN) {
 		p.nextToken() // consume '('
@@ -507,7 +514,7 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 				// Multiple return types: (Type1, Type2, ...)
 				p.nextToken() // consume '('
 
-				if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+				if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.STAR) {
 					p.errorAt(p.curToken.Line, p.curToken.Column, "expected type in return type list")
 					return nil
 				}
@@ -519,7 +526,7 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 					if p.curTokenIs(token.RPAREN) {
 						break
 					}
-					if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+					if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.STAR) {
 						p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after comma")
 						return nil
 					}
@@ -532,8 +539,8 @@ func (p *Parser) parseFuncDeclWithDoc(doc *ast.CommentGroup) *ast.FuncDecl {
 				}
 				p.nextToken() // consume ')'
 			}
-		} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
-			// Single return type
+		} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) || p.curTokenIs(token.STAR) {
+			// Single return type (including pointer types like *big.Int)
 			fn.ReturnTypes = append(fn.ReturnTypes, p.parseTypeName())
 		} else {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
@@ -931,7 +938,7 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 			// Multiple return types: (Type1, Type2, ...)
 			p.nextToken() // consume '('
 
-			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.STAR) {
 				p.errorAt(p.curToken.Line, p.curToken.Column, "expected type in return type list")
 				return nil
 			}
@@ -943,7 +950,7 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 				if p.curTokenIs(token.RPAREN) {
 					break
 				}
-				if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+				if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.STAR) {
 					p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after comma")
 					return nil
 				}
@@ -955,8 +962,8 @@ func (p *Parser) parseMethodSig() *ast.MethodSig {
 				return nil
 			}
 			p.nextToken() // consume ')'
-		} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
-			// Single return type
+		} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) || p.curTokenIs(token.STAR) {
+			// Single return type (including pointer types like *big.Int)
 			sig.ReturnTypes = append(sig.ReturnTypes, p.parseTypeName())
 		} else {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
@@ -990,8 +997,8 @@ func (p *Parser) parseAccessorDecl() *ast.AccessorDecl {
 	}
 	p.nextToken() // consume ':'
 
-	// Type can be simple (Int), qualified (big.Int), or generic (Array<Int>)
-	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.LPAREN) {
+	// Type can be simple (Int), qualified (big.Int), generic (Array<Int>), or pointer (*big.Int)
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.LPAREN) && !p.curTokenIs(token.STAR) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 		return nil
 	}
@@ -1019,8 +1026,8 @@ func (p *Parser) parseFieldDecl() *ast.FieldDecl {
 	}
 	p.nextToken() // consume ':'
 
-	// Type can be simple (Int), qualified (big.Int), or generic (Array<Int>)
-	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.LPAREN) {
+	// Type can be simple (Int), qualified (big.Int), generic (Array<Int>), or pointer (*big.Int)
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.LPAREN) && !p.curTokenIs(token.STAR) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 		return nil
 	}
@@ -1260,7 +1267,7 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 			// Multiple return types: (Type1, Type2, ...)
 			p.nextToken() // consume '('
 
-			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+			if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.STAR) {
 				p.errorAt(p.curToken.Line, p.curToken.Column, "expected type in return type list")
 				return nil
 			}
@@ -1272,7 +1279,7 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 				if p.curTokenIs(token.RPAREN) {
 					break
 				}
-				if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+				if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.STAR) {
 					p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after comma")
 					return nil
 				}
@@ -1284,8 +1291,8 @@ func (p *Parser) parseMethodDeclWithDoc(doc *ast.CommentGroup) *ast.MethodDecl {
 				return nil
 			}
 			p.nextToken() // consume ')'
-		} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) {
-			// Single return type
+		} else if p.curTokenIs(token.IDENT) || p.curTokenIs(token.ANY) || p.curTokenIs(token.STAR) {
+			// Single return type (including pointer types like *big.Int)
 			method.ReturnTypes = append(method.ReturnTypes, p.parseTypeName())
 		} else {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
@@ -1405,7 +1412,7 @@ func (p *Parser) parseConstDeclWithDoc(doc *ast.CommentGroup) *ast.ConstDecl {
 	var constType string
 	if p.curTokenIs(token.COLON) {
 		p.nextToken() // consume ':'
-		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.STAR) {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 			return nil
 		}

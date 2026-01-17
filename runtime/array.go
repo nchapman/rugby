@@ -840,6 +840,8 @@ func ShiftLeft(left any, right any) any {
 		return s << toIntForShift(right)
 	case uint64:
 		return s << toIntForShift(right)
+	case byte: // uint8
+		return int(s) << toIntForShift(right)
 	}
 
 	// Use reflection for channels and other types

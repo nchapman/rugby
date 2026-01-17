@@ -13,6 +13,21 @@ func ParseTypeWithParams(s string, typeParams map[string]string) *Type {
 		return TypeUnknownVal
 	}
 
+	// Check for pointer type: *Type (e.g., *big.Int for Go interop)
+	if strings.HasPrefix(s, "*") {
+		inner := ParseTypeWithParams(s[1:], typeParams)
+		return &Type{
+			Kind:       inner.Kind,
+			Name:       inner.Name,
+			Elem:       inner.Elem,
+			KeyType:    inner.KeyType,
+			ValueType:  inner.ValueType,
+			IsPointer:  true,
+			GoPackage:  inner.GoPackage,
+			GoTypeName: inner.GoTypeName,
+		}
+	}
+
 	// Check if it's a type parameter (must check before other parsing)
 	if typeParams != nil {
 		if constraint, ok := typeParams[s]; ok {
@@ -117,6 +132,18 @@ func ParseTypeWithParams(s string, typeParams map[string]string) *Type {
 		return TypeUnknownVal
 	}
 
+	// Check for Go interop type: package.Type (e.g., big.Int, http.Request)
+	if dotIdx := strings.LastIndex(s, "."); dotIdx != -1 {
+		pkgName := s[:dotIdx]
+		typeName := s[dotIdx+1:]
+		return &Type{
+			Kind:       TypeGoType,
+			Name:       typeName,
+			GoPackage:  pkgName,
+			GoTypeName: typeName,
+		}
+	}
+
 	// Assume it's a class or interface name
 	return NewClassType(s)
 }
@@ -127,6 +154,21 @@ func ParseType(s string) *Type {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return TypeUnknownVal
+	}
+
+	// Check for pointer type: *Type (e.g., *big.Int for Go interop)
+	if strings.HasPrefix(s, "*") {
+		inner := ParseType(s[1:])
+		return &Type{
+			Kind:       inner.Kind,
+			Name:       inner.Name,
+			Elem:       inner.Elem,
+			KeyType:    inner.KeyType,
+			ValueType:  inner.ValueType,
+			IsPointer:  true,
+			GoPackage:  inner.GoPackage,
+			GoTypeName: inner.GoTypeName,
+		}
 	}
 
 	// Check for optional suffix
@@ -225,6 +267,18 @@ func ParseType(s string) *Type {
 		return TypeRangeVal
 	case "":
 		return TypeUnknownVal
+	}
+
+	// Check for Go interop type: package.Type (e.g., big.Int, http.Request)
+	if dotIdx := strings.LastIndex(s, "."); dotIdx != -1 {
+		pkgName := s[:dotIdx]
+		typeName := s[dotIdx+1:]
+		return &Type{
+			Kind:       TypeGoType,
+			Name:       typeName,
+			GoPackage:  pkgName,
+			GoTypeName: typeName,
+		}
 	}
 
 	// Assume it's a class or interface name

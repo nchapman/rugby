@@ -81,8 +81,8 @@ func mapType(rubyType string) string {
 		return "int64"
 	case "UInt":
 		return "uint"
-	case "UInt8", "Byte":
-		return "uint8"
+	case "UInt8", "Byte", "byte":
+		return "byte"
 	case "UInt16":
 		return "uint16"
 	case "UInt32":

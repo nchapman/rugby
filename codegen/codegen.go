@@ -917,8 +917,27 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 		// Note: Constructor calls (ClassName.new) are handled by early check at top of function
 		// Here we only handle struct method calls for return type inference
 		if sel, ok := e.Func.(*ast.SelectorExpr); ok && sel.Sel != "new" {
-			// Struct method call: p.moved(...) -> look up method return type
 			receiverType := g.inferTypeFromExpr(sel.X)
+
+			// Check stdLib for method return type (e.g., String.bytes -> []byte)
+			lookupType := receiverType
+			switch receiverType {
+			case "string":
+				lookupType = "String"
+			case "int":
+				lookupType = "Int"
+			case "float64":
+				lookupType = "Float"
+			case "bool":
+				lookupType = "Bool"
+			}
+			if methods, ok := stdLib[lookupType]; ok {
+				if method, ok := methods[sel.Sel]; ok && method.ReturnType != "" {
+					return method.ReturnType
+				}
+			}
+
+			// Struct method call: p.moved(...) -> look up method return type
 			if g.structs != nil {
 				if structDecl, ok := g.structs[receiverType]; ok {
 					for _, method := range structDecl.Methods {

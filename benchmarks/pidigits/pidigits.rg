@@ -5,16 +5,16 @@ import "math/big"
 
 # Global state for the spigot algorithm
 class PiState
-  property tmp1: big.Int
-  property tmp2: big.Int
-  property y2: big.Int
-  property bigk: big.Int
-  property accum: big.Int
-  property denom: big.Int
-  property numer: big.Int
-  property ten: big.Int
-  property three: big.Int
-  property four: big.Int
+  property tmp1: *big.Int
+  property tmp2: *big.Int
+  property y2: *big.Int
+  property bigk: *big.Int
+  property accum: *big.Int
+  property denom: *big.Int
+  property numer: *big.Int
+  property ten: *big.Int
+  property three: *big.Int
+  property four: *big.Int
 
   def initialize
     @tmp1 = big.NewInt(0)
@@ -29,7 +29,7 @@ class PiState
     @four = big.NewInt(4)
   end
 
-  def next_term(k: Int): Int
+  def next_term(k: Int64): Int64
     while true
       k += 1
       @y2.SetInt64(k * 2 + 1)
@@ -48,18 +48,18 @@ class PiState
     k
   end
 
-  def extract_digit(nth: big.Int): Int
+  def extract_digit(nth: *big.Int): Int64
     @tmp1.Mul(nth, @numer)
     @tmp2.Add(@tmp1, @accum)
     @tmp1.Div(@tmp2, @denom)
-    @tmp1.Int64
+    @tmp1.Int64()
   end
 
-  def next_digit(k: Int): (Int, Int)
+  def next_digit(k: Int64): (Int64, Int64)
     while true
-      k = next_term(k)
-      d3 = extract_digit(@three)
-      d4 = extract_digit(@four)
+      k = self.next_term(k)
+      d3 = self.extract_digit(@three)
+      d4 = self.extract_digit(@four)
       if d3 == d4
         return d3, k
       end
@@ -67,7 +67,7 @@ class PiState
     return 0, k
   end
 
-  def eliminate_digit(d: Int)
+  def eliminate_digit(d: Int64)
     @tmp1.SetInt64(d)
     @accum.Sub(@accum, @tmp1.Mul(@denom, @tmp1))
     @accum.Mul(@accum, @ten)
@@ -84,13 +84,13 @@ def main
 
   state = PiState.new
   line = ""
-  k = 0
-  d = 0
+  k: Int64 = 0
+  d: Int64 = 0
 
   i = 1
   while i <= n
     d, k = state.next_digit(k)
-    line = line + d.to_s
+    line = line + fmt.Sprintf("%d", d)
 
     if line.length == 10
       fmt.Printf("%s\t:%d\n", line, i)

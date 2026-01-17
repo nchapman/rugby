@@ -1638,10 +1638,15 @@ func extractGenericTypeString(idx *ast.IndexExpr) string {
 
 // extractArrayElementType extracts the element type from a Rugby type string.
 // For "Array<Int>" returns "Int", for "Array<Body>" returns "Body".
+// For "[]byte" returns "byte", for "[]int" returns "int" (Go slice syntax).
 // Returns empty string if not an array type.
 func extractArrayElementType(rugbyType string) string {
 	if strings.HasPrefix(rugbyType, "Array<") && strings.HasSuffix(rugbyType, ">") {
 		return rugbyType[6 : len(rugbyType)-1]
+	}
+	// Handle Go slice syntax: []T
+	if strings.HasPrefix(rugbyType, "[]") {
+		return rugbyType[2:]
 	}
 	return ""
 }

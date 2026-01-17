@@ -3,6 +3,22 @@ import "fmt"
 import "bufio"
 import "strings"
 
+# Map nucleotide character to 2-bit encoding
+# Uses character lookup instead of byte manipulation to avoid
+# type inference limitations with Go's []byte element type
+def char_to_code(ch: String): Int
+  if ch == "A" || ch == "a"
+    return 0
+  elsif ch == "C" || ch == "c"
+    return 1
+  elsif ch == "T" || ch == "t"
+    return 2
+  elsif ch == "G" || ch == "g"
+    return 3
+  end
+  0
+end
+
 # Read stdin until we find ">THREE", then return all following lines
 def read_sequence(filename: String): Array<Int>
   f, err = os.Open(filename)
@@ -27,14 +43,10 @@ def read_sequence(filename: String): Array<Int>
       continue
     end
 
-    # Convert to 2-bit encoding: A=0, C=1, T=2, G=3
-    i = 0
-    while i < line.length
-      c = line[i]
-      val = (c >> 1) & 3
-      data.push(val)
-      i += 1
-    end
+    # Convert to 2-bit encoding using character lookup
+    line.chars.each -> { |ch|
+      data.push(char_to_code(ch))
+    }
   end
 
   f.Close
@@ -42,7 +54,7 @@ def read_sequence(filename: String): Array<Int>
 end
 
 def count_frequencies(data: Array<Int>, size: Int): Hash<Int, Int>
-  counts = {}
+  counts: Hash<Int, Int> = {}
 
   i = 0
   while i <= data.length - size
@@ -53,10 +65,8 @@ def count_frequencies(data: Array<Int>, size: Int): Hash<Int, Int>
       j += 1
     end
 
-    if counts[key] == nil
-      counts[key] = 0
-    end
-    counts[key] += 1
+    current = counts.fetch(key, 0)
+    counts[key] = current + 1
 
     i += 1
   end
@@ -77,13 +87,11 @@ def decompress(num: Int, length: Int): String
 end
 
 def compress(sequence: String): Int
-  to_num = { "A" => 0, "C" => 1, "T" => 2, "G" => 3 }
+  # Map characters to 2-bit encoding using char_to_code
   num = 0
-  i = 0
-  while i < sequence.length
-    num = (num << 2) | to_num[sequence[i]]
-    i += 1
-  end
+  sequence.chars.each -> { |ch|
+    num = (num << 2) | char_to_code(ch)
+  }
   num
 end
 
@@ -104,10 +112,7 @@ def write_count(data: Array<Int>, nucleotide: String): String
   size = nucleotide.length
   counts = count_frequencies(data, size)
   key = compress(nucleotide)
-  count = counts[key]
-  if count == nil
-    count = 0
-  end
+  count = counts.fetch(key, 0)
   fmt.Sprintf("%d\t%s", count, nucleotide)
 end
 

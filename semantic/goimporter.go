@@ -260,6 +260,10 @@ func (gi *GoImporter) convertGoType(t types.Type) *Type {
 		if pkg != nil {
 			pkgPath = pkg.Path()
 		}
+		// Check for the builtin error type (no package, name is "error")
+		if pkg == nil && t.Obj().Name() == "error" {
+			return TypeErrorVal
+		}
 		return &Type{
 			Kind:       TypeGoType,
 			Name:       t.Obj().Name(),

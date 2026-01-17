@@ -269,8 +269,8 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	var typeAnnotation string
 	if p.curTokenIs(token.COLON) {
 		p.nextToken() // consume ':'
-		// Allow IDENT, LPAREN (for tuples), or ANY keyword as type
-		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.LPAREN) && !p.curTokenIs(token.ANY) {
+		// Allow IDENT, LPAREN (for tuples), ANY keyword, or STAR (pointer) as type
+		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.LPAREN) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.STAR) {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 			return nil
 		}
@@ -293,8 +293,8 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	if typeAnnotation == "" && p.peekTokenIs(token.COLON) {
 		p.nextToken() // move to ':'
 		p.nextToken() // move past ':'
-		// Allow IDENT, LPAREN (for tuples), or ANY keyword as type
-		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.LPAREN) && !p.curTokenIs(token.ANY) {
+		// Allow IDENT, LPAREN (for tuples), ANY keyword, or STAR (pointer) as type
+		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.LPAREN) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.STAR) {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 			return nil
 		}

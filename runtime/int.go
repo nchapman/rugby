@@ -125,6 +125,9 @@ func ShiftRight(left, right any) any {
 	case uint64:
 		r := toIntForShift(right)
 		return l >> r
+	case byte: // uint8
+		r := toIntForShift(right)
+		return int(l) >> r
 	default:
 		panic(fmt.Sprintf("ShiftRight: unsupported type %T", left))
 	}
