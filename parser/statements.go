@@ -70,18 +70,18 @@ func (p *Parser) parseStatement() ast.Statement {
 		}
 	case token.AT:
 		// Check if this is assignment: @name = expr
-		// Pattern: AT IDENT ASSIGN
-		if p.peekTokenIs(token.IDENT) && p.peekTokenAfterIs(token.ASSIGN) {
+		// Pattern: AT IDENT ASSIGN (IDENT includes identifier-like keywords)
+		if p.peekTokenIsIdentifierLike() && p.peekTokenAfterIs(token.ASSIGN) {
 			return p.parseInstanceVarAssign()
 		}
 		// Check if this is or-assignment: @name ||= expr
 		// Pattern: AT IDENT ORASSIGN
-		if p.peekTokenIs(token.IDENT) && p.peekTokenAfterIs(token.ORASSIGN) {
+		if p.peekTokenIsIdentifierLike() && p.peekTokenAfterIs(token.ORASSIGN) {
 			return p.parseInstanceVarOrAssign()
 		}
 		// Check for compound assignment: @name += expr, @name -= expr, etc.
 		// Pattern: AT IDENT PLUSASSIGN/MINUSASSIGN/STARASSIGN/SLASHASSIGN
-		if p.peekTokenIs(token.IDENT) && (p.peekTokenAfterIs(token.PLUSASSIGN) ||
+		if p.peekTokenIsIdentifierLike() && (p.peekTokenAfterIs(token.PLUSASSIGN) ||
 			p.peekTokenAfterIs(token.MINUSASSIGN) || p.peekTokenAfterIs(token.STARASSIGN) ||
 			p.peekTokenAfterIs(token.SLASHASSIGN)) {
 			return p.parseInstanceVarCompoundAssign()
@@ -89,13 +89,13 @@ func (p *Parser) parseStatement() ast.Statement {
 		// Otherwise fall through to expression parsing
 	case token.ATAT:
 		// Check if this is assignment: @@name = expr
-		// Pattern: ATAT IDENT ASSIGN
-		if p.peekTokenIs(token.IDENT) && p.peekTokenAfterIs(token.ASSIGN) {
+		// Pattern: ATAT IDENT ASSIGN (IDENT includes identifier-like keywords)
+		if p.peekTokenIsIdentifierLike() && p.peekTokenAfterIs(token.ASSIGN) {
 			return p.parseClassVarAssign()
 		}
 		// Check for compound assignment: @@name += expr, @@name -= expr, etc.
 		// Pattern: ATAT IDENT PLUSASSIGN/MINUSASSIGN/STARASSIGN/SLASHASSIGN
-		if p.peekTokenIs(token.IDENT) && (p.peekTokenAfterIs(token.PLUSASSIGN) ||
+		if p.peekTokenIsIdentifierLike() && (p.peekTokenAfterIs(token.PLUSASSIGN) ||
 			p.peekTokenAfterIs(token.MINUSASSIGN) || p.peekTokenAfterIs(token.STARASSIGN) ||
 			p.peekTokenAfterIs(token.SLASHASSIGN)) {
 			return p.parseClassVarCompoundAssign()
@@ -269,7 +269,8 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	var typeAnnotation string
 	if p.curTokenIs(token.COLON) {
 		p.nextToken() // consume ':'
-		if !p.curTokenIs(token.IDENT) {
+		// Allow IDENT, LPAREN (for tuples), or ANY keyword as type
+		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.LPAREN) && !p.curTokenIs(token.ANY) {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 			return nil
 		}
@@ -292,7 +293,8 @@ func (p *Parser) parseAssignStmt() *ast.AssignStmt {
 	if typeAnnotation == "" && p.peekTokenIs(token.COLON) {
 		p.nextToken() // move to ':'
 		p.nextToken() // move past ':'
-		if !p.curTokenIs(token.IDENT) {
+		// Allow IDENT, LPAREN (for tuples), or ANY keyword as type
+		if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.LPAREN) && !p.curTokenIs(token.ANY) {
 			p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 			return nil
 		}
@@ -1110,7 +1112,7 @@ func (p *Parser) parseDeferStmt() *ast.DeferStmt {
 func (p *Parser) parseInstanceVarAssign() *ast.InstanceVarAssign {
 	line := p.curToken.Line
 	p.nextToken() // consume '@'
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIsIdentifierLike() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@'")
 		return nil
 	}
@@ -1199,7 +1201,7 @@ func (p *Parser) parseCompoundAssignStmt() ast.Statement {
 func (p *Parser) parseInstanceVarOrAssign() *ast.InstanceVarOrAssign {
 	line := p.curToken.Line
 	p.nextToken() // consume '@'
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIsIdentifierLike() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@'")
 		return nil
 	}
@@ -1227,7 +1229,7 @@ func (p *Parser) parseInstanceVarOrAssign() *ast.InstanceVarOrAssign {
 func (p *Parser) parseInstanceVarCompoundAssign() *ast.InstanceVarCompoundAssign {
 	line := p.curToken.Line
 	p.nextToken() // consume '@'
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIsIdentifierLike() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@'")
 		return nil
 	}
@@ -1265,7 +1267,7 @@ func (p *Parser) parseInstanceVarCompoundAssign() *ast.InstanceVarCompoundAssign
 func (p *Parser) parseClassVarAssign() *ast.ClassVarAssign {
 	line := p.curToken.Line
 	p.nextToken() // consume '@@'
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIsIdentifierLike() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@@'")
 		return nil
 	}
@@ -1292,7 +1294,7 @@ func (p *Parser) parseClassVarAssign() *ast.ClassVarAssign {
 func (p *Parser) parseClassVarCompoundAssign() *ast.ClassVarCompoundAssign {
 	line := p.curToken.Line
 	p.nextToken() // consume '@@'
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIsIdentifierLike() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@@'")
 		return nil
 	}

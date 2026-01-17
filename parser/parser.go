@@ -55,9 +55,32 @@ func (p *Parser) curTokenIs(t token.TokenType) bool {
 	return p.curToken.Type == t
 }
 
+// curTokenIsIdentifierLike checks if the current token can be used as an identifier.
+// This includes IDENT and certain keywords that Ruby allows as method/field names.
+func (p *Parser) curTokenIsIdentifierLike() bool {
+	switch p.curToken.Type {
+	case token.IDENT, token.NEXT, token.ANY:
+		// NEXT (next/continue) can be used as method/field name like in Ruby
+		// ANY (any) is also allowed as a field name
+		return true
+	default:
+		return false
+	}
+}
+
 // peekTokenIs checks if the peek token is of the given type.
 func (p *Parser) peekTokenIs(t token.TokenType) bool {
 	return p.peekToken.Type == t
+}
+
+// peekTokenIsIdentifierLike checks if the peek token can be used as an identifier.
+func (p *Parser) peekTokenIsIdentifierLike() bool {
+	switch p.peekToken.Type {
+	case token.IDENT, token.NEXT, token.ANY:
+		return true
+	default:
+		return false
+	}
 }
 
 // peekTokenAfterIs checks if the token immediately after peekToken matches the given type.

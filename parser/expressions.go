@@ -438,11 +438,33 @@ func (p *Parser) parseIndexExpr(left ast.Expression) ast.Expression {
 	return &ast.IndexExpr{Left: left, Index: index, Line: line}
 }
 
-// parseGroupedExpr parses a parenthesized expression: (expr).
+// parseGroupedExpr parses a parenthesized expression: (expr) or tuple: (expr, expr, ...).
 func (p *Parser) parseGroupedExpr() ast.Expression {
+	line := p.curToken.Line
 	p.nextToken() // consume '('
 
 	expr := p.parseExpression(lowest)
+
+	// Check for tuple literal: (expr, expr, ...)
+	if p.peekTokenIs(token.COMMA) {
+		elements := []ast.Expression{expr}
+		for p.peekTokenIs(token.COMMA) {
+			p.nextToken() // move to ','
+			p.nextToken() // move past ','
+			nextExpr := p.parseExpression(lowest)
+			if nextExpr == nil {
+				p.errorAt(p.curToken.Line, p.curToken.Column, "expected expression after ',' in tuple")
+				return nil
+			}
+			elements = append(elements, nextExpr)
+		}
+		if !p.peekTokenIs(token.RPAREN) {
+			p.errorAt(p.peekToken.Line, p.peekToken.Column, "expected ')' to close tuple")
+			return nil
+		}
+		p.nextToken() // move to ')'
+		return &ast.TupleLit{Elements: elements, Line: line}
+	}
 
 	if !p.peekTokenIs(token.RPAREN) {
 		p.errorAt(p.peekToken.Line, p.peekToken.Column, "expected ')'")
@@ -668,7 +690,7 @@ func (p *Parser) parseSelectorExpr(x ast.Expression) ast.Expression {
 // parseInstanceVar parses an instance variable read: @name.
 func (p *Parser) parseInstanceVar() ast.Expression {
 	p.nextToken() // consume '@'
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIsIdentifierLike() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@'")
 		return nil
 	}
@@ -679,7 +701,7 @@ func (p *Parser) parseInstanceVar() ast.Expression {
 // parseClassVar parses a class variable read: @@name.
 func (p *Parser) parseClassVar() ast.Expression {
 	p.nextToken() // consume '@@'
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIsIdentifierLike() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected identifier after '@@'")
 		return nil
 	}

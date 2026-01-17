@@ -975,7 +975,7 @@ func (p *Parser) parseAccessorDecl() *ast.AccessorDecl {
 	line := p.curToken.Line
 	p.nextToken() // consume accessor keyword
 
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIsIdentifierLike() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, fmt.Sprintf("expected field name after '%s'", kind))
 		return nil
 	}
@@ -1004,7 +1004,7 @@ func (p *Parser) parseAccessorDecl() *ast.AccessorDecl {
 func (p *Parser) parseFieldDecl() *ast.FieldDecl {
 	p.nextToken() // consume '@'
 
-	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+	if !p.curTokenIsIdentifierLike() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected field name after '@'")
 		return nil
 	}
@@ -1034,7 +1034,7 @@ func (p *Parser) parseClassVarDecl() *ast.ClassVarDecl {
 	line := p.curToken.Line
 	p.nextToken() // consume '@@'
 
-	if !p.curTokenIs(token.IDENT) {
+	if !p.curTokenIsIdentifierLike() {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected variable name after '@@'")
 		return nil
 	}
