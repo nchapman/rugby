@@ -288,6 +288,16 @@ func (p *Parser) parseTypeName() string {
 	typeName := p.curToken.Literal
 	p.nextToken() // consume type name
 
+	// Check for qualified type: pkg.Type (e.g., big.Int, sync.Mutex)
+	if p.curTokenIs(token.DOT) {
+		typeName += "."
+		p.nextToken() // consume '.'
+		if p.curTokenIs(token.IDENT) {
+			typeName += p.curToken.Literal
+			p.nextToken() // consume qualified name
+		}
+	}
+
 	// Check for generics: Type<T> or Type<K, V>
 	if p.curTokenIs(token.LT) {
 		typeName += "<"
@@ -951,7 +961,8 @@ func (p *Parser) parseAccessorDecl() *ast.AccessorDecl {
 	}
 	p.nextToken() // consume ':'
 
-	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+	// Type can be simple (Int), qualified (big.Int), or generic (Array<Int>)
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.LPAREN) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 		return nil
 	}
@@ -979,7 +990,8 @@ func (p *Parser) parseFieldDecl() *ast.FieldDecl {
 	}
 	p.nextToken() // consume ':'
 
-	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) {
+	// Type can be simple (Int), qualified (big.Int), or generic (Array<Int>)
+	if !p.curTokenIs(token.IDENT) && !p.curTokenIs(token.ANY) && !p.curTokenIs(token.LPAREN) {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected type after ':'")
 		return nil
 	}
