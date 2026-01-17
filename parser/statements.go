@@ -135,6 +135,43 @@ func (p *Parser) parseStatement() ast.Statement {
 			}
 		}
 
+		// Check for selector compound assignment: obj.field += value, obj.field -= value, etc.
+		if selExpr, ok := expr.(*ast.SelectorExpr); ok {
+			if p.peekTokenIs(token.PLUSASSIGN) || p.peekTokenIs(token.MINUSASSIGN) ||
+				p.peekTokenIs(token.STARASSIGN) || p.peekTokenIs(token.SLASHASSIGN) {
+				p.nextToken() // move to compound operator
+
+				// Determine the operator
+				var op string
+				switch p.curToken.Type {
+				case token.PLUSASSIGN:
+					op = "+"
+				case token.MINUSASSIGN:
+					op = "-"
+				case token.STARASSIGN:
+					op = "*"
+				case token.SLASHASSIGN:
+					op = "/"
+				}
+				p.nextToken() // move past operator to value
+
+				value := p.parseExpression(lowest)
+				if value == nil {
+					p.errorAt(p.curToken.Line, p.curToken.Column, "expected expression after compound assignment operator")
+					return nil
+				}
+				p.nextToken() // move past value
+				p.skipNewlines()
+				return &ast.SelectorCompoundAssign{
+					Object: selExpr.X,
+					Field:  selExpr.Sel,
+					Op:     op,
+					Value:  value,
+					Line:   line,
+				}
+			}
+		}
+
 		// Check for index assignment: arr[idx] = value or map[key] = value
 		if indexExpr, ok := expr.(*ast.IndexExpr); ok && p.peekTokenIs(token.ASSIGN) {
 			p.nextToken() // move to '='

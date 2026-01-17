@@ -47,6 +47,8 @@ func getStatementLine(stmt ast.Statement) int {
 		return s.Line
 	case *ast.SelectorAssignStmt:
 		return s.Line
+	case *ast.SelectorCompoundAssign:
+		return s.Line
 	case *ast.IndexAssignStmt:
 		return s.Line
 	case *ast.InstanceVarCompoundAssign:
@@ -171,6 +173,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genClassVarCompoundAssign(s)
 	case *ast.SelectorAssignStmt:
 		g.genSelectorAssignStmt(s)
+	case *ast.SelectorCompoundAssign:
+		g.genSelectorCompoundAssign(s)
 	case *ast.IndexAssignStmt:
 		g.genIndexAssignStmt(s)
 
@@ -740,6 +744,50 @@ func (g *Generator) genSelectorAssignStmt(s *ast.SelectorAssignStmt) {
 
 	g.buf.WriteString(setterName)
 	g.buf.WriteString("(")
+	g.genExpr(s.Value)
+	g.buf.WriteString(")\n")
+}
+
+// genSelectorCompoundAssign generates code for compound setter assignment: obj.field += value
+// This generates: obj.setField(obj.field() + value) or obj.SetField(obj.Field() + value) for pub classes
+func (g *Generator) genSelectorCompoundAssign(s *ast.SelectorCompoundAssign) {
+	g.writeIndent()
+
+	// Check if receiver is an instance of a pub class
+	receiverClassName := g.getReceiverClassName(s.Object)
+	isPubClass := g.isPublicClass(receiverClassName)
+
+	// Check if this specific accessor is pub (for non-pub classes with pub accessors)
+	isPubAccessor := false
+	if classAccessors := g.pubAccessors[receiverClassName]; classAccessors != nil {
+		isPubAccessor = classAccessors[s.Field]
+	}
+
+	fieldPascal := snakeToPascalWithAcronyms(s.Field)
+
+	// Generate setter method name
+	var setterName, getterName string
+	if isPubClass || isPubAccessor {
+		// Pub class/accessor use PascalCase
+		setterName = "Set" + fieldPascal
+		getterName = fieldPascal
+	} else {
+		// Private class use camelCase
+		setterName = "set" + fieldPascal
+		getterName = snakeToCamelWithAcronyms(s.Field)
+	}
+
+	// Generate: obj.setField(obj.field() op value)
+	g.genExpr(s.Object)
+	g.buf.WriteString(".")
+	g.buf.WriteString(setterName)
+	g.buf.WriteString("(")
+	g.genExpr(s.Object)
+	g.buf.WriteString(".")
+	g.buf.WriteString(getterName)
+	g.buf.WriteString("() ")
+	g.buf.WriteString(s.Op)
+	g.buf.WriteString(" ")
 	g.genExpr(s.Value)
 	g.buf.WriteString(")\n")
 }

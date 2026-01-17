@@ -500,6 +500,19 @@ type SelectorAssignStmt struct {
 func (s *SelectorAssignStmt) node()     {}
 func (s *SelectorAssignStmt) stmtNode() {}
 
+// SelectorCompoundAssign represents compound setter assignment: obj.field += value
+// This generates: obj.setField(obj.field() + value) or similar
+type SelectorCompoundAssign struct {
+	Object Expression // the receiver object
+	Field  string     // the field/property name
+	Op     string     // operator: "+", "-", "*", "/"
+	Value  Expression // the value being added/subtracted/etc.
+	Line   int        // source line number (1-indexed)
+}
+
+func (s *SelectorCompoundAssign) node()     {}
+func (s *SelectorCompoundAssign) stmtNode() {}
+
 // IndexAssignStmt represents index assignment: arr[idx] = value or map[key] = value
 type IndexAssignStmt struct {
 	Left  Expression // the collection (array, map, etc.)

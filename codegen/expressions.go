@@ -1282,12 +1282,33 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 		return
 	}
 
+	// For variable indices, we need runtime.AtIndex for negative index support.
+	// Add a type assertion to preserve the element type when known.
 	g.needsRuntime = true
-	g.buf.WriteString("runtime.AtIndex(")
-	g.genExpr(idx.Left)
-	g.buf.WriteString(", ")
-	g.genExpr(idx.Index)
-	g.buf.WriteString(")")
+
+	// Try to get element type from TypeInfo or from the Rugby type string
+	elemType := g.typeInfo.GetElementType(idx.Left)
+	if elemType == "" {
+		// Fallback: extract from type string like "Array<Int>"
+		elemType = extractArrayElementType(leftType)
+	}
+
+	if elemType != "" && elemType != "any" {
+		goElemType := mapType(elemType)
+		g.buf.WriteString("runtime.AtIndex(")
+		g.genExpr(idx.Left)
+		g.buf.WriteString(", ")
+		g.genExpr(idx.Index)
+		g.buf.WriteString(").(")
+		g.buf.WriteString(goElemType)
+		g.buf.WriteString(")")
+	} else {
+		g.buf.WriteString("runtime.AtIndex(")
+		g.genExpr(idx.Left)
+		g.buf.WriteString(", ")
+		g.genExpr(idx.Index)
+		g.buf.WriteString(")")
+	}
 }
 
 func (g *Generator) genRangeSlice(collection ast.Expression, r *ast.RangeLit) {
@@ -1362,6 +1383,16 @@ func (g *Generator) shouldUseNativeIndex(expr ast.Expression) bool {
 	default:
 		return false
 	}
+}
+
+// extractArrayElementType extracts the element type from a Rugby type string.
+// For "Array<Int>" returns "Int", for "Array<Body>" returns "Body".
+// Returns empty string if not an array type.
+func extractArrayElementType(rugbyType string) string {
+	if strings.HasPrefix(rugbyType, "Array<") && strings.HasSuffix(rugbyType, ">") {
+		return rugbyType[6 : len(rugbyType)-1]
+	}
+	return ""
 }
 
 func (g *Generator) genMapLit(m *ast.MapLit) {

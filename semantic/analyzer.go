@@ -1457,7 +1457,8 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 			}
 			elemType := valueType.Elements[i]
 
-			existing := a.scope.LookupLocal(name)
+			// Use Lookup (not LookupLocal) to find variables in outer scopes
+			existing := a.scope.Lookup(name)
 			if existing == nil {
 				v := NewVariable(name, elemType)
 				_ = a.scope.DefineOrShadow(v)
@@ -1475,7 +1476,8 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 			}
 
 			if valName != "_" {
-				existing := a.scope.LookupLocal(valName)
+				// Use Lookup (not LookupLocal) to find variables in outer scopes
+				existing := a.scope.Lookup(valName)
 				if existing == nil {
 					v := NewVariable(valName, innerType)
 					_ = a.scope.DefineOrShadow(v)
@@ -1484,7 +1486,8 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 				}
 			}
 			if okName != "_" {
-				existing := a.scope.LookupLocal(okName)
+				// Use Lookup (not LookupLocal) to find variables in outer scopes
+				existing := a.scope.Lookup(okName)
 				if existing == nil {
 					v := NewVariable(okName, TypeBoolVal)
 					_ = a.scope.DefineOrShadow(v)
@@ -1501,7 +1504,8 @@ func (a *Analyzer) analyzeMultiAssign(s *ast.MultiAssignStmt) {
 			if name == "_" {
 				continue
 			}
-			existing := a.scope.LookupLocal(name)
+			// Use Lookup (not LookupLocal) to find variables in outer scopes
+			existing := a.scope.Lookup(name)
 			if existing == nil {
 				v := NewVariable(name, TypeAnyVal)
 				_ = a.scope.DefineOrShadow(v)

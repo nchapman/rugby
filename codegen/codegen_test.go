@@ -770,8 +770,10 @@ end`
 
 	output := compile(t, input)
 
-	// Negative indices chain AtIndex calls
-	assertContains(t, output, `runtime.AtIndex(runtime.AtIndex(matrix, -1), -1)`)
+	// Negative indices chain AtIndex calls with type assertions
+	// Inner call returns any, asserted to []int for the outer index
+	// Outer call returns any, asserted to int for the assignment
+	assertContains(t, output, `runtime.AtIndex(runtime.AtIndex(matrix, -1).([]int), -1).(int)`)
 }
 
 func TestGenerateMixedChainedIndex(t *testing.T) {
