@@ -524,6 +524,18 @@ type IndexAssignStmt struct {
 func (i *IndexAssignStmt) node()     {}
 func (i *IndexAssignStmt) stmtNode() {}
 
+// IndexCompoundAssignStmt represents arr[idx] += value, arr[idx] -= value, etc.
+type IndexCompoundAssignStmt struct {
+	Left  Expression // the collection (array, map, etc.)
+	Index Expression // the index or key
+	Op    string     // operator: "+", "-", "*", "/"
+	Value Expression // the value being assigned
+	Line  int        // source line number (1-indexed)
+}
+
+func (i *IndexCompoundAssignStmt) node()     {}
+func (i *IndexCompoundAssignStmt) stmtNode() {}
+
 // OrAssignStmt represents x ||= y (logical or assignment)
 type OrAssignStmt struct {
 	Name  string

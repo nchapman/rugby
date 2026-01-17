@@ -1026,6 +1026,8 @@ func (a *Analyzer) analyzeStatement(stmt ast.Statement) {
 		a.analyzeSelectorAssign(s)
 	case *ast.IndexAssignStmt:
 		a.analyzeIndexAssign(s)
+	case *ast.IndexCompoundAssignStmt:
+		a.analyzeIndexCompoundAssign(s)
 	case *ast.ExprStmt:
 		a.analyzeExpr(s.Expr)
 		if s.Condition != nil {
@@ -1697,6 +1699,18 @@ func (a *Analyzer) analyzeSelectorAssign(s *ast.SelectorAssignStmt) {
 }
 
 func (a *Analyzer) analyzeIndexAssign(s *ast.IndexAssignStmt) {
+	// Analyze the collection being indexed
+	collectionType := a.analyzeExpr(s.Left)
+	// Analyze the index/key
+	a.analyzeExpr(s.Index)
+	// Analyze the value being assigned
+	a.analyzeExpr(s.Value)
+
+	// Set the type for the statement (for codegen to use)
+	a.setNodeType(s, collectionType)
+}
+
+func (a *Analyzer) analyzeIndexCompoundAssign(s *ast.IndexCompoundAssignStmt) {
 	// Analyze the collection being indexed
 	collectionType := a.analyzeExpr(s.Left)
 	// Analyze the index/key

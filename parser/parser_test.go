@@ -3539,6 +3539,50 @@ func TestCompoundAssignStmt(t *testing.T) {
 	}
 }
 
+func TestIndexCompoundAssignStmt(t *testing.T) {
+	tests := []struct {
+		input string
+		op    string
+		value int64
+	}{
+		{"arr[0] += 5", "+", 5},
+		{"arr[i] -= 10", "-", 10},
+		{"data[idx] *= 2", "*", 2},
+		{"nums[0] /= 4", "/", 4},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			l := lexer.New(tt.input)
+			p := New(l)
+			program := p.ParseProgram()
+			checkParserErrors(t, p)
+
+			if len(program.Declarations) != 1 {
+				t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+			}
+
+			indexAssign, ok := program.Declarations[0].(*ast.IndexCompoundAssignStmt)
+			if !ok {
+				t.Fatalf("expected IndexCompoundAssignStmt, got %T", program.Declarations[0])
+			}
+
+			if indexAssign.Op != tt.op {
+				t.Errorf("expected op %q, got %q", tt.op, indexAssign.Op)
+			}
+
+			intLit, ok := indexAssign.Value.(*ast.IntLit)
+			if !ok {
+				t.Fatalf("expected IntLit value, got %T", indexAssign.Value)
+			}
+
+			if intLit.Value != tt.value {
+				t.Errorf("expected value %d, got %d", tt.value, intLit.Value)
+			}
+		})
+	}
+}
+
 func TestOptionalTypeInParam(t *testing.T) {
 	input := `def find(id: Int?): User?
 end`

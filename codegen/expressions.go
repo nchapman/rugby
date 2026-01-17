@@ -1170,6 +1170,10 @@ func (g *Generator) getArrayType(arr *ast.ArrayLit) string {
 		}
 		if consistent && firstType != "" {
 			elemType = mapType(firstType)
+			// Classes are reference types - need pointer prefix in Go
+			if g.typeInfo != nil && g.typeInfo.IsClass(firstType) {
+				elemType = "*" + elemType
+			}
 		}
 	}
 	return "[]" + elemType
@@ -1365,6 +1369,10 @@ func (g *Generator) genIndexExpr(idx *ast.IndexExpr) {
 
 	if elemType != "" && elemType != "any" {
 		goElemType := mapType(elemType)
+		// Classes are reference types - need pointer prefix in Go
+		if g.typeInfo != nil && g.typeInfo.IsClass(elemType) {
+			goElemType = "*" + goElemType
+		}
 		g.buf.WriteString("runtime.AtIndex(")
 		g.genExpr(idx.Left)
 		g.buf.WriteString(", ")

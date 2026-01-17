@@ -2869,6 +2869,22 @@ end`
 	assertContains(t, output, "x = x / 5")
 }
 
+func TestIndexCompoundAssign(t *testing.T) {
+	input := `def main
+  arr = [10, 20, 30]
+  arr[0] += 5
+  arr[1] -= 10
+  arr[2] *= 2
+end`
+
+	output := compile(t, input)
+
+	// Should generate arr[i] = arr[i] op value
+	assertContains(t, output, "arr[0] = arr[0] + 5")
+	assertContains(t, output, "arr[1] = arr[1] - 10")
+	assertContains(t, output, "arr[2] = arr[2] * 2")
+}
+
 func TestOptionalValueType(t *testing.T) {
 	input := `def find(id: Int?): String?
 end

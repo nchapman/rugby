@@ -202,6 +202,10 @@ func (f *Formatter) formatStatement(stmt ast.Statement) {
 		f.formatOrAssignStmt(s)
 	case *ast.CompoundAssignStmt:
 		f.formatCompoundAssignStmt(s)
+	case *ast.IndexAssignStmt:
+		f.formatIndexAssignStmt(s)
+	case *ast.IndexCompoundAssignStmt:
+		f.formatIndexCompoundAssignStmt(s)
 	case *ast.ExprStmt:
 		f.formatExprStmt(s)
 	case *ast.ReturnStmt:
@@ -575,6 +579,30 @@ func (f *Formatter) formatCompoundAssignStmt(s *ast.CompoundAssignStmt) {
 	f.writeIndent()
 	f.write(s.Name)
 	f.write(" ")
+	f.write(s.Op)
+	f.write("= ")
+	f.formatExpr(s.Value)
+	f.write("\n")
+}
+
+// formatIndexAssignStmt formats an index assignment statement.
+func (f *Formatter) formatIndexAssignStmt(s *ast.IndexAssignStmt) {
+	f.writeIndent()
+	f.formatExpr(s.Left)
+	f.write("[")
+	f.formatExpr(s.Index)
+	f.write("] = ")
+	f.formatExpr(s.Value)
+	f.write("\n")
+}
+
+// formatIndexCompoundAssignStmt formats an index compound assignment statement.
+func (f *Formatter) formatIndexCompoundAssignStmt(s *ast.IndexCompoundAssignStmt) {
+	f.writeIndent()
+	f.formatExpr(s.Left)
+	f.write("[")
+	f.formatExpr(s.Index)
+	f.write("] ")
 	f.write(s.Op)
 	f.write("= ")
 	f.formatExpr(s.Value)

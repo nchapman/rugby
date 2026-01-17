@@ -51,6 +51,8 @@ func getStatementLine(stmt ast.Statement) int {
 		return s.Line
 	case *ast.IndexAssignStmt:
 		return s.Line
+	case *ast.IndexCompoundAssignStmt:
+		return s.Line
 	case *ast.InstanceVarCompoundAssign:
 		return s.Line
 	case *ast.ClassVarAssign:
@@ -177,6 +179,8 @@ func (g *Generator) genStatement(stmt ast.Statement) {
 		g.genSelectorCompoundAssign(s)
 	case *ast.IndexAssignStmt:
 		g.genIndexAssignStmt(s)
+	case *ast.IndexCompoundAssignStmt:
+		g.genIndexCompoundAssignStmt(s)
 
 	// Expression statements
 	case *ast.ExprStmt:
@@ -799,6 +803,24 @@ func (g *Generator) genIndexAssignStmt(s *ast.IndexAssignStmt) {
 	g.buf.WriteString("[")
 	g.genExpr(s.Index)
 	g.buf.WriteString("] = ")
+	g.genExpr(s.Value)
+	g.buf.WriteString("\n")
+}
+
+// genIndexCompoundAssignStmt generates code for index compound assignment: arr[idx] += value
+// This generates: arr[idx] = arr[idx] + value
+func (g *Generator) genIndexCompoundAssignStmt(s *ast.IndexCompoundAssignStmt) {
+	g.writeIndent()
+	g.genExpr(s.Left)
+	g.buf.WriteString("[")
+	g.genExpr(s.Index)
+	g.buf.WriteString("] = ")
+	g.genExpr(s.Left)
+	g.buf.WriteString("[")
+	g.genExpr(s.Index)
+	g.buf.WriteString("] ")
+	g.buf.WriteString(s.Op)
+	g.buf.WriteString(" ")
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
 }

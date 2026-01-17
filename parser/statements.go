@@ -191,6 +191,43 @@ func (p *Parser) parseStatement() ast.Statement {
 			}
 		}
 
+		// Check for index compound assignment: arr[idx] += value, arr[idx] -= value, etc.
+		if indexExpr, ok := expr.(*ast.IndexExpr); ok {
+			if p.peekTokenIs(token.PLUSASSIGN) || p.peekTokenIs(token.MINUSASSIGN) ||
+				p.peekTokenIs(token.STARASSIGN) || p.peekTokenIs(token.SLASHASSIGN) {
+				p.nextToken() // move to compound operator
+
+				// Determine the operator
+				var op string
+				switch p.curToken.Type {
+				case token.PLUSASSIGN:
+					op = "+"
+				case token.MINUSASSIGN:
+					op = "-"
+				case token.STARASSIGN:
+					op = "*"
+				case token.SLASHASSIGN:
+					op = "/"
+				}
+				p.nextToken() // move past operator to value
+
+				value := p.parseExpression(lowest)
+				if value == nil {
+					p.errorAt(p.curToken.Line, p.curToken.Column, "expected expression after compound assignment operator")
+					return nil
+				}
+				p.nextToken() // move past value
+				p.skipNewlines()
+				return &ast.IndexCompoundAssignStmt{
+					Left:  indexExpr.Left,
+					Index: indexExpr.Index,
+					Op:    op,
+					Value: value,
+					Line:  line,
+				}
+			}
+		}
+
 		// Check for tuple literal: expr, expr, ...
 		// This handles implicit multi-value returns like: 1, "hello"
 		if p.peekTokenIs(token.COMMA) {
