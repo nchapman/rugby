@@ -4139,9 +4139,10 @@ end`
 	// Should generate safe navigation check with captured variable to avoid double evaluation
 	// Uses unique variable name (_sn0, _sn1, etc.) to handle nested expressions
 	// Now uses early return pattern: if _sn0 == nil { return nil }
+	// .length uses len() for proper Go semantics
 	assertContains(t, output, `_sn0 := opt`)
 	assertContains(t, output, `if _sn0 == nil`)
-	assertContains(t, output, `(*_sn0).length`)
+	assertContains(t, output, `len((*_sn0))`)
 	assertContains(t, output, `return nil`)
 }
 

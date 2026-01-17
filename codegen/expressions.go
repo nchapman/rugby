@@ -166,6 +166,24 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			}
 		}
 
+		// Handle .length and .size universally
+		// This must come before selectorKind dispatch to handle Go interop types like []byte
+		if e.Sel == "length" || e.Sel == "size" {
+			// Range types use runtime.RangeSize, everything else uses len()
+			receiverType := g.inferTypeFromExpr(e.X)
+			if receiverType == "Range" || strings.HasPrefix(receiverType, "runtime.Range") {
+				g.needsRuntime = true
+				g.buf.WriteString("runtime.RangeSize(")
+				g.genExpr(e.X)
+				g.buf.WriteString(")")
+			} else {
+				g.buf.WriteString("len(")
+				g.genExpr(e.X)
+				g.buf.WriteString(")")
+			}
+			break
+		}
+
 		// Use SelectorKind to determine if this is a field access or method call
 		selectorKind := g.getSelectorKind(e)
 		switch selectorKind {
@@ -993,21 +1011,38 @@ func (g *Generator) genSafeNavExpr(e *ast.SafeNavExpr) {
 
 		if isLast {
 			// Last step: return the result
-			g.buf.WriteString("return (*")
-			g.buf.WriteString(prevVar)
-			g.buf.WriteString(").")
-			g.buf.WriteString(snakeToCamelWithAcronyms(selector))
-			g.buf.WriteString("()")
+			if selector == "length" || selector == "size" {
+				// .length and .size use len() for slices/strings/maps
+				g.buf.WriteString("return len((*")
+				g.buf.WriteString(prevVar)
+				g.buf.WriteString("))")
+			} else {
+				g.buf.WriteString("return (*")
+				g.buf.WriteString(prevVar)
+				g.buf.WriteString(").")
+				g.buf.WriteString(snakeToCamelWithAcronyms(selector))
+				g.buf.WriteString("()")
+			}
 		} else {
 			// Intermediate step: assign and check nil
 			g.buf.WriteString(currentVar)
-			g.buf.WriteString(" := (*")
-			g.buf.WriteString(prevVar)
-			g.buf.WriteString(").")
-			g.buf.WriteString(snakeToCamelWithAcronyms(selector))
-			g.buf.WriteString("(); if ")
-			g.buf.WriteString(currentVar)
-			g.buf.WriteString(" == nil { return nil }; ")
+			if selector == "length" || selector == "size" {
+				// .length and .size use len() - but this shouldn't be intermediate
+				// since len() returns int, not a pointer. This is likely an error case.
+				g.buf.WriteString(" := len((*")
+				g.buf.WriteString(prevVar)
+				g.buf.WriteString(")); _ = ")
+				g.buf.WriteString(currentVar)
+				g.buf.WriteString("; ")
+			} else {
+				g.buf.WriteString(" := (*")
+				g.buf.WriteString(prevVar)
+				g.buf.WriteString(").")
+				g.buf.WriteString(snakeToCamelWithAcronyms(selector))
+				g.buf.WriteString("(); if ")
+				g.buf.WriteString(currentVar)
+				g.buf.WriteString(" == nil { return nil }; ")
+			}
 			prevVar = currentVar
 		}
 	}
