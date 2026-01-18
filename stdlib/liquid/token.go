@@ -83,6 +83,9 @@ const (
 	tokenLimit
 	tokenOffset
 	tokenReversed
+	tokenCycle
+	tokenIncrement
+	tokenDecrement
 )
 
 // token represents a token in a Liquid template.
@@ -127,6 +130,9 @@ var keywords = map[string]TokenType{
 	"limit":      tokenLimit,
 	"offset":     tokenOffset,
 	"reversed":   tokenReversed,
+	"cycle":      tokenCycle,
+	"increment":  tokenIncrement,
+	"decrement":  tokenDecrement,
 }
 
 func lookupIdent(ident string) TokenType {

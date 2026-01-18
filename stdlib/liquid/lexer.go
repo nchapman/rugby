@@ -85,6 +85,43 @@ func (l *lexer) nextTextToken() token {
 	startPos := l.pos
 
 	for l.ch != 0 {
+		// Check for inline comment {# ... #} - skip entirely
+		if l.ch == '{' && l.peekChar() == '#' {
+			// If we have accumulated text, return it first
+			if l.pos > startPos {
+				return token{
+					typ:     tokenText,
+					literal: l.input[startPos:l.pos],
+					line:    startLine,
+					column:  startCol,
+				}
+			}
+			// Skip the entire comment
+			l.readChar() // consume {
+			l.readChar() // consume #
+			for l.ch != 0 {
+				if l.ch == '#' && l.peekChar() == '}' {
+					l.readChar() // consume #
+					l.readChar() // consume }
+					break
+				}
+				l.readChar()
+			}
+			// Also consume trailing newline if the comment was on its own line
+			// This prevents blank lines from inline comments
+			if l.ch == '\n' {
+				l.readChar()
+			} else if l.ch == '\r' && l.peekChar() == '\n' {
+				l.readChar()
+				l.readChar()
+			}
+			// Continue scanning text after the comment
+			startLine = l.line
+			startCol = l.column
+			startPos = l.pos
+			continue
+		}
+
 		// Check for output start {{ or {{-
 		if l.ch == '{' && l.peekChar() == '{' {
 			// If we have accumulated text, return it first
@@ -380,23 +417,23 @@ func isDigit(ch byte) bool {
 	return ch >= '0' && ch <= '9'
 }
 
-// scanRawBlock scans until we find {% endraw %} and returns the raw content.
-// Called after {% raw %} has been parsed.
-func (l *lexer) scanRawBlock() (string, int, int) {
+// scanRawBlock scans until we find {% endraw %} or {%- endraw -%} and returns the raw content.
+// Called after {% raw %} has been parsed. Returns (content, line, col, trimRight).
+func (l *lexer) scanRawBlock() (string, int, int, bool) {
 	startPos := l.pos
 	startLine := l.line
 	startCol := l.column
 
 	for l.ch != 0 {
-		// Look for {% endraw %}
+		// Look for {% endraw %} or {%- endraw -%}
 		if l.ch == '{' && l.peekChar() == '%' {
 			savePos := l.pos
 
 			l.readChar() // {
 			l.readChar() // %
 
-			// Skip whitespace
-			for l.ch == ' ' || l.ch == '\t' {
+			// Skip optional - and whitespace
+			for l.ch == ' ' || l.ch == '\t' || l.ch == '-' {
 				l.readChar()
 			}
 
@@ -412,12 +449,17 @@ func (l *lexer) scanRawBlock() (string, int, int) {
 					l.readChar()
 				}
 
-				// Check for %}
+				// Check for -%} or %}
+				trimRight := false
+				if l.ch == '-' {
+					trimRight = true
+					l.readChar()
+				}
 				if l.ch == '%' && l.peekChar() == '}' {
 					l.readChar() // %
 					l.readChar() // }
 					l.mode = modeText
-					return l.input[startPos:savePos], startLine, startCol
+					return l.input[startPos:savePos], startLine, startCol, trimRight
 				}
 			}
 
@@ -428,7 +470,7 @@ func (l *lexer) scanRawBlock() (string, int, int) {
 	}
 
 	// EOF reached without finding endraw
-	return l.input[startPos:l.pos], startLine, startCol
+	return l.input[startPos:l.pos], startLine, startCol, false
 }
 
 // matchAhead checks if the next n characters match the given string.
@@ -442,15 +484,15 @@ func (l *lexer) matchAhead(s string) bool {
 	return true
 }
 
-// scanCommentBlock scans until we find {% endcomment %} and returns the content.
-// Called after {% comment %} has been parsed.
-func (l *lexer) scanCommentBlock() (string, int, int) {
+// scanCommentBlock scans until we find {% endcomment %} or {%- endcomment -%} and returns the content.
+// Called after {% comment %} has been parsed. Returns (content, line, col, trimRight).
+func (l *lexer) scanCommentBlock() (string, int, int, bool) {
 	startPos := l.pos
 	startLine := l.line
 	startCol := l.column
 
 	for l.ch != 0 {
-		// Look for {% endcomment %}
+		// Look for {% endcomment %} or {%- endcomment -%}
 		if l.ch == '{' && l.peekChar() == '%' {
 			savePos := l.pos
 
@@ -474,15 +516,17 @@ func (l *lexer) scanCommentBlock() (string, int, int) {
 					l.readChar()
 				}
 
-				// Check for %} or -%}
+				// Check for -%} or %}
+				trimRight := false
 				if l.ch == '-' {
+					trimRight = true
 					l.readChar()
 				}
 				if l.ch == '%' && l.peekChar() == '}' {
 					l.readChar() // %
 					l.readChar() // }
 					l.mode = modeText
-					return l.input[startPos:savePos], startLine, startCol
+					return l.input[startPos:savePos], startLine, startCol, trimRight
 				}
 			}
 
@@ -492,5 +536,5 @@ func (l *lexer) scanCommentBlock() (string, int, int) {
 	}
 
 	// EOF reached without finding endcomment
-	return l.input[startPos:l.pos], startLine, startCol
+	return l.input[startPos:l.pos], startLine, startCol, false
 }

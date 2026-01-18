@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -68,30 +67,51 @@ func runLiquidSpec(t *testing.T, templatePath string) {
 	}
 }
 
-var dataDirectiveRegex = regexp.MustCompile(`\{#\s*data:\s*(\{.*?\})\s*#\}`)
-
 func extractData(t *testing.T, content string) map[string]any {
-	matches := dataDirectiveRegex.FindStringSubmatch(content)
-	if matches == nil {
+	// Try to find {# data: ... #} which may span multiple lines
+	start := strings.Index(content, "{# data:")
+	if start == -1 {
 		return make(map[string]any)
 	}
 
+	// Find the closing #}
+	end := strings.Index(content[start:], "#}")
+	if end == -1 {
+		return make(map[string]any)
+	}
+	end += start + 2 // include the #}
+
+	// Extract just the JSON part
+	directive := content[start:end]
+	jsonStart := strings.Index(directive, "{# data:") + len("{# data:")
+	jsonEnd := strings.LastIndex(directive, "#}")
+
+	jsonStr := strings.TrimSpace(directive[jsonStart:jsonEnd])
+
 	var data map[string]any
-	if err := json.Unmarshal([]byte(matches[1]), &data); err != nil {
-		t.Fatalf("failed to parse data directive: %v", err)
+	if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
+		t.Fatalf("failed to parse data directive: %v\nJSON: %s", err, jsonStr)
 	}
 	return data
 }
 
 func removeDataDirective(content string) string {
-	// Remove the data directive line
-	lines := strings.Split(content, "\n")
-	var result []string
-	for _, line := range lines {
-		if dataDirectiveRegex.MatchString(line) {
-			continue
-		}
-		result = append(result, line)
+	// Find and remove {# data: ... #} which may span multiple lines
+	start := strings.Index(content, "{# data:")
+	if start == -1 {
+		return content
 	}
-	return strings.Join(result, "\n")
+
+	end := strings.Index(content[start:], "#}")
+	if end == -1 {
+		return content
+	}
+	end += start + 2 // include the #}
+
+	// Also remove the trailing newline if present
+	if end < len(content) && content[end] == '\n' {
+		end++
+	}
+
+	return content[:start] + content[end:]
 }

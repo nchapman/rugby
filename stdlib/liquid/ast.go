@@ -26,11 +26,9 @@ func (n *TextNode) Pos() (line, column int) { return n.Line, n.Column }
 
 // OutputNode represents {{ expression }}.
 type OutputNode struct {
-	Expr      Expression
-	Line      int
-	Column    int
-	TrimLeft  bool
-	TrimRight bool
+	Expr   Expression
+	Line   int
+	Column int
 }
 
 func (n *OutputNode) node()                   {}
@@ -246,3 +244,34 @@ type RawTag struct {
 
 func (t *RawTag) node()                   {}
 func (t *RawTag) Pos() (line, column int) { return t.Line, t.Column }
+
+// CycleTag represents {% cycle "a", "b", "c" %} or {% cycle "group": "a", "b", "c" %}.
+type CycleTag struct {
+	GroupName string       // optional group name
+	Values    []Expression // values to cycle through
+	Line      int
+	Column    int
+}
+
+func (t *CycleTag) node()                   {}
+func (t *CycleTag) Pos() (line, column int) { return t.Line, t.Column }
+
+// IncrementTag represents {% increment var %}.
+type IncrementTag struct {
+	Variable string
+	Line     int
+	Column   int
+}
+
+func (t *IncrementTag) node()                   {}
+func (t *IncrementTag) Pos() (line, column int) { return t.Line, t.Column }
+
+// DecrementTag represents {% decrement var %}.
+type DecrementTag struct {
+	Variable string
+	Line     int
+	Column   int
+}
+
+func (t *DecrementTag) node()                   {}
+func (t *DecrementTag) Pos() (line, column int) { return t.Line, t.Column }

@@ -7,11 +7,17 @@ import (
 
 // evaluator executes a parsed template.
 type evaluator struct {
-	ctx *context
+	ctx           *context
+	cycleCounters map[string]int // tracks cycle position for each group
+	counterVars   map[string]int // tracks increment/decrement counters
 }
 
 func newEvaluator(data map[string]any) *evaluator {
-	return &evaluator{ctx: newContext(data)}
+	return &evaluator{
+		ctx:           newContext(data),
+		cycleCounters: make(map[string]int),
+		counterVars:   make(map[string]int),
+	}
 }
 
 // evaluate executes the template and returns the result.
@@ -41,14 +47,7 @@ func (e *evaluator) evalNode(node Node) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		result := toString(val)
-		if n.TrimLeft {
-			result = strings.TrimLeft(result, " \t\r\n")
-		}
-		if n.TrimRight {
-			result = strings.TrimRight(result, " \t\r\n")
-		}
-		return result, nil
+		return toString(val), nil
 
 	case *IfTag:
 		return e.evalIfTag(n)
@@ -89,6 +88,15 @@ func (e *evaluator) evalNode(node Node) (string, error) {
 
 	case *RawTag:
 		return n.Content, nil
+
+	case *CycleTag:
+		return e.evalCycleTag(n)
+
+	case *IncrementTag:
+		return e.evalIncrementTag(n)
+
+	case *DecrementTag:
+		return e.evalDecrementTag(n)
 
 	default:
 		return "", nil
@@ -401,7 +409,7 @@ func getProperty(obj any, prop string) any {
 
 	// Use reflection for struct fields
 	rv := reflect.ValueOf(obj)
-	if rv.Kind() == reflect.Ptr {
+	if rv.Kind() == reflect.Pointer {
 		rv = rv.Elem()
 	}
 	if rv.Kind() == reflect.Struct {
@@ -592,6 +600,54 @@ func isNumeric(v any) bool {
 		return true
 	}
 	return false
+}
+
+func (e *evaluator) evalCycleTag(tag *CycleTag) (string, error) {
+	// Generate a unique key for this cycle
+	// Use the group name if provided, otherwise create one from values
+	key := tag.GroupName
+	if key == "" {
+		// Generate a key from the values for unnamed cycles
+		var parts []string
+		for _, v := range tag.Values {
+			val, err := e.evalExpr(v)
+			if err != nil {
+				return "", err
+			}
+			parts = append(parts, toString(val))
+		}
+		key = strings.Join(parts, ",")
+	}
+
+	// Get current position in cycle
+	pos := e.cycleCounters[key]
+
+	// Evaluate the current value
+	idx := pos % len(tag.Values)
+	val, err := e.evalExpr(tag.Values[idx])
+	if err != nil {
+		return "", err
+	}
+
+	// Increment counter for next call
+	e.cycleCounters[key] = pos + 1
+
+	return toString(val), nil
+}
+
+func (e *evaluator) evalIncrementTag(tag *IncrementTag) (string, error) {
+	// Increment outputs the current value, then increments
+	val := e.counterVars[tag.Variable]
+	result := toString(val)
+	e.counterVars[tag.Variable] = val + 1
+	return result, nil
+}
+
+func (e *evaluator) evalDecrementTag(tag *DecrementTag) (string, error) {
+	// Decrement decrements first, then outputs the value
+	e.counterVars[tag.Variable]--
+	val := e.counterVars[tag.Variable]
+	return toString(val), nil
 }
 
 // Control flow errors for break/continue.

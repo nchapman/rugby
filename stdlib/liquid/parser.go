@@ -4,8 +4,9 @@ import "strconv"
 
 // parser parses a Liquid template into an AST.
 type parser struct {
-	l        *lexer
-	curToken token
+	l            *lexer
+	curToken     token
+	trimNextText bool // trim leading whitespace from next text node (set by -%} tags)
 }
 
 func newParser(input string) *parser {
@@ -30,22 +31,77 @@ func (p *parser) parseNodes(endCondition func() bool) ([]Node, error) {
 	var nodes []Node
 
 	for !endCondition() && p.curToken.typ != tokenEOF {
-		node, err := p.parseNode()
+		node, trimLeft, trimRight, err := p.parseNodeWithTrim()
 		if err != nil {
 			return nil, err
 		}
 		if node != nil {
+			// Handle left trim: trim trailing whitespace from previous text node
+			if trimLeft && len(nodes) > 0 {
+				if textNode, ok := nodes[len(nodes)-1].(*TextNode); ok {
+					textNode.Text = trimTrailingWhitespace(textNode.Text)
+				}
+			}
+
+			// Handle pending right trim from previous tag
+			if p.trimNextText {
+				if textNode, ok := node.(*TextNode); ok {
+					textNode.Text = trimLeadingWhitespace(textNode.Text)
+				}
+				p.trimNextText = false
+			}
+
 			nodes = append(nodes, node)
+
+			// Set flag for next text node if this node has right trim
+			if trimRight {
+				p.trimNextText = true
+			}
+		}
+	}
+
+	// Handle left trim from the terminating tag (e.g., {%- endfor, {%- endif)
+	// When we exit the loop due to endCondition, the current token is {%- or {%
+	// If it's {%-, we need to trim trailing whitespace from the last text node
+	if p.curToken.typ == tokenTagTrim && len(nodes) > 0 {
+		if textNode, ok := nodes[len(nodes)-1].(*TextNode); ok {
+			textNode.Text = trimTrailingWhitespace(textNode.Text)
 		}
 	}
 
 	return nodes, nil
 }
 
-func (p *parser) parseNode() (node Node, err error) {
+// trimTrailingWhitespace removes trailing whitespace including newlines
+func trimTrailingWhitespace(s string) string {
+	i := len(s)
+	for i > 0 {
+		r := s[i-1]
+		if r != ' ' && r != '\t' && r != '\n' && r != '\r' {
+			break
+		}
+		i--
+	}
+	return s[:i]
+}
+
+// trimLeadingWhitespace removes leading whitespace including newlines
+func trimLeadingWhitespace(s string) string {
+	i := 0
+	for i < len(s) {
+		r := s[i]
+		if r != ' ' && r != '\t' && r != '\n' && r != '\r' {
+			break
+		}
+		i++
+	}
+	return s[i:]
+}
+
+func (p *parser) parseNodeWithTrim() (node Node, trimLeft, trimRight bool, err error) {
 	switch p.curToken.typ {
 	case tokenEOF:
-		return // returns nil node and nil error - signals end of parsing
+		return nil, false, false, nil // returns nil node and nil error - signals end of parsing
 	case tokenText:
 		node = &TextNode{
 			Text:   p.curToken.literal,
@@ -53,44 +109,51 @@ func (p *parser) parseNode() (node Node, err error) {
 			Column: p.curToken.column,
 		}
 		p.nextToken()
-		return node, nil
+		return node, false, false, nil
 	case tokenOutputOpen, tokenOutputTrim:
-		return p.parseOutput()
+		trimLeft = p.curToken.typ == tokenOutputTrim
+		node, trimRight, err = p.parseOutputWithTrim()
+		return node, trimLeft, trimRight, err
 	case tokenTagOpen, tokenTagTrim:
-		return p.parseTag()
+		trimLeft = p.curToken.typ == tokenTagTrim
+		node, trimRight, err = p.parseTagWithTrim()
+		return node, trimLeft, trimRight, err
 	default:
 		err = newParseError(p.curToken.line, p.curToken.column,
 			"unexpected token: %v", p.curToken.literal)
 		p.nextToken()
-		return nil, err
+		return nil, false, false, err
 	}
 }
 
-func (p *parser) parseOutput() (Node, error) {
-	trimLeft := p.curToken.typ == tokenOutputTrim
+func (p *parser) parseOutputWithTrim() (Node, bool, error) {
 	line := p.curToken.line
 	column := p.curToken.column
 	p.nextToken()
 
 	expr, err := p.parseExpression()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	trimRight := p.curToken.typ == tokenOutputTrimR
 	if p.curToken.typ != tokenOutputClose && p.curToken.typ != tokenOutputTrimR {
-		return nil, newParseError(p.curToken.line, p.curToken.column,
+		return nil, false, newParseError(p.curToken.line, p.curToken.column,
 			"expected }}, got %v", p.curToken.literal)
 	}
 	p.nextToken()
 
 	return &OutputNode{
-		Expr:      expr,
-		Line:      line,
-		Column:    column,
-		TrimLeft:  trimLeft,
-		TrimRight: trimRight,
-	}, nil
+		Expr:   expr,
+		Line:   line,
+		Column: column,
+	}, trimRight, nil
+}
+
+func (p *parser) parseTagWithTrim() (Node, bool, error) {
+	p.trimNextText = false // reset so we capture only this tag's closing trim state
+	node, err := p.parseTag()
+	return node, p.trimNextText, err
 }
 
 func (p *parser) parseTag() (Node, error) {
@@ -117,6 +180,12 @@ func (p *parser) parseTag() (Node, error) {
 		return p.parseCommentTag()
 	case tokenRaw:
 		return p.parseRawTag()
+	case tokenCycle:
+		return p.parseCycleTag()
+	case tokenIncrement:
+		return p.parseIncrementTag()
+	case tokenDecrement:
+		return p.parseDecrementTag()
 	default:
 		return nil, newParseError(p.curToken.line, p.curToken.column,
 			"unknown tag: %s", p.curToken.literal)
@@ -617,14 +686,15 @@ func (p *parser) parseCommentTag() (Node, error) {
 	column := p.curToken.column
 	p.nextToken() // consume 'comment'
 
-	if err := p.consumeTagClose(); err != nil {
+	if err := p.validateTagClose(); err != nil {
 		return nil, err
 	}
 
 	// Set lexer to text mode and scan to endcomment
 	p.l.mode = modeText
-	content, _, _ := p.l.scanCommentBlock()
-	p.nextToken() // refresh cur token
+	content, _, _, trimRight := p.l.scanCommentBlock()
+	p.trimNextText = trimRight // propagate closing tag's trim state
+	p.nextToken()              // refresh cur token
 
 	return &CommentTag{
 		Content: content,
@@ -638,19 +708,120 @@ func (p *parser) parseRawTag() (Node, error) {
 	column := p.curToken.column
 	p.nextToken() // consume 'raw'
 
-	if err := p.consumeTagClose(); err != nil {
+	if err := p.validateTagClose(); err != nil {
 		return nil, err
 	}
 
 	// Set lexer to text mode and scan to endraw
 	p.l.mode = modeText
-	content, _, _ := p.l.scanRawBlock()
-	p.nextToken() // refresh cur token
+	content, _, _, trimRight := p.l.scanRawBlock()
+	p.trimNextText = trimRight // propagate closing tag's trim state
+	p.nextToken()              // refresh cur token
 
 	return &RawTag{
 		Content: content,
 		Line:    line,
 		Column:  column,
+	}, nil
+}
+
+func (p *parser) parseCycleTag() (Node, error) {
+	line := p.curToken.line
+	column := p.curToken.column
+	p.nextToken() // consume 'cycle'
+
+	tag := &CycleTag{
+		Line:   line,
+		Column: column,
+	}
+
+	// Check for named cycle: {% cycle 'group': 'a', 'b' %}
+	// First value, then check if followed by colon
+	firstExpr, err := p.parseAtom()
+	if err != nil {
+		return nil, err
+	}
+
+	if p.curToken.typ == tokenColon {
+		// Named cycle - first value was the group name
+		if lit, ok := firstExpr.(*LiteralExpr); ok {
+			if name, ok := lit.Value.(string); ok {
+				tag.GroupName = name
+			}
+		}
+		p.nextToken() // consume ':'
+
+		// Parse first actual value
+		firstExpr, err = p.parseAtom()
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	tag.Values = append(tag.Values, firstExpr)
+
+	// Parse remaining values separated by commas
+	for p.curToken.typ == tokenComma {
+		p.nextToken() // consume ','
+		expr, err := p.parseAtom()
+		if err != nil {
+			return nil, err
+		}
+		tag.Values = append(tag.Values, expr)
+	}
+
+	if err := p.expectTagClose(); err != nil {
+		return nil, err
+	}
+
+	return tag, nil
+}
+
+func (p *parser) parseIncrementTag() (Node, error) {
+	line := p.curToken.line
+	column := p.curToken.column
+	p.nextToken() // consume 'increment'
+
+	if p.curToken.typ != tokenIdent {
+		return nil, newParseError(p.curToken.line, p.curToken.column,
+			"expected variable name, got %s", p.curToken.literal)
+	}
+
+	varName := p.curToken.literal
+	p.nextToken() // consume variable name
+
+	if err := p.expectTagClose(); err != nil {
+		return nil, err
+	}
+
+	return &IncrementTag{
+		Variable: varName,
+		Line:     line,
+		Column:   column,
+	}, nil
+}
+
+func (p *parser) parseDecrementTag() (Node, error) {
+	line := p.curToken.line
+	column := p.curToken.column
+	p.nextToken() // consume 'decrement'
+
+	if p.curToken.typ != tokenIdent {
+		return nil, newParseError(p.curToken.line, p.curToken.column,
+			"expected variable name, got %s", p.curToken.literal)
+	}
+
+	varName := p.curToken.literal
+	p.nextToken() // consume variable name
+
+	if err := p.expectTagClose(); err != nil {
+		return nil, err
+	}
+
+	return &DecrementTag{
+		Variable: varName,
+		Line:     line,
+		Column:   column,
 	}, nil
 }
 
@@ -963,22 +1134,26 @@ func (p *parser) isTagKeyword(keyword TokenType) bool {
 }
 
 // expectTagClose expects and consumes a tag close token (%} or -%}).
+// Sets trimNextText so the next text node will be trimmed if -%} was used.
 func (p *parser) expectTagClose() error {
 	if p.curToken.typ != tokenTagClose && p.curToken.typ != tokenTagTrimR {
 		return newParseError(p.curToken.line, p.curToken.column,
 			"expected %%}, got %v", p.curToken.literal)
 	}
+	p.trimNextText = p.curToken.typ == tokenTagTrimR
 	p.nextToken()
 	return nil
 }
 
-// consumeTagClose consumes a tag close token without advancing to the next token.
+// validateTagClose validates but doesn't advance past a tag close token (%} or -%}).
 // Used for raw and comment tags where we need to directly scan for the end tag.
-func (p *parser) consumeTagClose() error {
+// Sets trimNextText so the next text node will be trimmed if -%} was used.
+func (p *parser) validateTagClose() error {
 	if p.curToken.typ != tokenTagClose && p.curToken.typ != tokenTagTrimR {
 		return newParseError(p.curToken.line, p.curToken.column,
 			"expected %%}, got %v", p.curToken.literal)
 	}
+	p.trimNextText = p.curToken.typ == tokenTagTrimR
 	// Don't call nextToken() - we'll scan raw content directly
 	return nil
 }
