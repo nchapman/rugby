@@ -1,0 +1,49 @@
+#@ session: multiline_enums
+#@ description: Test multi-line enum definitions
+#@ skip: needs REPL state improvements
+
+# Simple enum
+>>> enum Color
+...   Red
+...   Green
+...   Blue
+... end
+=> (defined)
+
+>>> Color::Red
+=> Color::Red
+
+>>> Color::Green
+=> Color::Green
+
+# Enum with explicit values
+>>> enum Status
+...   Pending = 0
+...   Active = 1
+...   Completed = 2
+... end
+=> (defined)
+
+>>> Status::Pending
+=> Status::Pending
+
+>>> Status::Active
+=> Status::Active
+
+# Using enum in function
+>>> def status_name(s: Status): String
+...   case s
+...   when Status::Pending
+...     "pending"
+...   when Status::Active
+...     "active"
+...   when Status::Completed
+...     "completed"
+...   else
+...     "unknown"
+...   end
+... end
+=> (defined)
+
+>>> status_name(Status::Active)
+=> "active"

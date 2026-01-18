@@ -1,0 +1,43 @@
+#@ session: multiline_functions
+#@ description: Test multi-line function definitions
+
+# Simple function
+>>> def add(a: Int, b: Int): Int
+...   a + b
+... end
+=> (defined)
+
+>>> add(2, 3)
+=> 5
+
+# Function with multiple statements
+>>> def greet(name: String): String
+...   prefix = "Hello, "
+...   prefix + name + "!"
+... end
+=> (defined)
+
+>>> greet("Alice")
+=> "Hello, Alice!"
+
+# Function with no parameters
+>>> def get_answer: Int
+...   42
+... end
+=> (defined)
+
+>>> get_answer
+=> 42
+
+# Function with early return
+>>> def abs_value(n: Int): Int
+...   return -n if n < 0
+...   n
+... end
+=> (defined)
+
+>>> abs_value(-5)
+=> 5
+
+>>> abs_value(5)
+=> 5

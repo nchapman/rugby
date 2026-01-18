@@ -1,0 +1,60 @@
+#@ session: lambdas
+#@ description: Test lambda expressions
+#@ skip: needs REPL state improvements
+
+# Simple lambda with braces
+>>> double = -> (x: Int) { x * 2 }
+=> (lambda)
+
+>>> double.call(5)
+=> 10
+
+# Lambda with do/end
+>>> triple = -> (x: Int) do
+...   x * 3
+... end
+=> (lambda)
+
+>>> triple.call(4)
+=> 12
+
+# Lambda with no parameters
+>>> greet = -> { "Hello, World!" }
+=> (lambda)
+
+>>> greet.call
+=> "Hello, World!"
+
+# Lambda as function argument
+>>> nums = [1, 2, 3, 4, 5]
+=> [1, 2, 3, 4, 5]
+
+>>> squared = nums.map { |x| x * x }
+=> [1, 4, 9, 16, 25]
+
+# Multi-statement lambda
+>>> process = -> (x: Int) do
+...   doubled = x * 2
+...   doubled + 1
+... end
+=> (lambda)
+
+>>> process.call(5)
+=> 11
+
+# Lambda with multiple parameters
+>>> add = -> (a: Int, b: Int) { a + b }
+=> (lambda)
+
+>>> add.call(3, 4)
+=> 7
+
+# Lambda capturing variables
+>>> multiplier = 10
+=> 10
+
+>>> scale = -> (x: Int) { x * multiplier }
+=> (lambda)
+
+>>> scale.call(5)
+=> 50

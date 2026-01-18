@@ -1,0 +1,43 @@
+#@ session: multiline_structs
+#@ description: Test multi-line struct definitions
+#@ skip: needs REPL state improvements
+
+# Simple struct
+>>> struct Vector2D
+...   x: Float
+...   y: Float
+... end
+=> (defined)
+
+>>> v = Vector2D{x: 3.0, y: 4.0}
+=> Vector2D{x: 3, y: 4}
+
+>>> v.x
+=> 3
+
+>>> v.y
+=> 4
+
+# Struct with methods
+>>> struct Rectangle
+...   width: Float
+...   height: Float
+...
+...   def area: Float
+...     width * height
+...   end
+...
+...   def perimeter: Float
+...     2.0 * (width + height)
+...   end
+... end
+=> (defined)
+
+>>> r = Rectangle{width: 5.0, height: 3.0}
+=> Rectangle{width: 5, height: 3}
+
+>>> r.area
+=> 15
+
+>>> r.perimeter
+=> 16

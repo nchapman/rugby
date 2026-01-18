@@ -1,0 +1,22 @@
+#@ session: error_recovery
+#@ description: Test that REPL recovers from errors
+
+# Start with working code
+>>> x = 10
+=> 10
+
+# Cause an error
+>>> undefined_var
+#! undefined
+
+# REPL still works
+>>> x + 5
+=> 15
+
+# Another error (parse)
+>>> 5 +
+#! error
+
+# Still works
+>>> x * 2
+=> 20

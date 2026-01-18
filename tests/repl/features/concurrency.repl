@@ -1,0 +1,62 @@
+#@ session: concurrency
+#@ description: Test spawn/await and channels
+#@ skip: needs REPL state improvements
+
+# Simple spawn/await
+>>> task = spawn { 42 }
+=> (task)
+
+>>> await task
+=> 42
+
+# Spawn with computation
+>>> task = spawn do
+...   sum = 0
+...   for i in 1..10
+...     sum += i
+...   end
+...   sum
+... end
+=> (task)
+
+>>> await task
+=> 55
+
+# Multiple tasks
+>>> t1 = spawn { 10 }
+=> (task)
+
+>>> t2 = spawn { 20 }
+=> (task)
+
+>>> t3 = spawn { 30 }
+=> (task)
+
+>>> await(t1) + await(t2) + await(t3)
+=> 60
+
+# Channel basics
+>>> ch = Channel[Int].new
+=> (channel)
+
+>>> spawn { ch.send(42) }
+=> (task)
+
+>>> ch.receive
+=> 42
+
+# Buffered channel
+>>> buf_ch = Channel[String].new(2)
+=> (channel)
+
+>>> buf_ch.send("first")
+=> nil
+
+>>> buf_ch.send("second")
+=> nil
+
+>>> buf_ch.receive
+=> "first"
+
+>>> buf_ch.receive
+=> "second"

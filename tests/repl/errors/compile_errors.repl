@@ -1,0 +1,10 @@
+#@ session: compile_errors
+#@ description: Test compile-time error handling
+
+# Undefined variable
+>>> undefined_variable
+#! undefined
+
+# After errors, REPL still works
+>>> 42
+=> 42

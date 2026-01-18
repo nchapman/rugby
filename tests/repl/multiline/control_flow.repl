@@ -1,0 +1,98 @@
+#@ session: multiline_control_flow
+#@ description: Test multi-line control flow constructs
+#@ skip: needs REPL state improvements
+
+# Multi-line if/elsif/else
+>>> def describe(n: Int): String
+...   if n < 0
+...     "negative"
+...   elsif n == 0
+...     "zero"
+...   else
+...     "positive"
+...   end
+... end
+=> (defined)
+
+>>> describe(-5)
+=> "negative"
+
+>>> describe(0)
+=> "zero"
+
+>>> describe(10)
+=> "positive"
+
+# Multi-line while loop
+>>> def countdown(n: Int)
+...   while n > 0
+...     puts n
+...     n -= 1
+...   end
+...   puts "Done!"
+... end
+=> (defined)
+
+>>> countdown(3)
+3
+2
+1
+Done!
+
+# Multi-line for loop
+>>> def sum_to(n: Int): Int
+...   total = 0
+...   for i in 1..n
+...     total += i
+...   end
+...   total
+... end
+=> (defined)
+
+>>> sum_to(5)
+=> 15
+
+# Nested control flow
+>>> def fizzbuzz(n: Int): String
+...   if n % 15 == 0
+...     "FizzBuzz"
+...   elsif n % 3 == 0
+...     "Fizz"
+...   elsif n % 5 == 0
+...     "Buzz"
+...   else
+...     n.to_s
+...   end
+... end
+=> (defined)
+
+>>> fizzbuzz(15)
+=> "FizzBuzz"
+
+>>> fizzbuzz(9)
+=> "Fizz"
+
+>>> fizzbuzz(10)
+=> "Buzz"
+
+>>> fizzbuzz(7)
+=> "7"
+
+# Case/when
+>>> def day_type(day: String): String
+...   case day
+...   when "Saturday", "Sunday"
+...     "weekend"
+...   when "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"
+...     "weekday"
+...   else
+...     "unknown"
+...   end
+... end
+=> (defined)
+
+>>> day_type("Monday")
+=> "weekday"
+
+>>> day_type("Saturday")
+=> "weekend"

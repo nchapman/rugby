@@ -1,0 +1,65 @@
+#@ session: error_handling
+#@ description: Test error handling with ! and rescue
+#@ skip: needs REPL state improvements
+
+# Function that may fail
+>>> def parse_int(s: String): Int!
+...   s.to_i!
+... end
+=> (defined)
+
+# Bang operator propagates errors
+>>> def double_parsed(s: String): Int!
+...   n = parse_int(s)!
+...   n * 2
+... end
+=> (defined)
+
+# Rescue inline
+>>> result = parse_int("abc") rescue -1
+=> -1
+
+>>> result = parse_int("42") rescue -1
+=> 42
+
+# Rescue block
+>>> def safe_parse(s: String): Int
+...   parse_int(s)
+... rescue e
+...   puts "Error: #{e.message}"
+...   0
+... end
+=> (defined)
+
+>>> safe_parse("123")
+=> 123
+
+>>> safe_parse("bad")
+Error: invalid syntax
+=> 0
+
+# Error in expression
+>>> value = (10 / 0) rescue 999
+=> 999
+
+# Custom error
+>>> class ValidationError < Error
+...   def initialize(msg: String)
+...     super(msg)
+...   end
+... end
+=> (defined)
+
+>>> def validate(n: Int)!
+...   if n < 0
+...     raise ValidationError.new("must be non-negative")
+...   end
+...   n
+... end
+=> (defined)
+
+>>> validate(5)
+=> 5
+
+>>> validate(-1) rescue 0
+=> 0

@@ -1,0 +1,57 @@
+#@ session: go_interop
+#@ description: Test Go package interop
+#@ skip: needs REPL state improvements
+
+# Import Go package
+>>> import "fmt"
+=> (imported)
+
+# Use imported package
+>>> fmt.Sprintf("Value: %d", 42)
+=> "Value: 42"
+
+# Import strings package
+>>> import "strings"
+=> (imported)
+
+>>> strings.ToUpper("hello")
+=> "HELLO"
+
+>>> strings.Contains("hello world", "world")
+=> true
+
+>>> strings.Split("a,b,c", ",")
+=> ["a", "b", "c"]
+
+# Import math package
+>>> import "math"
+=> (imported)
+
+>>> math.Sqrt(16.0)
+=> 4
+
+>>> math.Abs(-5.0)
+=> 5
+
+>>> math.Pi
+=> 3.141592653589793
+
+# Import time package
+>>> import "time"
+=> (imported)
+
+>>> time.Now.Year
+=> 2026
+
+# Import strconv
+>>> import "strconv"
+=> (imported)
+
+>>> strconv.Itoa(42)
+=> "42"
+
+>>> val, _ = strconv.Atoi("123")
+=> (123, nil)
+
+>>> val
+=> 123

@@ -1,0 +1,45 @@
+#@ session: multiline_modules
+#@ description: Test multi-line module definitions
+#@ skip: needs REPL state improvements
+
+# Simple module
+>>> module Math
+...   PI = 3.14159
+...
+...   def self.square(x: Int): Int
+...     x * x
+...   end
+...
+...   def self.cube(x: Int): Int
+...     x * x * x
+...   end
+... end
+=> (defined)
+
+>>> Math::PI
+=> 3.14159
+
+>>> Math.square(5)
+=> 25
+
+>>> Math.cube(3)
+=> 27
+
+# Module with multiple functions
+>>> module StringUtils
+...   def self.repeat(s: String, n: Int): String
+...     result = ""
+...     for _ in 1..n
+...       result += s
+...     end
+...     result
+...   end
+...
+...   def self.reverse(s: String): String
+...     s.reverse
+...   end
+... end
+=> (defined)
+
+>>> StringUtils.repeat("ab", 3)
+=> "ababab"

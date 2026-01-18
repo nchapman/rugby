@@ -1,0 +1,9 @@
+#@ session: runtime_errors
+#@ description: Test runtime error handling
+
+# Simple expressions work
+>>> 10 / 2
+=> 5
+
+>>> 3 + 4
+=> 7

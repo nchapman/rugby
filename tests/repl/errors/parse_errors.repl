@@ -1,0 +1,18 @@
+#@ session: parse_errors
+#@ description: Test parse error handling
+
+# Invalid operator
+>>> 5 +* 3
+#! error
+
+# Missing operand
+>>> 5 +
+#! error
+
+# Unclosed string
+>>> "hello
+#! error
+
+# After an error, REPL continues working
+>>> 2 + 2
+=> 4

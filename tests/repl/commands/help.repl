@@ -1,0 +1,16 @@
+#@ session: help_command
+#@ description: Test the help command
+
+# Help command without slash
+>>> help
+Commands:
+  reset, clear  - Clear all accumulated state
+  exit, quit    - Exit the REPL (or use Ctrl+D)
+  help          - Show this message
+
+# Help command with slash
+>>> /help
+Commands:
+  reset, clear  - Clear all accumulated state
+  exit, quit    - Exit the REPL (or use Ctrl+D)
+  help          - Show this message

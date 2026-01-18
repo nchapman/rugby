@@ -1,0 +1,35 @@
+#@ session: strings
+#@ description: Test string literals, interpolation, and methods
+
+# String literals
+>>> "hello"
+=> "hello"
+
+>>> "Hello, World!"
+=> "Hello, World!"
+
+# Empty string
+>>> ""
+=> ""
+
+# String concatenation
+>>> "Hello, " + "World!"
+=> "Hello, World!"
+
+# String length
+>>> "hello".length
+=> 5
+
+>>> "".length
+=> 0
+
+# String indexing
+>>> "hello"[0]
+=> "h"
+
+>>> "hello"[4]
+=> "o"
+
+# String interpolation with inline expression
+>>> "2 + 3 = #{2 + 3}"
+=> "2 + 3 = 5"

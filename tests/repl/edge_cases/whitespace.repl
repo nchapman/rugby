@@ -1,0 +1,68 @@
+#@ session: whitespace
+#@ description: Test whitespace handling in various contexts
+#@ skip: needs REPL state improvements
+
+# Whitespace around operators
+>>> 2+3
+=> 5
+
+>>> 2 + 3
+=> 5
+
+>>> 2  +  3
+=> 5
+
+# Whitespace in array literals
+>>> [1,2,3]
+=> [1, 2, 3]
+
+>>> [ 1, 2, 3 ]
+=> [1, 2, 3]
+
+>>> [1 , 2 , 3]
+=> [1, 2, 3]
+
+# Whitespace in function calls
+>>> def foo(a: Int, b: Int): Int
+...   a + b
+... end
+=> (defined)
+
+>>> foo(1,2)
+=> 3
+
+>>> foo(1, 2)
+=> 3
+
+>>> foo( 1 , 2 )
+=> 3
+
+# Whitespace in map literals
+>>> {"a"=>1}
+=> {"a" => 1}
+
+>>> { "a" => 1 }
+=> {"a" => 1}
+
+# Whitespace in blocks
+>>> [1, 2, 3].map{|x| x * 2}
+=> [2, 4, 6]
+
+>>> [1, 2, 3].map { |x| x * 2 }
+=> [2, 4, 6]
+
+>>> [1, 2, 3].map { | x | x * 2 }
+=> [2, 4, 6]
+
+# Whitespace in multi-line constructs
+>>> def with_space(x: Int): Int
+...
+...   y = x * 2
+...
+...   y + 1
+...
+... end
+=> (defined)
+
+>>> with_space(5)
+=> 11

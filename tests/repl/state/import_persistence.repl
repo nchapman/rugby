@@ -1,0 +1,41 @@
+#@ session: import_persistence
+#@ description: Test that imports persist across REPL inputs
+#@ skip: needs REPL state improvements
+
+# Import a package
+>>> import "strings"
+=> (imported)
+
+# Use the imported package
+>>> strings.ToUpper("hello")
+=> "HELLO"
+
+# Import another package
+>>> import "fmt"
+=> (imported)
+
+# Use both packages
+>>> fmt.Sprintf("Result: %s", strings.ToLower("WORLD"))
+=> "Result: world"
+
+# Define a function using imported package
+>>> def shout(s: String): String
+...   strings.ToUpper(s) + "!"
+... end
+=> (defined)
+
+>>> shout("hello")
+=> "HELLO!"
+
+# Import used in expressions
+>>> strings.Contains("hello world", "world")
+=> true
+
+# Multiple functions using imports
+>>> def format_name(first: String, last: String): String
+...   fmt.Sprintf("%s, %s", strings.ToUpper(last), first)
+... end
+=> (defined)
+
+>>> format_name("John", "Doe")
+=> "DOE, John"

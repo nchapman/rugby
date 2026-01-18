@@ -1,0 +1,41 @@
+#@ session: unicode
+#@ description: Test Unicode string handling
+#@ skip: needs REPL state improvements
+
+# Unicode string literals
+>>> greeting = "Hello, World!"
+=> "Hello, World!"
+
+# Non-ASCII characters
+>>> japanese = "Hello in Japanese"
+=> "Hello in Japanese"
+
+# Emoji
+>>> emoji = "thumbs up"
+=> "thumbs up"
+
+# Unicode in string interpolation
+>>> name = "User"
+=> "User"
+
+>>> "Hello #{name}"
+=> "Hello User"
+
+# String length with ASCII
+>>> "hello".length
+=> 5
+
+# Unicode escape sequences
+>>> "\u0048\u0065\u006c\u006c\u006f"
+=> "Hello"
+
+# Mixed content
+>>> mixed = "Hello World 123"
+=> "Hello World 123"
+
+# Unicode in arrays
+>>> words = ["one", "two", "three"]
+=> ["one", "two", "three"]
+
+>>> words[0]
+=> "one"

@@ -1,0 +1,82 @@
+#@ session: optionals
+#@ description: Test optional types
+#@ skip: needs REPL state improvements
+
+# nil literal
+>>> x = nil
+=> nil
+
+# Optional type
+>>> maybe: Int? = nil
+=> nil
+
+>>> maybe: Int? = 42
+=> 42
+
+# Nil coalescing (??)
+>>> value = nil
+=> nil
+
+>>> value ?? "default"
+=> "default"
+
+>>> value = "actual"
+=> "actual"
+
+>>> value ?? "default"
+=> "actual"
+
+# Safe navigation (&.)
+>>> name: String? = nil
+=> nil
+
+>>> name&.length
+=> nil
+
+>>> name = "hello"
+=> "hello"
+
+>>> name&.length
+=> 5
+
+# if-let pattern
+>>> def describe_optional(x: Int?)
+...   if let value = x
+...     puts "Value is #{value}"
+...   else
+...     puts "No value"
+...   end
+... end
+=> (defined)
+
+>>> describe_optional(42)
+Value is 42
+
+>>> describe_optional(nil)
+No value
+
+# Optional in array
+>>> arr: []Int? = [1, nil, 3]
+=> [1, nil, 3]
+
+>>> arr[0]
+=> 1
+
+>>> arr[1]
+=> nil
+
+# Function returning optional
+>>> def find_positive(n: Int): Int?
+...   if n > 0
+...     n
+...   else
+...     nil
+...   end
+... end
+=> (defined)
+
+>>> find_positive(5)
+=> 5
+
+>>> find_positive(-5)
+=> nil

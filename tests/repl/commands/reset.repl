@@ -1,0 +1,41 @@
+#@ session: reset_command
+#@ description: Test the reset/clear commands
+
+# Define some state
+>>> x = 42
+=> 42
+
+>>> def foo
+...   "hello"
+... end
+=> (defined)
+
+# Reset clears state
+>>> reset
+=> (state cleared)
+
+# Variable no longer exists
+>>> x
+#! undefined
+
+# Define new state
+>>> y = 100
+=> 100
+
+# Clear also works
+>>> clear
+=> (state cleared)
+
+# Variable no longer exists
+>>> y
+#! undefined
+
+# Slash versions also work
+>>> z = 1
+=> 1
+
+>>> /reset
+=> (state cleared)
+
+>>> z
+#! undefined

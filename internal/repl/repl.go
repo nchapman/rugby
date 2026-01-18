@@ -19,8 +19,182 @@ import (
 	"github.com/nchapman/rugby/internal/builder"
 	"github.com/nchapman/rugby/lexer"
 	"github.com/nchapman/rugby/parser"
+	"github.com/nchapman/rugby/semantic"
 	"github.com/nchapman/rugby/token"
 )
+
+// typeInfoAdapter adapts semantic.Analyzer to implement codegen.TypeInfo.
+type typeInfoAdapter struct {
+	analyzer *semantic.Analyzer
+}
+
+func (t *typeInfoAdapter) GetTypeKind(node ast.Node) codegen.TypeKind {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return codegen.TypeUnknown
+	}
+	switch typ.Kind {
+	case semantic.TypeInt:
+		return codegen.TypeInt
+	case semantic.TypeInt64:
+		return codegen.TypeInt64
+	case semantic.TypeFloat:
+		return codegen.TypeFloat
+	case semantic.TypeBool:
+		return codegen.TypeBool
+	case semantic.TypeString:
+		return codegen.TypeString
+	case semantic.TypeNil:
+		return codegen.TypeNil
+	case semantic.TypeArray:
+		return codegen.TypeArray
+	case semantic.TypeMap:
+		return codegen.TypeMap
+	case semantic.TypeClass:
+		return codegen.TypeClass
+	case semantic.TypeOptional:
+		return codegen.TypeOptional
+	case semantic.TypeChan:
+		return codegen.TypeChannel
+	case semantic.TypeAny:
+		return codegen.TypeAny
+	default:
+		return codegen.TypeUnknown
+	}
+}
+
+func (t *typeInfoAdapter) GetGoType(node ast.Node) string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return ""
+	}
+	return typ.GoType()
+}
+
+func (t *typeInfoAdapter) GetRugbyType(node ast.Node) string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return ""
+	}
+	return typ.String()
+}
+
+func (t *typeInfoAdapter) GetSelectorKind(node ast.Node) ast.SelectorKind {
+	if sel, ok := node.(*ast.SelectorExpr); ok && sel.ResolvedKind != ast.SelectorUnknown {
+		return sel.ResolvedKind
+	}
+	return t.analyzer.GetSelectorKind(node)
+}
+
+func (t *typeInfoAdapter) GetElementType(node ast.Node) string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil || typ.Elem == nil {
+		return ""
+	}
+	return typ.Elem.String()
+}
+
+func (t *typeInfoAdapter) GetKeyValueTypes(node ast.Node) (string, string) {
+	typ := t.analyzer.GetType(node)
+	if typ == nil || typ.Kind != semantic.TypeMap {
+		return "", ""
+	}
+	keyType := ""
+	valueType := ""
+	if typ.KeyType != nil {
+		keyType = typ.KeyType.String()
+	}
+	if typ.ValueType != nil {
+		valueType = typ.ValueType.String()
+	}
+	return keyType, valueType
+}
+
+func (t *typeInfoAdapter) GetTupleTypes(node ast.Node) []string {
+	typ := t.analyzer.GetType(node)
+	if typ == nil {
+		return nil
+	}
+	if typ.Kind == semantic.TypeTuple && len(typ.Elements) > 0 {
+		result := make([]string, len(typ.Elements))
+		for i, elem := range typ.Elements {
+			result[i] = elem.String()
+		}
+		return result
+	}
+	if typ.Kind == semantic.TypeOptional && typ.Elem != nil {
+		return []string{typ.Elem.String(), "Bool"}
+	}
+	return nil
+}
+
+func (t *typeInfoAdapter) IsVariableUsedAt(node ast.Node, name string) bool {
+	return t.analyzer.IsVariableUsedAt(node, name)
+}
+
+func (t *typeInfoAdapter) IsDeclaration(node ast.Node) bool {
+	return t.analyzer.IsDeclaration(node)
+}
+
+func (t *typeInfoAdapter) GetFieldType(className, fieldName string) string {
+	return t.analyzer.GetFieldType(className, fieldName)
+}
+
+func (t *typeInfoAdapter) IsClass(typeName string) bool {
+	return t.analyzer.IsClass(typeName)
+}
+
+func (t *typeInfoAdapter) IsInterface(typeName string) bool {
+	return t.analyzer.IsInterface(typeName)
+}
+
+func (t *typeInfoAdapter) IsStruct(typeName string) bool {
+	return t.analyzer.IsStruct(typeName)
+}
+
+func (t *typeInfoAdapter) IsNoArgFunction(name string) bool {
+	return t.analyzer.IsNoArgFunction(name)
+}
+
+func (t *typeInfoAdapter) IsPublicClass(className string) bool {
+	return t.analyzer.IsPublicClass(className)
+}
+
+func (t *typeInfoAdapter) HasAccessor(className, fieldName string) bool {
+	return t.analyzer.HasAccessor(className, fieldName)
+}
+
+func (t *typeInfoAdapter) GetInterfaceMethodNames(interfaceName string) []string {
+	return t.analyzer.GetInterfaceMethodNames(interfaceName)
+}
+
+func (t *typeInfoAdapter) GetAllInterfaceNames() []string {
+	return t.analyzer.GetAllInterfaceNames()
+}
+
+func (t *typeInfoAdapter) GetAllModuleNames() []string {
+	return t.analyzer.GetAllModuleNames()
+}
+
+func (t *typeInfoAdapter) GetModuleMethodNames(moduleName string) []string {
+	return t.analyzer.GetModuleMethodNames(moduleName)
+}
+
+func (t *typeInfoAdapter) IsModuleMethod(className, methodName string) bool {
+	return t.analyzer.IsModuleMethod(className, methodName)
+}
+
+func (t *typeInfoAdapter) GetConstructorParamCount(className string) int {
+	return t.analyzer.GetConstructorParamCount(className)
+}
+
+func (t *typeInfoAdapter) GetConstructorParams(className string) [][2]string {
+	return t.analyzer.GetConstructorParams(className)
+}
+
+func (t *typeInfoAdapter) GetGoName(node ast.Node) string {
+	return t.analyzer.GetGoName(node)
+}
 
 // Styles
 var (
@@ -476,18 +650,28 @@ func (m *Model) eval(input string, ctx evalContext) evalResult {
 		return result
 	}
 
-	// Parse and generate
+	// Parse
 	l := lexer.New(program)
 	p := parser.New(l)
-	ast := p.ParseProgram()
+	parsedAST := p.ParseProgram()
 
 	if len(p.Errors()) > 0 {
 		result.err = fmt.Errorf("parse error: %s", p.Errors()[0])
 		return result
 	}
 
-	gen := codegen.New()
-	goCode, err := gen.Generate(ast)
+	// Semantic analysis
+	analyzer := semantic.NewAnalyzer()
+	semanticErrors := analyzer.Analyze(parsedAST)
+	if len(semanticErrors) > 0 {
+		result.err = semanticErrors[0]
+		return result
+	}
+
+	// Generate
+	typeInfo := &typeInfoAdapter{analyzer: analyzer}
+	gen := codegen.New(codegen.WithTypeInfo(typeInfo))
+	goCode, err := gen.Generate(parsedAST)
 	if err != nil {
 		result.err = fmt.Errorf("codegen error: %v", err)
 		return result

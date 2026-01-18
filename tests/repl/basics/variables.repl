@@ -1,0 +1,29 @@
+#@ session: variables
+#@ description: Test variable assignment, compound assignment, and basic operations
+
+# Simple assignment and use
+>>> x = 5
+=> 5
+
+>>> x * 2
+=> 10
+
+# Reassignment (x still used)
+>>> x = 20
+=> 20
+
+>>> x + 1
+=> 21
+
+# Compound assignment (same variable chain)
+>>> x += 5
+=> 25
+
+>>> x -= 10
+=> 15
+
+>>> x *= 2
+=> 30
+
+>>> x /= 5
+=> 6

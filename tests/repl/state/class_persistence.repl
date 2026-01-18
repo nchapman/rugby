@@ -1,0 +1,80 @@
+#@ session: class_persistence
+#@ description: Test that classes persist across REPL inputs
+#@ skip: needs REPL state improvements
+
+# Define a class
+>>> class Counter
+...   def initialize
+...     @value = 0
+...   end
+...
+...   def increment
+...     @value += 1
+...   end
+...
+...   def get: Int
+...     @value
+...   end
+... end
+=> (defined)
+
+# Create instances
+>>> c1 = Counter.new
+=> Counter{value: 0}
+
+>>> c2 = Counter.new
+=> Counter{value: 0}
+
+# Use instances
+>>> c1.increment
+=> 1
+
+>>> c1.increment
+=> 2
+
+>>> c2.increment
+=> 1
+
+# Instances maintain separate state
+>>> c1.get
+=> 2
+
+>>> c2.get
+=> 1
+
+# Define a function that uses the class
+>>> def count_to(n: Int): Int
+...   c = Counter.new
+...   for _ in 1..n
+...     c.increment
+...   end
+...   c.get
+... end
+=> (defined)
+
+>>> count_to(5)
+=> 5
+
+# Define another class
+>>> class Point
+...   def initialize(x: Int, y: Int)
+...     @x = x
+...     @y = y
+...   end
+...
+...   def x: Int
+...     @x
+...   end
+...
+...   def y: Int
+...     @y
+...   end
+... end
+=> (defined)
+
+# Both classes work together
+>>> p = Point.new(3, 4)
+=> Point{x: 3, y: 4}
+
+>>> p.x + p.y
+=> 7

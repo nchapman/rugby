@@ -1,0 +1,73 @@
+#@ session: multiline_classes
+#@ description: Test multi-line class definitions
+#@ skip: needs REPL state improvements
+
+# Simple class
+>>> class Point
+...   def initialize(x: Int, y: Int)
+...     @x = x
+...     @y = y
+...   end
+...
+...   def x: Int
+...     @x
+...   end
+...
+...   def y: Int
+...     @y
+...   end
+... end
+=> (defined)
+
+>>> p = Point.new(3, 4)
+=> Point{x: 3, y: 4}
+
+>>> p.x
+=> 3
+
+>>> p.y
+=> 4
+
+# Class with method
+>>> class Counter
+...   def initialize
+...     @count = 0
+...   end
+...
+...   def increment
+...     @count += 1
+...   end
+...
+...   def value: Int
+...     @count
+...   end
+... end
+=> (defined)
+
+>>> c = Counter.new
+=> Counter{count: 0}
+
+>>> c.increment
+=> 1
+
+>>> c.increment
+=> 2
+
+>>> c.value
+=> 2
+
+# Class with to_s
+>>> class Person
+...   def initialize(name: String, age: Int)
+...     @name = name
+...     @age = age
+...   end
+...
+...   def to_s: String
+...     "#{@name} (#{@age})"
+...   end
+... end
+=> (defined)
+
+>>> bob = Person.new("Bob", 30)
+=> Bob (30)

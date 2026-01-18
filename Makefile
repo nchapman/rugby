@@ -1,4 +1,4 @@
-.PHONY: build test test-spec test-spec-bless lint clean clean-cache install run repl benchmark help
+.PHONY: build test test-spec test-spec-bless test-repl lint clean clean-cache install run repl benchmark help
 
 # Build the rugby compiler
 build:
@@ -39,6 +39,17 @@ test-spec-bless: build clean-cache
 	@echo "Running spec tests with blessing..."
 	@cd tests && go test -v -run TestSpecs -args -bless
 
+# Run REPL tests (rebuilds compiler, clears caches)
+# Usage: make test-repl                         # run all
+#        make test-repl NAME=basics/expressions # run specific test
+#        make test-repl NAME=multiline          # run category
+test-repl: build clean-cache
+	@if [ -n "$(NAME)" ]; then \
+		cd tests && go test -v -run "TestREPLSessions/$(NAME)"; \
+	else \
+		cd tests && go test -v -run TestREPLSessions; \
+	fi
+
 # Clean all .rugby cache directories (generated Go files)
 clean-cache:
 	@echo "Clearing .rugby caches..."
@@ -77,8 +88,8 @@ run: build
 	fi
 	@./rugby run $(FILE)
 
-# Run all checks (test + lint)
-check: test lint
+# Run all checks (test + spec + repl + lint)
+check: test test-spec test-repl lint
 	@echo "All checks passed!"
 
 # Run performance benchmarks (rebuilds compiler and all binaries for fair comparison)
@@ -110,7 +121,9 @@ help:
 	@echo "  make test-spec NAME=interfaces            - Run spec tests in category"
 	@echo "  make test-spec NAME=interfaces/any_type   - Run a specific spec test"
 	@echo "  make test-spec-bless                      - Update golden files"
-	@echo "  make check                                - Run tests + linters"
+	@echo "  make test-repl                            - Run all REPL tests"
+	@echo "  make test-repl NAME=basics/expressions    - Run specific REPL test"
+	@echo "  make check                                - Run all tests + linters"
 	@echo ""
 	@echo "Building:"
 	@echo "  make build                                - Build the compiler"

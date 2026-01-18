@@ -1,0 +1,80 @@
+#@ session: generics
+#@ description: Test generic functions and types
+#@ skip: needs REPL state improvements
+
+# Generic function
+>>> def identity[T](x: T): T
+...   x
+... end
+=> (defined)
+
+>>> identity(42)
+=> 42
+
+>>> identity("hello")
+=> "hello"
+
+# Generic pair function
+>>> def pair[T, U](a: T, b: U): (T, U)
+...   (a, b)
+... end
+=> (defined)
+
+>>> pair(1, "one")
+=> (1, "one")
+
+# Generic array operations
+>>> def first[T](arr: []T): T
+...   arr[0]
+... end
+=> (defined)
+
+>>> first([1, 2, 3])
+=> 1
+
+>>> first(["a", "b", "c"])
+=> "a"
+
+# Generic class
+>>> class Box[T]
+...   def initialize(value: T)
+...     @value = value
+...   end
+...
+...   def get: T
+...     @value
+...   end
+...
+...   def set(value: T)
+...     @value = value
+...   end
+... end
+=> (defined)
+
+>>> int_box = Box[Int].new(42)
+=> Box{value: 42}
+
+>>> int_box.get
+=> 42
+
+>>> str_box = Box[String].new("hello")
+=> Box{value: "hello"}
+
+>>> str_box.get
+=> "hello"
+
+# Generic with constraint
+>>> def max[T: Comparable](a: T, b: T): T
+...   if a > b
+...     a
+...   else
+...     b
+...   end
+... end
+=> (defined)
+
+>>> max(3, 7)
+=> 7
+
+>>> max("apple", "banana")
+=> "banana"

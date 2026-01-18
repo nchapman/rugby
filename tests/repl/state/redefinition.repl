@@ -1,0 +1,62 @@
+#@ session: redefinition
+#@ description: Test that functions and classes can be redefined
+#@ skip: needs REPL state improvements
+
+# Define a function
+>>> def greet(name: String): String
+...   "Hello, #{name}!"
+... end
+=> (defined)
+
+>>> greet("Alice")
+=> "Hello, Alice!"
+
+# Redefine the function
+>>> def greet(name: String): String
+...   "Hi there, #{name}!"
+... end
+=> (defined)
+
+# Uses the new definition
+>>> greet("Alice")
+=> "Hi there, Alice!"
+
+# Define a class
+>>> class Greeter
+...   def greet(name: String): String
+...     "Hello, #{name}"
+...   end
+... end
+=> (defined)
+
+>>> Greeter.new.greet("Bob")
+=> "Hello, Bob"
+
+# Redefine the class
+>>> class Greeter
+...   def greet(name: String): String
+...     "Greetings, #{name}!"
+...   end
+... end
+=> (defined)
+
+# Uses the new class definition
+>>> Greeter.new.greet("Bob")
+=> "Greetings, Bob!"
+
+# Redefine with different signature
+>>> def add(a: Int, b: Int): Int
+...   a + b
+... end
+=> (defined)
+
+>>> add(2, 3)
+=> 5
+
+>>> def add(a: Int, b: Int, c: Int): Int
+...   a + b + c
+... end
+=> (defined)
+
+>>> add(1, 2, 3)
+=> 6

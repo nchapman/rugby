@@ -1,0 +1,87 @@
+#@ session: nested_blocks
+#@ description: Test deeply nested constructs
+#@ skip: needs REPL state improvements
+
+# Nested if statements
+>>> def categorize(n: Int): String
+...   if n >= 0
+...     if n == 0
+...       "zero"
+...     else
+...       if n < 10
+...         "small positive"
+...       else
+...         "large positive"
+...       end
+...     end
+...   else
+...     "negative"
+...   end
+... end
+=> (defined)
+
+>>> categorize(0)
+=> "zero"
+
+>>> categorize(5)
+=> "small positive"
+
+>>> categorize(100)
+=> "large positive"
+
+>>> categorize(-5)
+=> "negative"
+
+# Nested loops
+>>> def print_grid(rows: Int, cols: Int)
+...   for i in 1..rows
+...     for j in 1..cols
+...       print "#{i},#{j} "
+...     end
+...     puts ""
+...   end
+... end
+=> (defined)
+
+>>> print_grid(2, 3)
+1,1 1,2 1,3
+2,1 2,2 2,3
+
+# Method with nested class
+>>> class Outer
+...   def initialize(value: Int)
+...     @value = value
+...   end
+...
+...   def process: Int
+...     result = 0
+...     for i in 1..@value
+...       if i % 2 == 0
+...         result += i
+...       end
+...     end
+...     result
+...   end
+... end
+=> (defined)
+
+>>> o = Outer.new(10)
+=> Outer{value: 10}
+
+>>> o.process
+=> 30
+
+# Nested block with do/end
+>>> def each_with_condition(arr: []Int)
+...   arr.each do |x|
+...     if x > 0
+...       puts x
+...     end
+...   end
+... end
+=> (defined)
+
+>>> each_with_condition([-1, 2, -3, 4, 5])
+2
+4
+5
