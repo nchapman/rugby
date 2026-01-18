@@ -82,15 +82,20 @@ func (g *Generator) mapConstraint(constraint string) string {
 func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	clear(g.vars)          // reset vars for each function
 	clear(g.goInteropVars) // reset Go interop tracking for each function
-	g.currentReturnTypes = fn.ReturnTypes
 	g.inMainFunc = fn.Name == "main"
 
-	// Track type parameters for this function (for T.zero, etc.)
-	g.currentFuncTypeParams = make(map[string]string)
+	// Set up method context for this function
+	typeParams := make(map[string]string)
 	for _, tp := range fn.TypeParams {
-		g.currentFuncTypeParams[tp.Name] = tp.Constraint
+		typeParams[tp.Name] = tp.Constraint
 	}
-	defer func() { g.currentFuncTypeParams = nil }()
+	g.method = &MethodContext{
+		Name:        fn.Name,
+		IsPub:       fn.Pub,
+		ReturnTypes: fn.ReturnTypes,
+		TypeParams:  typeParams,
+	}
+	defer func() { g.method = nil }()
 
 	// Store the function declaration for default parameter lookup at call sites
 	g.functions[fn.Name] = fn
@@ -115,12 +120,7 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	// Generate function name with proper casing
 	// pub def parse_json -> ParseJSON (exported)
 	// def parse_json -> parseJSON (unexported)
-	var funcName string
-	if fn.Pub {
-		funcName = snakeToPascalWithAcronyms(fn.Name)
-	} else {
-		funcName = snakeToCamelWithAcronyms(fn.Name)
-	}
+	funcName := goFuncName(fn.Name, fn.Pub)
 
 	// Generate function signature
 	g.buf.WriteString(fmt.Sprintf("func %s", funcName))
@@ -232,7 +232,6 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	}
 	g.indent--
 	g.buf.WriteString("}\n")
-	g.currentReturnTypes = nil
 	g.inMainFunc = false
 }
 
@@ -254,7 +253,7 @@ func (g *Generator) genModuleDecl(mod *ast.ModuleDecl) {
 		cls.Name = mod.Name + "_" + cls.Name
 
 		// Track the original class name for semantic analysis lookups
-		g.currentOriginalClass = originalName
+		g.pendingOriginalClassName = originalName
 
 		// Track instance methods for the namespaced class
 		if g.instanceMethods[cls.Name] == nil {
@@ -265,7 +264,7 @@ func (g *Generator) genModuleDecl(mod *ast.ModuleDecl) {
 
 		// Restore original name and clear tracking
 		cls.Name = originalName
-		g.currentOriginalClass = ""
+		g.pendingOriginalClassName = ""
 	}
 
 	// Generate class methods (def self.method) as package-level functions
@@ -341,7 +340,14 @@ func (g *Generator) genModuleDecl(mod *ast.ModuleDecl) {
 func (g *Generator) genModuleMethod(moduleName string, method *ast.MethodDecl) {
 	clear(g.vars)
 	clear(g.goInteropVars)
-	g.currentReturnTypes = method.ReturnTypes
+
+	// Set up method context
+	g.method = &MethodContext{
+		Name:        method.Name,
+		IsPub:       method.Pub,
+		ReturnTypes: method.ReturnTypes,
+	}
+	defer func() { g.method = nil }()
 
 	g.emitLineDirective(method.Line)
 
@@ -408,7 +414,6 @@ func (g *Generator) genModuleMethod(moduleName string, method *ast.MethodDecl) {
 	g.indent--
 
 	g.buf.WriteString("}\n\n")
-	g.currentReturnTypes = nil
 }
 
 // resolveModuleScopedType resolves a type name that might be a module-scoped class
@@ -440,11 +445,17 @@ func (g *Generator) resolveClassName(className string) string {
 
 func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	className := cls.Name
-	g.currentClass = className
-	g.currentClassEmbeds = cls.Embeds
-	g.currentClassTypeParamClause = ""
-	g.currentClassTypeParamNames = ""
-	clear(g.currentClassInterfaceMethods) // Reset for new class
+
+	// Set up class context
+	g.class = &ClassContext{
+		Name:             className,
+		OriginalName:     g.pendingOriginalClassName, // for module-scoped classes
+		Embeds:           cls.Embeds,
+		TypeParamClause:  "",
+		TypeParamNames:   "",
+		InterfaceMethods: make(map[string]bool),
+		AccessorFields:   make(map[string]bool),
+	}
 
 	// For structural typing support: export methods that match ANY interface method
 	// name in the program. In Go, interface methods must be exported (PascalCase),
@@ -453,13 +464,13 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	// without explicit 'implements' declarations.
 	for _, ifaceName := range g.getAllInterfaceNames() {
 		for _, methodName := range g.getInterfaceMethodNames(ifaceName) {
-			g.currentClassInterfaceMethods[methodName] = true
+			g.class.InterfaceMethods[methodName] = true
 		}
 	}
 	// Also include module methods (modules generate Go interfaces)
 	for _, modName := range g.getAllModuleNames() {
 		for _, methodName := range g.getModuleMethodNames(modName) {
-			g.currentClassInterfaceMethods[methodName] = true
+			g.class.InterfaceMethods[methodName] = true
 		}
 	}
 
@@ -467,7 +478,6 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	// Track field names to avoid duplicates
 	// accessorFields tracks which field names come from accessors (need underscore prefix)
 	fieldNames := make(map[string]bool)
-	clear(g.accessorFields) // Reset for new class
 	allFields := make([]*ast.FieldDecl, 0, len(cls.Fields)+len(cls.Accessors))
 	for _, f := range cls.Fields {
 		if !fieldNames[f.Name] {
@@ -478,7 +488,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	for _, acc := range cls.Accessors {
 		// Always track accessor fields for underscore prefix, even if field already exists
 		// (field might come from parameter promotion in initialize)
-		g.accessorFields[acc.Name] = true
+		g.class.AccessorFields[acc.Name] = true
 		if !fieldNames[acc.Name] {
 			allFields = append(allFields, &ast.FieldDecl{Name: acc.Name, Type: acc.Type})
 			fieldNames[acc.Name] = true
@@ -528,7 +538,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		}
 		for _, acc := range mod.Accessors {
 			// Always track accessor fields for underscore prefix
-			g.accessorFields[acc.Name] = true
+			g.class.AccessorFields[acc.Name] = true
 			if !fieldNames[acc.Name] {
 				allFields = append(allFields, &ast.FieldDecl{Name: acc.Name, Type: acc.Type})
 				fieldNames[acc.Name] = true
@@ -574,15 +584,15 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 			methodSources[m.Name] = fmt.Sprintf("module '%s'", modName)
 			allMethods = append(allMethods, m)
 			// Mark as interface method so it's exported (PascalCase) to satisfy module interface
-			g.currentClassInterfaceMethods[m.Name] = true
+			g.class.InterfaceMethods[m.Name] = true
 		}
 	}
 
 	// Also add underscore prefix for fields that have methods with the same name
 	// This handles cases like: field @name + method def name -> ... (without accessor declarations)
 	for _, m := range allMethods {
-		if fieldNames[m.Name] && !g.accessorFields[m.Name] {
-			g.accessorFields[m.Name] = true
+		if fieldNames[m.Name] && !g.class.AccessorFields[m.Name] {
+			g.class.AccessorFields[m.Name] = true
 		}
 	}
 
@@ -677,8 +687,8 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 	}
 
 	// Store type params in generator fields for use by method generation
-	g.currentClassTypeParamClause = typeParamClause
-	g.currentClassTypeParamNames = typeParamNames
+	g.class.TypeParamClause = typeParamClause
+	g.class.TypeParamNames = typeParamNames
 
 	// Emit constructor if initialize exists
 	hasInitialize := false
@@ -765,8 +775,7 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 		}
 	}
 
-	g.currentClass = ""
-	g.currentClassEmbeds = nil
+	g.class = nil
 }
 
 func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, pub bool) {
@@ -778,16 +787,9 @@ func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, 
 
 	// Generate getter for "getter" and "property"
 	if acc.Kind == "getter" || acc.Kind == "property" {
-		// getter/property generates: func (r *T) name() T { return r._name }
-		// Method name matches Rugby accessor name (camelCase for consistency)
-		// Field has underscore prefix to avoid Go field/method name conflict
-		var methodName string
-		if pub {
-			methodName = snakeToPascalWithAcronyms(acc.Name)
-		} else {
-			methodName = snakeToCamelWithAcronyms(acc.Name)
-		}
-		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) %s() %s {\n", recv, className, g.currentClassTypeParamNames, methodName, goType))
+		// getter/property generates: func (r *T) Name() T { return r._name }
+		methodName := goFuncName(acc.Name, pub)
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) %s() %s {\n", recv, className, g.class.TypeParamNames, methodName, goType))
 		g.buf.WriteString(fmt.Sprintf("\treturn %s.%s\n", recv, internalField))
 		g.buf.WriteString("}\n\n")
 	}
@@ -795,13 +797,8 @@ func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, 
 	// Generate setter for "setter" and "property"
 	if acc.Kind == "setter" || acc.Kind == "property" {
 		// setter/property generates: func (r *T) SetName(v T) { r._name = v }
-		var methodName string
-		if pub {
-			methodName = "Set" + snakeToPascalWithAcronyms(acc.Name)
-		} else {
-			methodName = "set" + snakeToPascalWithAcronyms(acc.Name)
-		}
-		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) %s(v %s) {\n", recv, className, g.currentClassTypeParamNames, methodName, goType))
+		methodName := goSetterName(acc.Name, pub, false)
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) %s(v %s) {\n", recv, className, g.class.TypeParamNames, methodName, goType))
 		g.buf.WriteString(fmt.Sprintf("\t%s.%s = v\n", recv, internalField))
 		g.buf.WriteString("}\n\n")
 	}
@@ -874,10 +871,14 @@ func (g *Generator) genInterfaceDecl(iface *ast.InterfaceDecl) {
 func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub bool, typeParamClause string, typeParamNames string) {
 	clear(g.vars)
 
-	// Set currentMethod so super calls are recognized as being inside a method
-	previousMethod := g.currentMethod
-	g.currentMethod = "initialize"
-	defer func() { g.currentMethod = previousMethod }()
+	// Set up method context so super calls are recognized as being inside a method
+	previousMethod := g.method
+	g.method = &MethodContext{
+		Name:        "initialize",
+		IsPub:       pub,
+		ReturnTypes: nil, // constructors don't have return types
+	}
+	defer func() { g.method = previousMethod }()
 
 	// Separate promoted parameters (@field : Type) from regular parameters
 	var promotedParams []struct {
@@ -1042,9 +1043,14 @@ func (g *Generator) genDefaultConstructor(className string, pub bool, typeParamC
 func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	clear(g.vars)          // reset vars for each method
 	clear(g.goInteropVars) // reset Go interop tracking for each method
-	g.currentReturnTypes = method.ReturnTypes
-	g.currentMethod = method.Name
-	g.currentMethodPub = method.Pub
+
+	// Set up method context
+	g.method = &MethodContext{
+		Name:        method.Name,
+		IsPub:       method.Pub,
+		ReturnTypes: method.ReturnTypes,
+	}
+	defer func() { g.method = nil }()
 
 	// Validate: methods ending in ? must return Bool
 	if strings.HasSuffix(method.Name, "?") {
@@ -1081,7 +1087,7 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	// to_s -> String() string (satisfies fmt.Stringer)
 	// Only applies when to_s has no parameters
 	if method.Name == "to_s" && len(method.Params) == 0 {
-		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) String() string {\n", recv, className, g.currentClassTypeParamNames))
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) String() string {\n", recv, className, g.class.TypeParamNames))
 		g.indent++
 		// Generate body statements, with implicit return for last expression
 		for i, stmt := range method.Body {
@@ -1100,16 +1106,13 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		}
 		g.indent--
 		g.buf.WriteString("}\n\n")
-		g.currentReturnTypes = nil
-		g.currentMethod = ""
-		g.currentMethodPub = false
 		return
 	}
 
 	// error or message -> Error() string (satisfies Go error interface)
 	// Only applies when method has no parameters
 	if (method.Name == "error" || method.Name == "message") && len(method.Params) == 0 {
-		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) Error() string {\n", recv, className, g.currentClassTypeParamNames))
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) Error() string {\n", recv, className, g.class.TypeParamNames))
 		g.indent++
 		// Generate body statements, with implicit return for last expression
 		for i, stmt := range method.Body {
@@ -1128,9 +1131,6 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		}
 		g.indent--
 		g.buf.WriteString("}\n\n")
-		g.currentReturnTypes = nil
-		g.currentMethod = ""
-		g.currentMethodPub = false
 		return
 	}
 
@@ -1138,11 +1138,11 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	// Only applies when == has exactly one parameter
 	if method.Name == "==" && len(method.Params) == 1 {
 		param := method.Params[0]
-		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) Equal(other any) bool {\n", recv, className, g.currentClassTypeParamNames))
+		g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) Equal(other any) bool {\n", recv, className, g.class.TypeParamNames))
 		g.indent++
 		// Create type assertion for the parameter
 		g.writeIndent()
-		g.buf.WriteString(fmt.Sprintf("%s, ok := other.(*%s%s)\n", param.Name, className, g.currentClassTypeParamNames))
+		g.buf.WriteString(fmt.Sprintf("%s, ok := other.(*%s%s)\n", param.Name, className, g.class.TypeParamNames))
 		g.writeIndent()
 		g.buf.WriteString("if !ok {\n")
 		g.indent++
@@ -1168,9 +1168,6 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 		}
 		g.indent--
 		g.buf.WriteString("}\n\n")
-		g.currentReturnTypes = nil
-		g.currentMethod = ""
-		g.currentMethodPub = false
 		return
 	}
 
@@ -1181,29 +1178,13 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	// Methods required by interfaces must be exported (PascalCase) for Go interface satisfaction
 	// Special: setter methods (name=) -> SetName or setName
 	var methodName string
+	isInterfaceMethod := g.class.InterfaceMethods[method.Name]
 
-	// Handle setter methods (ending in =)
-	isSetter := strings.HasSuffix(method.Name, "=")
-	baseName := strings.TrimSuffix(method.Name, "=")
-
-	if method.Pub || g.currentClassInterfaceMethods[method.Name] {
-		if isSetter {
-			methodName = "Set" + snakeToPascalWithAcronyms(baseName)
-		} else {
-			methodName = snakeToPascalWithAcronyms(method.Name)
-		}
-	} else if method.Private {
-		if isSetter {
-			methodName = "_set" + snakeToPascalWithAcronyms(baseName)
-		} else {
-			methodName = "_" + snakeToCamelWithAcronyms(method.Name)
-		}
+	if baseName, isSetter := strings.CutSuffix(method.Name, "="); isSetter {
+		// Setter method (name=) -> SetName, setName, or _setName
+		methodName = goSetterName(baseName, method.Pub || isInterfaceMethod, method.Private)
 	} else {
-		if isSetter {
-			methodName = "set" + snakeToPascalWithAcronyms(baseName)
-		} else {
-			methodName = snakeToCamelWithAcronyms(method.Name)
-		}
+		methodName = goMethodName(method.Name, method.Pub, method.Private, isInterfaceMethod)
 	}
 
 	// Check if method implicitly returns self (for method chaining)
@@ -1229,7 +1210,7 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	}
 
 	// Generate method signature with pointer receiver: func (r *ClassName[T]) MethodName(params) returns
-	g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) %s(", recv, className, g.currentClassTypeParamNames, methodName))
+	g.buf.WriteString(fmt.Sprintf("func (%s *%s%s) %s(", recv, className, g.class.TypeParamNames, methodName))
 	for i, param := range method.Params {
 		if i > 0 {
 			g.buf.WriteString(", ")
@@ -1288,9 +1269,6 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	}
 	g.indent--
 	g.buf.WriteString("}\n\n")
-	g.currentReturnTypes = nil
-	g.currentMethod = ""
-	g.currentMethodPub = false
 }
 
 // genClassMethod generates a class method (def self.method_name)
@@ -1304,12 +1282,7 @@ func (g *Generator) genClassMethod(className string, method *ast.MethodDecl) {
 	}
 
 	// Method name: ClassName_methodName for unexported, ClassName_MethodName for exported
-	var methodName string
-	if method.Pub {
-		methodName = className + "_" + snakeToPascalWithAcronyms(method.Name)
-	} else {
-		methodName = className + "_" + snakeToCamelWithAcronyms(method.Name)
-	}
+	methodName := className + "_" + goFuncName(method.Name, method.Pub)
 
 	// Track this class method for call resolution
 	if g.classMethods == nil {
@@ -1366,9 +1339,6 @@ func (g *Generator) genClassMethod(className string, method *ast.MethodDecl) {
 	}
 	g.indent--
 	g.buf.WriteString("}\n\n")
-	g.currentReturnTypes = nil
-	g.currentMethod = ""
-	g.currentMethodPub = false
 }
 
 // genTypeAliasDecl generates a Go type alias from a Rugby type alias
@@ -1551,7 +1521,7 @@ func (g *Generator) genStructMethod(structDecl *ast.StructDecl, method *ast.Meth
 
 	// Save old state
 	oldVars := g.vars
-	oldReturnTypes := g.currentReturnTypes
+	oldMethod := g.method
 	g.vars = maps.Clone(oldVars)
 
 	// Type parameters - for struct methods, we only need the type names (e.g., "[T]"), not the constraints
@@ -1601,7 +1571,11 @@ func (g *Generator) genStructMethod(structDecl *ast.StructDecl, method *ast.Meth
 
 	// Set up method context
 	g.currentStruct = structDecl
-	g.currentReturnTypes = method.ReturnTypes
+	g.method = &MethodContext{
+		Name:        method.Name,
+		IsPub:       method.Pub,
+		ReturnTypes: method.ReturnTypes,
+	}
 
 	// Generate method body with implicit return for last expression
 	hasReturnType := len(method.ReturnTypes) > 0
@@ -1622,7 +1596,7 @@ func (g *Generator) genStructMethod(structDecl *ast.StructDecl, method *ast.Meth
 
 	// Restore state
 	g.currentStruct = nil
-	g.currentReturnTypes = oldReturnTypes
+	g.method = oldMethod
 	g.vars = oldVars
 	g.indent--
 	g.buf.WriteString("}\n\n")

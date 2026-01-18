@@ -352,6 +352,45 @@ func snakeToCamelWithAcronyms(s string) string {
 	return baseResult
 }
 
+// goMethodName returns the Go method name for a Ruby method based on visibility.
+// - pub or interface method → PascalCase (exported)
+// - private → _camelCase (underscore prefix)
+// - default → camelCase (unexported)
+func goMethodName(name string, isPub, isPrivate, isInterfaceMethod bool) string {
+	if isPub || isInterfaceMethod {
+		return snakeToPascalWithAcronyms(name)
+	}
+	if isPrivate {
+		return "_" + snakeToCamelWithAcronyms(name)
+	}
+	return snakeToCamelWithAcronyms(name)
+}
+
+// goSetterName returns the Go setter method name for a field based on visibility.
+// - pub → SetFieldName
+// - private → _setFieldName
+// - default → setFieldName
+func goSetterName(fieldName string, isPub, isPrivate bool) string {
+	pascal := snakeToPascalWithAcronyms(fieldName)
+	if isPub {
+		return "Set" + pascal
+	}
+	if isPrivate {
+		return "_set" + pascal
+	}
+	return "set" + pascal
+}
+
+// goFuncName returns the Go function name based on visibility.
+// - pub → PascalCase (exported)
+// - default → camelCase (unexported)
+func goFuncName(name string, isPub bool) string {
+	if isPub {
+		return snakeToPascalWithAcronyms(name)
+	}
+	return snakeToCamelWithAcronyms(name)
+}
+
 // zeroValue returns the Go zero value for a Rugby type.
 // It checks the generator's tracked interfaces to properly return nil for interface types.
 func (g *Generator) zeroValue(rubyType string) string {

@@ -157,57 +157,94 @@ type TypeInfo interface {
 	GetGoName(node ast.Node) string
 }
 
+// ClassContext holds state for the current class being generated.
+// This is set when entering genClassDecl and cleared when exiting.
+type ClassContext struct {
+	Name             string          // class name (e.g., "User")
+	OriginalName     string          // original name for module-scoped classes (for semantic lookups)
+	Embeds           []string        // parent classes (embedded types)
+	TypeParamClause  string          // type parameter clause (e.g., "[T any]")
+	TypeParamNames   string          // type parameter names (e.g., "[T]")
+	InterfaceMethods map[string]bool // methods that must be exported to satisfy interfaces
+	AccessorFields   map[string]bool // fields with accessor methods (need underscore prefix)
+}
+
+// MethodContext holds state for the current method/function being generated.
+// This is set when entering genMethodDecl/genFuncDecl and cleared when exiting.
+type MethodContext struct {
+	Name        string            // method name (e.g., "initialize")
+	IsPub       bool              // whether method is declared with 'pub'
+	ReturnTypes []string          // return types of the function/method
+	TypeParams  map[string]string // type parameters (name -> constraint)
+}
+
 type Generator struct {
-	buf                          strings.Builder
-	indent                       int
-	vars                         map[string]string            // track declared variables and their types (empty string = unknown type)
-	imports                      map[string]bool              // track import aliases for Go interop detection
-	needsRuntime                 bool                         // track if rugby/runtime import is needed
-	needsFmt                     bool                         // track if fmt import is needed (string interpolation)
-	needsErrors                  bool                         // track if errors import is needed (error_is?, error_as)
-	needsRegexp                  bool                         // track if regexp import is needed (regex literals)
-	needsConstraints             bool                         // track if constraints import is needed (generics)
-	needsTestingImport           bool                         // track if testing import is needed
-	needsTestImport              bool                         // track if rugby/test import is needed
-	currentClass                 string                       // current class being generated (for instance vars)
-	currentOriginalClass         string                       // original class name for module-scoped classes (for semantic analysis lookup)
-	currentModule                string                       // current module being generated (for nested class naming)
-	currentMethod                string                       // current method name being generated (for super)
-	currentMethodPub             bool                         // whether current method is pub (for super)
-	currentClassEmbeds           []string                     // embedded types (parent classes) of current class
-	currentClassTypeParamClause  string                       // type parameter clause for current class (e.g., "[T any]")
-	currentClassTypeParamNames   string                       // type parameter names for current class (e.g., "[T]")
-	currentFuncTypeParams        map[string]string            // current function's type parameters (name -> constraint)
-	accessorFields               map[string]bool              // track which fields have accessor methods (need underscore prefix)
-	modules                      map[string]*ast.ModuleDecl   // track module definitions for include
-	currentClassInterfaceMethods map[string]bool              // methods that must be exported for current class (to satisfy interfaces)
-	goInteropVars                map[string]bool              // track variables holding Go interop types
-	sourceFile                   string                       // original .rg filename for //line directives
-	emitLineDir                  bool                         // whether to emit //line directives
-	currentReturnTypes           []string                     // return types of the current function/method
-	loopDepth                    int                          // nesting depth of loops (for break/next)
-	inInlinedLambda              bool                         // true when inside an inlined lambda (each/times); return -> continue
-	inMainFunc                   bool                         // true when generating code inside main() function
-	forceAnyLambdaReturn         bool                         // true when lambda args to Go interop should use 'any' return type
-	errors                       []error                      // collected errors during generation
-	tempVarCounter               int                          // counter for generating unique temp variable names
-	typeInfo                     TypeInfo                     // type info from semantic analysis (required)
-	baseClasses                  map[string]bool              // track classes that are extended by other classes
-	baseClassMethods             map[string][]string          // base class name -> method names (for lint suppression)
-	baseClassAccessors           map[string][]string          // base class name -> accessor names (for lint suppression)
-	classMethods                 map[string]map[string]string // class name -> method name -> generated function name
-	classVars                    map[string]string            // "ClassName@@varname" -> "_ClassName_varname" (package-level var)
-	pubFuncs                     map[string]bool              // track functions declared with 'pub' for correct casing
-	pubAccessors                 map[string]map[string]bool   // track pub accessors per class: className -> accessorName -> isPub
-	privateMethods               map[string]map[string]bool   // track private methods per class: className -> methodName -> isPrivate
-	instanceMethods              map[string]map[string]string // track instance methods per class: className -> methodName -> goName
-	pubMethods                   map[string]map[string]bool   // track pub methods per class: className -> methodName -> isPub
-	classParent                  map[string]string            // track class inheritance: childClass -> parentClass
-	enums                        map[string]*ast.EnumDecl     // track enum definitions for expression translation
-	structs                      map[string]*ast.StructDecl   // track struct definitions
-	currentStruct                *ast.StructDecl              // current struct being generated (for @field translation)
-	functions                    map[string]*ast.FuncDecl     // track function declarations for default parameter lookup
-	nonNegativeVars              map[string]bool              // track variables known to be >= 0 for native array indexing
+	buf    strings.Builder
+	indent int
+
+	// Context: tracks current class and method being generated
+	class  *ClassContext  // nil when not in a class
+	method *MethodContext // nil when not in a method/function
+
+	// Variable tracking
+	vars            map[string]string // declared variables and their types
+	nonNegativeVars map[string]bool   // variables known to be >= 0 (for native indexing)
+	goInteropVars   map[string]bool   // variables holding Go interop types
+
+	// Import tracking
+	imports            map[string]bool // import aliases for Go interop detection
+	needsRuntime       bool            // needs rugby/runtime import
+	needsFmt           bool            // needs fmt import (string interpolation)
+	needsErrors        bool            // needs errors import (error_is?, error_as)
+	needsRegexp        bool            // needs regexp import (regex literals)
+	needsConstraints   bool            // needs constraints import (generics)
+	needsTestingImport bool            // needs testing import
+	needsTestImport    bool            // needs rugby/test import
+
+	// Module state
+	currentModule            string                     // current module being generated
+	pendingOriginalClassName string                     // original class name for module-scoped classes (set before genClassDecl)
+	modules                  map[string]*ast.ModuleDecl // module definitions for include
+
+	// Loop/lambda state
+	loopDepth       int  // nesting depth of loops (for break/next)
+	inInlinedLambda bool // inside inlined lambda (each/times); return -> continue
+	inMainFunc      bool // inside main() function
+
+	// Source mapping
+	sourceFile  string // original .rg filename for //line directives
+	emitLineDir bool   // whether to emit //line directives
+
+	// Type info from semantic analysis
+	typeInfo TypeInfo
+
+	// Struct state
+	currentStruct *ast.StructDecl            // current struct being generated
+	structs       map[string]*ast.StructDecl // struct definitions
+
+	// Enum state
+	enums map[string]*ast.EnumDecl // enum definitions
+
+	// Function tracking
+	functions            map[string]*ast.FuncDecl // function declarations
+	pubFuncs             map[string]bool          // functions declared with 'pub'
+	forceAnyLambdaReturn bool                     // lambda args to Go interop use 'any' return
+
+	// Class tracking (global, not per-class)
+	baseClasses        map[string]bool              // classes extended by other classes
+	baseClassMethods   map[string][]string          // base class -> method names (lint suppression)
+	baseClassAccessors map[string][]string          // base class -> accessor names (lint suppression)
+	classMethods       map[string]map[string]string // class -> method -> generated function name
+	classVars          map[string]string            // "Class@@var" -> "_Class_var"
+	pubAccessors       map[string]map[string]bool   // class -> accessor -> isPub
+	privateMethods     map[string]map[string]bool   // class -> method -> isPrivate
+	instanceMethods    map[string]map[string]string // class -> method -> goName
+	pubMethods         map[string]map[string]bool   // class -> method -> isPub
+	classParent        map[string]string            // child -> parent class
+
+	// Error collection
+	errors         []error
+	tempVarCounter int
 }
 
 // addError records an error during code generation
@@ -222,10 +259,10 @@ func (g *Generator) Errors() []error {
 
 // returnsError checks if the current function returns error as its last type
 func (g *Generator) returnsError() bool {
-	if len(g.currentReturnTypes) == 0 {
+	if len(g.currentReturnTypes()) == 0 {
 		return false
 	}
-	lastType := g.currentReturnTypes[len(g.currentReturnTypes)-1]
+	lastType := g.currentReturnTypes()[len(g.currentReturnTypes())-1]
 	return lastType == "error" || lastType == "Error"
 }
 
@@ -269,30 +306,90 @@ func WithTypeInfo(ti TypeInfo) Option {
 
 func New(opts ...Option) *Generator {
 	g := &Generator{
-		vars:                         make(map[string]string),
-		imports:                      make(map[string]bool),
-		accessorFields:               make(map[string]bool),
-		modules:                      make(map[string]*ast.ModuleDecl),
-		currentClassInterfaceMethods: make(map[string]bool),
-		goInteropVars:                make(map[string]bool),
-		baseClasses:                  make(map[string]bool),
-		baseClassMethods:             make(map[string][]string),
-		baseClassAccessors:           make(map[string][]string),
-		classMethods:                 make(map[string]map[string]string),
-		classVars:                    make(map[string]string),
-		pubFuncs:                     make(map[string]bool),
-		pubAccessors:                 make(map[string]map[string]bool),
-		privateMethods:               make(map[string]map[string]bool),
-		instanceMethods:              make(map[string]map[string]string),
-		pubMethods:                   make(map[string]map[string]bool),
-		classParent:                  make(map[string]string),
-		functions:                    make(map[string]*ast.FuncDecl),
-		nonNegativeVars:              make(map[string]bool),
+		vars:               make(map[string]string),
+		imports:            make(map[string]bool),
+		modules:            make(map[string]*ast.ModuleDecl),
+		goInteropVars:      make(map[string]bool),
+		baseClasses:        make(map[string]bool),
+		baseClassMethods:   make(map[string][]string),
+		baseClassAccessors: make(map[string][]string),
+		classMethods:       make(map[string]map[string]string),
+		classVars:          make(map[string]string),
+		pubFuncs:           make(map[string]bool),
+		pubAccessors:       make(map[string]map[string]bool),
+		privateMethods:     make(map[string]map[string]bool),
+		instanceMethods:    make(map[string]map[string]string),
+		pubMethods:         make(map[string]map[string]bool),
+		classParent:        make(map[string]string),
+		functions:          make(map[string]*ast.FuncDecl),
+		nonNegativeVars:    make(map[string]bool),
+		structs:            make(map[string]*ast.StructDecl),
+		enums:              make(map[string]*ast.EnumDecl),
 	}
 	for _, opt := range opts {
 		opt(g)
 	}
 	return g
+}
+
+// --- Class context helpers ---
+
+// currentClass returns the current class name, or empty string if not in a class.
+func (g *Generator) currentClass() string {
+	if g.class == nil {
+		return ""
+	}
+	return g.class.Name
+}
+
+// currentOriginalClass returns the original class name for module-scoped classes.
+func (g *Generator) currentOriginalClass() string {
+	if g.class == nil {
+		return ""
+	}
+	return g.class.OriginalName
+}
+
+// currentClassEmbeds returns the embedded types (parent classes) of the current class.
+func (g *Generator) currentClassEmbeds() []string {
+	if g.class == nil {
+		return nil
+	}
+	return g.class.Embeds
+}
+
+// accessorFields returns fields with accessor methods (need underscore prefix).
+func (g *Generator) accessorFields() map[string]bool {
+	if g.class == nil {
+		return nil
+	}
+	return g.class.AccessorFields
+}
+
+// --- Method context helpers ---
+
+// currentMethod returns the current method name, or empty string if not in a method.
+func (g *Generator) currentMethod() string {
+	if g.method == nil {
+		return ""
+	}
+	return g.method.Name
+}
+
+// currentReturnTypes returns the return types of the current function/method.
+func (g *Generator) currentReturnTypes() []string {
+	if g.method == nil {
+		return nil
+	}
+	return g.method.ReturnTypes
+}
+
+// currentFuncTypeParams returns the type parameters of the current function.
+func (g *Generator) currentFuncTypeParams() map[string]string {
+	if g.method == nil {
+		return nil
+	}
+	return g.method.TypeParams
 }
 
 // shouldDeclare returns true if this AST node should use := (declaration)
@@ -366,20 +463,20 @@ func (g *Generator) isAccessorField(fieldName string) bool {
 	}
 	// Check if this field is in the current class's accessorFields map
 	// (this is populated during class generation and handles module-scoped classes correctly)
-	if g.accessorFields[fieldName] {
+	if g.accessorFields()[fieldName] {
 		return true
 	}
 	// Check current class in semantic analysis
 	// For module-scoped classes, use the original class name
-	classToCheck := g.currentClass
-	if g.currentOriginalClass != "" {
-		classToCheck = g.currentOriginalClass
+	classToCheck := g.currentClass()
+	if g.currentOriginalClass() != "" {
+		classToCheck = g.currentOriginalClass()
 	}
 	if g.typeInfo.HasAccessor(classToCheck, fieldName) {
 		return true
 	}
 	// Check parent classes (through embedding)
-	for _, embed := range g.currentClassEmbeds {
+	for _, embed := range g.currentClassEmbeds() {
 		if g.typeInfo.HasAccessor(embed, fieldName) {
 			return true
 		}
@@ -421,12 +518,12 @@ func (g *Generator) isAccessorInClassHierarchy(className, fieldName string) bool
 // if the field is from a parent class. Returns empty string if the field is local.
 func (g *Generator) getInheritedFieldPath(fieldName string) string {
 	// Check if this field is an accessor in a parent class
-	if !g.isParentAccessor(g.currentClassEmbeds, fieldName) {
+	if !g.isParentAccessor(g.currentClassEmbeds(), fieldName) {
 		return "" // Field is local, no path needed
 	}
 
 	// Find which parent class has this accessor and build the path
-	return g.findFieldPath(g.currentClassEmbeds, fieldName)
+	return g.findFieldPath(g.currentClassEmbeds(), fieldName)
 }
 
 // findFieldPath recursively finds the path to a field in the class hierarchy
@@ -462,7 +559,7 @@ func (g *Generator) getFieldType(fieldName string) string {
 	if g.typeInfo == nil {
 		panic("codegen: typeInfo is required - run semantic analysis before code generation")
 	}
-	return g.typeInfo.GetFieldType(g.currentClass, fieldName)
+	return g.typeInfo.GetFieldType(g.currentClass(), fieldName)
 }
 
 // isClass checks if a type name is a declared class. Requires typeInfo from semantic analysis.
@@ -595,10 +692,10 @@ func (g *Generator) getModuleMethodNames(moduleName string) []string {
 // isModuleMethod checks if a method in the current class came from an included module.
 // Returns false if not in a class context or if typeInfo is not available.
 func (g *Generator) isModuleMethod(methodName string) bool {
-	if g.typeInfo == nil || g.currentClass == "" {
+	if g.typeInfo == nil || g.currentClass() == "" {
 		return false
 	}
-	return g.typeInfo.IsModuleMethod(g.currentClass, methodName)
+	return g.typeInfo.IsModuleMethod(g.currentClass(), methodName)
 }
 
 // isOptionalType checks if a type is an optional type (ends with ?)
@@ -1069,223 +1166,126 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 		return "", fmt.Errorf("cannot mix top-level statements with 'def main'; use one or the other")
 	}
 
-	// Pre-pass: track base classes (classes that are extended by others)
-	// This is used to generate method reference assertions that suppress
-	// "unused method" lint warnings for methods in base classes that are
-	// shadowed by subclasses.
-	// Also track the inheritance hierarchy for method lookup.
+	// Pre-pass 1: Collect metadata from all declarations in a single traversal.
+	// This pass collects:
+	// - Base class relationships (for inheritance and lint suppression)
+	// - Public functions (for correct casing at call sites)
+	// - Class metadata: public accessors, private methods, instance methods
+	// - Module nested class methods (for type lookups)
+	// - Struct methods (always public)
 	for _, def := range definitions {
-		if cls, ok := def.(*ast.ClassDecl); ok {
-			for _, embed := range cls.Embeds {
+		switch d := def.(type) {
+		case *ast.FuncDecl:
+			if d.Pub {
+				g.pubFuncs[d.Name] = true
+			}
+
+		case *ast.ClassDecl:
+			// Track base classes and inheritance hierarchy
+			for _, embed := range d.Embeds {
 				g.baseClasses[embed] = true
-				// Track child -> parent relationship (only single inheritance)
-				if len(cls.Embeds) == 1 {
-					g.classParent[cls.Name] = embed
-				}
-			}
-		}
-	}
-
-	// Pre-pass: collect methods and accessors for base classes
-	// These are used to generate var _ = (*BaseClass).methodName assertions
-	for _, def := range definitions {
-		if cls, ok := def.(*ast.ClassDecl); ok {
-			if g.baseClasses[cls.Name] {
-				// Collect method names (skip initialize - it's the constructor)
-				for _, m := range cls.Methods {
-					if m.Name != "initialize" {
-						g.baseClassMethods[cls.Name] = append(g.baseClassMethods[cls.Name], m.Name)
-					}
-				}
-				// Collect accessor names (getters generate methods that may be shadowed)
-				for _, acc := range cls.Accessors {
-					if acc.Kind == "getter" || acc.Kind == "property" {
-						g.baseClassAccessors[cls.Name] = append(g.baseClassAccessors[cls.Name], acc.Name)
-					}
-				}
-			}
-		}
-	}
-
-	// Pre-pass: collect public functions (declared with 'pub')
-	// This is needed so function calls can use the correct casing
-	for _, def := range definitions {
-		if fn, ok := def.(*ast.FuncDecl); ok && fn.Pub {
-			g.pubFuncs[fn.Name] = true
-		}
-	}
-
-	// Pre-pass: collect public accessors per class
-	// This is needed so accessor calls can use the correct casing
-	for _, def := range definitions {
-		if cls, ok := def.(*ast.ClassDecl); ok {
-			for _, acc := range cls.Accessors {
-				if acc.Pub || cls.Pub {
-					// Accessor is exported if it has 'pub' or the class is 'pub'
-					if g.pubAccessors[cls.Name] == nil {
-						g.pubAccessors[cls.Name] = make(map[string]bool)
-					}
-					g.pubAccessors[cls.Name][acc.Name] = true
-				}
-			}
-		}
-	}
-
-	// Pre-pass: collect private methods per class
-	// This is needed so method calls can use the correct name (underscore prefix)
-	for _, def := range definitions {
-		if cls, ok := def.(*ast.ClassDecl); ok {
-			for _, method := range cls.Methods {
-				if method.Private {
-					if g.privateMethods[cls.Name] == nil {
-						g.privateMethods[cls.Name] = make(map[string]bool)
-					}
-					g.privateMethods[cls.Name][method.Name] = true
-				}
-			}
-		}
-	}
-
-	// Pre-pass: collect all instance methods per class
-	// This is needed to resolve implicit method calls (validate -> u.validate())
-	// Note: We can't check currentClassInterfaceMethods here since it's populated per-class during generation.
-	// Interface methods will be handled separately via structural typing during genClassDecl.
-	for _, def := range definitions {
-		if cls, ok := def.(*ast.ClassDecl); ok {
-			for _, method := range cls.Methods {
-				if method.IsClassMethod {
-					continue // Skip class methods (def self.method_name)
-				}
-				if g.instanceMethods[cls.Name] == nil {
-					g.instanceMethods[cls.Name] = make(map[string]string)
-				}
-				// Determine the Go method name based on visibility
-				// Note: pub takes precedence over private (invalid combo is caught by semantic analyzer)
-				// Special: setter methods (name=) -> SetName or setName
-				var goName string
-				isSetter := strings.HasSuffix(method.Name, "=")
-				baseName := strings.TrimSuffix(method.Name, "=")
-
-				if method.Pub {
-					if isSetter {
-						goName = "Set" + snakeToPascalWithAcronyms(baseName)
-					} else {
-						goName = snakeToPascalWithAcronyms(method.Name)
-					}
-				} else if method.Private {
-					if isSetter {
-						goName = "_set" + snakeToPascalWithAcronyms(baseName)
-					} else {
-						goName = "_" + snakeToCamelWithAcronyms(method.Name)
-					}
-				} else {
-					if isSetter {
-						goName = "set" + snakeToPascalWithAcronyms(baseName)
-					} else {
-						goName = snakeToCamelWithAcronyms(method.Name)
-					}
-				}
-				g.instanceMethods[cls.Name][method.Name] = goName
-
-				// Track pub methods for correct casing at call sites
-				if method.Pub {
-					if g.pubMethods[cls.Name] == nil {
-						g.pubMethods[cls.Name] = make(map[string]bool)
-					}
-					g.pubMethods[cls.Name][method.Name] = true
+				if len(d.Embeds) == 1 {
+					g.classParent[d.Name] = embed
 				}
 			}
 
-			// Also collect accessor getters as instance methods
-			// This allows genSelectorExpr to know when to add () for getter calls
-			for _, acc := range cls.Accessors {
+			// Collect public accessors
+			for _, acc := range d.Accessors {
+				if acc.Pub || d.Pub {
+					if g.pubAccessors[d.Name] == nil {
+						g.pubAccessors[d.Name] = make(map[string]bool)
+					}
+					g.pubAccessors[d.Name][acc.Name] = true
+				}
+				// Collect accessor getters as instance methods
 				if acc.Kind == "getter" || acc.Kind == "property" {
-					if g.instanceMethods[cls.Name] == nil {
-						g.instanceMethods[cls.Name] = make(map[string]string)
+					if g.instanceMethods[d.Name] == nil {
+						g.instanceMethods[d.Name] = make(map[string]string)
 					}
-					// Determine Go name based on visibility
-					var goName string
-					if acc.Pub || cls.Pub {
-						goName = snakeToPascalWithAcronyms(acc.Name)
-					} else {
-						goName = snakeToCamelWithAcronyms(acc.Name)
-					}
-					g.instanceMethods[cls.Name][acc.Name] = goName
+					g.instanceMethods[d.Name][acc.Name] = goFuncName(acc.Name, acc.Pub || d.Pub)
 				}
 			}
-		}
-	}
 
-	// Pre-pass: collect instance methods for nested classes inside modules
-	// The semantic analyzer uses the original class name (e.g., "Response"),
-	// so we register methods under that name for type lookups to work correctly.
-	for _, def := range definitions {
-		if mod, ok := def.(*ast.ModuleDecl); ok {
-			for _, cls := range mod.Classes {
-				// Register instance methods under the original class name
-				for _, method := range cls.Methods {
-					if method.IsClassMethod {
-						continue
+			// Collect methods: private, public, and instance methods
+			for _, method := range d.Methods {
+				if method.Private {
+					if g.privateMethods[d.Name] == nil {
+						g.privateMethods[d.Name] = make(map[string]bool)
 					}
-					if g.instanceMethods[cls.Name] == nil {
-						g.instanceMethods[cls.Name] = make(map[string]string)
+					g.privateMethods[d.Name][method.Name] = true
+				}
+				if method.Pub {
+					if g.pubMethods[d.Name] == nil {
+						g.pubMethods[d.Name] = make(map[string]bool)
+					}
+					g.pubMethods[d.Name][method.Name] = true
+				}
+				if !method.IsClassMethod {
+					if g.instanceMethods[d.Name] == nil {
+						g.instanceMethods[d.Name] = make(map[string]string)
 					}
 					var goName string
-					isSetter := strings.HasSuffix(method.Name, "=")
-					baseName := strings.TrimSuffix(method.Name, "=")
-
-					if method.Pub {
-						if isSetter {
-							goName = "Set" + snakeToPascalWithAcronyms(baseName)
-						} else {
-							goName = snakeToPascalWithAcronyms(method.Name)
-						}
-					} else if method.Private {
-						if isSetter {
-							goName = "_set" + snakeToPascalWithAcronyms(baseName)
-						} else {
-							goName = "_" + snakeToCamelWithAcronyms(method.Name)
-						}
+					if baseName, isSetter := strings.CutSuffix(method.Name, "="); isSetter {
+						goName = goSetterName(baseName, method.Pub, method.Private)
 					} else {
-						if isSetter {
-							goName = "set" + snakeToPascalWithAcronyms(baseName)
-						} else {
-							goName = snakeToCamelWithAcronyms(method.Name)
-						}
+						goName = goMethodName(method.Name, method.Pub, method.Private, false)
 					}
-					g.instanceMethods[cls.Name][method.Name] = goName
+					g.instanceMethods[d.Name][method.Name] = goName
 				}
+			}
 
-				// Register accessor getters under the original class name
+		case *ast.ModuleDecl:
+			// Collect instance methods for nested classes
+			for _, cls := range d.Classes {
+				for _, method := range cls.Methods {
+					if !method.IsClassMethod {
+						if g.instanceMethods[cls.Name] == nil {
+							g.instanceMethods[cls.Name] = make(map[string]string)
+						}
+						var goName string
+						if baseName, isSetter := strings.CutSuffix(method.Name, "="); isSetter {
+							goName = goSetterName(baseName, method.Pub, method.Private)
+						} else {
+							goName = goMethodName(method.Name, method.Pub, method.Private, false)
+						}
+						g.instanceMethods[cls.Name][method.Name] = goName
+					}
+				}
 				for _, acc := range cls.Accessors {
 					if acc.Kind == "getter" || acc.Kind == "property" {
 						if g.instanceMethods[cls.Name] == nil {
 							g.instanceMethods[cls.Name] = make(map[string]string)
 						}
-						var goName string
-						if acc.Pub || cls.Pub {
-							goName = snakeToPascalWithAcronyms(acc.Name)
-						} else {
-							goName = snakeToCamelWithAcronyms(acc.Name)
-						}
-						g.instanceMethods[cls.Name][acc.Name] = goName
+						g.instanceMethods[cls.Name][acc.Name] = goFuncName(acc.Name, acc.Pub || cls.Pub)
 					}
 				}
+			}
+
+		case *ast.StructDecl:
+			// Struct methods are always public (PascalCase)
+			for _, method := range d.Methods {
+				if g.instanceMethods[d.Name] == nil {
+					g.instanceMethods[d.Name] = make(map[string]string)
+				}
+				g.instanceMethods[d.Name][method.Name] = goFuncName(method.Name, true)
 			}
 		}
 	}
 
-	// Pre-pass: collect instance methods for structs
-	// Structs are value types with all methods always public (PascalCase)
+	// Pre-pass 2: Collect base class methods and accessors.
+	// This must be a separate pass because it depends on g.baseClasses populated above.
+	// Used to generate var _ = (*BaseClass).methodName assertions for lint suppression.
 	for _, def := range definitions {
-		if structDecl, ok := def.(*ast.StructDecl); ok {
-			for _, method := range structDecl.Methods {
-				if g.instanceMethods[structDecl.Name] == nil {
-					g.instanceMethods[structDecl.Name] = make(map[string]string)
+		if cls, ok := def.(*ast.ClassDecl); ok && g.baseClasses[cls.Name] {
+			for _, m := range cls.Methods {
+				if m.Name != "initialize" {
+					g.baseClassMethods[cls.Name] = append(g.baseClassMethods[cls.Name], m.Name)
 				}
-				// Struct methods are always public (PascalCase)
-				goName := snakeToPascalWithAcronyms(method.Name)
-				g.instanceMethods[structDecl.Name][method.Name] = goName
+			}
+			for _, acc := range cls.Accessors {
+				if acc.Kind == "getter" || acc.Kind == "property" {
+					g.baseClassAccessors[cls.Name] = append(g.baseClassAccessors[cls.Name], acc.Name)
+				}
 			}
 		}
 	}
