@@ -210,9 +210,24 @@ func (g *Generator) genExpr(expr ast.Expression) {
 		// Use SelectorKind to determine if this is a field access or method call
 		selectorKind := g.getSelectorKind(e)
 		switch selectorKind {
-		case ast.SelectorMethod, ast.SelectorGetter:
+		case ast.SelectorMethod:
 			// Method calls need () - convert to CallExpr
 			g.genCallExpr(&ast.CallExpr{Func: e, Args: nil})
+		case ast.SelectorGetter:
+			// Check if this is a declared accessor (getter/property) with a backing field
+			receiverClassName := g.getReceiverClassName(e.X)
+			hasAccessor := g.typeInfo != nil && g.typeInfo.HasAccessor(receiverClassName, e.Sel)
+
+			if hasAccessor {
+				// Inline getter to direct field access for performance
+				// obj.field -> obj._field (same-package access)
+				g.genExpr(e.X)
+				g.buf.WriteString(".")
+				g.buf.WriteString(privateFieldName(e.Sel))
+			} else {
+				// No declared accessor - treat as method call
+				g.genCallExpr(&ast.CallExpr{Func: e, Args: nil})
+			}
 		case ast.SelectorGoMethod:
 			// Go method calls need () - use actual Go name from semantic analysis
 			g.genExpr(e.X)
@@ -860,6 +875,27 @@ func isPrimitiveKind(k TypeKind) bool {
 func isPrimitiveLiteral(e ast.Expression) bool {
 	switch e.(type) {
 	case *ast.IntLit, *ast.FloatLit, *ast.BoolLit, *ast.StringLit, *ast.NilLit:
+		return true
+	default:
+		return false
+	}
+}
+
+// isZeroValue returns true if the expression is a zero value literal.
+// Zero values: 0, 0.0, false, "", nil
+// When filling arrays with zero values, we can use make() instead of runtime.Fill
+// since Go automatically zeroes allocated memory.
+func isZeroValue(e ast.Expression) bool {
+	switch v := e.(type) {
+	case *ast.IntLit:
+		return v.Value == 0
+	case *ast.FloatLit:
+		return v.Value == 0.0
+	case *ast.BoolLit:
+		return !v.Value // false is zero value
+	case *ast.StringLit:
+		return v.Value == ""
+	case *ast.NilLit:
 		return true
 	default:
 		return false
@@ -2094,15 +2130,25 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 					goType := mapType(elemType)
 
 					if len(call.Args) >= 2 {
-						// Array<T>.new(size, default) -> runtime.Fill[T](default, size)
-						g.needsRuntime = true
-						g.buf.WriteString("runtime.Fill[")
-						g.buf.WriteString(goType)
-						g.buf.WriteString("](")
-						g.genExpr(call.Args[1]) // default value
-						g.buf.WriteString(", ")
-						g.genExpr(call.Args[0]) // size
-						g.buf.WriteString(")")
+						// Check if default is a zero value - can use make() instead of Fill
+						if isZeroValue(call.Args[1]) {
+							// Array<T>.new(size, zero) -> make([]T, size)
+							g.buf.WriteString("make([]")
+							g.buf.WriteString(goType)
+							g.buf.WriteString(", ")
+							g.genExpr(call.Args[0]) // size
+							g.buf.WriteString(")")
+						} else {
+							// Array<T>.new(size, default) -> runtime.Fill[T](default, size)
+							g.needsRuntime = true
+							g.buf.WriteString("runtime.Fill[")
+							g.buf.WriteString(goType)
+							g.buf.WriteString("](")
+							g.genExpr(call.Args[1]) // default value
+							g.buf.WriteString(", ")
+							g.genExpr(call.Args[0]) // size
+							g.buf.WriteString(")")
+						}
 					} else if len(call.Args) == 1 {
 						// Array<T>.new(size) -> make([]T, size)
 						g.buf.WriteString("make([]")
@@ -2130,23 +2176,39 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 					if elemType != "" && elemType != "unknown" {
 						// Use mapParamType to handle class types as pointers
 						goType := g.mapParamType(elemType)
-						g.needsRuntime = true
-						g.buf.WriteString("runtime.Fill[")
-						g.buf.WriteString(goType)
-						g.buf.WriteString("](")
-						g.genExpr(call.Args[1]) // default value
-						g.buf.WriteString(", ")
-						g.genExpr(call.Args[0]) // size
-						g.buf.WriteString(")")
+						// Check if default is a zero value - can use make() instead of Fill
+						if isZeroValue(call.Args[1]) {
+							// Array.new(size, zero) -> make([]T, size)
+							g.buf.WriteString("make([]")
+							g.buf.WriteString(goType)
+							g.buf.WriteString(", ")
+							g.genExpr(call.Args[0]) // size
+							g.buf.WriteString(")")
+						} else {
+							g.needsRuntime = true
+							g.buf.WriteString("runtime.Fill[")
+							g.buf.WriteString(goType)
+							g.buf.WriteString("](")
+							g.genExpr(call.Args[1]) // default value
+							g.buf.WriteString(", ")
+							g.genExpr(call.Args[0]) // size
+							g.buf.WriteString(")")
+						}
 						return
 					}
 					// Fallback: use []any when type inference fails
-					g.needsRuntime = true
-					g.buf.WriteString("runtime.Fill[any](")
-					g.genExpr(call.Args[1])
-					g.buf.WriteString(", ")
-					g.genExpr(call.Args[0])
-					g.buf.WriteString(")")
+					if isZeroValue(call.Args[1]) {
+						g.buf.WriteString("make([]any, ")
+						g.genExpr(call.Args[0])
+						g.buf.WriteString(")")
+					} else {
+						g.needsRuntime = true
+						g.buf.WriteString("runtime.Fill[any](")
+						g.genExpr(call.Args[1])
+						g.buf.WriteString(", ")
+						g.genExpr(call.Args[0])
+						g.buf.WriteString(")")
+					}
 					return
 				} else if len(call.Args) == 1 {
 					// Array.new(size) -> make([]any, size)
@@ -2563,6 +2625,35 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		}
 
 		if lookupType != "" {
+			// Optimize type conversions to use direct Go casts
+			// Int.to_f -> float64(x), Float.to_i -> int(x)
+			// Skip float literals for to_i as Go doesn't allow int(3.5)
+			if lookupType == "Int" && fn.Sel == "to_f" {
+				g.buf.WriteString("float64(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			}
+			if lookupType == "Float" && fn.Sel == "to_i" {
+				if _, isLit := fn.X.(*ast.FloatLit); !isLit {
+					g.buf.WriteString("int(")
+					g.genExpr(fn.X)
+					g.buf.WriteString(")")
+					return
+				}
+			}
+
+			// Optimize String.substring(start, end) to direct slice syntax s[start:end]
+			if lookupType == "String" && fn.Sel == "substring" && len(call.Args) == 2 {
+				g.genExpr(fn.X)
+				g.buf.WriteString("[")
+				g.genExpr(call.Args[0])
+				g.buf.WriteString(":")
+				g.genExpr(call.Args[1])
+				g.buf.WriteString("]")
+				return
+			}
+
 			if methods, ok := stdLib[lookupType]; ok {
 				if def, ok := methods[fn.Sel]; ok {
 					methodDef = def
@@ -5641,6 +5732,24 @@ func (g *Generator) genStdLibPropertyMethod(sel *ast.SelectorExpr) bool {
 		lookupType = "Float"
 	case "string":
 		lookupType = "String"
+	}
+
+	// Optimize type conversions to use direct Go casts instead of runtime calls
+	// Int.to_f -> float64(x), Float.to_i -> int(x)
+	// Skip float literals for to_i as Go doesn't allow int(3.5)
+	if lookupType == "Int" && sel.Sel == "to_f" {
+		g.buf.WriteString("float64(")
+		g.genExpr(sel.X)
+		g.buf.WriteString(")")
+		return true
+	}
+	if lookupType == "Float" && sel.Sel == "to_i" {
+		if _, isLit := sel.X.(*ast.FloatLit); !isLit {
+			g.buf.WriteString("int(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return true
+		}
 	}
 
 	if methods, ok := stdLib[lookupType]; ok {

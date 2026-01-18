@@ -643,10 +643,10 @@ func (g *Generator) genClassDecl(cls *ast.ClassDecl) {
 				continue
 			}
 
-			// Use underscore prefix for accessor fields to avoid conflict with getter/setter methods
+			// Use private field naming for accessor fields to avoid conflict with getter/setter methods
 			goFieldName := field.Name
 			if g.isAccessorField(field.Name) {
-				goFieldName = "_" + field.Name
+				goFieldName = privateFieldName(field.Name)
 			}
 			// Determine field type: explicit annotation takes precedence,
 			// then inferred type from semantic analysis, then fallback to any
@@ -773,8 +773,8 @@ func (g *Generator) genAccessorMethods(className string, acc *ast.AccessorDecl, 
 	recv := receiverName(className)
 	// Use mapParamType to properly handle class types as pointers in maps/arrays
 	goType := g.mapParamType(acc.Type)
-	// Internal field has underscore prefix to avoid conflict with method name
-	internalField := "_" + acc.Name
+	// Internal field uses private field naming convention to avoid conflict with method name
+	internalField := privateFieldName(acc.Name)
 
 	// Generate getter for "getter" and "property"
 	if acc.Kind == "getter" || acc.Kind == "property" {
@@ -933,10 +933,10 @@ func (g *Generator) genConstructor(className string, method *ast.MethodDecl, pub
 
 	// Auto-assign promoted parameters
 	for _, promoted := range promotedParams {
-		// Use underscore prefix for accessor fields
+		// Use private field naming for accessor fields
 		goFieldName := promoted.fieldName
 		if g.isAccessorField(promoted.fieldName) {
-			goFieldName = "_" + promoted.fieldName
+			goFieldName = privateFieldName(promoted.fieldName)
 		}
 		g.buf.WriteString(fmt.Sprintf("\t%s.%s = %s\n", recv, goFieldName, promoted.paramName))
 	}

@@ -442,8 +442,8 @@ func (g *Generator) findFieldPath(embeds []string, fieldName string) string {
 		}
 
 		if hasAccessor {
-			// Found it in this parent class - return path with underscore prefix
-			return parentClass + "._" + fieldName
+			// Found it in this parent class - return path with private field prefix
+			return parentClass + "." + privateFieldName(fieldName)
 		}
 
 		// Check this parent's parents (recursive)
@@ -479,6 +479,13 @@ func (g *Generator) isStruct(typeName string) bool {
 		panic("codegen: typeInfo is required - run semantic analysis before code generation")
 	}
 	return g.typeInfo.IsStruct(typeName)
+}
+
+// privateFieldName returns the internal field name for a declared accessor.
+// Rugby uses underscore prefix to avoid name conflicts with getter/setter methods.
+// Example: "name" -> "_name"
+func privateFieldName(name string) string {
+	return "_" + name
 }
 
 // stripTypeParams removes generic type parameters from a type name.

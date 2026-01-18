@@ -7,6 +7,23 @@ import (
 	"github.com/nchapman/rugby/ast"
 )
 
+// isSimpleExpr returns true if the expression is safe to evaluate multiple times
+// without side effects (identifiers, instance variables, self).
+func isSimpleExpr(expr ast.Expression) bool {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		// All identifiers (including 'self') are simple
+		return true
+	case *ast.InstanceVar:
+		return true
+	case *ast.SelectorExpr:
+		// selector is simple if receiver is simple (e.g., self.user.name)
+		return isSimpleExpr(e.X)
+	default:
+		return false
+	}
+}
+
 // getStatementLine returns the source line number for a statement, or 0 if unknown.
 func getStatementLine(stmt ast.Statement) int {
 	switch s := stmt.(type) {
@@ -819,83 +836,119 @@ func (g *Generator) genClassVarCompoundAssign(s *ast.ClassVarCompoundAssign) {
 }
 
 // genSelectorAssignStmt generates code for setter assignment: obj.field = value
-// This generates a setter method call: obj.setField(value) or obj.SetField(value) for pub classes/accessors
+// For declared accessors (setter/property), generates direct field access: obj._field = value
+// For custom setters (def field=), generates method call: obj.setField(value)
 func (g *Generator) genSelectorAssignStmt(s *ast.SelectorAssignStmt) {
 	g.writeIndent()
 
-	// Check if receiver is an instance of a pub class
+	// Check if this is a declared accessor (setter/property) with a backing field
 	receiverClassName := g.getReceiverClassName(s.Object)
-	isPubClass := g.isPublicClass(receiverClassName)
+	hasAccessor := g.typeInfo != nil && g.typeInfo.HasAccessor(receiverClassName, s.Field)
 
-	// Check if this specific accessor is pub (for non-pub classes with pub accessors)
-	isPubAccessor := false
-	if classAccessors := g.pubAccessors[receiverClassName]; classAccessors != nil {
-		isPubAccessor = classAccessors[s.Field]
-	}
-
-	// Generate: obj.setField(value) or obj.SetField(value)
-	g.genExpr(s.Object)
-	g.buf.WriteString(".")
-
-	// Generate setter method name
-	fieldPascal := snakeToPascalWithAcronyms(s.Field)
-	var setterName string
-	if isPubClass || isPubAccessor {
-		// Pub class/accessor setters use PascalCase: SetField
-		setterName = "Set" + fieldPascal
+	if hasAccessor {
+		// Declared accessor - use direct field access (inlined for performance)
+		g.genExpr(s.Object)
+		g.buf.WriteString(".")
+		g.buf.WriteString(privateFieldName(s.Field))
+		g.buf.WriteString(" = ")
+		g.genExpr(s.Value)
+		g.buf.WriteString("\n")
 	} else {
-		// Private class setters use camelCase: setField
-		setterName = "set" + fieldPascal
-	}
+		// Custom setter method - generate setter method call
+		isPubClass := g.isPublicClass(receiverClassName)
+		isPubAccessor := false
+		if classAccessors := g.pubAccessors[receiverClassName]; classAccessors != nil {
+			isPubAccessor = classAccessors[s.Field]
+		}
 
-	g.buf.WriteString(setterName)
-	g.buf.WriteString("(")
-	g.genExpr(s.Value)
-	g.buf.WriteString(")\n")
+		g.genExpr(s.Object)
+		g.buf.WriteString(".")
+		fieldPascal := snakeToPascalWithAcronyms(s.Field)
+		if isPubClass || isPubAccessor {
+			g.buf.WriteString("Set" + fieldPascal)
+		} else {
+			g.buf.WriteString("set" + fieldPascal)
+		}
+		g.buf.WriteString("(")
+		g.genExpr(s.Value)
+		g.buf.WriteString(")\n")
+	}
 }
 
 // genSelectorCompoundAssign generates code for compound setter assignment: obj.field += value
-// This generates: obj.setField(obj.field() + value) or obj.SetField(obj.Field() + value) for pub classes
+// For declared accessors, generates direct field access: obj._field += value
+// For custom setters, generates method call: obj.setField(obj.field() + value)
 func (g *Generator) genSelectorCompoundAssign(s *ast.SelectorCompoundAssign) {
 	g.writeIndent()
 
-	// Check if receiver is an instance of a pub class
+	// Check if this is a declared accessor (setter/property) with a backing field
 	receiverClassName := g.getReceiverClassName(s.Object)
-	isPubClass := g.isPublicClass(receiverClassName)
+	hasAccessor := g.typeInfo != nil && g.typeInfo.HasAccessor(receiverClassName, s.Field)
 
-	// Check if this specific accessor is pub (for non-pub classes with pub accessors)
-	isPubAccessor := false
-	if classAccessors := g.pubAccessors[receiverClassName]; classAccessors != nil {
-		isPubAccessor = classAccessors[s.Field]
-	}
-
-	fieldPascal := snakeToPascalWithAcronyms(s.Field)
-
-	// Generate setter method name
-	var setterName, getterName string
-	if isPubClass || isPubAccessor {
-		// Pub class/accessor use PascalCase
-		setterName = "Set" + fieldPascal
-		getterName = fieldPascal
+	if hasAccessor {
+		// Declared accessor - use direct field access (inlined for performance)
+		g.genExpr(s.Object)
+		g.buf.WriteString(".")
+		g.buf.WriteString(privateFieldName(s.Field))
+		g.buf.WriteString(" ")
+		g.buf.WriteString(s.Op)
+		g.buf.WriteString("= ")
+		g.genExpr(s.Value)
+		g.buf.WriteString("\n")
 	} else {
-		// Private class use camelCase
-		setterName = "set" + fieldPascal
-		getterName = snakeToCamelWithAcronyms(s.Field)
-	}
+		// Custom accessor - generate setter/getter method calls
+		isPubClass := g.isPublicClass(receiverClassName)
+		isPubAccessor := false
+		if classAccessors := g.pubAccessors[receiverClassName]; classAccessors != nil {
+			isPubAccessor = classAccessors[s.Field]
+		}
 
-	// Generate: obj.setField(obj.field() op value)
-	g.genExpr(s.Object)
-	g.buf.WriteString(".")
-	g.buf.WriteString(setterName)
-	g.buf.WriteString("(")
-	g.genExpr(s.Object)
-	g.buf.WriteString(".")
-	g.buf.WriteString(getterName)
-	g.buf.WriteString("() ")
-	g.buf.WriteString(s.Op)
-	g.buf.WriteString(" ")
-	g.genExpr(s.Value)
-	g.buf.WriteString(")\n")
+		fieldPascal := snakeToPascalWithAcronyms(s.Field)
+		var setterName, getterName string
+		if isPubClass || isPubAccessor {
+			setterName = "Set" + fieldPascal
+			getterName = fieldPascal
+		} else {
+			setterName = "set" + fieldPascal
+			getterName = snakeToCamelWithAcronyms(s.Field)
+		}
+
+		// Check if object expression needs to be stored in a temp variable
+		// to avoid double evaluation (e.g., get_user().score += 1)
+		objVar := "_obj"
+		needsTempVar := !isSimpleExpr(s.Object)
+
+		if needsTempVar {
+			// Generate: _obj := expr
+			g.buf.WriteString(objVar)
+			g.buf.WriteString(" := ")
+			g.genExpr(s.Object)
+			g.buf.WriteString("\n")
+			g.writeIndent()
+		}
+
+		// Generate: obj.setField(obj.field() op value)
+		if needsTempVar {
+			g.buf.WriteString(objVar)
+		} else {
+			g.genExpr(s.Object)
+		}
+		g.buf.WriteString(".")
+		g.buf.WriteString(setterName)
+		g.buf.WriteString("(")
+		if needsTempVar {
+			g.buf.WriteString(objVar)
+		} else {
+			g.genExpr(s.Object)
+		}
+		g.buf.WriteString(".")
+		g.buf.WriteString(getterName)
+		g.buf.WriteString("() ")
+		g.buf.WriteString(s.Op)
+		g.buf.WriteString(" ")
+		g.genExpr(s.Value)
+		g.buf.WriteString(")\n")
+	}
 }
 
 // genIndexAssignStmt generates code for index assignment: arr[idx] = value or map[key] = value
@@ -1048,6 +1101,9 @@ func (g *Generator) isNonNegativeValue(expr ast.Expression) bool {
 	switch e := expr.(type) {
 	case *ast.IntLit:
 		return e.Value >= 0
+	case *ast.Ident:
+		// Check if this variable is tracked as non-negative
+		return g.nonNegativeVars[e.Name]
 	case *ast.BinaryExpr:
 		// Addition and multiplication of non-negative values are non-negative
 		if e.Op == "+" || e.Op == "*" {
@@ -1057,6 +1113,10 @@ func (g *Generator) isNonNegativeValue(expr ast.Expression) bool {
 	case *ast.CallExpr:
 		// len(x) is always non-negative
 		if fn, ok := e.Func.(*ast.Ident); ok && fn.Name == "len" {
+			return true
+		}
+		// .length is also always non-negative
+		if sel, ok := e.Func.(*ast.SelectorExpr); ok && sel.Sel == "length" {
 			return true
 		}
 		return false
@@ -2216,6 +2276,22 @@ func (g *Generator) genExprStmt(s *ast.ExprStmt) {
 					g.buf.WriteString(")")
 				}
 				g.buf.WriteString("\n")
+				return
+			}
+		}
+	}
+
+	// Optimize Map.delete(key) to Go's delete() builtin when return value is discarded
+	// In Rugby, .delete(key) with one arg is only defined for Map/Hash types in stdLib
+	if call, ok := s.Expr.(*ast.CallExpr); ok {
+		if sel, ok := call.Func.(*ast.SelectorExpr); ok {
+			if sel.Sel == "delete" && len(call.Args) == 1 {
+				g.writeIndent()
+				g.buf.WriteString("delete(")
+				g.genExpr(sel.X)
+				g.buf.WriteString(", ")
+				g.genExpr(call.Args[0])
+				g.buf.WriteString(")\n")
 				return
 			}
 		}

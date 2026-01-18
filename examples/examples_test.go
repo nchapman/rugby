@@ -178,11 +178,14 @@ func TestGeneratedCodeLint(t *testing.T) {
 				return
 			}
 
-			// Run golangci-lint on the individual file (govet only)
+			// Run golangci-lint on the individual file (govet only, no unused)
+			// We disable unused because accessor methods are generated for external access
+			// but may be unused within the same package due to direct field access optimization
 			cmd = exec.Command("golangci-lint", "run",
 				"--no-config",
 				"-E", "govet",
 				"-D", "staticcheck",
+				"-D", "unused",
 				"--max-issues-per-linter=0",
 				"--max-same-issues=0",
 				goFile,

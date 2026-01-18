@@ -4369,11 +4369,11 @@ end`
 
 	// Should have the field in the struct (with underscore prefix for accessors)
 	assertContains(t, output, "_name string")
-	// Should have a getter method
+	// Should have a getter method (for interface compatibility)
 	assertContains(t, output, "func (u *User) Name() string {")
 	assertContains(t, output, "return u._name")
-	// Getter call should generate method call with ()
-	assertContains(t, output, "user.Name()")
+	// Getter access should generate direct field access (inlined for performance)
+	assertContains(t, output, "user._name")
 }
 
 func TestAccessorSetter(t *testing.T) {
@@ -4394,11 +4394,11 @@ end`
 
 	// Should have the field in the struct (with underscore prefix for accessors)
 	assertContains(t, output, "_email string")
-	// Should have a setter method
+	// Should have a setter method (for interface compatibility)
 	assertContains(t, output, "func (u *User) SetEmail(v string) {")
 	assertContains(t, output, "u._email = v")
-	// Setter assignment should generate method call
-	assertContains(t, output, `user.SetEmail("bob@example.com")`)
+	// Setter assignment should generate direct field access (inlined for performance)
+	assertContains(t, output, `user._email = "bob@example.com"`)
 }
 
 func TestAccessorProperty(t *testing.T) {
@@ -4421,15 +4421,15 @@ end`
 
 	// Should have the field in the struct (with underscore prefix for accessors)
 	assertContains(t, output, "_value int")
-	// Should have both getter and setter methods
+	// Should have both getter and setter methods (for interface compatibility)
 	assertContains(t, output, "func (c *Counter) Value() int {")
 	assertContains(t, output, "return c._value")
 	assertContains(t, output, "func (c *Counter) SetValue(v int) {")
 	assertContains(t, output, "c._value = v")
-	// Property getter should generate method call
-	assertContains(t, output, "counter.Value()")
-	// Property setter should generate method call
-	assertContains(t, output, "counter.SetValue(20)")
+	// Property getter should generate direct field access (inlined for performance)
+	assertContains(t, output, "counter._value")
+	// Property setter should generate direct field access (inlined for performance)
+	assertContains(t, output, "counter._value = 20")
 }
 
 func TestAccessorNonPubClass(t *testing.T) {
@@ -4467,12 +4467,11 @@ end`
 
 	output := compile(t, input)
 
-	// Pub accessor in non-pub class should have PascalCase method names
+	// Pub accessor in non-pub class should have PascalCase method names (for interface compatibility)
 	assertContains(t, output, "func (u *User) Name() string {")
 	assertContains(t, output, "func (u *User) SetName(v string) {")
-	// Call site should use PascalCase
-	assertContains(t, output, "user.Name()")
-	assertContains(t, output, "user.SetName(")
+	// Call site should use direct field access (inlined for performance)
+	assertContains(t, output, "user._name")
 }
 
 func TestSuperKeyword(t *testing.T) {
@@ -5180,10 +5179,10 @@ end`
 	// Semantic analysis resolves setter assignment
 	output := compile(t, input)
 
-	// Should have setter method (parameter name is 'v')
+	// Should have setter method (for interface compatibility)
 	assertContains(t, output, `func (p *Person) setName(v string)`)
-	// Should generate setter method call
-	assertContains(t, output, `person.setName("Bob")`)
+	// Should generate direct field access (inlined for performance)
+	assertContains(t, output, `person._name = "Bob"`)
 }
 
 // Test that accessor field types propagate correctly
@@ -5294,8 +5293,20 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate runtime.Fill call with type parameter
-	assertContains(t, output, `runtime.Fill[int](0, 10)`)
+	// Zero value (0) should use make() instead of runtime.Fill for efficiency
+	assertContains(t, output, `make([]int, 10)`)
+}
+
+// TestPreSizedArrayNonZero tests Array<T>.new(size, default) with non-zero default
+func TestPreSizedArrayNonZero(t *testing.T) {
+	input := `def main
+  arr = Array<Int>.new(10, 42)
+end`
+
+	output := compile(t, input)
+
+	// Non-zero value should use runtime.Fill
+	assertContains(t, output, `runtime.Fill[int](42, 10)`)
 }
 
 // TestTupleArrayIndexDestructuring tests destructuring tuples from array indexing
