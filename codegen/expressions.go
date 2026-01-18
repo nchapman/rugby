@@ -184,6 +184,29 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			break
 		}
 
+		// Special case: channel close uses Go builtin close(ch), not ch.close()
+		if e.Sel == "close" {
+			recvType := g.inferTypeFromExpr(e.X)
+			isChannel := strings.HasPrefix(recvType, "Chan<") || strings.HasPrefix(recvType, "chan ")
+			// Also check TypeInfo for channel detection
+			if !isChannel && g.typeInfo != nil {
+				isChannel = g.typeInfo.GetTypeKind(e.X) == TypeChannel
+			}
+			// Fallback: if type is unknown and not a Go interop var, treat as channel
+			// This maintains backward compatibility with tests that don't have type info
+			if !isChannel && recvType == "" {
+				if ident, ok := e.X.(*ast.Ident); ok && !g.goInteropVars[ident.Name] && !g.imports[ident.Name] {
+					isChannel = true
+				}
+			}
+			if isChannel {
+				g.buf.WriteString("close(")
+				g.genExpr(e.X)
+				g.buf.WriteString(")")
+				break
+			}
+		}
+
 		// Use SelectorKind to determine if this is a field access or method call
 		selectorKind := g.getSelectorKind(e)
 		switch selectorKind {
@@ -2200,10 +2223,28 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 		}
 
 		if fn.Sel == "close" {
-			g.buf.WriteString("close(")
-			g.genExpr(fn.X)
-			g.buf.WriteString(")")
-			return
+			// Check if receiver is a channel - use close() builtin
+			// For Go interop types (like *os.File), use .Close() method
+			recvType := g.inferTypeFromExpr(fn.X)
+			isChannel := strings.HasPrefix(recvType, "Chan<") || strings.HasPrefix(recvType, "chan ")
+			// Also check TypeInfo for channel detection
+			if !isChannel && g.typeInfo != nil {
+				isChannel = g.typeInfo.GetTypeKind(fn.X) == TypeChannel
+			}
+			// Fallback: if type is unknown and not a Go interop var, treat as channel
+			if !isChannel && recvType == "" {
+				if ident, ok := fn.X.(*ast.Ident); ok && !g.goInteropVars[ident.Name] && !g.imports[ident.Name] {
+					isChannel = true
+				}
+			}
+			if isChannel {
+				g.buf.WriteString("close(")
+				g.genExpr(fn.X)
+				g.buf.WriteString(")")
+				return
+			}
+			// For Go interop types, fall through to normal method handling
+			// which will convert to .Close()
 		}
 		if fn.Sel == "receive" {
 			g.buf.WriteString("<- ")
@@ -4994,11 +5035,16 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 		g.buf.WriteString(")")
 		return
 	case "close":
-		// ch.close -> close(ch)
-		g.buf.WriteString("close(")
-		g.genExpr(sel.X)
-		g.buf.WriteString(")")
-		return
+		// ch.close -> close(ch) for channels
+		// file.close -> file.Close() for Go interop types
+		recvType := g.inferTypeFromExpr(sel.X)
+		if strings.HasPrefix(recvType, "Chan<") || strings.HasPrefix(recvType, "chan ") {
+			g.buf.WriteString("close(")
+			g.genExpr(sel.X)
+			g.buf.WriteString(")")
+			return
+		}
+		// Fall through to handle as Go interop method .Close()
 	case "await":
 		// task.await -> runtime.Await(task)
 		g.needsRuntime = true
@@ -5239,9 +5285,32 @@ func (g *Generator) isGoInterop(expr ast.Expression) bool {
 		return g.imports[e.Name] || g.goInteropVars[e.Name]
 	case *ast.SelectorExpr:
 		return g.isGoInterop(e.X)
+	case *ast.InstanceVar:
+		// Check if instance variable has a Go interop type (like *big.Int)
+		fieldType := g.getFieldType(e.Name)
+		return g.isGoInteropType(fieldType)
 	default:
 		return false
 	}
+}
+
+// isGoInteropType checks if a type annotation refers to a Go interop type.
+// Examples: "*bufio.Writer", "io.Reader", "*http.Request"
+// This is used to track parameters with Go types for PascalCase method conversion.
+func (g *Generator) isGoInteropType(typeName string) bool {
+	// Strip pointer prefix
+	typeName = strings.TrimPrefix(typeName, "*")
+
+	// Check if type contains a dot (package.Type pattern)
+	if strings.Contains(typeName, ".") {
+		// Extract package name and check if it's an imported Go package
+		parts := strings.Split(typeName, ".")
+		if len(parts) >= 2 {
+			pkgName := parts[0]
+			return g.imports[pkgName]
+		}
+	}
+	return false
 }
 
 // isGoInteropTypeConstructor checks if an expression is a Go type constructor like sync.WaitGroup.new
@@ -5281,12 +5350,21 @@ func (g *Generator) isGoInteropTypeConstructor(expr ast.Expression) bool {
 }
 
 // isGoInteropCall checks if an expression is a function call from a Go package.
-// Examples: http.get(url), json.parse(data), etc.
+// Examples: http.get(url), json.parse(data), md5.new, etc.
 // Also handles BangExpr (!) wrapping: http.get(url)!
+// Also handles SelectorExpr with SelectorGoMethod kind (no-arg Go function calls).
 func (g *Generator) isGoInteropCall(expr ast.Expression) bool {
 	// Unwrap BangExpr (!)
 	if bang, ok := expr.(*ast.BangExpr); ok {
 		expr = bang.Expr
+	}
+
+	// Check for SelectorExpr with SelectorGoMethod kind (no-arg Go function calls like md5.new)
+	if sel, ok := expr.(*ast.SelectorExpr); ok {
+		selectorKind := g.getSelectorKind(sel)
+		if selectorKind == ast.SelectorGoMethod && g.isGoInterop(sel.X) {
+			return true
+		}
 	}
 
 	// Check for CallExpr

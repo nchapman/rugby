@@ -103,8 +103,13 @@ func (g *Generator) genFuncDecl(fn *ast.FuncDecl) {
 	}
 
 	// Mark parameters as declared variables with their types
+	// Also track Go interop parameters for PascalCase method call conversion
 	for _, param := range fn.Params {
 		g.vars[param.Name] = param.Type
+		// Check if parameter type is a Go interop type (contains package reference like "bufio.Writer")
+		if g.isGoInteropType(param.Type) {
+			g.goInteropVars[param.Name] = true
+		}
 	}
 
 	// Generate function name with proper casing
@@ -1049,6 +1054,7 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 	}
 
 	// Mark parameters as declared variables with their types
+	// Also track Go interop parameters for PascalCase method call conversion
 	for _, param := range method.Params {
 		// Handle promoted parameters (shouldn't appear in regular methods, but be safe)
 		paramName := param.Name
@@ -1056,6 +1062,10 @@ func (g *Generator) genMethodDecl(className string, method *ast.MethodDecl) {
 			paramName = paramName[1:]
 		}
 		g.vars[paramName] = param.Type
+		// Check if parameter type is a Go interop type (contains package reference like "bufio.Writer")
+		if g.isGoInteropType(param.Type) {
+			g.goInteropVars[paramName] = true
+		}
 	}
 
 	// Handle class methods (def self.method_name)

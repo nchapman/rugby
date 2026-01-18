@@ -40,6 +40,8 @@ linters:
       check-blank: false
 
   exclusions:
+    paths:
+      - benchmarks
     rules:
       # Disable type assertion checks in test files - panics give clear errors anyway
       - path: '_test\.go'

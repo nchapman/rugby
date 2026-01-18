@@ -222,26 +222,16 @@ func splitTopLevelCommas(s string) []string {
 
 // Common acronyms that should be uppercased in Go identifiers
 // Per spec section 9.5
+// NOTE: Keep in sync with semantic/goimporter.go goAcronyms
 var acronyms = map[string]string{
-	"id":    "ID",
-	"url":   "URL",
-	"uri":   "URI",
-	"http":  "HTTP",
-	"https": "HTTPS",
-	"json":  "JSON",
-	"xml":   "XML",
-	"api":   "API",
-	"uuid":  "UUID",
-	"ip":    "IP",
-	"tcp":   "TCP",
-	"udp":   "UDP",
-	"sql":   "SQL",
-	"tls":   "TLS",
-	"ssh":   "SSH",
-	"cpu":   "CPU",
-	"gpu":   "GPU",
-	"html":  "HTML",
-	"css":   "CSS",
+	"id": "ID", "url": "URL", "uri": "URI", "http": "HTTP", "https": "HTTPS",
+	"html": "HTML", "xml": "XML", "json": "JSON", "api": "API", "sql": "SQL",
+	"cpu": "CPU", "gpu": "GPU", "io": "IO", "ip": "IP", "tcp": "TCP", "udp": "UDP",
+	"rpc": "RPC", "ssl": "SSL", "tls": "TLS", "dns": "DNS", "ssh": "SSH",
+	"uid": "UID", "gid": "GID", "pid": "PID", "uuid": "UUID", "guid": "GUID",
+	"utf": "UTF", "ascii": "ASCII", "eof": "EOF", "crc": "CRC", "md5": "MD5",
+	"sha": "SHA", "hmac": "HMAC", "rsa": "RSA", "aes": "AES", "des": "DES",
+	"css": "CSS",
 }
 
 // snakeToPascalWithAcronyms converts snake_case to PascalCase with acronym handling

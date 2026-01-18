@@ -440,6 +440,13 @@ func (g *Generator) genMultiAssignStmt(s *ast.MultiAssignStmt) {
 
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
+
+	// Track Go interop for multi-value assignments
+	// If the value is a Go interop call (e.g., os.open(filename)), the first
+	// variable receives a Go type and should be tracked as a Go interop var.
+	if g.isGoInteropCall(s.Value) && len(effectiveNames) > 0 && effectiveNames[0] != "_" {
+		g.goInteropVars[effectiveNames[0]] = true
+	}
 }
 
 // genTupleDestructure generates code to destructure a tuple variable

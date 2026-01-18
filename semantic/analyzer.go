@@ -2778,17 +2778,51 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			}
 		}
 
+		// Try Go package function lookup (e.g., md5.new -> md5.New)
+		// This handles property-style access to Go package functions
+		if typ == nil && isGoPackage {
+			if pkgIdent, ok := e.X.(*ast.Ident); ok {
+				if pkgPath, found := a.goPackages[pkgIdent.Name]; found {
+					if fn := a.goImporter.LookupFunction(pkgPath, e.Sel); fn != nil {
+						if len(fn.Returns) == 1 {
+							typ = fn.Returns[0]
+						} else if len(fn.Returns) > 1 {
+							typ = NewTupleType(fn.Returns...)
+						} else {
+							typ = TypeUnknownVal
+						}
+						selectorKind = ast.SelectorGoMethod
+					}
+				}
+			}
+		}
+
 		// Try Go type field and method lookup for Go interop types
 		if typ == nil && receiverType.Kind == TypeGoType {
-			if typeDef := a.goImporter.LookupType(receiverType.GoPackage, receiverType.GoTypeName); typeDef != nil {
+			// Resolve short package name (e.g., "big") to full path (e.g., "math/big")
+			pkgPath := receiverType.GoPackage
+			if fullPath, found := a.goPackages[pkgPath]; found {
+				pkgPath = fullPath
+			}
+			if typeDef := a.goImporter.LookupType(pkgPath, receiverType.GoTypeName); typeDef != nil {
 				// Check fields first (e.g., http.Request.URL)
-				if field := typeDef.Fields[e.Sel]; field != nil {
+				// Try direct name first, then PascalCase conversion
+				field := typeDef.Fields[e.Sel]
+				if field == nil {
+					field = typeDef.Fields[snakeToPascal(e.Sel)]
+				}
+				if field != nil {
 					typ = field.Type
 					selectorKind = ast.SelectorField
 				}
-				// Then check methods (e.g., scanner.Text())
+				// Then check methods (e.g., scanner.Text(), big.Int.int64)
+				// Try direct name first, then PascalCase conversion
 				if typ == nil {
-					if method := typeDef.Methods[e.Sel]; method != nil {
+					method := typeDef.Methods[e.Sel]
+					if method == nil {
+						method = typeDef.Methods[snakeToPascal(e.Sel)]
+					}
+					if method != nil {
 						if len(method.Returns) == 1 {
 							typ = method.Returns[0]
 						} else if len(method.Returns) > 1 {
@@ -3680,8 +3714,18 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 
 		// Try Go type method lookup (e.g., scanner.Text where scanner is *bufio.Scanner)
 		if receiverType.Kind == TypeGoType {
-			if typeDef := a.goImporter.LookupType(receiverType.GoPackage, receiverType.GoTypeName); typeDef != nil {
-				if method := typeDef.Methods[sel.Sel]; method != nil {
+			// Resolve short package name (e.g., "big") to full path (e.g., "math/big")
+			pkgPath := receiverType.GoPackage
+			if fullPath, found := a.goPackages[pkgPath]; found {
+				pkgPath = fullPath
+			}
+			if typeDef := a.goImporter.LookupType(pkgPath, receiverType.GoTypeName); typeDef != nil {
+				// Try direct name first, then PascalCase conversion
+				method := typeDef.Methods[sel.Sel]
+				if method == nil {
+					method = typeDef.Methods[snakeToPascal(sel.Sel)]
+				}
+				if method != nil {
 					if len(method.Returns) == 1 {
 						return method.Returns[0]
 					} else if len(method.Returns) > 1 {
