@@ -207,6 +207,7 @@ type Generator struct {
 	structs                      map[string]*ast.StructDecl   // track struct definitions
 	currentStruct                *ast.StructDecl              // current struct being generated (for @field translation)
 	functions                    map[string]*ast.FuncDecl     // track function declarations for default parameter lookup
+	nonNegativeVars              map[string]bool              // track variables known to be >= 0 for native array indexing
 }
 
 // addError records an error during code generation
@@ -286,6 +287,7 @@ func New(opts ...Option) *Generator {
 		pubMethods:                   make(map[string]map[string]bool),
 		classParent:                  make(map[string]string),
 		functions:                    make(map[string]*ast.FuncDecl),
+		nonNegativeVars:              make(map[string]bool),
 	}
 	for _, opt := range opts {
 		opt(g)

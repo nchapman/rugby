@@ -626,8 +626,8 @@ end`
 
 	output := compile(t, input)
 
-	// Variable index uses runtime.SliceAt[T] for typed arrays
-	assertContains(t, output, `runtime.SliceAt[int](arr, (i + 1))`)
+	// Non-negative expression (i is assigned 0, so i+1 >= 1) uses native indexing
+	assertContains(t, output, `arr[(i + 1)]`)
 }
 
 func TestGenerateNegativeIndexLiteral(t *testing.T) {
@@ -665,8 +665,8 @@ end`
 
 	output := compile(t, input)
 
-	// Variable indices use runtime.SliceAt[T] for typed arrays
-	assertContains(t, output, `runtime.SliceAt[int](arr, i)`)
+	// Non-negative variable (i is assigned 0) uses native indexing
+	assertContains(t, output, `arr[i]`)
 }
 
 func TestGenerateRangeSliceInclusive(t *testing.T) {
@@ -2827,8 +2827,8 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate x = x + 5
-	assertContains(t, output, "x = x + 5")
+	// Should generate native Go compound operator
+	assertContains(t, output, "x += 5")
 }
 
 func TestCompoundAssignMinusEquals(t *testing.T) {
@@ -2839,8 +2839,8 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate x = x - 3
-	assertContains(t, output, "x = x - 3")
+	// Should generate native Go compound operator
+	assertContains(t, output, "x -= 3")
 }
 
 func TestCompoundAssignStarEquals(t *testing.T) {
@@ -2851,8 +2851,8 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate x = x * 2
-	assertContains(t, output, "x = x * 2")
+	// Should generate native Go compound operator
+	assertContains(t, output, "x *= 2")
 }
 
 func TestCompoundAssignSlashEquals(t *testing.T) {
@@ -2863,8 +2863,8 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate x = x / 5
-	assertContains(t, output, "x = x / 5")
+	// Should generate native Go compound operator
+	assertContains(t, output, "x /= 5")
 }
 
 func TestIndexCompoundAssign(t *testing.T) {
@@ -2877,10 +2877,10 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate arr[i] = arr[i] op value
-	assertContains(t, output, "arr[0] = arr[0] + 5")
-	assertContains(t, output, "arr[1] = arr[1] - 10")
-	assertContains(t, output, "arr[2] = arr[2] * 2")
+	// Should generate native Go compound operators
+	assertContains(t, output, "arr[0] += 5")
+	assertContains(t, output, "arr[1] -= 10")
+	assertContains(t, output, "arr[2] *= 2")
 }
 
 func TestOptionalValueType(t *testing.T) {
@@ -5113,11 +5113,11 @@ end`
 
 	output := compile(t, input)
 
-	// Should generate expanded compound assignments
-	assertContains(t, output, `c._count = c._count + 1`)
-	assertContains(t, output, `c._count = c._count - 1`)
-	assertContains(t, output, `c._count = c._count * 2`)
-	assertContains(t, output, `c._count = c._count / 2`)
+	// Should generate native Go compound operators
+	assertContains(t, output, `c._count += 1`)
+	assertContains(t, output, `c._count -= 1`)
+	assertContains(t, output, `c._count *= 2`)
+	assertContains(t, output, `c._count /= 2`)
 }
 
 // BUG-028: to_s method calls should map to String()

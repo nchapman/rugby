@@ -345,11 +345,9 @@ func (g *Generator) genOrAssignStmt(s *ast.OrAssignStmt) {
 func (g *Generator) genCompoundAssignStmt(s *ast.CompoundAssignStmt) {
 	g.writeIndent()
 	g.buf.WriteString(s.Name)
-	g.buf.WriteString(" = ")
-	g.buf.WriteString(s.Name)
 	g.buf.WriteString(" ")
 	g.buf.WriteString(s.Op)
-	g.buf.WriteString(" ")
+	g.buf.WriteString("= ")
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
 }
@@ -755,7 +753,7 @@ func (g *Generator) genInstanceVarOrAssign(s *ast.InstanceVarOrAssign) {
 }
 
 // genInstanceVarCompoundAssign generates code for @name += value, @name -= value, etc.
-// This expands to: recv.field = recv.field + value
+// This generates: recv.field += value (using Go's native compound operators)
 func (g *Generator) genInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAssign) {
 	if g.currentClass == "" {
 		g.addError(fmt.Errorf("instance variable '@%s' %s= used outside of class context", s.Name, s.Op))
@@ -770,14 +768,12 @@ func (g *Generator) genInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAssig
 	}
 	field := fmt.Sprintf("%s.%s", recv, goFieldName)
 
-	// Generate: field = field op value
+	// Generate: field += value (using native compound operator)
 	g.writeIndent()
-	g.buf.WriteString(field)
-	g.buf.WriteString(" = ")
 	g.buf.WriteString(field)
 	g.buf.WriteString(" ")
 	g.buf.WriteString(s.Op)
-	g.buf.WriteString(" ")
+	g.buf.WriteString("= ")
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
 }
@@ -807,14 +803,12 @@ func (g *Generator) genClassVarCompoundAssign(s *ast.ClassVarCompoundAssign) {
 	// Class variables are package-level vars named _ClassName_varname
 	varName := fmt.Sprintf("_%s_%s", g.currentClass, s.Name)
 
-	// Generate: varName = varName op value
+	// Generate: varName += value (using native compound operator)
 	g.writeIndent()
-	g.buf.WriteString(varName)
-	g.buf.WriteString(" = ")
 	g.buf.WriteString(varName)
 	g.buf.WriteString(" ")
 	g.buf.WriteString(s.Op)
-	g.buf.WriteString(" ")
+	g.buf.WriteString("= ")
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
 }
@@ -911,19 +905,15 @@ func (g *Generator) genIndexAssignStmt(s *ast.IndexAssignStmt) {
 }
 
 // genIndexCompoundAssignStmt generates code for index compound assignment: arr[idx] += value
-// This generates: arr[idx] = arr[idx] + value
+// This generates: arr[idx] += value (using Go's native compound operators)
 func (g *Generator) genIndexCompoundAssignStmt(s *ast.IndexCompoundAssignStmt) {
 	g.writeIndent()
 	g.genExpr(s.Left)
 	g.buf.WriteString("[")
 	g.genExpr(s.Index)
-	g.buf.WriteString("] = ")
-	g.genExpr(s.Left)
-	g.buf.WriteString("[")
-	g.genExpr(s.Index)
 	g.buf.WriteString("] ")
 	g.buf.WriteString(s.Op)
-	g.buf.WriteString(" ")
+	g.buf.WriteString("= ")
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
 }
@@ -1033,6 +1023,41 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 		g.genExpr(s.Value)
 	}
 	g.buf.WriteString("\n")
+
+	// Track non-negative variables for native array indexing optimization
+	g.trackNonNegativeAssign(s.Name, s.Value)
+}
+
+// trackNonNegativeAssign marks a variable as non-negative if the assigned value is provably >= 0.
+func (g *Generator) trackNonNegativeAssign(name string, value ast.Expression) {
+	if g.isNonNegativeValue(value) {
+		g.nonNegativeVars[name] = true
+	} else {
+		// Variable might be negative, remove from tracking
+		delete(g.nonNegativeVars, name)
+	}
+}
+
+// isNonNegativeValue checks if an expression is known to produce a non-negative value.
+func (g *Generator) isNonNegativeValue(expr ast.Expression) bool {
+	switch e := expr.(type) {
+	case *ast.IntLit:
+		return e.Value >= 0
+	case *ast.BinaryExpr:
+		// Addition and multiplication of non-negative values are non-negative
+		if e.Op == "+" || e.Op == "*" {
+			return g.isNonNegativeValue(e.Left) && g.isNonNegativeValue(e.Right)
+		}
+		return false
+	case *ast.CallExpr:
+		// len(x) is always non-negative
+		if fn, ok := e.Func.(*ast.Ident); ok && fn.Name == "len" {
+			return true
+		}
+		return false
+	default:
+		return false
+	}
 }
 
 // getShiftLeftTargetType returns the Go type for ShiftLeft type assertion if needed.
@@ -2011,6 +2036,10 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 	g.vars[s.Var] = "" // loop variable, type unknown
 	if s.Var2 != "" {
 		g.vars[s.Var2] = "" // second loop variable
+		// In two-variable form over arrays, first var is the index (always non-negative)
+		if !strings.HasPrefix(iterType, "map[") && !strings.HasPrefix(iterType, "Map<") {
+			g.nonNegativeVars[s.Var] = true
+		}
 	}
 
 	g.enterLoop()
@@ -2091,6 +2120,8 @@ func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.
 		g.buf.WriteString(" := range ")
 		g.genExpr(r.End)
 		g.buf.WriteString(" {\n")
+		// Loop variable starting from 0 is always non-negative
+		g.nonNegativeVars[varName] = true
 	} else {
 		// Generate: for i := start; i <= end; i++ { ... }
 		// or:       for i := start; i < end; i++ { ... } (exclusive)
@@ -2112,6 +2143,11 @@ func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.
 	}
 
 	g.vars[varName] = "Int" // range loop variable is always Int
+
+	// Track loop variable as non-negative if start is non-negative
+	if g.isNonNegativeValue(r.Start) {
+		g.nonNegativeVars[varName] = true
+	}
 
 	g.enterLoop()
 	g.indent++

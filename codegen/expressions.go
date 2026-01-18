@@ -1633,6 +1633,33 @@ func (g *Generator) shouldUseNativeIndex(expr ast.Expression) bool {
 		return e.Value >= 0
 	case *ast.StringLit:
 		return true
+	case *ast.Ident:
+		// Check if this variable is known to be non-negative
+		return g.nonNegativeVars[e.Name]
+	case *ast.BinaryExpr:
+		// Binary expressions with non-negative operands and safe operators
+		// are also non-negative (e.g., i + 1, i * 2)
+		if e.Op == "+" || e.Op == "*" {
+			return g.isNonNegativeExpr(e.Left) && g.isNonNegativeExpr(e.Right)
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+// isNonNegativeExpr checks if an expression is known to be non-negative.
+func (g *Generator) isNonNegativeExpr(expr ast.Expression) bool {
+	switch e := expr.(type) {
+	case *ast.IntLit:
+		return e.Value >= 0
+	case *ast.Ident:
+		return g.nonNegativeVars[e.Name]
+	case *ast.BinaryExpr:
+		if e.Op == "+" || e.Op == "*" {
+			return g.isNonNegativeExpr(e.Left) && g.isNonNegativeExpr(e.Right)
+		}
+		return false
 	default:
 		return false
 	}
@@ -5645,8 +5672,6 @@ func (g *Generator) genStdLibPropertyMethod(sel *ast.SelectorExpr) bool {
 }
 
 func (g *Generator) genSpawnExpr(e *ast.SpawnExpr) {
-	g.needsRuntime = true
-
 	// spawn { expr } or spawn do ... end
 	// Variables from enclosing scope are captured by reference (closure semantics)
 
@@ -5654,17 +5679,19 @@ func (g *Generator) genSpawnExpr(e *ast.SpawnExpr) {
 	isVoid := g.isBlockVoid(e.Block.Body)
 
 	if isVoid {
-		// Void block - use SpawnVoid (fire-and-forget)
-		g.buf.WriteString("runtime.SpawnVoid(func() {\n")
+		// Void block - inline to bare go statement (fire-and-forget)
+		// No runtime import needed for this case
+		g.buf.WriteString("go func() {\n")
 		g.indent++
 		for _, stmt := range e.Block.Body {
 			g.genStatement(stmt)
 		}
 		g.indent--
 		g.writeIndent()
-		g.buf.WriteString("})")
+		g.buf.WriteString("}()")
 	} else {
 		// Value-returning block - use Spawn and return Task<T>
+		g.needsRuntime = true
 		returnType := g.inferBlockBodyReturnType(e.Block.Body)
 
 		g.buf.WriteString("runtime.Spawn(func() ")
