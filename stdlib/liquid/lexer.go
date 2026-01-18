@@ -274,6 +274,9 @@ func (l *lexer) scanExpression(line, col int) token {
 		}
 		l.readChar()
 		return token{typ: tokenGt, literal: ">", line: line, column: col}
+	case '-':
+		l.readChar()
+		return token{typ: tokenMinus, literal: "-", line: line, column: col}
 	case '"', '\'':
 		return l.scanString()
 	default:

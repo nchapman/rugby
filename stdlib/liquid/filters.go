@@ -5,6 +5,7 @@ import (
 	"html"
 	"reflect"
 	"strings"
+	"unicode/utf8"
 )
 
 // FilterFunc is the signature for filter functions.
@@ -14,10 +15,11 @@ type FilterFunc func(input any, args ...any) any
 // filters is the global filter registry.
 var filters = map[string]FilterFunc{
 	// String filters
-	"upcase":   filterUpcase,
-	"downcase": filterDowncase,
-	"strip":    filterStrip,
-	"escape":   filterEscape,
+	"upcase":     filterUpcase,
+	"downcase":   filterDowncase,
+	"capitalize": filterCapitalize,
+	"strip":      filterStrip,
+	"escape":     filterEscape,
 
 	// Array filters
 	"first":   filterFirst,
@@ -42,6 +44,15 @@ func filterUpcase(input any, args ...any) any {
 
 func filterDowncase(input any, args ...any) any {
 	return strings.ToLower(toString(input))
+}
+
+func filterCapitalize(input any, args ...any) any {
+	s := toString(input)
+	if len(s) == 0 {
+		return s
+	}
+	r, size := utf8.DecodeRuneInString(s)
+	return strings.ToUpper(string(r)) + strings.ToLower(s[size:])
 }
 
 func filterStrip(input any, args ...any) any {

@@ -44,6 +44,9 @@ const (
 	tokenLe // <=
 	tokenGe // >=
 
+	// Arithmetic operators
+	tokenMinus // -
+
 	// Assignment
 	tokenAssign // =
 

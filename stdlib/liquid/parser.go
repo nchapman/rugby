@@ -910,6 +910,22 @@ func (p *parser) parseAtom() (Expression, error) {
 		p.nextToken()
 		return expr, nil
 
+	case tokenMinus:
+		// Unary minus for negative numbers
+		p.nextToken()
+		if p.curToken.typ == tokenInt {
+			value := -parseInt(p.curToken.literal)
+			p.nextToken()
+			return &LiteralExpr{Value: value, Line: line, Column: column}, nil
+		}
+		if p.curToken.typ == tokenFloat {
+			value := -parseFloat(p.curToken.literal)
+			p.nextToken()
+			return &LiteralExpr{Value: value, Line: line, Column: column}, nil
+		}
+		return nil, newParseError(p.curToken.line, p.curToken.column,
+			"expected number after '-', got %v", p.curToken.literal)
+
 	default:
 		return nil, newParseError(line, column,
 			"unexpected token in expression: %v", p.curToken.literal)
