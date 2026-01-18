@@ -1,6 +1,6 @@
 #@ session: lambdas
 #@ description: Test lambda expressions
-#@ skip: needs REPL state improvements
+#@ skip: lambda syntax and .call method not supported
 
 # Simple lambda with braces
 >>> double = -> (x: Int) { x * 2 }

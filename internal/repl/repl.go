@@ -632,6 +632,24 @@ func (m *Model) isInterfaceDef(input string) bool {
 	return strings.HasPrefix(trimmed, "interface ") || strings.HasPrefix(trimmed, "pub interface ")
 }
 
+// isStructDef checks if the input is a struct definition.
+func (m *Model) isStructDef(input string) bool {
+	trimmed := strings.TrimSpace(input)
+	return strings.HasPrefix(trimmed, "struct ") || strings.HasPrefix(trimmed, "pub struct ")
+}
+
+// isEnumDef checks if the input is an enum definition.
+func (m *Model) isEnumDef(input string) bool {
+	trimmed := strings.TrimSpace(input)
+	return strings.HasPrefix(trimmed, "enum ") || strings.HasPrefix(trimmed, "pub enum ")
+}
+
+// isModuleDef checks if the input is a module definition.
+func (m *Model) isModuleDef(input string) bool {
+	trimmed := strings.TrimSpace(input)
+	return strings.HasPrefix(trimmed, "module ") || strings.HasPrefix(trimmed, "pub module ")
+}
+
 // truncateOutput keeps output to a maximum of 100 lines.
 func (m *Model) truncateOutput() {
 	if len(m.output) > 100 {
@@ -689,6 +707,24 @@ func (m *Model) eval(input string, ctx evalContext) evalResult {
 	}
 
 	if m.isInterfaceDef(input) {
+		result.addFunction = input
+		result.output = successStyle.Render("(defined)")
+		return result
+	}
+
+	if m.isStructDef(input) {
+		result.addFunction = input
+		result.output = successStyle.Render("(defined)")
+		return result
+	}
+
+	if m.isEnumDef(input) {
+		result.addFunction = input
+		result.output = successStyle.Render("(defined)")
+		return result
+	}
+
+	if m.isModuleDef(input) {
 		result.addFunction = input
 		result.output = successStyle.Render("(defined)")
 		return result

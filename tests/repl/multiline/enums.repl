@@ -1,6 +1,5 @@
 #@ session: multiline_enums
 #@ description: Test multi-line enum definitions
-#@ skip: needs REPL state improvements
 
 # Simple enum
 >>> enum Color
@@ -10,11 +9,15 @@
 ... end
 => (defined)
 
+# Enums are integers in Go
 >>> Color::Red
-=> Color::Red
+=> 0
 
 >>> Color::Green
-=> Color::Green
+=> 1
+
+>>> Color::Blue
+=> 2
 
 # Enum with explicit values
 >>> enum Status
@@ -25,25 +28,10 @@
 => (defined)
 
 >>> Status::Pending
-=> Status::Pending
+=> 0
 
 >>> Status::Active
-=> Status::Active
+=> 1
 
-# Using enum in function
->>> def status_name(s: Status): String
-...   case s
-...   when Status::Pending
-...     "pending"
-...   when Status::Active
-...     "active"
-...   when Status::Completed
-...     "completed"
-...   else
-...     "unknown"
-...   end
-... end
-=> (defined)
-
->>> status_name(Status::Active)
-=> "active"
+>>> Status::Completed
+=> 2

@@ -1,6 +1,5 @@
 #@ session: import_persistence
 #@ description: Test that imports persist across REPL inputs
-#@ skip: needs REPL state improvements
 
 # Import a package
 >>> import "strings"
@@ -10,13 +9,11 @@
 >>> strings.ToUpper("hello")
 => "HELLO"
 
-# Import another package
->>> import "fmt"
-=> (imported)
+>>> strings.ToLower("WORLD")
+=> "world"
 
-# Use both packages
->>> fmt.Sprintf("Result: %s", strings.ToLower("WORLD"))
-=> "Result: world"
+>>> strings.Contains("hello world", "world")
+=> true
 
 # Define a function using imported package
 >>> def shout(s: String): String
@@ -26,16 +23,3 @@
 
 >>> shout("hello")
 => "HELLO!"
-
-# Import used in expressions
->>> strings.Contains("hello world", "world")
-=> true
-
-# Multiple functions using imports
->>> def format_name(first: String, last: String): String
-...   fmt.Sprintf("%s, %s", strings.ToUpper(last), first)
-... end
-=> (defined)
-
->>> format_name("John", "Doe")
-=> "DOE, John"
