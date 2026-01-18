@@ -31,14 +31,14 @@ Refactoring work to make the compiler simpler, more elegant, and maintainable.
   - `goFuncName(name, isPub)` - handles function naming
 - [x] Consolidated 8 pre-pass loops into 2 loops - single type switch over definitions collects all metadata in one traversal
 
+### AST Package
+- [x] Evaluated assignment type consolidation - decided to keep separate types (`AssignStmt`, `IndexAssignStmt`, `SelectorAssignStmt`) as they accurately model the domain and codegen is already minimal (10-39 lines each)
+
 ---
 
 ## Pending
 
-### Runtime Package (do last)
+### Runtime Package
 - [ ] Delete redundant type-specific functions - `MapEachString`, `MapKeysString`, etc. can be replaced by generics
 - [ ] Consolidate coalesce and optional helpers - `CoalesceInt`, `CoalesceString`, etc. should be unified
 - [ ] Consider splitting `array.go` (~600 lines) into smaller, focused files
-
-### AST Package (low priority)
-- [ ] Consider consolidating assignment types - `AssignStmt`, `IndexAssignStmt`, `SelectorAssignStmt` have overlapping structures
