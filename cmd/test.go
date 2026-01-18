@@ -52,6 +52,6 @@ Examples:
 }
 
 func init() {
-	testCmd.Flags().BoolVarP(&testVerbose, "verbose", "V", false, "verbose test output (go test -v)")
+	testCmd.Flags().BoolVarP(&testVerbose, "verbose", "v", false, "verbose test output (go test -v)")
 	rootCmd.AddCommand(testCmd)
 }

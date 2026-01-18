@@ -3,8 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -32,18 +30,10 @@ Examples:
   rugby format --check ./...   # Check if all files are formatted`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Collect all files to format
-		var files []string
-		for _, arg := range args {
-			expanded, err := expandPath(arg)
-			if err != nil {
-				return err
-			}
-			files = append(files, expanded...)
+		files, err := ExpandRgPaths(args)
+		if err != nil {
+			return err
 		}
-
-		// Deduplicate files (e.g., if user runs `rugby format . main.rg`)
-		files = deduplicateFiles(files)
 
 		if len(files) == 0 {
 			logger.Info("no .rg files found")
@@ -67,91 +57,6 @@ Examples:
 
 		return nil
 	},
-}
-
-// deduplicateFiles removes duplicate file paths.
-func deduplicateFiles(files []string) []string {
-	seen := make(map[string]bool)
-	var result []string
-	for _, f := range files {
-		abs, err := filepath.Abs(f)
-		if err != nil {
-			abs = f // fallback to original if Abs fails
-		}
-		if !seen[abs] {
-			seen[abs] = true
-			result = append(result, f)
-		}
-	}
-	return result
-}
-
-// expandPath expands a path argument into a list of .rg files.
-func expandPath(path string) ([]string, error) {
-	// Handle ./... recursive pattern
-	if path == "./..." || strings.HasSuffix(path, "/...") {
-		baseDir := "."
-		if path != "./..." {
-			baseDir = strings.TrimSuffix(path, "/...")
-		}
-		return findRgFilesRecursive(baseDir)
-	}
-
-	info, err := os.Stat(path)
-	if err != nil {
-		return nil, fmt.Errorf("stat %s: %w", path, err)
-	}
-
-	// If it's a directory, find .rg files in it (non-recursive)
-	if info.IsDir() {
-		return findRgFilesInDir(path)
-	}
-
-	// Single file - must be .rg
-	if !strings.HasSuffix(path, ".rg") {
-		return nil, fmt.Errorf("expected .rg file, got: %s", path)
-	}
-
-	return []string{path}, nil
-}
-
-// findRgFilesInDir finds .rg files in a directory (non-recursive).
-func findRgFilesInDir(dir string) ([]string, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("reading directory %s: %w", dir, err)
-	}
-
-	var files []string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".rg") {
-			files = append(files, filepath.Join(dir, entry.Name()))
-		}
-	}
-	return files, nil
-}
-
-// findRgFilesRecursive finds all .rg files recursively.
-func findRgFilesRecursive(root string) ([]string, error) {
-	var files []string
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		// Skip hidden directories and .rugby build directory
-		if d.IsDir() {
-			name := d.Name()
-			if strings.HasPrefix(name, ".") || name == "vendor" || name == "node_modules" {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if strings.HasSuffix(path, ".rg") {
-			files = append(files, path)
-		}
-		return nil
-	})
-	return files, err
 }
 
 // formatFile formats a single file, returns true if file was changed.

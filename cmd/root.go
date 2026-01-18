@@ -44,6 +44,9 @@ Commands:
 		}
 		// If first arg looks like a .rg file, run it
 		if len(args) > 0 && strings.HasSuffix(args[0], ".rg") {
+			if err := ValidateRgFile(args[0]); err != nil {
+				return err
+			}
 			return runFile(args[0], nil)
 		}
 		return cmd.Help()

@@ -15,6 +15,10 @@ Pass arguments to the program after --:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		file := args[0]
 
+		if err := ValidateRgFile(file); err != nil {
+			return err
+		}
+
 		// Arguments after -- go to the program
 		var programArgs []string
 		if dashIndex := cmd.ArgsLenAtDash(); dashIndex >= 0 {

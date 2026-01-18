@@ -3,7 +3,6 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -13,29 +12,38 @@ import (
 var outputName string
 
 var buildCmd = &cobra.Command{
-	Use:   "build <file.rg> [files...]",
+	Use:   "build <path> [paths...]",
 	Short: "Build an optimized binary",
 	Long: `Compiles Rugby files and produces a standalone binary in the current directory.
 
+Accepts files, directories, or patterns:
+  file.rg    Build a specific file
+  dir/       Build all .rg files in directory (non-recursive)
+  ./...      Build all .rg files recursively
+
 Examples:
   rugby build main.rg              # Produces ./main
-  rugby build main.rg -o myapp     # Produces ./myapp`,
+  rugby build main.rg -o myapp     # Produces ./myapp
+  rugby build src/                 # Build all .rg files in src/
+  rugby build ./...                # Build all .rg files recursively`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// Validate all files have .rg extension
-		for _, f := range args {
-			if !strings.HasSuffix(f, ".rg") {
-				return fmt.Errorf("expected .rg file, got: %s", f)
-			}
+		files, err := ExpandRgPaths(args)
+		if err != nil {
+			return err
 		}
 
-		project, err := builder.FindProjectFrom(args[0])
+		if len(files) == 0 {
+			return fmt.Errorf("no .rg files found")
+		}
+
+		project, err := builder.FindProjectFrom(files[0])
 		if err != nil {
 			return err
 		}
 
 		b := builder.New(project, builder.WithVerbose(verbose), builder.WithColorMode(getColorMode()))
-		return b.Build(args, outputName)
+		return b.Build(files, outputName)
 	},
 }
 

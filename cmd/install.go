@@ -41,7 +41,7 @@ func runInstall() error {
 
 	// We need a go.mod in .rugby/gen/ for go mod download to work.
 	// Create a minimal builder just to set up the gen directory.
-	b := builder.New(project, builder.WithVerbose(verbose))
+	b := builder.New(project, builder.WithVerbose(verbose), builder.WithColorMode(getColorMode()))
 	if err := b.SetupGenDir(); err != nil {
 		return fmt.Errorf("failed to set up gen directory: %w", err)
 	}
