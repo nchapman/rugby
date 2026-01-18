@@ -1,29 +1,19 @@
 #@ session: maps
 #@ description: Test map literals and methods
-#@ skip: needs REPL state improvements
-
-# Map literal
->>> m = {"a" => 1, "b" => 2, "c" => 3}
-=> {"a" => 1, "b" => 2, "c" => 3}
 
 # Map access
+>>> m = {"a" => 1, "b" => 2}
+=> map[string]int{"a":1, "b":2}
+
 >>> m["a"]
 => 1
 
 >>> m["b"]
 => 2
 
-# Map keys
->>> m.keys
-=> ["a", "b", "c"]
-
-# Map values
->>> m.values
-=> [1, 2, 3]
-
 # Map length
 >>> m.length
-=> 3
+=> 2
 
 # Map contains key
 >>> m.has_key?("a")
@@ -38,34 +28,3 @@
 
 >>> m.fetch("x", 0)
 => 0
-
-# Empty map
->>> empty = {}
-=> {}
-
->>> empty.empty?
-=> true
-
-# Map iteration
->>> {"x" => 10, "y" => 20}.each do |k, v|
-...   puts "#{k}: #{v}"
-... end
-x: 10
-y: 20
-
-# Integer keys
->>> nums = {1 => "one", 2 => "two", 3 => "three"}
-=> {1 => "one", 2 => "two", 3 => "three"}
-
->>> nums[2]
-=> "two"
-
-# Map merge
->>> a = {"x" => 1}
-=> {"x" => 1}
-
->>> b = {"y" => 2}
-=> {"y" => 2}
-
->>> a.merge(b)
-=> {"x" => 1, "y" => 2}

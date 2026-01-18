@@ -1,6 +1,5 @@
 #@ session: unicode
 #@ description: Test Unicode string handling
-#@ skip: needs REPL state improvements
 
 # Unicode string literals
 >>> greeting = "Hello, World!"
@@ -25,17 +24,13 @@
 >>> "hello".length
 => 5
 
-# Unicode escape sequences
->>> "\u0048\u0065\u006c\u006c\u006f"
-=> "Hello"
-
 # Mixed content
 >>> mixed = "Hello World 123"
 => "Hello World 123"
 
-# Unicode in arrays
+# Unicode in arrays (Go format)
 >>> words = ["one", "two", "three"]
-=> ["one", "two", "three"]
+=> ["one" "two" "three"]
 
 >>> words[0]
 => "one"

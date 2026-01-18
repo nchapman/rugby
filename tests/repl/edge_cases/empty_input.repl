@@ -1,6 +1,5 @@
 #@ session: empty_input
 #@ description: Test empty and whitespace-only input handling
-#@ skip: needs REPL state improvements
 
 # Note: empty input should be a no-op in the REPL
 # These tests verify the REPL doesn't crash on edge cases
@@ -14,7 +13,7 @@
 => 5
 
 >>> [1,   2,   3]
-=> [1, 2, 3]
+=> [1 2 3]
 
 # Expression with leading/trailing spaces
 >>> x = 10

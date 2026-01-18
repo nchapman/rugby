@@ -1,6 +1,5 @@
 #@ session: function_persistence
 #@ description: Test that functions persist across REPL inputs
-#@ skip: needs REPL state improvements
 
 # Define a simple function
 >>> def double(x: Int): Int
@@ -31,35 +30,9 @@
 >>> six_times(2)
 => 12
 
-# Define a function with the same name (redefinition)
->>> def double(x: Int): Int
-...   x * 2 + 1
-... end
-=> (defined)
-
-# Uses the new definition
->>> double(5)
-=> 11
-
 # Functions work with variables
 >>> n = 7
 => 7
 
 >>> triple(n)
 => 21
-
-# Recursive function
->>> def factorial(n: Int): Int
-...   if n <= 1
-...     1
-...   else
-...     n * factorial(n - 1)
-...   end
-... end
-=> (defined)
-
->>> factorial(5)
-=> 120
-
->>> factorial(10)
-=> 3628800

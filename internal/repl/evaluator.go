@@ -95,6 +95,7 @@ func (e *Evaluator) Reset() {
 	e.imports = nil
 	e.funcs = nil
 	e.stmts = nil
+	e.counter = 0
 }
 
 // State returns the current accumulated state for debugging.

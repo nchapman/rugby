@@ -801,8 +801,18 @@ func (m *Model) buildProgramFromContext(input string, ctx evalContext) string {
 	}
 
 	// Prior statements (for variable persistence)
+	// Track variables so we can suppress "declared and not used" errors
+	var declaredVars []string
 	for _, stmt := range ctx.statements {
 		buf.WriteString(stmt + "\n")
+		if varName := m.getAssignmentVar(stmt); varName != "" {
+			declaredVars = append(declaredVars, varName)
+		}
+	}
+
+	// Suppress unused variable errors for accumulated variables
+	for _, v := range declaredVars {
+		buf.WriteString("_ = " + v + "\n")
 	}
 
 	// New input - wrap expressions in p() to print

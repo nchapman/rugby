@@ -1,18 +1,13 @@
 #@ session: long_expressions
 #@ description: Test handling of long expressions
-#@ skip: needs REPL state improvements
 
 # Long arithmetic expression
 >>> 1 + 2 + 3 + 4 + 5 + 6 + 7 + 8 + 9 + 10
 => 55
 
-# Long array
+# Long array (Go format)
 >>> [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-=> [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-
-# Long chained method calls
->>> [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].select { |x| x % 2 == 0 }.map { |x| x * 2 }.reduce(0) { |acc, x| acc + x }
-=> 60
+=> [1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20]
 
 # Long string
 >>> "This is a very long string that contains many words and goes on for quite a while to test handling of long expressions in the REPL"

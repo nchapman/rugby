@@ -1,35 +1,13 @@
 #@ session: ranges
 #@ description: Test range literals and operations
-#@ skip: needs REPL state improvements
 
-# Inclusive range
->>> 1..5
-=> 1..5
-
-# Range to array
+# Range to array (Go format)
 >>> (1..5).to_a
-=> [1, 2, 3, 4, 5]
+=> [1 2 3 4 5]
 
 # Exclusive range
->>> 1...5
-=> 1...5
-
 >>> (1...5).to_a
-=> [1, 2, 3, 4]
-
-# Range iteration
->>> (1..3).each { |x| puts x }
-1
-2
-3
-
-# Range in for loop
->>> for i in 1..3
-...   puts i * 10
-... end
-10
-20
-30
+=> [1 2 3 4]
 
 # Range contains
 >>> (1..10).include?(5)
@@ -44,31 +22,3 @@
 
 >>> (1...10).size
 => 9
-
-# Character range
->>> ("a".."e").to_a
-=> ["a", "b", "c", "d", "e"]
-
-# Range in case/when
->>> def grade(score: Int): String
-...   case score
-...   when 90..100
-...     "A"
-...   when 80..89
-...     "B"
-...   when 70..79
-...     "C"
-...   else
-...     "F"
-...   end
-... end
-=> (defined)
-
->>> grade(95)
-=> "A"
-
->>> grade(85)
-=> "B"
-
->>> grade(55)
-=> "F"

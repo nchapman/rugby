@@ -1,6 +1,6 @@
 #@ session: multiline_control_flow
 #@ description: Test multi-line control flow constructs
-#@ skip: needs REPL state improvements
+#@ skip: if/elsif/else as expression not returning properly
 
 # Multi-line if/elsif/else
 >>> def describe(n: Int): String

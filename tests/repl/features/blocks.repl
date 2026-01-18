@@ -1,6 +1,6 @@
 #@ session: blocks
 #@ description: Test block iteration methods
-#@ skip: needs REPL state improvements
+#@ skip: block syntax not parsing in REPL context
 
 # each
 >>> [1, 2, 3].each { |x| puts x }

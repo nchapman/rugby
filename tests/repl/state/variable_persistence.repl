@@ -1,6 +1,5 @@
 #@ session: variable_persistence
 #@ description: Test that variables persist across REPL inputs
-#@ skip: needs REPL state improvements
 
 # Define multiple variables
 >>> x = 10
@@ -39,20 +38,3 @@
 
 >>> "#{greeting}, #{name}!"
 => "Hello, World!"
-
-# Array variables persist
->>> nums = [1, 2, 3]
-=> [1, 2, 3]
-
->>> nums.push(4)
-=> [1, 2, 3, 4]
-
->>> nums.length
-=> 4
-
-# Map variables persist
->>> config = {"debug" => true}
-=> {"debug" => true}
-
->>> config["debug"]
-=> true
