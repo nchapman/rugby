@@ -129,6 +129,65 @@ func (f *Formatter) preMarkStatementComments(stmt ast.Statement) {
 	case *ast.ReturnStmt:
 		f.markCommentGroupEmitted(s.Doc)
 		f.markCommentGroupEmitted(s.Comment)
+	// Phase 2: Type Declarations
+	case *ast.StructDecl:
+		f.markCommentGroupEmitted(s.Doc)
+		f.markCommentGroupEmitted(s.Comment)
+		for _, method := range s.Methods {
+			f.markCommentGroupEmitted(method.Doc)
+			f.markCommentGroupEmitted(method.Comment)
+			for _, bodyStmt := range method.Body {
+				f.preMarkStatementComments(bodyStmt)
+			}
+		}
+	case *ast.EnumDecl:
+		f.markCommentGroupEmitted(s.Doc)
+		f.markCommentGroupEmitted(s.Comment)
+	case *ast.ConstDecl:
+		f.markCommentGroupEmitted(s.Doc)
+		f.markCommentGroupEmitted(s.Comment)
+	case *ast.TypeAliasDecl:
+		f.markCommentGroupEmitted(s.Doc)
+		f.markCommentGroupEmitted(s.Comment)
+	case *ast.ModuleDecl:
+		f.markCommentGroupEmitted(s.Doc)
+		for _, method := range s.Methods {
+			f.markCommentGroupEmitted(method.Doc)
+			f.markCommentGroupEmitted(method.Comment)
+			for _, bodyStmt := range method.Body {
+				f.preMarkStatementComments(bodyStmt)
+			}
+		}
+		for _, cls := range s.Classes {
+			f.preMarkStatementComments(cls)
+		}
+	// Phase 4: Control Flow
+	case *ast.UntilStmt:
+		f.markCommentGroupEmitted(s.Doc)
+		f.markCommentGroupEmitted(s.Comment)
+		for _, bodyStmt := range s.Body {
+			f.preMarkStatementComments(bodyStmt)
+		}
+	case *ast.CaseTypeStmt:
+		f.markCommentGroupEmitted(s.Doc)
+		f.markCommentGroupEmitted(s.Comment)
+		for _, when := range s.WhenClauses {
+			for _, bodyStmt := range when.Body {
+				f.preMarkStatementComments(bodyStmt)
+			}
+		}
+		for _, bodyStmt := range s.Else {
+			f.preMarkStatementComments(bodyStmt)
+		}
+	case *ast.SelectStmt:
+		for _, c := range s.Cases {
+			for _, bodyStmt := range c.Body {
+				f.preMarkStatementComments(bodyStmt)
+			}
+		}
+		for _, bodyStmt := range s.Else {
+			f.preMarkStatementComments(bodyStmt)
+		}
 	}
 }
 
@@ -156,6 +215,69 @@ func (f *Formatter) getStatementLine(stmt ast.Statement) int {
 	case *ast.ExprStmt:
 		return s.Line
 	case *ast.ReturnStmt:
+		return s.Line
+	// Phase 2: Type Declarations
+	case *ast.StructDecl:
+		return s.Line
+	case *ast.EnumDecl:
+		return s.Line
+	case *ast.ConstDecl:
+		return s.Line
+	case *ast.TypeAliasDecl:
+		return s.Line
+	case *ast.ModuleDecl:
+		return s.Line
+	// Phase 4: Control Flow
+	case *ast.UntilStmt:
+		return s.Line
+	case *ast.CaseTypeStmt:
+		return s.Line
+	case *ast.MultiAssignStmt:
+		return s.Line
+	case *ast.MapDestructuringStmt:
+		return s.Line
+	case *ast.SelectStmt:
+		return s.Line
+	// Phase 5: Class Features
+	case *ast.AccessorDecl:
+		return s.Line
+	case *ast.ClassVarAssign:
+		return s.Line
+	case *ast.ClassVarCompoundAssign:
+		return s.Line
+	case *ast.IncludeStmt:
+		return s.Line
+	case *ast.InstanceVarAssign:
+		return s.Line
+	case *ast.InstanceVarOrAssign:
+		return s.Line
+	case *ast.InstanceVarCompoundAssign:
+		return s.Line
+	case *ast.SelectorAssignStmt:
+		return s.Line
+	case *ast.SelectorCompoundAssign:
+		return s.Line
+	// Phase 6: Concurrency
+	case *ast.GoStmt:
+		return s.Line
+	case *ast.ChanSendStmt:
+		return s.Line
+	// Additional statements
+	case *ast.OrAssignStmt:
+		return s.Line
+	case *ast.CompoundAssignStmt:
+		return s.Line
+	case *ast.IndexAssignStmt:
+		return s.Line
+	case *ast.IndexCompoundAssignStmt:
+		return s.Line
+	case *ast.BreakStmt:
+		return s.Line
+	case *ast.NextStmt:
+		return s.Line
+	case *ast.DeferStmt:
+		return s.Line
+	case *ast.PanicStmt:
 		return s.Line
 	default:
 		return 0
@@ -220,6 +342,55 @@ func (f *Formatter) formatStatement(stmt ast.Statement) {
 		f.formatInstanceVarAssign(s)
 	case *ast.InstanceVarOrAssign:
 		f.formatInstanceVarOrAssign(s)
+	// Phase 2: Type Declarations
+	case *ast.StructDecl:
+		f.formatStructDecl(s)
+	case *ast.EnumDecl:
+		f.formatEnumDecl(s)
+	case *ast.ConstDecl:
+		f.formatConstDecl(s)
+	case *ast.TypeAliasDecl:
+		f.formatTypeAliasDecl(s)
+	case *ast.ModuleDecl:
+		f.formatModuleDecl(s)
+	// Phase 4: Control Flow
+	case *ast.UntilStmt:
+		f.formatUntilStmt(s)
+	case *ast.CaseTypeStmt:
+		f.formatCaseTypeStmt(s)
+	case *ast.MultiAssignStmt:
+		f.formatMultiAssignStmt(s)
+	case *ast.MapDestructuringStmt:
+		f.formatMapDestructuringStmt(s)
+	case *ast.SelectStmt:
+		f.formatSelectStmt(s)
+	// Phase 5: Class Features
+	case *ast.AccessorDecl:
+		f.formatAccessorDecl(s)
+	case *ast.ClassVarAssign:
+		f.formatClassVarAssign(s)
+	case *ast.ClassVarCompoundAssign:
+		f.formatClassVarCompoundAssign(s)
+	case *ast.IncludeStmt:
+		f.formatIncludeStmt(s)
+	case *ast.InstanceVarCompoundAssign:
+		f.formatInstanceVarCompoundAssign(s)
+	case *ast.SelectorAssignStmt:
+		f.formatSelectorAssignStmt(s)
+	case *ast.SelectorCompoundAssign:
+		f.formatSelectorCompoundAssign(s)
+	// Phase 6: Concurrency
+	case *ast.GoStmt:
+		f.formatGoStmt(s)
+	case *ast.ChanSendStmt:
+		f.formatChanSendStmt(s)
+	// Additional statements
+	case *ast.PanicStmt:
+		f.formatPanicStmt(s)
+	default:
+		// Unhandled statement type - write a comment to make issue visible
+		f.writeIndent()
+		f.write(fmt.Sprintf("# unformatted: %T\n", stmt))
 	}
 }
 
@@ -232,6 +403,7 @@ func (f *Formatter) formatFuncDecl(fn *ast.FuncDecl) {
 	}
 	f.write("def ")
 	f.write(fn.Name)
+	f.formatTypeParams(fn.TypeParams)
 
 	if len(fn.Params) > 0 {
 		f.write("(")
@@ -264,10 +436,16 @@ func (f *Formatter) formatClassDecl(cls *ast.ClassDecl) {
 	}
 	f.write("class ")
 	f.write(cls.Name)
+	f.formatTypeParams(cls.TypeParams)
 
 	if len(cls.Embeds) > 0 {
 		f.write(" < ")
 		f.write(strings.Join(cls.Embeds, ", "))
+	}
+
+	if len(cls.Implements) > 0 {
+		f.write(" implements ")
+		f.write(strings.Join(cls.Implements, ", "))
 	}
 
 	f.formatTrailingComment(cls.Comment)
@@ -275,13 +453,37 @@ func (f *Formatter) formatClassDecl(cls *ast.ClassDecl) {
 
 	f.indent++
 
+	// Format includes
+	for _, inc := range cls.Includes {
+		f.writeIndent()
+		f.write("include ")
+		f.write(inc)
+		f.write("\n")
+	}
+
+	// Format accessors
+	for _, acc := range cls.Accessors {
+		f.formatAccessorDecl(acc)
+	}
+
+	// Format class variables
+	for _, cv := range cls.ClassVars {
+		f.writeIndent()
+		f.write("@@")
+		f.write(cv.Name)
+		f.write(" = ")
+		f.formatExpr(cv.Value)
+		f.write("\n")
+	}
+
 	// Format field declarations
 	for _, field := range cls.Fields {
 		f.formatFieldDecl(field)
 	}
 
-	// Add blank line between fields and methods if both exist
-	if len(cls.Fields) > 0 && len(cls.Methods) > 0 {
+	// Add blank line between fields/accessors and methods if both exist
+	hasPreContent := len(cls.Includes) > 0 || len(cls.Accessors) > 0 || len(cls.ClassVars) > 0 || len(cls.Fields) > 0
+	if hasPreContent && len(cls.Methods) > 0 {
 		f.write("\n")
 	}
 
@@ -318,6 +520,14 @@ func (f *Formatter) formatInterfaceDecl(iface *ast.InterfaceDecl) {
 	}
 	f.write("interface ")
 	f.write(iface.Name)
+	f.formatTypeParams(iface.TypeParams)
+
+	// Format parent interfaces for embedding
+	if len(iface.Parents) > 0 {
+		f.write(" < ")
+		f.write(strings.Join(iface.Parents, ", "))
+	}
+
 	f.formatTrailingComment(iface.Comment)
 	f.write("\n")
 
@@ -335,11 +545,17 @@ func (f *Formatter) formatInterfaceDecl(iface *ast.InterfaceDecl) {
 func (f *Formatter) formatMethodDecl(m *ast.MethodDecl) {
 	f.formatCommentGroup(m.Doc)
 	f.writeIndent()
-	if m.Pub {
+	if m.Private {
+		f.write("private ")
+	} else if m.Pub {
 		f.write("pub ")
 	}
 	f.write("def ")
+	if m.IsClassMethod {
+		f.write("self.")
+	}
 	f.write(m.Name)
+	f.formatTypeParams(m.TypeParams)
 
 	if len(m.Params) > 0 {
 		f.write("(")
@@ -388,10 +604,39 @@ func (f *Formatter) formatParams(params []*ast.Param) {
 		if i > 0 {
 			f.write(", ")
 		}
+		// Handle pattern destructuring: {name:, age:} : Type
+		if len(p.DestructurePairs) > 0 {
+			f.write("{")
+			for j, pair := range p.DestructurePairs {
+				if j > 0 {
+					f.write(", ")
+				}
+				f.write(pair.Key)
+				if pair.Variable != "" && pair.Variable != pair.Key {
+					f.write(": ")
+					f.write(pair.Variable)
+				} else {
+					f.write(":")
+				}
+			}
+			f.write("}")
+			if p.Type != "" {
+				f.write(": ")
+				f.write(p.Type)
+			}
+			continue
+		}
+		if p.Variadic {
+			f.write("*")
+		}
 		f.write(p.Name)
 		if p.Type != "" {
 			f.write(": ")
 			f.write(p.Type)
+		}
+		if p.DefaultValue != nil {
+			f.write(" = ")
+			f.formatExpr(p.DefaultValue)
 		}
 	}
 }
@@ -421,11 +666,11 @@ func (f *Formatter) formatIfStmt(s *ast.IfStmt) {
 	}
 
 	if s.AssignName != "" {
-		f.write("(")
+		// if-let syntax: if let name = expr
+		f.write("let ")
 		f.write(s.AssignName)
 		f.write(" = ")
 		f.formatExpr(s.AssignExpr)
-		f.write(")")
 	} else {
 		f.formatExpr(s.Cond)
 	}
@@ -482,6 +727,10 @@ func (f *Formatter) formatForStmt(s *ast.ForStmt) {
 	f.writeIndent()
 	f.write("for ")
 	f.write(s.Var)
+	if s.Var2 != "" {
+		f.write(", ")
+		f.write(s.Var2)
+	}
 	f.write(" in ")
 	f.formatExpr(s.Iterable)
 	f.formatTrailingComment(s.Comment)
@@ -768,6 +1017,94 @@ func (f *Formatter) formatExpr(expr ast.Expression) {
 		f.write(e.Name)
 	case *ast.BlockExpr:
 		f.formatBlockExpr(e)
+	// Phase 1: Core Expressions
+	case *ast.LambdaExpr:
+		f.formatLambdaExpr(e)
+	case *ast.BangExpr:
+		f.formatExpr(e.Expr)
+		f.write("!")
+	case *ast.NilCoalesceExpr:
+		f.formatExpr(e.Left)
+		f.write(" ?? ")
+		f.formatExpr(e.Right)
+	case *ast.RescueExpr:
+		f.formatRescueExpr(e)
+	case *ast.SafeNavExpr:
+		f.formatExpr(e.Receiver)
+		f.write("&.")
+		f.write(e.Selector)
+	case *ast.TernaryExpr:
+		f.formatExpr(e.Condition)
+		f.write(" ? ")
+		f.formatExpr(e.Then)
+		f.write(" : ")
+		f.formatExpr(e.Else)
+	// Phase 6: Concurrency expressions
+	case *ast.SpawnExpr:
+		f.write("spawn ")
+		f.formatBlockExpr(e.Block)
+	case *ast.AwaitExpr:
+		f.write("await ")
+		f.formatExpr(e.Task)
+	// Phase 7: Additional expressions
+	case *ast.StructLit:
+		f.formatStructLit(e)
+	case *ast.SetLit:
+		f.formatSetLit(e)
+	case *ast.RegexLit:
+		f.write("/")
+		f.write(e.Pattern)
+		f.write("/")
+		f.write(e.Flags)
+	case *ast.SplatExpr:
+		f.write("*")
+		f.formatExpr(e.Expr)
+	case *ast.DoubleSplatExpr:
+		f.write("**")
+		f.formatExpr(e.Expr)
+	case *ast.KeywordArg:
+		f.write(e.Name)
+		f.write(": ")
+		f.formatExpr(e.Value)
+	case *ast.ScopeExpr:
+		f.formatExpr(e.Left)
+		f.write("::")
+		f.write(e.Right)
+	case *ast.SuperExpr:
+		f.write("super")
+		if len(e.Args) > 0 {
+			f.write("(")
+			for i, arg := range e.Args {
+				if i > 0 {
+					f.write(", ")
+				}
+				f.formatExpr(arg)
+			}
+			f.write(")")
+		}
+	case *ast.TupleLit:
+		for i, elem := range e.Elements {
+			if i > 0 {
+				f.write(", ")
+			}
+			f.formatExpr(elem)
+		}
+	case *ast.ClassVar:
+		f.write("@@")
+		f.write(e.Name)
+	case *ast.SymbolToProcExpr:
+		f.write("&:")
+		f.write(e.Method)
+	case *ast.GoStructLit:
+		if e.Package != "" {
+			f.write(e.Package)
+			f.write(".")
+		}
+		f.write(e.Type)
+		f.write("{}")
+	default:
+		// Unhandled expression type - write a placeholder
+		f.write(fmt.Sprintf("/* unformatted: %T */", expr))
 	}
 }
 
@@ -849,9 +1186,9 @@ func (f *Formatter) formatBinaryExpr(e *ast.BinaryExpr) {
 // precedence returns the precedence level of an operator.
 func precedence(op string) int {
 	switch op {
-	case "or":
+	case "or", "||":
 		return 1
-	case "and":
+	case "and", "&&":
 		return 2
 	case "==", "!=":
 		return 3
@@ -944,16 +1281,35 @@ func (f *Formatter) formatInlineStatement(stmt ast.Statement) {
 				f.formatExpr(v)
 			}
 		}
+	case *ast.BreakStmt:
+		f.write("break")
+	case *ast.NextStmt:
+		f.write("next")
+	case *ast.AssignStmt:
+		f.write(s.Name)
+		if s.Type != "" {
+			f.write(": ")
+			f.write(s.Type)
+		}
+		f.write(" = ")
+		f.formatExpr(s.Value)
 	default:
-		// Fall back to regular formatting
-		f.formatStatement(stmt)
+		// For inline blocks, unsupported statements get a placeholder
+		// This shouldn't happen in well-formed code
+		f.write(fmt.Sprintf("/* inline: %T */", stmt))
 	}
 }
 
 // hasNestedBlocks checks if any statements contain nested blocks.
 func hasNestedBlocks(stmts []ast.Statement) bool {
 	for _, stmt := range stmts {
-		if s, ok := stmt.(*ast.ExprStmt); ok {
+		switch s := stmt.(type) {
+		case *ast.IfStmt, *ast.WhileStmt, *ast.ForStmt, *ast.CaseStmt,
+			*ast.LoopStmt, *ast.UntilStmt, *ast.CaseTypeStmt, *ast.SelectStmt,
+			*ast.ConcurrentlyStmt:
+			// These statements always require multi-line block format
+			return true
+		case *ast.ExprStmt:
 			if c, ok := s.Expr.(*ast.CallExpr); ok {
 				if c.Block != nil {
 					return true
@@ -984,4 +1340,517 @@ func escapeString(s string) string {
 		}
 	}
 	return buf.String()
+}
+
+// formatLambdaExpr formats a lambda expression.
+func (f *Formatter) formatLambdaExpr(l *ast.LambdaExpr) {
+	// Decide between {} (single expression) and do...end (multi-line)
+	isMultiLine := len(l.Body) > 1 || (len(l.Body) == 1 && hasNestedBlocks(l.Body))
+
+	if isMultiLine {
+		f.write("-> do")
+		if len(l.Params) > 0 {
+			f.write(" |")
+			f.formatLambdaParams(l.Params)
+			f.write("|")
+		}
+		f.write("\n")
+		f.indent++
+		f.formatBody(l.Body)
+		f.indent--
+		f.writeIndent()
+		f.write("end")
+	} else {
+		f.write("-> {")
+		if len(l.Params) > 0 {
+			f.write(" |")
+			f.formatLambdaParams(l.Params)
+			f.write("|")
+		}
+		if l.ReturnType != "" {
+			f.write(": ")
+			f.write(l.ReturnType)
+		}
+		if len(l.Body) == 1 {
+			f.write(" ")
+			f.formatInlineStatement(l.Body[0])
+		}
+		f.write(" }")
+	}
+}
+
+// formatLambdaParams formats lambda parameters with types.
+func (f *Formatter) formatLambdaParams(params []*ast.Param) {
+	for i, p := range params {
+		if i > 0 {
+			f.write(", ")
+		}
+		if p.Variadic {
+			f.write("*")
+		}
+		f.write(p.Name)
+		if p.Type != "" {
+			f.write(": ")
+			f.write(p.Type)
+		}
+		if p.DefaultValue != nil {
+			f.write(" = ")
+			f.formatExpr(p.DefaultValue)
+		}
+	}
+}
+
+// formatRescueExpr formats a rescue expression.
+func (f *Formatter) formatRescueExpr(r *ast.RescueExpr) {
+	f.formatExpr(r.Expr)
+	f.write(" rescue ")
+	if r.Block != nil {
+		// Block form: rescue => err do ... end
+		if r.ErrName != "" {
+			f.write("=> ")
+			f.write(r.ErrName)
+			f.write(" ")
+		}
+		f.formatBlockExpr(r.Block)
+	} else {
+		// Inline form: rescue default
+		f.formatExpr(r.Default)
+	}
+}
+
+// formatStructLit formats a struct literal.
+func (f *Formatter) formatStructLit(s *ast.StructLit) {
+	f.write(s.Name)
+	f.write("{")
+	for i, field := range s.Fields {
+		if i > 0 {
+			f.write(", ")
+		}
+		f.write(field.Name)
+		f.write(": ")
+		f.formatExpr(field.Value)
+	}
+	f.write("}")
+}
+
+// formatSetLit formats a set literal.
+func (f *Formatter) formatSetLit(s *ast.SetLit) {
+	f.write("Set")
+	if s.TypeHint != "" {
+		f.write("<")
+		f.write(s.TypeHint)
+		f.write(">")
+	}
+	f.write("{")
+	for i, elem := range s.Elements {
+		if i > 0 {
+			f.write(", ")
+		}
+		f.formatExpr(elem)
+	}
+	f.write("}")
+}
+
+// formatTypeParams formats type parameters for generics.
+func (f *Formatter) formatTypeParams(typeParams []*ast.TypeParam) {
+	if len(typeParams) == 0 {
+		return
+	}
+	f.write("<")
+	for i, tp := range typeParams {
+		if i > 0 {
+			f.write(", ")
+		}
+		f.write(tp.Name)
+		if tp.Constraint != "" {
+			f.write(": ")
+			f.write(tp.Constraint)
+		}
+	}
+	f.write(">")
+}
+
+// Phase 2: Type Declaration formatters
+
+// formatStructDecl formats a struct declaration.
+func (f *Formatter) formatStructDecl(s *ast.StructDecl) {
+	f.formatCommentGroup(s.Doc)
+	f.writeIndent()
+	if s.Pub {
+		f.write("pub ")
+	}
+	f.write("struct ")
+	f.write(s.Name)
+	f.formatTypeParams(s.TypeParams)
+	f.formatTrailingComment(s.Comment)
+	f.write("\n")
+
+	f.indent++
+	for _, field := range s.Fields {
+		f.writeIndent()
+		f.write(field.Name)
+		f.write(": ")
+		f.write(field.Type)
+		f.write("\n")
+	}
+
+	// Add blank line between fields and methods if both exist
+	if len(s.Fields) > 0 && len(s.Methods) > 0 {
+		f.write("\n")
+	}
+
+	for _, method := range s.Methods {
+		f.formatMethodDecl(method)
+	}
+	f.indent--
+
+	f.writeIndent()
+	f.writeLine("end")
+}
+
+// formatEnumDecl formats an enum declaration.
+func (f *Formatter) formatEnumDecl(e *ast.EnumDecl) {
+	f.formatCommentGroup(e.Doc)
+	f.writeIndent()
+	if e.Pub {
+		f.write("pub ")
+	}
+	f.write("enum ")
+	f.write(e.Name)
+	f.formatTrailingComment(e.Comment)
+	f.write("\n")
+
+	f.indent++
+	for _, val := range e.Values {
+		f.writeIndent()
+		f.write(val.Name)
+		if val.Value != nil {
+			f.write(" = ")
+			f.formatExpr(val.Value)
+		}
+		f.write("\n")
+	}
+	f.indent--
+
+	f.writeIndent()
+	f.writeLine("end")
+}
+
+// formatConstDecl formats a constant declaration.
+func (f *Formatter) formatConstDecl(c *ast.ConstDecl) {
+	f.formatCommentGroup(c.Doc)
+	f.writeIndent()
+	f.write("const ")
+	f.write(c.Name)
+	if c.Type != "" {
+		f.write(": ")
+		f.write(c.Type)
+	}
+	f.write(" = ")
+	f.formatExpr(c.Value)
+	f.formatTrailingComment(c.Comment)
+	f.write("\n")
+}
+
+// formatTypeAliasDecl formats a type alias declaration.
+func (f *Formatter) formatTypeAliasDecl(t *ast.TypeAliasDecl) {
+	f.formatCommentGroup(t.Doc)
+	f.writeIndent()
+	if t.Pub {
+		f.write("pub ")
+	}
+	f.write("type ")
+	f.write(t.Name)
+	f.write(" = ")
+	f.write(t.Type)
+	f.formatTrailingComment(t.Comment)
+	f.write("\n")
+}
+
+// formatModuleDecl formats a module declaration.
+func (f *Formatter) formatModuleDecl(m *ast.ModuleDecl) {
+	f.formatCommentGroup(m.Doc)
+	f.writeIndent()
+	if m.Pub {
+		f.write("pub ")
+	}
+	f.write("module ")
+	f.write(m.Name)
+	f.write("\n")
+
+	f.indent++
+
+	// Format accessors
+	for _, acc := range m.Accessors {
+		f.formatAccessorDecl(acc)
+	}
+
+	// Format methods
+	for _, method := range m.Methods {
+		f.formatMethodDecl(method)
+	}
+
+	// Format nested classes
+	for _, cls := range m.Classes {
+		f.formatClassDecl(cls)
+	}
+	f.indent--
+
+	f.writeIndent()
+	f.writeLine("end")
+}
+
+// Phase 4: Control Flow formatters
+
+// formatUntilStmt formats an until statement.
+func (f *Formatter) formatUntilStmt(s *ast.UntilStmt) {
+	f.formatCommentGroup(s.Doc)
+	f.writeIndent()
+	f.write("until ")
+	f.formatExpr(s.Cond)
+	f.formatTrailingComment(s.Comment)
+	f.write("\n")
+
+	f.indent++
+	f.formatBody(s.Body)
+	f.indent--
+
+	f.writeIndent()
+	f.writeLine("end")
+}
+
+// formatCaseTypeStmt formats a case_type statement.
+func (f *Formatter) formatCaseTypeStmt(s *ast.CaseTypeStmt) {
+	f.formatCommentGroup(s.Doc)
+	f.writeIndent()
+	f.write("case_type ")
+	f.formatExpr(s.Subject)
+	f.formatTrailingComment(s.Comment)
+	f.write("\n")
+
+	for _, when := range s.WhenClauses {
+		f.writeIndent()
+		f.write("when ")
+		if when.BindingVar != "" {
+			f.write(when.BindingVar)
+			f.write(": ")
+		}
+		f.write(when.Type)
+		f.write("\n")
+		f.indent++
+		f.formatBody(when.Body)
+		f.indent--
+	}
+
+	if len(s.Else) > 0 {
+		f.writeIndent()
+		f.writeLine("else")
+		f.indent++
+		f.formatBody(s.Else)
+		f.indent--
+	}
+
+	f.writeIndent()
+	f.writeLine("end")
+}
+
+// formatMultiAssignStmt formats a multi-assignment statement.
+func (f *Formatter) formatMultiAssignStmt(s *ast.MultiAssignStmt) {
+	f.writeIndent()
+	for i, name := range s.Names {
+		if i > 0 {
+			f.write(", ")
+		}
+		if s.SplatIndex >= 0 && i == s.SplatIndex {
+			f.write("*")
+		}
+		f.write(name)
+	}
+	f.write(" = ")
+	f.formatExpr(s.Value)
+	f.write("\n")
+}
+
+// formatMapDestructuringStmt formats a map destructuring statement.
+func (f *Formatter) formatMapDestructuringStmt(s *ast.MapDestructuringStmt) {
+	f.writeIndent()
+	f.write("{")
+	for i, pair := range s.Pairs {
+		if i > 0 {
+			f.write(", ")
+		}
+		f.write(pair.Key)
+		if pair.Variable != "" && pair.Variable != pair.Key {
+			f.write(": ")
+			f.write(pair.Variable)
+		} else {
+			f.write(":")
+		}
+	}
+	f.write("} = ")
+	f.formatExpr(s.Value)
+	f.write("\n")
+}
+
+// formatSelectStmt formats a select statement.
+func (f *Formatter) formatSelectStmt(s *ast.SelectStmt) {
+	f.writeIndent()
+	f.writeLine("select")
+
+	for _, c := range s.Cases {
+		f.writeIndent()
+		f.write("when ")
+		if c.IsSend {
+			// Send case: ch << value
+			f.formatExpr(c.Chan)
+			f.write(" << ")
+			f.formatExpr(c.Value)
+		} else {
+			// Receive case: val = ch.receive
+			if c.AssignName != "" {
+				f.write(c.AssignName)
+				f.write(" = ")
+			}
+			f.formatExpr(c.Chan)
+			f.write(".receive")
+		}
+		f.write("\n")
+		f.indent++
+		f.formatBody(c.Body)
+		f.indent--
+	}
+
+	if len(s.Else) > 0 {
+		f.writeIndent()
+		f.writeLine("else")
+		f.indent++
+		f.formatBody(s.Else)
+		f.indent--
+	}
+
+	f.writeIndent()
+	f.writeLine("end")
+}
+
+// Phase 5: Class Features formatters
+
+// formatAccessorDecl formats an accessor declaration.
+func (f *Formatter) formatAccessorDecl(a *ast.AccessorDecl) {
+	f.writeIndent()
+	if a.Pub {
+		f.write("pub ")
+	}
+	f.write(a.Kind)
+	f.write(" ")
+	f.write(a.Name)
+	f.write(": ")
+	f.write(a.Type)
+	f.write("\n")
+}
+
+// formatClassVarAssign formats a class variable assignment.
+func (f *Formatter) formatClassVarAssign(s *ast.ClassVarAssign) {
+	f.writeIndent()
+	f.write("@@")
+	f.write(s.Name)
+	f.write(" = ")
+	f.formatExpr(s.Value)
+	f.write("\n")
+}
+
+// formatClassVarCompoundAssign formats a class variable compound assignment.
+func (f *Formatter) formatClassVarCompoundAssign(s *ast.ClassVarCompoundAssign) {
+	f.writeIndent()
+	f.write("@@")
+	f.write(s.Name)
+	f.write(" ")
+	f.write(s.Op)
+	f.write("= ")
+	f.formatExpr(s.Value)
+	f.write("\n")
+}
+
+// formatIncludeStmt formats an include statement.
+func (f *Formatter) formatIncludeStmt(s *ast.IncludeStmt) {
+	f.writeIndent()
+	f.write("include ")
+	f.write(s.Module)
+	f.write("\n")
+}
+
+// formatInstanceVarCompoundAssign formats an instance variable compound assignment.
+func (f *Formatter) formatInstanceVarCompoundAssign(s *ast.InstanceVarCompoundAssign) {
+	f.writeIndent()
+	f.write("@")
+	f.write(s.Name)
+	f.write(" ")
+	f.write(s.Op)
+	f.write("= ")
+	f.formatExpr(s.Value)
+	f.write("\n")
+}
+
+// formatSelectorAssignStmt formats a selector assignment statement.
+func (f *Formatter) formatSelectorAssignStmt(s *ast.SelectorAssignStmt) {
+	f.writeIndent()
+	f.formatExpr(s.Object)
+	f.write(".")
+	f.write(s.Field)
+	f.write(" = ")
+	f.formatExpr(s.Value)
+	f.write("\n")
+}
+
+// formatSelectorCompoundAssign formats a selector compound assignment statement.
+func (f *Formatter) formatSelectorCompoundAssign(s *ast.SelectorCompoundAssign) {
+	f.writeIndent()
+	f.formatExpr(s.Object)
+	f.write(".")
+	f.write(s.Field)
+	f.write(" ")
+	f.write(s.Op)
+	f.write("= ")
+	f.formatExpr(s.Value)
+	f.write("\n")
+}
+
+// Phase 6: Concurrency formatters
+
+// formatGoStmt formats a go statement.
+func (f *Formatter) formatGoStmt(s *ast.GoStmt) {
+	f.writeIndent()
+	f.write("go ")
+	if s.Block != nil {
+		f.formatBlockExpr(s.Block)
+	} else {
+		f.formatExpr(s.Call)
+	}
+	f.write("\n")
+}
+
+// formatChanSendStmt formats a channel send statement.
+func (f *Formatter) formatChanSendStmt(s *ast.ChanSendStmt) {
+	f.writeIndent()
+	f.formatExpr(s.Chan)
+	f.write(" << ")
+	f.formatExpr(s.Value)
+	f.write("\n")
+}
+
+// Additional statement formatters
+
+// formatPanicStmt formats a panic statement.
+func (f *Formatter) formatPanicStmt(s *ast.PanicStmt) {
+	f.writeIndent()
+	f.write("panic ")
+	f.formatExpr(s.Message)
+	if s.Condition != nil {
+		if s.IsUnless {
+			f.write(" unless ")
+		} else {
+			f.write(" if ")
+		}
+		f.formatExpr(s.Condition)
+	}
+	f.write("\n")
 }
