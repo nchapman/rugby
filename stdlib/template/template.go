@@ -1,5 +1,5 @@
-// Package liquid provides a Liquid template engine for Rugby programs.
-// Rugby: import rugby/liquid
+// Package template provides a Liquid template engine for Rugby programs.
+// Rugby: import rugby/template
 //
 // Liquid is a template language created by Shopify, widely used in static
 // site generators and web applications. This package provides a pure Go
@@ -7,13 +7,13 @@
 //
 // Example:
 //
-//	result = liquid.render("Hello, {{ name }}!", {name: "World"})!
+//	result = template.render("Hello, {{ name }}!", {name: "World"})!
 //	# => "Hello, World!"
 //
-//	tmpl = liquid.parse("{% for item in items %}{{ item }}{% endfor %}")!
+//	tmpl = template.parse("{% for item in items %}{{ item }}{% endfor %}")!
 //	result = tmpl.render({items: [1, 2, 3]})!
 //	# => "123"
-package liquid
+package template
 
 import "reflect"
 
@@ -24,7 +24,7 @@ type Template struct {
 
 // Parse parses a Liquid template string and returns a Template.
 // Returns an error if the template contains syntax errors.
-// Ruby: liquid.parse(source)
+// Ruby: template.parse(source)
 func Parse(source string) (*Template, error) {
 	p := newParser(source)
 	ast, err := p.parse()
@@ -35,7 +35,7 @@ func Parse(source string) (*Template, error) {
 }
 
 // MustParse parses a Liquid template string and panics on error.
-// Ruby: liquid.must_parse(source)
+// Ruby: template.must_parse(source)
 func MustParse(source string) *Template {
 	tmpl, err := Parse(source)
 	if err != nil {
@@ -55,7 +55,7 @@ func (t *Template) Render(data any) (string, error) {
 
 // Render parses and renders a template in one step.
 // This is a convenience function for simple one-off templates.
-// Ruby: liquid.render(source, data)
+// Ruby: template.render(source, data)
 func Render(source string, data any) (string, error) {
 	tmpl, err := Parse(source)
 	if err != nil {
@@ -65,7 +65,7 @@ func Render(source string, data any) (string, error) {
 }
 
 // MustRender parses and renders a template, panicking on any error.
-// Ruby: liquid.must_render(source, data)
+// Ruby: template.must_render(source, data)
 func MustRender(source string, data any) string {
 	result, err := Render(source, data)
 	if err != nil {

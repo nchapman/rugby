@@ -17,10 +17,10 @@ type CompileTimeHandler interface {
 // compileTimeRegistry maps "package.method" to handlers.
 // Currently hardcoded; could be made dynamic with a Register() function later.
 var compileTimeRegistry = map[string]CompileTimeHandler{
-	"liquid.compile":      &liquidCompileHandler{},
-	"liquid.compile_file": &liquidCompileHandler{},
-	"liquid.compile_dir":  &liquidCompileHandler{},
-	"liquid.compile_glob": &liquidCompileHandler{},
+	"template.compile":      &templateCompileHandler{},
+	"template.compile_file": &templateCompileHandler{},
+	"template.compile_dir":  &templateCompileHandler{},
+	"template.compile_glob": &templateCompileHandler{},
 }
 
 // getCompileTimeHandler checks if a call expression matches a registered compile-time handler.

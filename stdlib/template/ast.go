@@ -1,4 +1,4 @@
-package liquid
+package template
 
 // Node is the interface for all AST nodes.
 type Node interface {

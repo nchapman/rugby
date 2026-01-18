@@ -12,11 +12,11 @@ import (
 
 // --- Registry Tests ---
 
-func TestCompileTimeRegistry_LiquidCompile(t *testing.T) {
-	// Test that liquid.compile is registered
+func TestCompileTimeRegistry_TemplateCompile(t *testing.T) {
+	// Test that template.compile is registered
 	call := &ast.CallExpr{
 		Func: &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "liquid"},
+			X:   &ast.Ident{Name: "template"},
 			Sel: "compile",
 		},
 	}
@@ -25,7 +25,7 @@ func TestCompileTimeRegistry_LiquidCompile(t *testing.T) {
 	handler, method, ok := gen.getCompileTimeHandler(call)
 
 	if !ok {
-		t.Fatal("expected liquid.compile to be registered")
+		t.Fatal("expected template.compile to be registered")
 	}
 	if method != "compile" {
 		t.Errorf("expected method 'compile', got %q", method)
@@ -35,11 +35,11 @@ func TestCompileTimeRegistry_LiquidCompile(t *testing.T) {
 	}
 }
 
-func TestCompileTimeRegistry_LiquidCompileFile(t *testing.T) {
-	// Test that liquid.compile_file is registered
+func TestCompileTimeRegistry_TemplateCompileFile(t *testing.T) {
+	// Test that template.compile_file is registered
 	call := &ast.CallExpr{
 		Func: &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "liquid"},
+			X:   &ast.Ident{Name: "template"},
 			Sel: "compile_file",
 		},
 	}
@@ -48,7 +48,7 @@ func TestCompileTimeRegistry_LiquidCompileFile(t *testing.T) {
 	handler, method, ok := gen.getCompileTimeHandler(call)
 
 	if !ok {
-		t.Fatal("expected liquid.compile_file to be registered")
+		t.Fatal("expected template.compile_file to be registered")
 	}
 	if method != "compile_file" {
 		t.Errorf("expected method 'compile_file', got %q", method)
@@ -79,7 +79,7 @@ func TestCompileTimeRegistry_UnknownMethod(t *testing.T) {
 	// Test that unknown methods on known packages are not matched
 	call := &ast.CallExpr{
 		Func: &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "liquid"},
+			X:   &ast.Ident{Name: "template"},
 			Sel: "parse", // parse is runtime, not compile-time
 		},
 	}
@@ -88,14 +88,14 @@ func TestCompileTimeRegistry_UnknownMethod(t *testing.T) {
 	_, _, ok := gen.getCompileTimeHandler(call)
 
 	if ok {
-		t.Fatal("expected liquid.parse to NOT be registered as compile-time handler")
+		t.Fatal("expected template.parse to NOT be registered as compile-time handler")
 	}
 }
 
-func TestCompileTimeRegistry_LiquidCompileDir(t *testing.T) {
+func TestCompileTimeRegistry_TemplateCompileDir(t *testing.T) {
 	call := &ast.CallExpr{
 		Func: &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "liquid"},
+			X:   &ast.Ident{Name: "template"},
 			Sel: "compile_dir",
 		},
 	}
@@ -104,7 +104,7 @@ func TestCompileTimeRegistry_LiquidCompileDir(t *testing.T) {
 	handler, method, ok := gen.getCompileTimeHandler(call)
 
 	if !ok {
-		t.Fatal("expected liquid.compile_dir to be registered")
+		t.Fatal("expected template.compile_dir to be registered")
 	}
 	if method != "compile_dir" {
 		t.Errorf("expected method 'compile_dir', got %q", method)
@@ -114,10 +114,10 @@ func TestCompileTimeRegistry_LiquidCompileDir(t *testing.T) {
 	}
 }
 
-func TestCompileTimeRegistry_LiquidCompileGlob(t *testing.T) {
+func TestCompileTimeRegistry_TemplateCompileGlob(t *testing.T) {
 	call := &ast.CallExpr{
 		Func: &ast.SelectorExpr{
-			X:   &ast.Ident{Name: "liquid"},
+			X:   &ast.Ident{Name: "template"},
 			Sel: "compile_glob",
 		},
 	}
@@ -126,7 +126,7 @@ func TestCompileTimeRegistry_LiquidCompileGlob(t *testing.T) {
 	handler, method, ok := gen.getCompileTimeHandler(call)
 
 	if !ok {
-		t.Fatal("expected liquid.compile_glob to be registered")
+		t.Fatal("expected template.compile_glob to be registered")
 	}
 	if method != "compile_glob" {
 		t.Errorf("expected method 'compile_glob', got %q", method)
@@ -150,79 +150,79 @@ func TestCompileTimeRegistry_NonSelectorCall(t *testing.T) {
 	}
 }
 
-// --- Liquid Compile Handler Tests ---
+// --- Template Compile Handler Tests ---
 
-func TestLiquidCompile_BasicText(t *testing.T) {
-	input := `import "rugby/liquid"
-const HELLO = liquid.compile("Hello, World!")
+func TestTemplateCompile_BasicText(t *testing.T) {
+	input := `import "rugby/template"
+const HELLO = template.compile("Hello, World!")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `var HELLO = liquid.CompiledTemplate{`)
+	assertContains(t, output, `var HELLO = template.CompiledTemplate{`)
 	assertContains(t, output, `Render: func(data map[string]any) (string, error)`)
 	assertContains(t, output, `buf.WriteString("Hello, World!")`)
 	assertContains(t, output, `return buf.String(), nil`)
 }
 
-func TestLiquidCompile_VariableInterpolation(t *testing.T) {
-	input := `import "rugby/liquid"
-const GREETING = liquid.compile("Hello, {{ name }}!")
+func TestTemplateCompile_VariableInterpolation(t *testing.T) {
+	input := `import "rugby/template"
+const GREETING = template.compile("Hello, {{ name }}!")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `var GREETING = liquid.CompiledTemplate{`)
-	assertContains(t, output, `ctx := liquid.NewContext(data)`)
+	assertContains(t, output, `var GREETING = template.CompiledTemplate{`)
+	assertContains(t, output, `ctx := template.NewContext(data)`)
 	assertContains(t, output, `buf.WriteString("Hello, ")`)
-	assertContains(t, output, `buf.WriteString(liquid.ToString(ctx.Get("name")))`)
+	assertContains(t, output, `buf.WriteString(template.ToString(ctx.Get("name")))`)
 	assertContains(t, output, `buf.WriteString("!")`)
 }
 
-func TestLiquidCompile_Filter(t *testing.T) {
-	input := `import "rugby/liquid"
-const UPPER = liquid.compile("{{ name | upcase }}")
+func TestTemplateCompile_Filter(t *testing.T) {
+	input := `import "rugby/template"
+const UPPER = template.compile("{{ name | upcase }}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `liquid.FilterUpcase(ctx.Get("name"))`)
+	assertContains(t, output, `template.FilterUpcase(ctx.Get("name"))`)
 }
 
-func TestLiquidCompile_FilterChain(t *testing.T) {
-	input := `import "rugby/liquid"
-const CHAIN = liquid.compile("{{ name | upcase | downcase }}")
+func TestTemplateCompile_FilterChain(t *testing.T) {
+	input := `import "rugby/template"
+const CHAIN = template.compile("{{ name | upcase | downcase }}")
 `
 	output := compileRelaxed(t, input)
 
 	// Filter chain: downcase(upcase(name))
-	assertContains(t, output, `liquid.FilterDowncase(liquid.FilterUpcase(ctx.Get("name")))`)
+	assertContains(t, output, `template.FilterDowncase(template.FilterUpcase(ctx.Get("name")))`)
 }
 
-func TestLiquidCompile_IfElse(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% if show %}Yes{% else %}No{% endif %}")
+func TestTemplateCompile_IfElse(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% if show %}Yes{% else %}No{% endif %}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `if liquid.ToBool(ctx.Get("show")) {`)
+	assertContains(t, output, `if template.ToBool(ctx.Get("show")) {`)
 	assertContains(t, output, `buf.WriteString("Yes")`)
 	assertContains(t, output, `} else {`)
 	assertContains(t, output, `buf.WriteString("No")`)
 }
 
-func TestLiquidCompile_ForLoop(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% for item in items %}{{ item }}{% endfor %}")
+func TestTemplateCompile_ForLoop(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% for item in items %}{{ item }}{% endfor %}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `liquid.ToSlice(ctx.Get("items"))`)
+	assertContains(t, output, `template.ToSlice(ctx.Get("items"))`)
 	assertContains(t, output, `for _i, _item := range`)
 	assertContains(t, output, `ctx.Set("item", _item)`)
 	assertContains(t, output, `ctx.SetForloop(_i,`)
 }
 
-func TestLiquidCompile_ForLoopWithElse(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% for item in items %}{{ item }}{% else %}Empty{% endfor %}")
+func TestTemplateCompile_ForLoopWithElse(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% for item in items %}{{ item }}{% else %}Empty{% endfor %}")
 `
 	output := compileRelaxed(t, input)
 
@@ -232,32 +232,32 @@ const TMPL = liquid.compile("{% for item in items %}{{ item }}{% else %}Empty{% 
 	assertContains(t, output, `} else {`)
 }
 
-func TestLiquidCompile_Unless(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% unless hidden %}Visible{% endunless %}")
+func TestTemplateCompile_Unless(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% unless hidden %}Visible{% endunless %}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `if !liquid.ToBool(ctx.Get("hidden")) {`)
+	assertContains(t, output, `if !template.ToBool(ctx.Get("hidden")) {`)
 	assertContains(t, output, `buf.WriteString("Visible")`)
 }
 
-func TestLiquidCompile_CaseWhen(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% case x %}{% when 1 %}One{% when 2 %}Two{% else %}Other{% endcase %}")
+func TestTemplateCompile_CaseWhen(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% case x %}{% when 1 %}One{% when 2 %}Two{% else %}Other{% endcase %}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `liquid.CompareValues(`)
+	assertContains(t, output, `template.CompareValues(`)
 	assertContains(t, output, `"=="`)
 	assertContains(t, output, `buf.WriteString("One")`)
 	assertContains(t, output, `buf.WriteString("Two")`)
 	assertContains(t, output, `buf.WriteString("Other")`)
 }
 
-func TestLiquidCompile_Assign(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% assign x = 42 %}{{ x }}")
+func TestTemplateCompile_Assign(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% assign x = 42 %}{{ x }}")
 `
 	output := compileRelaxed(t, input)
 
@@ -265,9 +265,9 @@ const TMPL = liquid.compile("{% assign x = 42 %}{{ x }}")
 	assertContains(t, output, `ctx.Get("x")`)
 }
 
-func TestLiquidCompile_Capture(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% capture greeting %}Hello{% endcapture %}{{ greeting }}")
+func TestTemplateCompile_Capture(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% capture greeting %}Hello{% endcapture %}{{ greeting }}")
 `
 	output := compileRelaxed(t, input)
 
@@ -277,9 +277,9 @@ const TMPL = liquid.compile("{% capture greeting %}Hello{% endcapture %}{{ greet
 	assertContains(t, output, `ctx.Set("greeting",`)   // set captured value
 }
 
-func TestLiquidCompile_Comment(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("A{% comment %}ignored{% endcomment %}B")
+func TestTemplateCompile_Comment(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("A{% comment %}ignored{% endcomment %}B")
 `
 	output := compileRelaxed(t, input)
 
@@ -288,9 +288,9 @@ const TMPL = liquid.compile("A{% comment %}ignored{% endcomment %}B")
 	assertNotContains(t, output, `ignored`)
 }
 
-func TestLiquidCompile_Raw(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% raw %}{{ not interpolated }}{% endraw %}")
+func TestTemplateCompile_Raw(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% raw %}{{ not interpolated }}{% endraw %}")
 `
 	output := compileRelaxed(t, input)
 
@@ -298,73 +298,73 @@ const TMPL = liquid.compile("{% raw %}{{ not interpolated }}{% endraw %}")
 	assertContains(t, output, `buf.WriteString("{{ not interpolated }}")`)
 }
 
-func TestLiquidCompile_DotAccess(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{{ user.name }}")
+func TestTemplateCompile_DotAccess(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{{ user.name }}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `liquid.GetProperty(ctx.Get("user"), "name")`)
+	assertContains(t, output, `template.GetProperty(ctx.Get("user"), "name")`)
 }
 
-func TestLiquidCompile_IndexAccess(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{{ items[0] }}")
+func TestTemplateCompile_IndexAccess(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{{ items[0] }}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `liquid.GetIndex(ctx.Get("items"), 0)`)
+	assertContains(t, output, `template.GetIndex(ctx.Get("items"), 0)`)
 }
 
-func TestLiquidCompile_BinaryExpr(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% if x == 1 %}yes{% endif %}")
+func TestTemplateCompile_BinaryExpr(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% if x == 1 %}yes{% endif %}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `liquid.CompareValues(ctx.Get("x"), "==", 1)`)
+	assertContains(t, output, `template.CompareValues(ctx.Get("x"), "==", 1)`)
 }
 
-func TestLiquidCompile_AndOr(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% if a and b %}both{% endif %}")
+func TestTemplateCompile_AndOr(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% if a and b %}both{% endif %}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `liquid.ToBool(ctx.Get("a")) && liquid.ToBool(ctx.Get("b"))`)
+	assertContains(t, output, `template.ToBool(ctx.Get("a")) && template.ToBool(ctx.Get("b"))`)
 }
 
-func TestLiquidCompile_Range(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% for i in (1..3) %}{{ i }}{% endfor %}")
+func TestTemplateCompile_Range(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% for i in (1..3) %}{{ i }}{% endfor %}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `liquid.MakeRange(1, 3)`)
+	assertContains(t, output, `template.MakeRange(1, 3)`)
 }
 
-// --- Liquid Compile Handler: All Filters ---
+// --- Template Compile Handler: All Filters ---
 
-func TestLiquidCompile_AllFilters(t *testing.T) {
+func TestTemplateCompile_AllFilters(t *testing.T) {
 	tests := []struct {
 		filter   string
 		expected string
 	}{
-		{"upcase", "liquid.FilterUpcase"},
-		{"downcase", "liquid.FilterDowncase"},
-		{"capitalize", "liquid.FilterCapitalize"},
-		{"strip", "liquid.FilterStrip"},
-		{"escape", "liquid.FilterEscape"},
-		{"first", "liquid.FilterFirst"},
-		{"last", "liquid.FilterLast"},
-		{"size", "liquid.FilterSize"},
-		{"reverse", "liquid.FilterReverse"},
+		{"upcase", "template.FilterUpcase"},
+		{"downcase", "template.FilterDowncase"},
+		{"capitalize", "template.FilterCapitalize"},
+		{"strip", "template.FilterStrip"},
+		{"escape", "template.FilterEscape"},
+		{"first", "template.FilterFirst"},
+		{"last", "template.FilterLast"},
+		{"size", "template.FilterSize"},
+		{"reverse", "template.FilterReverse"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.filter, func(t *testing.T) {
-			input := `import "rugby/liquid"
-const TMPL = liquid.compile("{{ x | ` + tt.filter + ` }}")
+			input := `import "rugby/template"
+const TMPL = template.compile("{{ x | ` + tt.filter + ` }}")
 `
 			output := compileRelaxed(t, input)
 			assertContains(t, output, tt.expected)
@@ -372,29 +372,29 @@ const TMPL = liquid.compile("{{ x | ` + tt.filter + ` }}")
 	}
 }
 
-func TestLiquidCompile_FilterWithArg(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{{ items | join: \", \" }}")
+func TestTemplateCompile_FilterWithArg(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{{ items | join: \", \" }}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `liquid.FilterJoin(ctx.Get("items"),`)
+	assertContains(t, output, `template.FilterJoin(ctx.Get("items"),`)
 }
 
-func TestLiquidCompile_DefaultFilter(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{{ missing | default: \"N/A\" }}")
+func TestTemplateCompile_DefaultFilter(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{{ missing | default: \"N/A\" }}")
 `
 	output := compileRelaxed(t, input)
 
-	assertContains(t, output, `liquid.FilterDefault(ctx.Get("missing"),`)
+	assertContains(t, output, `template.FilterDefault(ctx.Get("missing"),`)
 }
 
 // --- Error Cases ---
 
-func TestLiquidCompile_ErrorMissingArgument(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile()
+func TestTemplateCompile_ErrorMissingArgument(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile()
 `
 	errs := compileWithErrors(t, input)
 
@@ -414,9 +414,9 @@ const TMPL = liquid.compile()
 	}
 }
 
-func TestLiquidCompile_ErrorInvalidSyntax(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% if %}")
+func TestTemplateCompile_ErrorInvalidSyntax(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% if %}")
 `
 	errs := compileWithErrors(t, input)
 
@@ -426,31 +426,31 @@ const TMPL = liquid.compile("{% if %}")
 
 	found := false
 	for _, err := range errs {
-		if strings.Contains(err.Error(), "liquid template syntax error") {
+		if strings.Contains(err.Error(), "template syntax error") {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("expected 'liquid template syntax error', got: %v", errs)
+		t.Errorf("expected 'template syntax error', got: %v", errs)
 	}
 }
 
 // --- Import Tests ---
 
-func TestLiquidCompile_ImportsLiquid(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("Hello")
+func TestTemplateCompile_ImportsTemplate(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("Hello")
 `
 	output := compileRelaxed(t, input)
 
-	// Should import the liquid package
-	assertContains(t, output, `"github.com/nchapman/rugby/stdlib/liquid"`)
+	// Should import the template package
+	assertContains(t, output, `"github.com/nchapman/rugby/stdlib/template"`)
 }
 
-func TestLiquidCompile_ImportsStrings(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("Hello")
+func TestTemplateCompile_ImportsStrings(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("Hello")
 `
 	output := compileRelaxed(t, input)
 
@@ -460,9 +460,9 @@ const TMPL = liquid.compile("Hello")
 
 // --- Context Scope Tests ---
 
-func TestLiquidCompile_ForLoopContextScope(t *testing.T) {
-	input := `import "rugby/liquid"
-const TMPL = liquid.compile("{% for i in items %}{{ i }}{% endfor %}")
+func TestTemplateCompile_ForLoopContextScope(t *testing.T) {
+	input := `import "rugby/template"
+const TMPL = template.compile("{% for i in items %}{{ i }}{% endfor %}")
 `
 	output := compileRelaxed(t, input)
 
@@ -472,44 +472,44 @@ const TMPL = liquid.compile("{% for i in items %}{{ i }}{% endfor %}")
 	assertContains(t, output, `ctx =`)      // restore (appears multiple times)
 }
 
-// --- Liquid compile_dir Tests ---
+// --- Template compile_dir Tests ---
 
-func TestLiquidCompileDir_GeneratesMap(t *testing.T) {
-	// Uses testdata/liquid_templates/ which contains greeting.liquid and i18n/*.liquid
+func TestTemplateCompileDir_GeneratesMap(t *testing.T) {
+	// Uses testdata/templates/ which contains greeting.tmpl and i18n/*.tmpl
 	// Tests run from the codegen package directory, so use "." as source dir
-	input := `import "rugby/liquid"
-const TEMPLATES = liquid.compile_dir("testdata/liquid_templates/i18n/")
+	input := `import "rugby/template"
+const TEMPLATES = template.compile_dir("testdata/templates/i18n/")
 `
 	output := compileRelaxedWithSourceDir(t, input, ".")
 
 	// Should generate map type with pointer values (so MustRender pointer receiver works)
-	assertContains(t, output, `var TEMPLATES = map[string]*liquid.CompiledTemplate{`)
+	assertContains(t, output, `var TEMPLATES = map[string]*template.CompiledTemplate{`)
 
 	// Should have keys for both templates (sorted alphabetically)
-	assertContains(t, output, `"en.liquid": {`)
-	assertContains(t, output, `"fr.liquid": {`)
+	assertContains(t, output, `"en.tmpl": {`)
+	assertContains(t, output, `"fr.tmpl": {`)
 
 	// Each entry should have a Render function
 	assertContains(t, output, `Render: func(data map[string]any) (string, error)`)
 }
 
-func TestLiquidCompileDir_TemplateContent(t *testing.T) {
-	input := `import "rugby/liquid"
-const TEMPLATES = liquid.compile_dir("testdata/liquid_templates/i18n/")
+func TestTemplateCompileDir_TemplateContent(t *testing.T) {
+	input := `import "rugby/template"
+const TEMPLATES = template.compile_dir("testdata/templates/i18n/")
 `
 	output := compileRelaxedWithSourceDir(t, input, ".")
 
-	// en.liquid contains: Hello, {{ name }}!
+	// en.tmpl contains: Hello, {{ name }}!
 	assertContains(t, output, `buf.WriteString("Hello, ")`)
 	assertContains(t, output, `ctx.Get("name")`)
 
-	// fr.liquid contains: Bonjour, {{ name }}!
+	// fr.tmpl contains: Bonjour, {{ name }}!
 	assertContains(t, output, `buf.WriteString("Bonjour, ")`)
 }
 
-func TestLiquidCompileDir_ErrorNotDirectory(t *testing.T) {
-	input := `import "rugby/liquid"
-const TEMPLATES = liquid.compile_dir("testdata/liquid_templates/greeting.liquid")
+func TestTemplateCompileDir_ErrorNotDirectory(t *testing.T) {
+	input := `import "rugby/template"
+const TEMPLATES = template.compile_dir("testdata/templates/greeting.tmpl")
 `
 	errs := compileWithErrorsAndSourceDir(t, input, ".")
 
@@ -529,65 +529,65 @@ const TEMPLATES = liquid.compile_dir("testdata/liquid_templates/greeting.liquid"
 	}
 }
 
-func TestLiquidCompileDir_ErrorNoFiles(t *testing.T) {
-	// Use testdata/empty_dir which has no .liquid files
-	input := `import "rugby/liquid"
-const TEMPLATES = liquid.compile_dir("testdata/empty_dir/")
+func TestTemplateCompileDir_ErrorNoFiles(t *testing.T) {
+	// Use testdata/empty_dir which has no template files
+	input := `import "rugby/template"
+const TEMPLATES = template.compile_dir("testdata/empty_dir/")
 `
 	errs := compileWithErrorsAndSourceDir(t, input, ".")
 
 	if len(errs) == 0 {
-		t.Fatal("expected error for directory with no .liquid files")
+		t.Fatal("expected error for directory with no template files")
 	}
 
 	found := false
 	for _, err := range errs {
-		if strings.Contains(err.Error(), "no .liquid files found") {
+		if strings.Contains(err.Error(), "no template files") {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("expected 'no .liquid files found' error, got: %v", errs)
+		t.Errorf("expected 'no template files' error, got: %v", errs)
 	}
 }
 
-// --- Liquid compile_glob Tests ---
+// --- Template compile_glob Tests ---
 
-func TestLiquidCompileGlob_GeneratesMap(t *testing.T) {
-	input := `import "rugby/liquid"
-const TEMPLATES = liquid.compile_glob("testdata/liquid_templates/i18n/*.liquid")
+func TestTemplateCompileGlob_GeneratesMap(t *testing.T) {
+	input := `import "rugby/template"
+const TEMPLATES = template.compile_glob("testdata/templates/i18n/*.tmpl")
 `
 	output := compileRelaxedWithSourceDir(t, input, ".")
 
 	// Should generate map type with pointer values
-	assertContains(t, output, `var TEMPLATES = map[string]*liquid.CompiledTemplate{`)
+	assertContains(t, output, `var TEMPLATES = map[string]*template.CompiledTemplate{`)
 
 	// Should have keys for matched templates
-	assertContains(t, output, `"en.liquid": {`)
-	assertContains(t, output, `"fr.liquid": {`)
+	assertContains(t, output, `"en.tmpl": {`)
+	assertContains(t, output, `"fr.tmpl": {`)
 }
 
-func TestLiquidCompileGlob_NestedPattern(t *testing.T) {
+func TestTemplateCompileGlob_NestedPattern(t *testing.T) {
 	// Note: Go's filepath.Glob doesn't support ** for recursive matching.
-	// ** matches exactly one directory level, so "templates/**/*.liquid"
-	// matches "templates/SUBDIR/*.liquid" but not "templates/*.liquid"
-	input := `import "rugby/liquid"
-const TEMPLATES = liquid.compile_glob("testdata/liquid_templates/*/*.liquid")
+	// ** matches exactly one directory level, so "templates/**/*.tmpl"
+	// matches "templates/SUBDIR/*.tmpl" but not "templates/*.tmpl"
+	input := `import "rugby/template"
+const TEMPLATES = template.compile_glob("testdata/templates/*/*.tmpl")
 `
 	output := compileRelaxedWithSourceDir(t, input, ".")
 
-	// Should match .liquid files one level deep (with pointer values)
-	assertContains(t, output, `var TEMPLATES = map[string]*liquid.CompiledTemplate{`)
+	// Should match .tmpl files one level deep (with pointer values)
+	assertContains(t, output, `var TEMPLATES = map[string]*template.CompiledTemplate{`)
 
 	// Should include files from subdirectories with relative paths
-	assertContains(t, output, `"i18n/en.liquid": {`)
-	assertContains(t, output, `"i18n/fr.liquid": {`)
+	assertContains(t, output, `"i18n/en.tmpl": {`)
+	assertContains(t, output, `"i18n/fr.tmpl": {`)
 }
 
-func TestLiquidCompileGlob_ErrorNoMatches(t *testing.T) {
-	input := `import "rugby/liquid"
-const TEMPLATES = liquid.compile_glob("testdata/nonexistent/*.liquid")
+func TestTemplateCompileGlob_ErrorNoMatches(t *testing.T) {
+	input := `import "rugby/template"
+const TEMPLATES = template.compile_glob("testdata/nonexistent/*.tmpl")
 `
 	errs := compileWithErrorsAndSourceDir(t, input, ".")
 

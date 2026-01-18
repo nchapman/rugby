@@ -1,4 +1,4 @@
-package liquid
+package template
 
 import (
 	"encoding/json"
@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-// TestLiquidSpecs runs all .liquid spec tests
-func TestLiquidSpecs(t *testing.T) {
-	specDir := "../../tests/spec/stdlib/liquid"
+// TestTemplateSpecs runs all template spec tests (.tmpl or .liquid)
+func TestTemplateSpecs(t *testing.T) {
+	specDir := "../../tests/spec/stdlib/template"
 
 	entries, err := os.ReadDir(specDir)
 	if err != nil {
@@ -18,22 +18,31 @@ func TestLiquidSpecs(t *testing.T) {
 	}
 
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".liquid") {
+		if entry.IsDir() {
 			continue
 		}
-		// Skip .liquid.out files
-		if strings.HasSuffix(entry.Name(), ".liquid.out") {
+		// Check for template extensions
+		var testName string
+		switch {
+		case strings.HasSuffix(entry.Name(), ".tmpl"):
+			testName = strings.TrimSuffix(entry.Name(), ".tmpl")
+		case strings.HasSuffix(entry.Name(), ".liquid"):
+			// Skip .liquid.out files
+			if strings.HasSuffix(entry.Name(), ".liquid.out") {
+				continue
+			}
+			testName = strings.TrimSuffix(entry.Name(), ".liquid")
+		default:
 			continue
 		}
 
-		testName := strings.TrimSuffix(entry.Name(), ".liquid")
 		t.Run(testName, func(t *testing.T) {
-			runLiquidSpec(t, filepath.Join(specDir, entry.Name()))
+			runTemplateSpec(t, filepath.Join(specDir, entry.Name()))
 		})
 	}
 }
 
-func runLiquidSpec(t *testing.T, templatePath string) {
+func runTemplateSpec(t *testing.T, templatePath string) {
 	// Read template file
 	templateBytes, err := os.ReadFile(templatePath)
 	if err != nil {

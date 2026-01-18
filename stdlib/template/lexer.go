@@ -1,4 +1,4 @@
-package liquid
+package template
 
 // lexerMode represents the current lexing mode.
 type lexerMode int

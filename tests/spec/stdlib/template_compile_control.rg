@@ -1,30 +1,30 @@
 #@ run-pass
 #@ check-output
 #
-# Test compile-time liquid templates with control flow
+# Test compile-time template.compile with control flow
 
-import "rugby/liquid"
+import "rugby/template"
 
 # If/else
-const IF_TMPL = liquid.compile("{% if show %}Visible{% else %}Hidden{% endif %}")
+const IF_TMPL = template.compile("{% if show %}Visible{% else %}Hidden{% endif %}")
 
 # Unless
-const UNLESS_TMPL = liquid.compile("{% unless hidden %}Shown{% endunless %}")
+const UNLESS_TMPL = template.compile("{% unless hidden %}Shown{% endunless %}")
 
 # For loop
-const FOR_TMPL = liquid.compile("{% for item in items %}{% unless forloop.first %} {% endunless %}{{ item }}{% endfor %}")
+const FOR_TMPL = template.compile("{% for item in items %}{% unless forloop.first %} {% endunless %}{{ item }}{% endfor %}")
 
 # For loop with forloop variable
-const FORLOOP_TMPL = liquid.compile("{% for i in items %}{{ forloop.index }}{% endfor %}")
+const FORLOOP_TMPL = template.compile("{% for i in items %}{{ forloop.index }}{% endfor %}")
 
 # For with else
-const FOR_ELSE_TMPL = liquid.compile("{% for item in items %}{{ item }}{% else %}Empty{% endfor %}")
+const FOR_ELSE_TMPL = template.compile("{% for item in items %}{{ item }}{% else %}Empty{% endfor %}")
 
 # Case/when
-const CASE_TMPL = liquid.compile("{% case status %}{% when 1 %}One{% when 2 %}Two{% else %}Other{% endcase %}")
+const CASE_TMPL = template.compile("{% case status %}{% when 1 %}One{% when 2 %}Two{% else %}Other{% endcase %}")
 
 # Nested if
-const NESTED_IF = liquid.compile("{% if a %}{% if b %}Both{% else %}A only{% endif %}{% else %}None{% endif %}")
+const NESTED_IF = template.compile("{% if a %}{% if b %}Both{% else %}A only{% endif %}{% else %}None{% endif %}")
 
 puts IF_TMPL.MustRender({show: true})
 puts IF_TMPL.MustRender({show: false})

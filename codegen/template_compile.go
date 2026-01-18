@@ -9,17 +9,17 @@ import (
 	"strings"
 
 	"github.com/nchapman/rugby/ast"
-	"github.com/nchapman/rugby/stdlib/liquid"
+	"github.com/nchapman/rugby/stdlib/template"
 )
 
-// liquidCompileHandler handles compile-time processing for liquid.compile() and liquid.compile_file().
-type liquidCompileHandler struct{}
+// templateCompileHandler handles compile-time processing for template.compile() and template.compile_file().
+type templateCompileHandler struct{}
 
-// Generate implements CompileTimeHandler for Liquid templates.
-func (h *liquidCompileHandler) Generate(g *Generator, name string, call *ast.CallExpr, method string) {
+// Generate implements CompileTimeHandler for template compilation.
+func (h *templateCompileHandler) Generate(g *Generator, name string, call *ast.CallExpr, method string) {
 	// Require at least one argument
 	if len(call.Args) == 0 {
-		g.addError(fmt.Errorf("liquid.%s requires a string argument", method))
+		g.addError(fmt.Errorf("template.%s requires a string argument", method))
 		return
 	}
 
@@ -33,32 +33,32 @@ func (h *liquidCompileHandler) Generate(g *Generator, name string, call *ast.Cal
 	case "compile_glob":
 		h.generateTemplateMap(g, name, call, true)
 	default:
-		g.addError(fmt.Errorf("unknown liquid compile method: %s", method))
+		g.addError(fmt.Errorf("unknown template compile method: %s", method))
 	}
 }
 
-// generateSingleTemplate handles liquid.compile("template string").
-func (h *liquidCompileHandler) generateSingleTemplate(g *Generator, name string, call *ast.CallExpr) {
+// generateSingleTemplate handles template.compile("template string").
+func (h *templateCompileHandler) generateSingleTemplate(g *Generator, name string, call *ast.CallExpr) {
 	strLit, ok := call.Args[0].(*ast.StringLit)
 	if !ok {
-		g.addError(fmt.Errorf("liquid.compile requires a string literal argument"))
+		g.addError(fmt.Errorf("template.compile requires a string literal argument"))
 		return
 	}
 
-	tmpl, err := liquid.Parse(strLit.Value)
+	tmpl, err := template.Parse(strLit.Value)
 	if err != nil {
-		g.addError(fmt.Errorf("liquid template syntax error: %v", err))
+		g.addError(fmt.Errorf("template syntax error: %v", err))
 		return
 	}
 
-	g.genLiquidCompiledTemplate(name, tmpl)
+	g.genTemplateCompiledTemplate(name, tmpl)
 }
 
-// generateSingleTemplateFromFile handles liquid.compile_file("path").
-func (h *liquidCompileHandler) generateSingleTemplateFromFile(g *Generator, name string, call *ast.CallExpr) {
+// generateSingleTemplateFromFile handles template.compile_file("path").
+func (h *templateCompileHandler) generateSingleTemplateFromFile(g *Generator, name string, call *ast.CallExpr) {
 	strLit, ok := call.Args[0].(*ast.StringLit)
 	if !ok {
-		g.addError(fmt.Errorf("liquid.compile_file requires a string literal file path"))
+		g.addError(fmt.Errorf("template.compile_file requires a string literal file path"))
 		return
 	}
 
@@ -69,23 +69,23 @@ func (h *liquidCompileHandler) generateSingleTemplateFromFile(g *Generator, name
 
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		g.addError(fmt.Errorf("liquid.compile_file: cannot read file %q: %v", strLit.Value, err))
+		g.addError(fmt.Errorf("template.compile_file: cannot read file %q: %v", strLit.Value, err))
 		return
 	}
 
-	tmpl, err := liquid.Parse(string(content))
+	tmpl, err := template.Parse(string(content))
 	if err != nil {
-		g.addError(fmt.Errorf("liquid template syntax error in %q: %v", strLit.Value, err))
+		g.addError(fmt.Errorf("template syntax error in %q: %v", strLit.Value, err))
 		return
 	}
 
-	g.genLiquidCompiledTemplate(name, tmpl)
+	g.genTemplateCompiledTemplate(name, tmpl)
 }
 
-// generateTemplateMap handles liquid.compile_dir("path") and liquid.compile_glob("pattern").
-// compile_dir recursively walks the directory and includes only .liquid files.
+// generateTemplateMap handles template.compile_dir("path") and template.compile_glob("pattern").
+// compile_dir recursively walks the directory and includes only template files (.tmpl or .liquid).
 // compile_glob matches files according to the glob pattern with no extension filtering.
-func (h *liquidCompileHandler) generateTemplateMap(g *Generator, name string, call *ast.CallExpr, isGlob bool) {
+func (h *templateCompileHandler) generateTemplateMap(g *Generator, name string, call *ast.CallExpr, isGlob bool) {
 	strLit, ok := call.Args[0].(*ast.StringLit)
 	if !ok {
 		methodName := "compile_dir"
@@ -94,7 +94,7 @@ func (h *liquidCompileHandler) generateTemplateMap(g *Generator, name string, ca
 			methodName = "compile_glob"
 			argType = "glob pattern"
 		}
-		g.addError(fmt.Errorf("liquid.%s requires a string literal %s", methodName, argType))
+		g.addError(fmt.Errorf("template.%s requires a string literal %s", methodName, argType))
 		return
 	}
 
@@ -107,17 +107,17 @@ func (h *liquidCompileHandler) generateTemplateMap(g *Generator, name string, ca
 	}
 
 	// Collect templates
-	templates := make(map[string]*liquid.Template)
+	templates := make(map[string]*template.Template)
 
 	if isGlob {
 		// compile_glob: use filepath.Glob
 		matches, err := filepath.Glob(basePath)
 		if err != nil {
-			g.addError(fmt.Errorf("liquid.compile_glob: invalid pattern %q: %v", pattern, err))
+			g.addError(fmt.Errorf("template.compile_glob: invalid pattern %q: %v", pattern, err))
 			return
 		}
 		if len(matches) == 0 {
-			g.addError(fmt.Errorf("liquid.compile_glob: no files matched pattern %q", pattern))
+			g.addError(fmt.Errorf("template.compile_glob: no files matched pattern %q", pattern))
 			return
 		}
 
@@ -132,14 +132,14 @@ func (h *liquidCompileHandler) generateTemplateMap(g *Generator, name string, ca
 
 			content, err := os.ReadFile(filePath)
 			if err != nil {
-				g.addError(fmt.Errorf("liquid.compile_glob: cannot read file %q: %v", filePath, err))
+				g.addError(fmt.Errorf("template.compile_glob: cannot read file %q: %v", filePath, err))
 				return
 			}
 
-			tmpl, err := liquid.Parse(string(content))
+			tmpl, err := template.Parse(string(content))
 			if err != nil {
 				relPath, _ := filepath.Rel(baseDir, filePath)
-				g.addError(fmt.Errorf("liquid template syntax error in %q: %v", relPath, err))
+				g.addError(fmt.Errorf("template syntax error in %q: %v", relPath, err))
 				return
 			}
 
@@ -151,11 +151,11 @@ func (h *liquidCompileHandler) generateTemplateMap(g *Generator, name string, ca
 		// compile_dir: walk directory recursively
 		info, err := os.Stat(basePath)
 		if err != nil {
-			g.addError(fmt.Errorf("liquid.compile_dir: cannot access directory %q: %v", pattern, err))
+			g.addError(fmt.Errorf("template.compile_dir: cannot access directory %q: %v", pattern, err))
 			return
 		}
 		if !info.IsDir() {
-			g.addError(fmt.Errorf("liquid.compile_dir: %q is not a directory", pattern))
+			g.addError(fmt.Errorf("template.compile_dir: %q is not a directory", pattern))
 			return
 		}
 
@@ -166,8 +166,8 @@ func (h *liquidCompileHandler) generateTemplateMap(g *Generator, name string, ca
 			if d.IsDir() {
 				return nil
 			}
-			// Filter for .liquid files
-			if !strings.HasSuffix(filePath, ".liquid") {
+			// Filter for template files (.tmpl or .liquid)
+			if !isTemplateFile(filePath) {
 				return nil
 			}
 
@@ -176,7 +176,7 @@ func (h *liquidCompileHandler) generateTemplateMap(g *Generator, name string, ca
 				return fmt.Errorf("cannot read file %q: %v", filePath, err)
 			}
 
-			tmpl, err := liquid.Parse(string(content))
+			tmpl, err := template.Parse(string(content))
 			if err != nil {
 				relPath, _ := filepath.Rel(basePath, filePath)
 				return fmt.Errorf("template syntax error in %q: %v", relPath, err)
@@ -189,17 +189,22 @@ func (h *liquidCompileHandler) generateTemplateMap(g *Generator, name string, ca
 		})
 
 		if err != nil {
-			g.addError(fmt.Errorf("liquid.compile_dir: %v", err))
+			g.addError(fmt.Errorf("template.compile_dir: %v", err))
 			return
 		}
 
 		if len(templates) == 0 {
-			g.addError(fmt.Errorf("liquid.compile_dir: no .liquid files found in %q", pattern))
+			g.addError(fmt.Errorf("template.compile_dir: no template files (.tmpl or .liquid) found in %q", pattern))
 			return
 		}
 	}
 
-	g.genLiquidTemplateMap(name, templates)
+	g.genTemplateTemplateMap(name, templates)
+}
+
+// isTemplateFile returns true if the file has a recognized template extension.
+func isTemplateFile(path string) bool {
+	return strings.HasSuffix(path, ".tmpl") || strings.HasSuffix(path, ".liquid")
 }
 
 // extractGlobBase finds the base directory before any glob wildcards.
@@ -219,24 +224,24 @@ func extractGlobBase(pattern string) string {
 	}
 }
 
-// genLiquidCompiledTemplate generates a single liquid.CompiledTemplate variable.
-func (g *Generator) genLiquidCompiledTemplate(name string, tmpl *liquid.Template) {
-	g.needsLiquid = true
+// genTemplateCompiledTemplate generates a single template.CompiledTemplate variable.
+func (g *Generator) genTemplateCompiledTemplate(name string, tmpl *template.Template) {
+	g.needsTemplate = true
 	g.needsStrings = true
 
 	// Register the type in constTypes so inferTypeFromExpr can find it across function boundaries.
-	g.constTypes[name] = "liquid.CompiledTemplate"
+	g.constTypes[name] = "template.CompiledTemplate"
 
 	g.writeIndent()
 	g.buf.WriteString("var ")
 	g.buf.WriteString(name)
-	g.buf.WriteString(" = liquid.CompiledTemplate{\n")
+	g.buf.WriteString(" = template.CompiledTemplate{\n")
 	g.indent++
 	g.writeIndent()
 	g.buf.WriteString("Render: func(data map[string]any) (string, error) {\n")
 	g.indent++
 
-	g.genLiquidRenderBody(tmpl)
+	g.genTemplateRenderBody(tmpl)
 
 	g.indent--
 	g.writeIndent()
@@ -246,21 +251,21 @@ func (g *Generator) genLiquidCompiledTemplate(name string, tmpl *liquid.Template
 	g.buf.WriteString("}\n")
 }
 
-// genLiquidTemplateMap generates a map[string]*liquid.CompiledTemplate variable.
+// genTemplateTemplateMap generates a map[string]*template.CompiledTemplate variable.
 // Uses pointers so that MustRender (pointer receiver) can be called on map elements.
-func (g *Generator) genLiquidTemplateMap(name string, templates map[string]*liquid.Template) {
-	g.needsLiquid = true
+func (g *Generator) genTemplateTemplateMap(name string, templates map[string]*template.Template) {
+	g.needsTemplate = true
 	g.needsStrings = true
 
 	// Register the type in constTypes so inferTypeFromExpr can find it across function boundaries.
 	// This is necessary because g.vars is cleared for each function, but compile-time generated
 	// constants are module-level and need their types available throughout the entire module.
-	g.constTypes[name] = "map[string]*liquid.CompiledTemplate"
+	g.constTypes[name] = "map[string]*template.CompiledTemplate"
 
 	g.writeIndent()
 	g.buf.WriteString("var ")
 	g.buf.WriteString(name)
-	g.buf.WriteString(" = map[string]*liquid.CompiledTemplate{\n")
+	g.buf.WriteString(" = map[string]*template.CompiledTemplate{\n")
 	g.indent++
 
 	// Sort keys for deterministic output
@@ -280,7 +285,7 @@ func (g *Generator) genLiquidTemplateMap(name string, templates map[string]*liqu
 		g.buf.WriteString("Render: func(data map[string]any) (string, error) {\n")
 		g.indent++
 
-		g.genLiquidRenderBody(tmpl)
+		g.genTemplateRenderBody(tmpl)
 
 		g.indent--
 		g.writeIndent()
@@ -295,15 +300,15 @@ func (g *Generator) genLiquidTemplateMap(name string, templates map[string]*liqu
 	g.buf.WriteString("}\n")
 }
 
-// genLiquidRenderBody generates the body of a Render function for a parsed template.
-func (g *Generator) genLiquidRenderBody(tmpl *liquid.Template) {
+// genTemplateRenderBody generates the body of a Render function for a parsed template.
+func (g *Generator) genTemplateRenderBody(tmpl *template.Template) {
 	g.writeIndent()
 	g.buf.WriteString("var buf strings.Builder\n")
 	g.writeIndent()
-	g.buf.WriteString("ctx := liquid.NewContext(data)\n")
+	g.buf.WriteString("ctx := template.NewContext(data)\n")
 
 	for _, node := range tmpl.AST() {
-		g.genLiquidNode(node)
+		g.genTemplateNode(node)
 	}
 
 	g.writeIndent()
@@ -312,34 +317,34 @@ func (g *Generator) genLiquidRenderBody(tmpl *liquid.Template) {
 	g.buf.WriteString("return buf.String(), nil\n")
 }
 
-// genLiquidNode generates Go code for a single Liquid AST node.
-func (g *Generator) genLiquidNode(node liquid.Node) {
+// genTemplateNode generates Go code for a single template AST node.
+func (g *Generator) genTemplateNode(node template.Node) {
 	switch n := node.(type) {
-	case *liquid.TextNode:
-		g.genLiquidTextNode(n)
-	case *liquid.OutputNode:
-		g.genLiquidOutputNode(n)
-	case *liquid.IfTag:
-		g.genLiquidIfTag(n)
-	case *liquid.UnlessTag:
-		g.genLiquidUnlessTag(n)
-	case *liquid.ForTag:
-		g.genLiquidForTag(n)
-	case *liquid.CaseTag:
-		g.genLiquidCaseTag(n)
-	case *liquid.AssignTag:
-		g.genLiquidAssignTag(n)
-	case *liquid.CaptureTag:
-		g.genLiquidCaptureTag(n)
-	case *liquid.BreakTag:
+	case *template.TextNode:
+		g.genTemplateTextNode(n)
+	case *template.OutputNode:
+		g.genTemplateOutputNode(n)
+	case *template.IfTag:
+		g.genTemplateIfTag(n)
+	case *template.UnlessTag:
+		g.genTemplateUnlessTag(n)
+	case *template.ForTag:
+		g.genTemplateForTag(n)
+	case *template.CaseTag:
+		g.genTemplateCaseTag(n)
+	case *template.AssignTag:
+		g.genTemplateAssignTag(n)
+	case *template.CaptureTag:
+		g.genTemplateCaptureTag(n)
+	case *template.BreakTag:
 		g.writeIndent()
 		g.buf.WriteString("break\n")
-	case *liquid.ContinueTag:
+	case *template.ContinueTag:
 		g.writeIndent()
 		g.buf.WriteString("continue\n")
-	case *liquid.CommentTag:
+	case *template.CommentTag:
 		// Comments produce no output
-	case *liquid.RawTag:
+	case *template.RawTag:
 		g.writeIndent()
 		g.buf.WriteString("buf.WriteString(")
 		g.buf.WriteString(strconv.Quote(n.Content))
@@ -347,8 +352,8 @@ func (g *Generator) genLiquidNode(node liquid.Node) {
 	}
 }
 
-// genLiquidTextNode generates code for a TextNode.
-func (g *Generator) genLiquidTextNode(n *liquid.TextNode) {
+// genTemplateTextNode generates code for a TextNode.
+func (g *Generator) genTemplateTextNode(n *template.TextNode) {
 	if n.Text == "" {
 		return
 	}
@@ -358,23 +363,23 @@ func (g *Generator) genLiquidTextNode(n *liquid.TextNode) {
 	g.buf.WriteString(")\n")
 }
 
-// genLiquidOutputNode generates code for an OutputNode ({{ expression }}).
-func (g *Generator) genLiquidOutputNode(n *liquid.OutputNode) {
+// genTemplateOutputNode generates code for an OutputNode ({{ expression }}).
+func (g *Generator) genTemplateOutputNode(n *template.OutputNode) {
 	g.writeIndent()
-	g.buf.WriteString("buf.WriteString(liquid.ToString(")
-	g.genLiquidExpr(n.Expr)
+	g.buf.WriteString("buf.WriteString(template.ToString(")
+	g.genTemplateExpr(n.Expr)
 	g.buf.WriteString("))\n")
 }
 
-// genLiquidExpr generates Go code for a Liquid expression.
-func (g *Generator) genLiquidExpr(expr liquid.Expression) {
+// genTemplateExpr generates Go code for a template expression.
+func (g *Generator) genTemplateExpr(expr template.Expression) {
 	switch e := expr.(type) {
-	case *liquid.IdentExpr:
+	case *template.IdentExpr:
 		g.buf.WriteString("ctx.Get(")
 		g.buf.WriteString(strconv.Quote(e.Name))
 		g.buf.WriteString(")")
 
-	case *liquid.LiteralExpr:
+	case *template.LiteralExpr:
 		switch v := e.Value.(type) {
 		case string:
 			g.buf.WriteString(strconv.Quote(v))
@@ -397,31 +402,31 @@ func (g *Generator) genLiquidExpr(expr liquid.Expression) {
 			g.buf.WriteString("nil")
 		}
 
-	case *liquid.DotExpr:
-		g.buf.WriteString("liquid.GetProperty(")
-		g.genLiquidExpr(e.Object)
+	case *template.DotExpr:
+		g.buf.WriteString("template.GetProperty(")
+		g.genTemplateExpr(e.Object)
 		g.buf.WriteString(", ")
 		g.buf.WriteString(strconv.Quote(e.Property))
 		g.buf.WriteString(")")
 
-	case *liquid.IndexExpr:
-		g.buf.WriteString("liquid.GetIndex(")
-		g.genLiquidExpr(e.Object)
+	case *template.IndexExpr:
+		g.buf.WriteString("template.GetIndex(")
+		g.genTemplateExpr(e.Object)
 		g.buf.WriteString(", ")
-		g.genLiquidExpr(e.Index)
+		g.genTemplateExpr(e.Index)
 		g.buf.WriteString(")")
 
-	case *liquid.FilterExpr:
-		g.genLiquidFilterExpr(e)
+	case *template.FilterExpr:
+		g.genTemplateFilterExpr(e)
 
-	case *liquid.BinaryExpr:
-		g.genLiquidBinaryExpr(e)
+	case *template.BinaryExpr:
+		g.genTemplateBinaryExpr(e)
 
-	case *liquid.RangeExpr:
-		g.buf.WriteString("liquid.MakeRange(")
-		g.genLiquidExpr(e.Start)
+	case *template.RangeExpr:
+		g.buf.WriteString("template.MakeRange(")
+		g.genTemplateExpr(e.Start)
 		g.buf.WriteString(", ")
-		g.genLiquidExpr(e.End)
+		g.genTemplateExpr(e.End)
 		g.buf.WriteString(")")
 
 	default:
@@ -430,141 +435,141 @@ func (g *Generator) genLiquidExpr(expr liquid.Expression) {
 	}
 }
 
-// genLiquidFilterExpr generates code for a filter expression.
-func (g *Generator) genLiquidFilterExpr(e *liquid.FilterExpr) {
+// genTemplateFilterExpr generates code for a filter expression.
+func (g *Generator) genTemplateFilterExpr(e *template.FilterExpr) {
 	switch e.Name {
 	case "upcase":
-		g.buf.WriteString("liquid.FilterUpcase(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterUpcase(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(")")
 	case "downcase":
-		g.buf.WriteString("liquid.FilterDowncase(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterDowncase(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(")")
 	case "capitalize":
-		g.buf.WriteString("liquid.FilterCapitalize(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterCapitalize(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(")")
 	case "strip":
-		g.buf.WriteString("liquid.FilterStrip(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterStrip(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(")")
 	case "escape":
-		g.buf.WriteString("liquid.FilterEscape(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterEscape(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(")")
 	case "first":
-		g.buf.WriteString("liquid.FilterFirst(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterFirst(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(")")
 	case "last":
-		g.buf.WriteString("liquid.FilterLast(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterLast(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(")")
 	case "size":
-		g.buf.WriteString("liquid.FilterSize(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterSize(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(")")
 	case "reverse":
-		g.buf.WriteString("liquid.FilterReverse(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterReverse(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(")")
 	case "join":
-		g.buf.WriteString("liquid.FilterJoin(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterJoin(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(", ")
 		if len(e.Args) > 0 {
-			g.buf.WriteString("liquid.ToString(")
-			g.genLiquidExpr(e.Args[0])
+			g.buf.WriteString("template.ToString(")
+			g.genTemplateExpr(e.Args[0])
 			g.buf.WriteString(")")
 		} else {
 			g.buf.WriteString(`" "`)
 		}
 		g.buf.WriteString(")")
 	case "default":
-		g.buf.WriteString("liquid.FilterDefault(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterDefault(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(", ")
 		if len(e.Args) > 0 {
-			g.genLiquidExpr(e.Args[0])
+			g.genTemplateExpr(e.Args[0])
 		} else {
 			g.buf.WriteString(`""`)
 		}
 		g.buf.WriteString(")")
 	case "plus":
-		g.buf.WriteString("liquid.FilterPlus(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterPlus(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(", ")
 		if len(e.Args) > 0 {
-			g.genLiquidExpr(e.Args[0])
+			g.genTemplateExpr(e.Args[0])
 		} else {
 			g.buf.WriteString("0")
 		}
 		g.buf.WriteString(")")
 	case "minus":
-		g.buf.WriteString("liquid.FilterMinus(")
-		g.genLiquidExpr(e.Input)
+		g.buf.WriteString("template.FilterMinus(")
+		g.genTemplateExpr(e.Input)
 		g.buf.WriteString(", ")
 		if len(e.Args) > 0 {
-			g.genLiquidExpr(e.Args[0])
+			g.genTemplateExpr(e.Args[0])
 		} else {
 			g.buf.WriteString("0")
 		}
 		g.buf.WriteString(")")
 	default:
 		// Unknown filter - just pass through input
-		g.genLiquidExpr(e.Input)
+		g.genTemplateExpr(e.Input)
 	}
 }
 
-// genLiquidBinaryExpr generates code for a binary expression.
-func (g *Generator) genLiquidBinaryExpr(e *liquid.BinaryExpr) {
+// genTemplateBinaryExpr generates code for a binary expression.
+func (g *Generator) genTemplateBinaryExpr(e *template.BinaryExpr) {
 	switch e.Operator {
 	case "and":
-		g.buf.WriteString("(liquid.ToBool(")
-		g.genLiquidExpr(e.Left)
-		g.buf.WriteString(") && liquid.ToBool(")
-		g.genLiquidExpr(e.Right)
+		g.buf.WriteString("(template.ToBool(")
+		g.genTemplateExpr(e.Left)
+		g.buf.WriteString(") && template.ToBool(")
+		g.genTemplateExpr(e.Right)
 		g.buf.WriteString("))")
 	case "or":
-		g.buf.WriteString("(liquid.ToBool(")
-		g.genLiquidExpr(e.Left)
-		g.buf.WriteString(") || liquid.ToBool(")
-		g.genLiquidExpr(e.Right)
+		g.buf.WriteString("(template.ToBool(")
+		g.genTemplateExpr(e.Left)
+		g.buf.WriteString(") || template.ToBool(")
+		g.genTemplateExpr(e.Right)
 		g.buf.WriteString("))")
 	default:
 		// Use CompareValues for comparison operators
-		g.buf.WriteString("liquid.CompareValues(")
-		g.genLiquidExpr(e.Left)
+		g.buf.WriteString("template.CompareValues(")
+		g.genTemplateExpr(e.Left)
 		g.buf.WriteString(", ")
 		g.buf.WriteString(strconv.Quote(e.Operator))
 		g.buf.WriteString(", ")
-		g.genLiquidExpr(e.Right)
+		g.genTemplateExpr(e.Right)
 		g.buf.WriteString(")")
 	}
 }
 
-// genLiquidIfTag generates code for an if tag.
-func (g *Generator) genLiquidIfTag(tag *liquid.IfTag) {
+// genTemplateIfTag generates code for an if tag.
+func (g *Generator) genTemplateIfTag(tag *template.IfTag) {
 	g.writeIndent()
-	g.buf.WriteString("if liquid.ToBool(")
-	g.genLiquidExpr(tag.Condition)
+	g.buf.WriteString("if template.ToBool(")
+	g.genTemplateExpr(tag.Condition)
 	g.buf.WriteString(") {\n")
 	g.indent++
 	for _, node := range tag.ThenBranch {
-		g.genLiquidNode(node)
+		g.genTemplateNode(node)
 	}
 	g.indent--
 
 	// Handle elsif branches
 	for _, elsif := range tag.ElsifBranches {
 		g.writeIndent()
-		g.buf.WriteString("} else if liquid.ToBool(")
-		g.genLiquidExpr(elsif.Condition)
+		g.buf.WriteString("} else if template.ToBool(")
+		g.genTemplateExpr(elsif.Condition)
 		g.buf.WriteString(") {\n")
 		g.indent++
 		for _, node := range elsif.Body {
-			g.genLiquidNode(node)
+			g.genTemplateNode(node)
 		}
 		g.indent--
 	}
@@ -575,7 +580,7 @@ func (g *Generator) genLiquidIfTag(tag *liquid.IfTag) {
 		g.buf.WriteString("} else {\n")
 		g.indent++
 		for _, node := range tag.ElseBranch {
-			g.genLiquidNode(node)
+			g.genTemplateNode(node)
 		}
 		g.indent--
 	}
@@ -584,15 +589,15 @@ func (g *Generator) genLiquidIfTag(tag *liquid.IfTag) {
 	g.buf.WriteString("}\n")
 }
 
-// genLiquidUnlessTag generates code for an unless tag.
-func (g *Generator) genLiquidUnlessTag(tag *liquid.UnlessTag) {
+// genTemplateUnlessTag generates code for an unless tag.
+func (g *Generator) genTemplateUnlessTag(tag *template.UnlessTag) {
 	g.writeIndent()
-	g.buf.WriteString("if !liquid.ToBool(")
-	g.genLiquidExpr(tag.Condition)
+	g.buf.WriteString("if !template.ToBool(")
+	g.genTemplateExpr(tag.Condition)
 	g.buf.WriteString(") {\n")
 	g.indent++
 	for _, node := range tag.Body {
-		g.genLiquidNode(node)
+		g.genTemplateNode(node)
 	}
 	g.indent--
 
@@ -602,7 +607,7 @@ func (g *Generator) genLiquidUnlessTag(tag *liquid.UnlessTag) {
 		g.buf.WriteString("} else {\n")
 		g.indent++
 		for _, node := range tag.ElseBranch {
-			g.genLiquidNode(node)
+			g.genTemplateNode(node)
 		}
 		g.indent--
 	}
@@ -611,8 +616,8 @@ func (g *Generator) genLiquidUnlessTag(tag *liquid.UnlessTag) {
 	g.buf.WriteString("}\n")
 }
 
-// genLiquidForTag generates code for a for loop.
-func (g *Generator) genLiquidForTag(tag *liquid.ForTag) {
+// genTemplateForTag generates code for a for loop.
+func (g *Generator) genTemplateForTag(tag *template.ForTag) {
 	// Generate a unique variable name for the collection
 	collectionVar := fmt.Sprintf("_lfc%d", g.tempVarCounter)
 	g.tempVarCounter++
@@ -620,15 +625,15 @@ func (g *Generator) genLiquidForTag(tag *liquid.ForTag) {
 	// Get the collection
 	g.writeIndent()
 	g.buf.WriteString(collectionVar)
-	g.buf.WriteString(" := liquid.ToSlice(")
-	g.genLiquidExpr(tag.Collection)
+	g.buf.WriteString(" := template.ToSlice(")
+	g.genTemplateExpr(tag.Collection)
 	g.buf.WriteString(")\n")
 
 	// Handle offset
 	if tag.Offset != nil {
 		g.writeIndent()
-		g.buf.WriteString("if _off := liquid.ToIntValue(")
-		g.genLiquidExpr(tag.Offset)
+		g.buf.WriteString("if _off := template.ToIntValue(")
+		g.genTemplateExpr(tag.Offset)
 		g.buf.WriteString("); _off > 0 && _off < len(")
 		g.buf.WriteString(collectionVar)
 		g.buf.WriteString(") {\n")
@@ -646,8 +651,8 @@ func (g *Generator) genLiquidForTag(tag *liquid.ForTag) {
 	// Handle limit
 	if tag.Limit != nil {
 		g.writeIndent()
-		g.buf.WriteString("if _lim := liquid.ToIntValue(")
-		g.genLiquidExpr(tag.Limit)
+		g.buf.WriteString("if _lim := template.ToIntValue(")
+		g.genTemplateExpr(tag.Limit)
 		g.buf.WriteString("); _lim > 0 && _lim < len(")
 		g.buf.WriteString(collectionVar)
 		g.buf.WriteString(") {\n")
@@ -699,7 +704,7 @@ func (g *Generator) genLiquidForTag(tag *liquid.ForTag) {
 		g.buf.WriteString(") == 0 {\n")
 		g.indent++
 		for _, node := range tag.ElseBody {
-			g.genLiquidNode(node)
+			g.genTemplateNode(node)
 		}
 		g.indent--
 		g.writeIndent()
@@ -745,7 +750,7 @@ func (g *Generator) genLiquidForTag(tag *liquid.ForTag) {
 
 	// Generate loop body
 	for _, node := range tag.Body {
-		g.genLiquidNode(node)
+		g.genTemplateNode(node)
 	}
 
 	g.indent--
@@ -765,15 +770,15 @@ func (g *Generator) genLiquidForTag(tag *liquid.ForTag) {
 	}
 }
 
-// genLiquidCaseTag generates code for a case tag.
-func (g *Generator) genLiquidCaseTag(tag *liquid.CaseTag) {
+// genTemplateCaseTag generates code for a case tag.
+func (g *Generator) genTemplateCaseTag(tag *template.CaseTag) {
 	valueVar := fmt.Sprintf("_lcv%d", g.tempVarCounter)
 	g.tempVarCounter++
 
 	g.writeIndent()
 	g.buf.WriteString(valueVar)
 	g.buf.WriteString(" := ")
-	g.genLiquidExpr(tag.Value)
+	g.genTemplateExpr(tag.Value)
 	g.buf.WriteString("\n")
 
 	for i, when := range tag.Whens {
@@ -789,17 +794,17 @@ func (g *Generator) genLiquidCaseTag(tag *liquid.CaseTag) {
 			if j > 0 {
 				g.buf.WriteString(" || ")
 			}
-			g.buf.WriteString("liquid.CompareValues(")
+			g.buf.WriteString("template.CompareValues(")
 			g.buf.WriteString(valueVar)
 			g.buf.WriteString(", \"==\", ")
-			g.genLiquidExpr(val)
+			g.genTemplateExpr(val)
 			g.buf.WriteString(")")
 		}
 
 		g.buf.WriteString(" {\n")
 		g.indent++
 		for _, node := range when.Body {
-			g.genLiquidNode(node)
+			g.genTemplateNode(node)
 		}
 		g.indent--
 	}
@@ -809,7 +814,7 @@ func (g *Generator) genLiquidCaseTag(tag *liquid.CaseTag) {
 		g.buf.WriteString("} else {\n")
 		g.indent++
 		for _, node := range tag.Else {
-			g.genLiquidNode(node)
+			g.genTemplateNode(node)
 		}
 		g.indent--
 	}
@@ -820,18 +825,18 @@ func (g *Generator) genLiquidCaseTag(tag *liquid.CaseTag) {
 	}
 }
 
-// genLiquidAssignTag generates code for an assign tag.
-func (g *Generator) genLiquidAssignTag(tag *liquid.AssignTag) {
+// genTemplateAssignTag generates code for an assign tag.
+func (g *Generator) genTemplateAssignTag(tag *template.AssignTag) {
 	g.writeIndent()
 	g.buf.WriteString("ctx.Set(")
 	g.buf.WriteString(strconv.Quote(tag.Variable))
 	g.buf.WriteString(", ")
-	g.genLiquidExpr(tag.Value)
+	g.genTemplateExpr(tag.Value)
 	g.buf.WriteString(")\n")
 }
 
-// genLiquidCaptureTag generates code for a capture tag.
-func (g *Generator) genLiquidCaptureTag(tag *liquid.CaptureTag) {
+// genTemplateCaptureTag generates code for a capture tag.
+func (g *Generator) genTemplateCaptureTag(tag *template.CaptureTag) {
 	// Save content written so far
 	preVar := fmt.Sprintf("_lcpre%d", g.tempVarCounter)
 	g.tempVarCounter++
@@ -846,7 +851,7 @@ func (g *Generator) genLiquidCaptureTag(tag *liquid.CaptureTag) {
 
 	// Generate body (writes to buf)
 	for _, node := range tag.Body {
-		g.genLiquidNode(node)
+		g.genTemplateNode(node)
 	}
 
 	// Save captured content to context variable

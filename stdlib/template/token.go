@@ -1,4 +1,4 @@
-package liquid
+package template
 
 // TokenType represents the type of a token in a Liquid template.
 type TokenType int

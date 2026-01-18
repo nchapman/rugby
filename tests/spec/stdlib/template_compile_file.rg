@@ -1,12 +1,12 @@
 #@ run-pass
 #@ check-output
 #
-# Test compile-time liquid templates with compile_file
+# Test compile-time template.compile with compile_file
 
-import "rugby/liquid"
+import "rugby/template"
 
 # Load template from file
-const TEMPLATE = liquid.compile_file("liquid/test_template.liquid")
+const TEMPLATE = template.compile_file("template/test_template.tmpl")
 
 puts TEMPLATE.MustRender({name: "World", items: [1, 2, 3]})
 

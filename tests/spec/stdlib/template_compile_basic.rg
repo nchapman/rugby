@@ -1,21 +1,21 @@
 #@ run-pass
 #@ check-output
 #
-# Test compile-time liquid templates with liquid.compile
+# Test compile-time template.compile with template.compile
 
-import "rugby/liquid"
+import "rugby/template"
 
 # Simple text
-const HELLO = liquid.compile("Hello!")
+const HELLO = template.compile("Hello!")
 
 # Variable interpolation
-const GREETING = liquid.compile("Hello, {{ name }}!")
+const GREETING = template.compile("Hello, {{ name }}!")
 
 # Multiple variables
-const MESSAGE = liquid.compile("{{ greeting }}, {{ name }}!")
+const MESSAGE = template.compile("{{ greeting }}, {{ name }}!")
 
 # With filter
-const UPPER = liquid.compile("Hello, {{ name | upcase }}!")
+const UPPER = template.compile("Hello, {{ name | upcase }}!")
 
 puts HELLO.MustRender({})
 puts GREETING.MustRender({name: "World"})

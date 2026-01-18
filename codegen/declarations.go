@@ -1604,9 +1604,9 @@ func (g *Generator) genStructMethod(structDecl *ast.StructDecl, method *ast.Meth
 
 // genConstDecl generates a Go const declaration from a Rugby const declaration
 // e.g., const MAX_SIZE = 1024 becomes const MAX_SIZE = 1024
-// Special handling for compile-time handlers (e.g., liquid.compile) - generates optimized code
+// Special handling for compile-time handlers (e.g., template.compile) - generates optimized code
 func (g *Generator) genConstDecl(constDecl *ast.ConstDecl) {
-	// Check for compile-time handlers (e.g., liquid.compile, regex.compile, etc.)
+	// Check for compile-time handlers (e.g., template.compile, regex.compile, etc.)
 	if call, ok := constDecl.Value.(*ast.CallExpr); ok {
 		if handler, method, ok := g.getCompileTimeHandler(call); ok {
 			handler.Generate(g, constDecl.Name, call, method)
