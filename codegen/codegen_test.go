@@ -669,6 +669,20 @@ end`
 	assertContains(t, output, `arr[i]`)
 }
 
+func TestSubtractionInvalidatesNonNegative(t *testing.T) {
+	input := `def main
+  arr = [1, 2, 3, 4, 5]
+  i = 5
+  i -= 10
+  x = arr[i]
+end`
+
+	output := compile(t, input)
+
+	// After subtraction, i could be negative, so should use runtime.SliceAt
+	assertContains(t, output, `runtime.SliceAt[int](arr, i)`)
+}
+
 func TestGenerateRangeSliceInclusive(t *testing.T) {
 	input := `def main
   arr = [1, 2, 3, 4, 5]

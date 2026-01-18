@@ -350,6 +350,11 @@ func (g *Generator) genCompoundAssignStmt(s *ast.CompoundAssignStmt) {
 	g.buf.WriteString("= ")
 	g.genExpr(s.Value)
 	g.buf.WriteString("\n")
+
+	// Subtraction and modulo can make a value negative, invalidate tracking
+	if s.Op == "-" || s.Op == "%" {
+		delete(g.nonNegativeVars, s.Name)
+	}
 }
 
 // genMultiAssignStmt generates code for tuple unpacking: val, ok = expr
@@ -2050,15 +2055,17 @@ func (g *Generator) genForStmt(s *ast.ForStmt) {
 	g.indent--
 	g.exitLoop()
 
-	// Restore variable state
+	// Restore variable state (including non-negative tracking)
 	if !wasDefinedBefore {
 		delete(g.vars, s.Var)
+		delete(g.nonNegativeVars, s.Var)
 	} else {
 		g.vars[s.Var] = prevType
 	}
 	if s.Var2 != "" {
 		if !wasDefinedBefore2 {
 			delete(g.vars, s.Var2)
+			delete(g.nonNegativeVars, s.Var2)
 		} else {
 			g.vars[s.Var2] = prevType2
 		}
@@ -2094,8 +2101,10 @@ func (g *Generator) genForRangeVarLoop(varName string, rangeVar string, body []a
 	g.indent--
 	g.exitLoop()
 
+	// Restore variable state (including non-negative tracking)
 	if !wasDefinedBefore {
 		delete(g.vars, varName)
+		delete(g.nonNegativeVars, varName)
 	} else {
 		g.vars[varName] = prevType
 	}
@@ -2157,9 +2166,10 @@ func (g *Generator) genForRangeLoop(varName string, r *ast.RangeLit, body []ast.
 	g.indent--
 	g.exitLoop()
 
-	// Restore variable state
+	// Restore variable state (including non-negative tracking)
 	if !wasDefinedBefore {
 		delete(g.vars, varName)
+		delete(g.nonNegativeVars, varName)
 	} else {
 		g.vars[varName] = prevType
 	}
