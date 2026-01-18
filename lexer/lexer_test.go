@@ -1962,3 +1962,136 @@ func TestRegexVsDivision(t *testing.T) {
 		})
 	}
 }
+
+func TestAllKeywords(t *testing.T) {
+	// Test that all keywords are properly recognized by the lexer
+	tests := []struct {
+		input    string
+		expected token.TokenType
+	}{
+		// Basic keywords
+		{"import", token.IMPORT},
+		{"def", token.DEF},
+		{"end", token.END},
+		{"if", token.IF},
+		{"elsif", token.ELSIF},
+		{"else", token.ELSE},
+		{"unless", token.UNLESS},
+		{"case", token.CASE},
+		{"case_type", token.CASETYPE},
+		{"when", token.WHEN},
+		{"while", token.WHILE},
+		{"until", token.UNTIL},
+		{"for", token.FOR},
+		{"loop", token.LOOP},
+		{"in", token.IN},
+		{"break", token.BREAK},
+		{"next", token.NEXT},
+		{"continue", token.NEXT}, // alias for next
+		{"return", token.RETURN},
+
+		// Declaration keywords
+		{"class", token.CLASS},
+		{"interface", token.INTERFACE},
+		{"module", token.MODULE},
+		{"enum", token.ENUM},
+		{"struct", token.STRUCT},
+		{"type", token.TYPE},
+		{"const", token.CONST},
+
+		// Accessor keywords
+		{"getter", token.GETTER},
+		{"setter", token.SETTER},
+		{"property", token.PROPERTY},
+
+		// Visibility keywords
+		{"pub", token.PUB},
+		{"private", token.PRIVATE},
+
+		// Concurrency keywords
+		{"go", token.GO},
+		{"spawn", token.SPAWN},
+		{"await", token.AWAIT},
+		{"concurrently", token.CONCURRENTLY},
+		{"select", token.SELECT},
+
+		// Error handling keywords
+		{"panic", token.PANIC},
+		{"rescue", token.RESCUE},
+
+		// Special keywords
+		{"self", token.SELF},
+		{"super", token.SUPER},
+		{"include", token.INCLUDE},
+		{"implements", token.IMPLEMENTS},
+		{"any", token.ANY},
+
+		// Boolean and nil
+		{"true", token.TRUE},
+		{"false", token.FALSE},
+		{"nil", token.NIL},
+
+		// Logical operators as keywords
+		{"and", token.AND},
+		{"or", token.OR},
+		{"not", token.NOT},
+
+		// Other keywords
+		{"as", token.AS},
+		{"let", token.LET},
+		{"defer", token.DEFER},
+		{"do", token.DO},
+
+		// Testing keywords
+		{"describe", token.DESCRIBE},
+		{"it", token.IT},
+		{"test", token.TEST},
+		{"table", token.TABLE},
+		{"before", token.BEFORE},
+		{"after", token.AFTER},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			l := New(tt.input)
+			tok := l.NextToken()
+			if tok.Type != tt.expected {
+				t.Errorf("keyword %q: expected type %q, got %q", tt.input, tt.expected, tok.Type)
+			}
+			if tok.Literal != tt.input {
+				t.Errorf("keyword %q: expected literal %q, got %q", tt.input, tt.input, tok.Literal)
+			}
+		})
+	}
+}
+
+func TestKeywordBoundaries(t *testing.T) {
+	// Test that keywords are not matched when they're part of larger identifiers
+	tests := []struct {
+		input    string
+		expected token.TokenType
+	}{
+		{"defx", token.IDENT},         // not DEF
+		{"endx", token.IDENT},         // not END
+		{"ifx", token.IDENT},          // not IF
+		{"classname", token.IDENT},    // not CLASS
+		{"module_name", token.IDENT},  // not MODULE
+		{"enum_value", token.IDENT},   // not ENUM
+		{"struct_field", token.IDENT}, // not STRUCT
+		{"spawner", token.IDENT},      // not SPAWN
+		{"awaiting", token.IDENT},     // not AWAIT
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			l := New(tt.input)
+			tok := l.NextToken()
+			if tok.Type != tt.expected {
+				t.Errorf("identifier %q: expected type %q, got %q", tt.input, tt.expected, tok.Type)
+			}
+			if tok.Literal != tt.input {
+				t.Errorf("identifier %q: expected literal %q, got %q", tt.input, tt.input, tok.Literal)
+			}
+		})
+	}
+}

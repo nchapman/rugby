@@ -180,6 +180,71 @@ func TestMapInvert(t *testing.T) {
 	}
 }
 
+func TestMapEach(t *testing.T) {
+	m := map[string]int{"a": 1, "b": 2, "c": 3}
+	collected := make(map[string]int)
+
+	MapEach(m, func(k string, v int) {
+		collected[k] = v
+	})
+
+	if len(collected) != 3 {
+		t.Errorf("MapEach: collected %d entries, want 3", len(collected))
+	}
+	for k, v := range m {
+		if collected[k] != v {
+			t.Errorf("MapEach: collected[%q] = %d, want %d", k, collected[k], v)
+		}
+	}
+
+	// Empty map
+	var count int
+	MapEach(map[string]int{}, func(k string, v int) {
+		count++
+	})
+	if count != 0 {
+		t.Errorf("MapEach empty: got %d iterations, want 0", count)
+	}
+}
+
+func TestMapEmpty(t *testing.T) {
+	m := map[string]int{"a": 1}
+	if MapEmpty(m) {
+		t.Error("MapEmpty non-empty: got true, want false")
+	}
+
+	empty := map[string]int{}
+	if !MapEmpty(empty) {
+		t.Error("MapEmpty empty: got false, want true")
+	}
+}
+
+func TestMapLength(t *testing.T) {
+	m := map[string]int{"a": 1, "b": 2, "c": 3}
+	if MapLength(m) != 3 {
+		t.Errorf("MapLength: got %d, want 3", MapLength(m))
+	}
+
+	empty := map[string]int{}
+	if MapLength(empty) != 0 {
+		t.Errorf("MapLength empty: got %d, want 0", MapLength(empty))
+	}
+}
+
+func TestMapGet(t *testing.T) {
+	m := map[string]int{"a": 1, "b": 2}
+
+	// Key exists
+	if v := MapGet(m, "a"); v == nil || *v != 1 {
+		t.Errorf("MapGet existing: got %v, want 1", v)
+	}
+
+	// Key missing
+	if v := MapGet(m, "z"); v != nil {
+		t.Errorf("MapGet missing: got %v, want nil", v)
+	}
+}
+
 func TestGetKey(t *testing.T) {
 	// Test with map[string]any (common JSON pattern)
 	stringMap := map[string]any{"name": "Alice", "age": 30}

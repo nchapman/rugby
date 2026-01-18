@@ -5345,3 +5345,138 @@ end`
 	// Should NOT contain tuple field access for the function call
 	assertNotContains(t, output, `getPair()._0`)
 }
+
+// TestMapDeleteOptimization tests that map.delete() compiles to Go's delete() builtin
+func TestMapDeleteOptimization(t *testing.T) {
+	input := `def main
+  m: Map<String, Int> = {"a" => 1, "b" => 2}
+  m.delete("a")
+end`
+
+	output := compile(t, input)
+
+	// Should use native Go delete() builtin, not runtime.MapDelete
+	assertContains(t, output, `delete(m, "a")`)
+	assertNotContains(t, output, `runtime.MapDelete`)
+}
+
+// TestMapDeleteWithReturnValue tests that map.delete() uses runtime when return value is needed
+func TestMapDeleteWithReturnValue(t *testing.T) {
+	input := `def main
+  m: Map<String, Int> = {"a" => 1, "b" => 2}
+  val = m.delete("a")
+  puts(val)
+end`
+
+	output := compile(t, input)
+
+	// Should use runtime.MapDelete when return value is used
+	assertContains(t, output, `runtime.MapDelete`)
+}
+
+// TestStringSubstringOptimization tests that string.substring compiles to slice syntax
+func TestStringSubstringOptimization(t *testing.T) {
+	input := `def main
+  s = "hello world"
+  sub = s.substring(0, 5)
+  puts(sub)
+end`
+
+	output := compile(t, input)
+
+	// Should use native Go slice syntax, not runtime.SubString
+	assertContains(t, output, `s[0:5]`)
+	assertNotContains(t, output, `runtime.SubString`)
+}
+
+// TestNonNegativeLoopVariables tests that loop variables are tracked as non-negative
+func TestNonNegativeLoopVariables(t *testing.T) {
+	input := `def main
+  arr = [1, 2, 3, 4, 5]
+  for i in 0...5
+    puts(arr[i])
+  end
+end`
+
+	output := compile(t, input)
+
+	// Loop variable i should use native indexing (no bounds check)
+	assertContains(t, output, `arr[i]`)
+	assertNotContains(t, output, `runtime.AtIndex`)
+}
+
+// TestNonNegativeTimesVariable tests that times loop variable uses runtime.SliceAt
+func TestNonNegativeTimesVariable(t *testing.T) {
+	input := `def main
+  arr = [1, 2, 3, 4, 5]
+  5.times do |i|
+    puts(arr[i])
+  end
+end`
+
+	output := compile(t, input)
+
+	// Times block uses runtime.Times with closure - uses SliceAt for safety
+	assertContains(t, output, `runtime.Times(5`)
+	assertContains(t, output, `runtime.SliceAt`)
+}
+
+// TestNonNegativeInvalidatedBySubtraction tests that subtraction invalidates non-negative tracking
+func TestNonNegativeInvalidatedBySubtraction(t *testing.T) {
+	input := `def main
+  arr = [1, 2, 3, 4, 5]
+  i = 3
+  i = i - 1
+  x = arr[i]
+  puts(x)
+end`
+
+	output := compile(t, input)
+
+	// After subtraction, i could be negative, so use bounds-checked access (runtime.SliceAt)
+	assertContains(t, output, `runtime.SliceAt`)
+}
+
+// TestLoopVariableScopeCleanup tests that loop variables are cleaned up after loop exits
+func TestLoopVariableScopeCleanup(t *testing.T) {
+	input := `def main
+  for i in 0...3
+    puts(i)
+  end
+  # i should not be accessible here - if it is, this is a scope leak
+  # The generated code should not have i available outside the loop
+end`
+
+	output := compile(t, input)
+
+	// Loop variable should be scoped to the loop (Go 1.22+ uses range over int)
+	assertContains(t, output, `for i := range 3`)
+}
+
+// TestIntToFloatOptimization tests that .to_f on Int compiles to float64() cast
+func TestIntToFloatOptimization(t *testing.T) {
+	input := `def main
+  n = 42
+  f = n.to_f
+  puts(f)
+end`
+
+	output := compile(t, input)
+
+	// Should use direct float64() cast, not runtime call
+	assertContains(t, output, `float64(n)`)
+}
+
+// TestFloatToIntOptimization tests that .to_i on Float compiles to int() cast
+func TestFloatToIntOptimization(t *testing.T) {
+	input := `def main
+  f = 3.14
+  n = f.to_i
+  puts(n)
+end`
+
+	output := compile(t, input)
+
+	// Should use direct int() cast, not runtime call
+	assertContains(t, output, `int(f)`)
+}

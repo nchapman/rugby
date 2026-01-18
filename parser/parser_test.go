@@ -6963,3 +6963,215 @@ const C = 3`
 		}
 	}
 }
+
+func TestRegexLiteral(t *testing.T) {
+	tests := []struct {
+		input   string
+		pattern string
+		flags   string
+	}{
+		{`def main
+  r = /hello/
+end`, "hello", ""},
+		{`def main
+  r = /world/i
+end`, "world", "i"},
+		{`def main
+  r = /^start$/m
+end`, "^start$", "m"},
+		{`def main
+  r = /\d+/
+end`, `\d+`, ""},
+	}
+
+	for _, tt := range tests {
+		l := lexer.New(tt.input)
+		p := New(l)
+		program := p.ParseProgram()
+		checkParserErrors(t, p)
+
+		fn, ok := program.Declarations[0].(*ast.FuncDecl)
+		if !ok {
+			t.Fatalf("expected FuncDecl, got %T", program.Declarations[0])
+		}
+
+		assign, ok := fn.Body[0].(*ast.AssignStmt)
+		if !ok {
+			t.Fatalf("expected AssignStmt, got %T", fn.Body[0])
+		}
+
+		regex, ok := assign.Value.(*ast.RegexLit)
+		if !ok {
+			t.Fatalf("expected RegexLit, got %T", assign.Value)
+		}
+
+		if regex.Pattern != tt.pattern {
+			t.Errorf("expected pattern %q, got %q", tt.pattern, regex.Pattern)
+		}
+
+		if regex.Flags != tt.flags {
+			t.Errorf("expected flags %q, got %q", tt.flags, regex.Flags)
+		}
+	}
+}
+
+func TestEnumDeclaration(t *testing.T) {
+	input := `enum Status
+  Pending
+  Active
+  Complete
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	enumDecl, ok := program.Declarations[0].(*ast.EnumDecl)
+	if !ok {
+		t.Fatalf("expected EnumDecl, got %T", program.Declarations[0])
+	}
+
+	if enumDecl.Name != "Status" {
+		t.Errorf("expected name 'Status', got %q", enumDecl.Name)
+	}
+
+	if len(enumDecl.Values) != 3 {
+		t.Fatalf("expected 3 values, got %d", len(enumDecl.Values))
+	}
+
+	expectedNames := []string{"Pending", "Active", "Complete"}
+	for i, name := range expectedNames {
+		if enumDecl.Values[i].Name != name {
+			t.Errorf("value %d: expected %q, got %q", i, name, enumDecl.Values[i].Name)
+		}
+	}
+}
+
+func TestEnumDeclarationWithExplicitValues(t *testing.T) {
+	input := `enum HttpStatus
+  OK = 200
+  NotFound = 404
+  ServerError = 500
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	enumDecl, ok := program.Declarations[0].(*ast.EnumDecl)
+	if !ok {
+		t.Fatalf("expected EnumDecl, got %T", program.Declarations[0])
+	}
+
+	if enumDecl.Name != "HttpStatus" {
+		t.Errorf("expected name 'HttpStatus', got %q", enumDecl.Name)
+	}
+
+	expectedValues := map[string]int64{
+		"OK":          200,
+		"NotFound":    404,
+		"ServerError": 500,
+	}
+
+	for _, ev := range enumDecl.Values {
+		expected, found := expectedValues[ev.Name]
+		if !found {
+			t.Errorf("unexpected enum value: %s", ev.Name)
+			continue
+		}
+
+		intLit, ok := ev.Value.(*ast.IntLit)
+		if !ok {
+			t.Errorf("%s: expected IntLit value, got %T", ev.Name, ev.Value)
+			continue
+		}
+
+		if intLit.Value != expected {
+			t.Errorf("%s: expected value %d, got %d", ev.Name, expected, intLit.Value)
+		}
+	}
+}
+
+func TestStructDeclaration(t *testing.T) {
+	input := `struct Point
+  x: Int
+  y: Int
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	if len(program.Declarations) != 1 {
+		t.Fatalf("expected 1 declaration, got %d", len(program.Declarations))
+	}
+
+	structDecl, ok := program.Declarations[0].(*ast.StructDecl)
+	if !ok {
+		t.Fatalf("expected StructDecl, got %T", program.Declarations[0])
+	}
+
+	if structDecl.Name != "Point" {
+		t.Errorf("expected name 'Point', got %q", structDecl.Name)
+	}
+
+	if len(structDecl.Fields) != 2 {
+		t.Fatalf("expected 2 fields, got %d", len(structDecl.Fields))
+	}
+
+	expectedFields := []struct {
+		name     string
+		typeName string
+	}{
+		{"x", "Int"},
+		{"y", "Int"},
+	}
+
+	for i, ef := range expectedFields {
+		if structDecl.Fields[i].Name != ef.name {
+			t.Errorf("field %d: expected name %q, got %q", i, ef.name, structDecl.Fields[i].Name)
+		}
+		if structDecl.Fields[i].Type != ef.typeName {
+			t.Errorf("field %d: expected type %q, got %q", i, ef.typeName, structDecl.Fields[i].Type)
+		}
+	}
+}
+
+func TestStructDeclarationWithGenerics(t *testing.T) {
+	input := `struct Pair<A, B>
+  first: A
+  second: B
+end`
+
+	l := lexer.New(input)
+	p := New(l)
+	program := p.ParseProgram()
+	checkParserErrors(t, p)
+
+	structDecl, ok := program.Declarations[0].(*ast.StructDecl)
+	if !ok {
+		t.Fatalf("expected StructDecl, got %T", program.Declarations[0])
+	}
+
+	if structDecl.Name != "Pair" {
+		t.Errorf("expected name 'Pair', got %q", structDecl.Name)
+	}
+
+	if len(structDecl.TypeParams) != 2 {
+		t.Fatalf("expected 2 type params, got %d", len(structDecl.TypeParams))
+	}
+
+	if structDecl.TypeParams[0].Name != "A" {
+		t.Errorf("expected first type param 'A', got %q", structDecl.TypeParams[0].Name)
+	}
+	if structDecl.TypeParams[1].Name != "B" {
+		t.Errorf("expected second type param 'B', got %q", structDecl.TypeParams[1].Name)
+	}
+}

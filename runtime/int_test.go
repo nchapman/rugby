@@ -1,6 +1,9 @@
 package runtime
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 func TestAbs(t *testing.T) {
 	if a := Abs(5); a != 5 {
@@ -163,10 +166,123 @@ func TestOdd(t *testing.T) {
 	}
 }
 
+func TestPositive(t *testing.T) {
+	tests := []struct {
+		n        int
+		expected bool
+	}{
+		{1, true},
+		{100, true},
+		{0, false},
+		{-1, false},
+		{-100, false},
+	}
+
+	for _, tt := range tests {
+		got := Positive(tt.n)
+		if got != tt.expected {
+			t.Errorf("Positive(%d): got %v, want %v", tt.n, got, tt.expected)
+		}
+	}
+}
+
+func TestNegative(t *testing.T) {
+	tests := []struct {
+		n        int
+		expected bool
+	}{
+		{-1, true},
+		{-100, true},
+		{0, false},
+		{1, false},
+		{100, false},
+	}
+
+	for _, tt := range tests {
+		got := Negative(tt.n)
+		if got != tt.expected {
+			t.Errorf("Negative(%d): got %v, want %v", tt.n, got, tt.expected)
+		}
+	}
+}
+
+func TestZero(t *testing.T) {
+	tests := []struct {
+		n        int
+		expected bool
+	}{
+		{0, true},
+		{1, false},
+		{-1, false},
+		{100, false},
+		{-100, false},
+	}
+
+	for _, tt := range tests {
+		got := Zero(tt.n)
+		if got != tt.expected {
+			t.Errorf("Zero(%d): got %v, want %v", tt.n, got, tt.expected)
+		}
+	}
+}
+
+func TestIntToString(t *testing.T) {
+	tests := []struct {
+		n        int
+		expected string
+	}{
+		{0, "0"},
+		{42, "42"},
+		{-17, "-17"},
+		{1000000, "1000000"},
+	}
+
+	for _, tt := range tests {
+		got := IntToString(tt.n)
+		if got != tt.expected {
+			t.Errorf("IntToString(%d): got %q, want %q", tt.n, got, tt.expected)
+		}
+	}
+}
+
+func TestIntToFloat(t *testing.T) {
+	tests := []struct {
+		n        int
+		expected float64
+	}{
+		{0, 0.0},
+		{42, 42.0},
+		{-17, -17.0},
+	}
+
+	for _, tt := range tests {
+		got := IntToFloat(tt.n)
+		if got != tt.expected {
+			t.Errorf("IntToFloat(%d): got %v, want %v", tt.n, got, tt.expected)
+		}
+	}
+}
+
 func TestAbsInt64_Extended(t *testing.T) {
 	// Additional coverage for edge cases
 	if AbsInt64(-1) != 1 {
 		t.Error("AbsInt64 -1 failed")
+	}
+}
+
+func TestAbsOverflow(t *testing.T) {
+	// Document behavior: Abs(math.MinInt) overflows and returns math.MinInt
+	// This is noted in the function doc: "Note: Abs(math.MinInt) overflows and returns math.MinInt"
+	// We test to ensure this documented behavior doesn't change unexpectedly
+	result := Abs(math.MinInt)
+	if result != math.MinInt {
+		t.Errorf("Abs(math.MinInt): expected math.MinInt (overflow), got %d", result)
+	}
+
+	// Same for int64 version
+	result64 := AbsInt64(math.MinInt64)
+	if result64 != math.MinInt64 {
+		t.Errorf("AbsInt64(math.MinInt64): expected math.MinInt64 (overflow), got %d", result64)
 	}
 }
 
