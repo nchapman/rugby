@@ -346,6 +346,10 @@ func (t *testTypeInfoAdapter) GetConstructorParams(className string) [][2]string
 	return t.analyzer.GetConstructorParams(className)
 }
 
+func (t *testTypeInfoAdapter) GetGoName(node ast.Node) string {
+	return t.analyzer.GetGoName(node)
+}
+
 // --- Snake Case Conversion Tests ---
 
 func TestSnakeToPascalWithAcronyms(t *testing.T) {

@@ -150,6 +150,11 @@ type TypeInfo interface {
 	// Returns nil if the class has no constructor or doesn't exist.
 	// Each element is a [2]string{name, type}.
 	GetConstructorParams(className string) [][2]string
+
+	// GetGoName returns the actual Go name for a Go interop method/function call.
+	// For example, if Rugby code calls `hasher.sum(nil)` and the Go method is `Sum`,
+	// this returns "Sum". Returns empty string if not a Go interop call or not found.
+	GetGoName(node ast.Node) string
 }
 
 type Generator struct {

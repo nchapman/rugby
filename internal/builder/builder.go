@@ -217,6 +217,11 @@ func (t *typeInfoAdapter) GetConstructorParams(className string) [][2]string {
 	return t.analyzer.GetConstructorParams(className)
 }
 
+// GetGoName returns the actual Go name for a Go interop method/function call.
+func (t *typeInfoAdapter) GetGoName(node ast.Node) string {
+	return t.analyzer.GetGoName(node)
+}
+
 // Styles for pretty output
 var successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
 

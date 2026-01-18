@@ -180,6 +180,10 @@ func (t *testTypeInfo) GetConstructorParams(className string) [][2]string {
 	return t.analyzer.GetConstructorParams(className)
 }
 
+func (t *testTypeInfo) GetGoName(node ast.Node) string {
+	return t.analyzer.GetGoName(node)
+}
+
 // compileWithTypeInfo runs the full compilation pipeline.
 // It ignores semantic errors since some tests use constructs not known to semantic analyzer.
 func compileWithTypeInfo(t *testing.T, input string) string {

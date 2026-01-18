@@ -32,6 +32,9 @@ type Analyzer struct {
 	// Selector kind resolution (field vs method vs getter vs setter)
 	selectorKinds map[*ast.SelectorExpr]ast.SelectorKind
 
+	// Actual Go names for Go interop calls (e.g., "sum" -> "Sum")
+	goNames map[*ast.SelectorExpr]string
+
 	// Class and interface definitions
 	classes    map[string]*Symbol
 	interfaces map[string]*Symbol
@@ -71,6 +74,7 @@ func NewAnalyzer() *Analyzer {
 		globalScope:   global,
 		nodeTypes:     make(map[ast.Node]*Type),
 		selectorKinds: make(map[*ast.SelectorExpr]ast.SelectorKind),
+		goNames:       make(map[*ast.SelectorExpr]string),
 		classes:       make(map[string]*Symbol),
 		interfaces:    make(map[string]*Symbol),
 		modules:       make(map[string]*Symbol),
@@ -2792,6 +2796,7 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 							typ = TypeUnknownVal
 						}
 						selectorKind = ast.SelectorGoMethod
+						a.goNames[e] = fn.Name // Store actual Go name
 					}
 				}
 			}
@@ -2804,34 +2809,24 @@ func (a *Analyzer) analyzeExpr(expr ast.Expression) *Type {
 			if fullPath, found := a.goPackages[pkgPath]; found {
 				pkgPath = fullPath
 			}
-			if typeDef := a.goImporter.LookupType(pkgPath, receiverType.GoTypeName); typeDef != nil {
-				// Check fields first (e.g., http.Request.URL)
-				// Try direct name first, then PascalCase conversion
-				field := typeDef.Fields[e.Sel]
-				if field == nil {
-					field = typeDef.Fields[snakeToPascal(e.Sel)]
-				}
-				if field != nil {
-					typ = field.Type
-					selectorKind = ast.SelectorField
-				}
-				// Then check methods (e.g., scanner.Text(), big.Int.int64)
-				// Try direct name first, then PascalCase conversion
-				if typ == nil {
-					method := typeDef.Methods[e.Sel]
-					if method == nil {
-						method = typeDef.Methods[snakeToPascal(e.Sel)]
+			// Check fields first (e.g., http.Request.URL)
+			if field := a.goImporter.LookupField(pkgPath, receiverType.GoTypeName, e.Sel); field != nil {
+				typ = field.Type
+				selectorKind = ast.SelectorField
+				a.goNames[e] = field.Name // Store actual Go name
+			}
+			// Then check methods (e.g., scanner.Text(), big.Int.int64)
+			if typ == nil {
+				if method := a.goImporter.LookupMethod(pkgPath, receiverType.GoTypeName, e.Sel); method != nil {
+					if len(method.Returns) == 1 {
+						typ = method.Returns[0]
+					} else if len(method.Returns) > 1 {
+						typ = NewTupleType(method.Returns...)
+					} else {
+						typ = TypeUnknownVal
 					}
-					if method != nil {
-						if len(method.Returns) == 1 {
-							typ = method.Returns[0]
-						} else if len(method.Returns) > 1 {
-							typ = NewTupleType(method.Returns...)
-						} else {
-							typ = TypeUnknownVal
-						}
-						selectorKind = ast.SelectorGoMethod
-					}
+					selectorKind = ast.SelectorGoMethod
+					a.goNames[e] = method.Name // Store actual Go name
 				}
 			}
 		}
@@ -3719,20 +3714,14 @@ func (a *Analyzer) analyzeCall(call *ast.CallExpr) *Type {
 			if fullPath, found := a.goPackages[pkgPath]; found {
 				pkgPath = fullPath
 			}
-			if typeDef := a.goImporter.LookupType(pkgPath, receiverType.GoTypeName); typeDef != nil {
-				// Try direct name first, then PascalCase conversion
-				method := typeDef.Methods[sel.Sel]
-				if method == nil {
-					method = typeDef.Methods[snakeToPascal(sel.Sel)]
+			if method := a.goImporter.LookupMethod(pkgPath, receiverType.GoTypeName, sel.Sel); method != nil {
+				a.goNames[sel] = method.Name // Store actual Go name
+				if len(method.Returns) == 1 {
+					return method.Returns[0]
+				} else if len(method.Returns) > 1 {
+					return NewTupleType(method.Returns...)
 				}
-				if method != nil {
-					if len(method.Returns) == 1 {
-						return method.Returns[0]
-					} else if len(method.Returns) > 1 {
-						return NewTupleType(method.Returns...)
-					}
-					return TypeUnknownVal
-				}
+				return TypeUnknownVal
 			}
 		}
 
@@ -4939,6 +4928,16 @@ func (a *Analyzer) GetConstructorParams(className string) [][2]string {
 		result[i] = [2]string{param.Name, typeName}
 	}
 	return result
+}
+
+// GetGoName returns the actual Go name for a Go interop method/function call.
+// For example, if Rugby code calls `hasher.sum(nil)` and the Go method is `Sum`,
+// this returns "Sum". Returns empty string if not a Go interop call or not found.
+func (a *Analyzer) GetGoName(node ast.Node) string {
+	if sel, ok := node.(*ast.SelectorExpr); ok {
+		return a.goNames[sel]
+	}
+	return ""
 }
 
 // GetSymbol looks up a symbol by name in the global scope.

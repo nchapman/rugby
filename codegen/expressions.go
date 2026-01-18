@@ -214,10 +214,14 @@ func (g *Generator) genExpr(expr ast.Expression) {
 			// Method calls need () - convert to CallExpr
 			g.genCallExpr(&ast.CallExpr{Func: e, Args: nil})
 		case ast.SelectorGoMethod:
-			// Go method calls need () with PascalCase naming
+			// Go method calls need () - use actual Go name from semantic analysis
 			g.genExpr(e.X)
 			g.buf.WriteString(".")
-			g.buf.WriteString(snakeToPascalWithAcronyms(e.Sel))
+			if goName := g.typeInfo.GetGoName(e); goName != "" {
+				g.buf.WriteString(goName)
+			} else {
+				g.buf.WriteString(snakeToPascalWithAcronyms(e.Sel))
+			}
 			g.buf.WriteString("()")
 		default:
 			// Field access or unknown - use existing logic
@@ -5228,8 +5232,13 @@ func (g *Generator) genSelectorExpr(sel *ast.SelectorExpr) {
 	if g.isGoInterop(sel.X) {
 		g.genExpr(sel.X)
 		g.buf.WriteString(".")
-		// For Go interop, don't add "Is" prefix to predicate methods
-		g.buf.WriteString(snakeToPascalWithAcronyms(sel.Sel, true))
+		// Use actual Go name from semantic analysis if available
+		if goName := g.typeInfo.GetGoName(sel); goName != "" {
+			g.buf.WriteString(goName)
+		} else {
+			// Fallback to acronym conversion for unresolved cases
+			g.buf.WriteString(snakeToPascalWithAcronyms(sel.Sel, true))
+		}
 		return
 	}
 

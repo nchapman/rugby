@@ -7,62 +7,16 @@ import (
 	"sync"
 )
 
-// Common acronyms that should be all uppercase in Go (ID, URL, HTTP, etc.)
-// NOTE: Keep in sync with codegen/helpers.go acronyms
-var goAcronyms = map[string]string{
-	"id": "ID", "url": "URL", "uri": "URI", "http": "HTTP", "https": "HTTPS",
-	"html": "HTML", "xml": "XML", "json": "JSON", "api": "API", "sql": "SQL",
-	"cpu": "CPU", "gpu": "GPU", "io": "IO", "ip": "IP", "tcp": "TCP", "udp": "UDP",
-	"rpc": "RPC", "ssl": "SSL", "tls": "TLS", "dns": "DNS", "ssh": "SSH",
-	"uid": "UID", "gid": "GID", "pid": "PID", "uuid": "UUID", "guid": "GUID",
-	"utf": "UTF", "ascii": "ASCII", "eof": "EOF", "crc": "CRC", "md5": "MD5",
-	"sha": "SHA", "hmac": "HMAC", "rsa": "RSA", "aes": "AES", "des": "DES",
-	"css": "CSS",
-}
-
-// snakeToPascal converts snake_case to PascalCase for Go interop.
-// Input is expected to be snake_case (e.g., "new_scanner") or lowercase
-// (e.g., "new"). Already-PascalCase input is returned with first letter
-// capitalized. Ruby-style suffixes (? and !) are stripped.
-// Examples: new -> New, new_scanner -> NewScanner, read_all -> ReadAll
-func snakeToPascal(s string) string {
-	if s == "" {
-		return s
-	}
-
-	// Strip Ruby-style suffixes
+// normalize converts a name to a canonical form for case-insensitive matching.
+// It lowercases the string and removes underscores, so both "WriteString" and
+// "write_string" normalize to "writestring". This allows Rugby snake_case names
+// to match Go PascalCase names without needing an acronym list.
+func normalize(s string) string {
+	// Strip Ruby-style suffixes first
 	s = strings.TrimSuffix(s, "!")
 	s = strings.TrimSuffix(s, "?")
-
-	// If no underscore, check for single-word acronym or capitalize first letter
-	if !strings.Contains(s, "_") {
-		if upper, ok := goAcronyms[strings.ToLower(s)]; ok {
-			return upper
-		}
-		if len(s) > 0 {
-			return strings.ToUpper(s[:1]) + s[1:]
-		}
-		return s
-	}
-
-	// Split by underscore and process each part
-	parts := strings.Split(s, "_")
-	var result strings.Builder
-
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-		if upper, ok := goAcronyms[strings.ToLower(part)]; ok {
-			result.WriteString(upper)
-		} else if len(part) > 0 {
-			result.WriteString(strings.ToUpper(part[:1]))
-			if len(part) > 1 {
-				result.WriteString(part[1:])
-			}
-		}
-	}
-	return result.String()
+	// Lowercase and remove underscores
+	return strings.ToLower(strings.ReplaceAll(s, "_", ""))
 }
 
 // GoImporter loads and caches Go package type information.
@@ -368,7 +322,8 @@ func (gi *GoImporter) convertGoType(t types.Type) *Type {
 }
 
 // LookupFunction looks up a function in a Go package.
-// Handles Rugby snake_case to Go PascalCase conversion (e.g., new -> New).
+// Uses normalized matching so Rugby snake_case names match Go PascalCase names.
+// For example, "new" matches "New", "write_string" matches "WriteString".
 func (gi *GoImporter) LookupFunction(pkgPath, funcName string) *GoFuncDef {
 	gi.mu.RLock()
 	pkg, ok := gi.cache[pkgPath]
@@ -376,15 +331,22 @@ func (gi *GoImporter) LookupFunction(pkgPath, funcName string) *GoFuncDef {
 	if !ok {
 		return nil
 	}
-	// Try direct lookup first (for already-PascalCase names)
+	// Try direct lookup first
 	if fn := pkg.Functions[funcName]; fn != nil {
 		return fn
 	}
-	// Try PascalCase conversion (for snake_case names)
-	return pkg.Functions[snakeToPascal(funcName)]
+	// Try normalized matching
+	normalizedName := normalize(funcName)
+	for goName, fn := range pkg.Functions {
+		if normalize(goName) == normalizedName {
+			return fn
+		}
+	}
+	return nil
 }
 
 // LookupType looks up a type in a Go package.
+// Uses normalized matching so Rugby snake_case names match Go PascalCase names.
 func (gi *GoImporter) LookupType(pkgPath, typeName string) *GoTypeDef {
 	gi.mu.RLock()
 	pkg, ok := gi.cache[pkgPath]
@@ -392,20 +354,59 @@ func (gi *GoImporter) LookupType(pkgPath, typeName string) *GoTypeDef {
 	if !ok {
 		return nil
 	}
-	return pkg.Types[typeName]
+	// Try direct lookup first
+	if t := pkg.Types[typeName]; t != nil {
+		return t
+	}
+	// Try normalized matching
+	normalizedName := normalize(typeName)
+	for goName, t := range pkg.Types {
+		if normalize(goName) == normalizedName {
+			return t
+		}
+	}
+	return nil
 }
 
 // LookupMethod looks up a method on a Go type.
-// Handles Rugby snake_case to Go PascalCase conversion (e.g., int64 -> Int64).
+// Uses normalized matching so Rugby snake_case names match Go PascalCase names.
+// For example, "int64" matches "Int64", "set_int64" matches "SetInt64".
 func (gi *GoImporter) LookupMethod(pkgPath, typeName, methodName string) *GoMethodDef {
 	typeDef := gi.LookupType(pkgPath, typeName)
 	if typeDef == nil {
 		return nil
 	}
-	// Try direct lookup first (for already-PascalCase names)
+	// Try direct lookup first
 	if method := typeDef.Methods[methodName]; method != nil {
 		return method
 	}
-	// Try PascalCase conversion (for snake_case names)
-	return typeDef.Methods[snakeToPascal(methodName)]
+	// Try normalized matching
+	normalizedName := normalize(methodName)
+	for goName, method := range typeDef.Methods {
+		if normalize(goName) == normalizedName {
+			return method
+		}
+	}
+	return nil
+}
+
+// LookupField looks up a field on a Go type.
+// Uses normalized matching so Rugby snake_case names match Go PascalCase names.
+func (gi *GoImporter) LookupField(pkgPath, typeName, fieldName string) *GoFieldDef {
+	typeDef := gi.LookupType(pkgPath, typeName)
+	if typeDef == nil {
+		return nil
+	}
+	// Try direct lookup first
+	if field := typeDef.Fields[fieldName]; field != nil {
+		return field
+	}
+	// Try normalized matching
+	normalizedName := normalize(fieldName)
+	for goName, field := range typeDef.Fields {
+		if normalize(goName) == normalizedName {
+			return field
+		}
+	}
+	return nil
 }
