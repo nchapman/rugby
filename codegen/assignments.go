@@ -105,8 +105,7 @@ func (g *Generator) genOrAssignStmt(s *ast.OrAssignStmt) {
 		}
 
 		if needsWrap {
-			baseType := strings.TrimSuffix(declaredType, "?")
-			g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+			g.buf.WriteString("runtime.Some(")
 			g.genExpr(s.Value)
 			g.buf.WriteString(")")
 		} else {
@@ -767,24 +766,22 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 	}
 
 	if isNilAssignment && isValueTypeOptional(targetType) {
-		baseType := strings.TrimSuffix(targetType, "?")
+		goType := mapType(targetType)
 
 		if s.Type != "" && g.shouldDeclare(s) {
-			// Typed declaration: var x Int? = nil
-			g.buf.WriteString(fmt.Sprintf("var %s %s = ", s.Name, g.mapTypeClassAware(s.Type)))
+			// Typed declaration: var x *int = nil
+			g.buf.WriteString(fmt.Sprintf("var %s %s = nil", s.Name, goType))
 			g.vars[s.Name] = s.Type
 		} else if !g.shouldDeclare(s) {
 			// Reassignment: x = nil
 			g.buf.WriteString(s.Name)
-			g.buf.WriteString(" = ")
+			g.buf.WriteString(" = nil")
 		} else {
-			// Untyped declaration (x = nil)
-			g.buf.WriteString(s.Name)
-			g.buf.WriteString(" := ")
-			g.vars[s.Name] = ""
+			// Untyped declaration - need explicit type since Go can't infer nil's type
+			g.buf.WriteString(fmt.Sprintf("var %s %s = nil", s.Name, goType))
+			g.vars[s.Name] = targetType
 		}
 
-		g.buf.WriteString(fmt.Sprintf("runtime.None%s()", baseType))
 		g.buf.WriteString("\n")
 		return
 	}
@@ -825,8 +822,7 @@ func (g *Generator) genAssignStmt(s *ast.AssignStmt) {
 	}
 
 	if needsWrap {
-		baseType := strings.TrimSuffix(targetType, "?")
-		g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+		g.buf.WriteString("runtime.Some(")
 		g.genExpr(s.Value)
 		g.buf.WriteString(")")
 	} else if goType := g.getShiftLeftTargetType(s.Value); goType != "" {

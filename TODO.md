@@ -34,11 +34,11 @@ Refactoring work to make the compiler simpler, more elegant, and maintainable.
 ### AST Package
 - [x] Evaluated assignment type consolidation - decided to keep separate types (`AssignStmt`, `IndexAssignStmt`, `SelectorAssignStmt`) as they accurately model the domain and codegen is already minimal (10-39 lines each)
 
----
-
-## Pending
-
 ### Runtime Package
-- [ ] Delete redundant type-specific functions - `MapEachString`, `MapKeysString`, etc. can be replaced by generics
-- [ ] Consolidate coalesce and optional helpers - `CoalesceInt`, `CoalesceString`, etc. should be unified
-- [ ] Consider splitting `array.go` (~600 lines) into smaller, focused files
+- [x] Map functions already use generics - no `MapEachString`, `MapKeysString` exist (TODO was outdated)
+- [x] Unified optional helpers with generics:
+  - Added `Some[T](v T) *T` and `Coalesce[T](opt *T, def T) T`
+  - Legacy type-specific functions now delegate to generics
+  - Codegen updated to use `runtime.Some()` and `runtime.Coalesce()`
+  - Nil assignments now use `nil` directly (type inferred from context)
+- [x] Evaluated array.go splitting - kept as-is (1145 lines provides cohesive Ruby-like API; splitting would fragment it)

@@ -917,45 +917,28 @@ func (g *Generator) genNilCoalesceExpr(e *ast.NilCoalesceExpr) {
 	// Check if right side is optional (for chaining: a ?? b ?? c)
 	isRightOptional := strings.HasSuffix(rightType, "?")
 
+	// Handle known value-type optionals with generic Coalesce
 	switch leftType {
-	case "Int?":
+	case "Int?", "Int64?", "Float?", "Bool?":
 		if isRightOptional {
-			g.buf.WriteString("runtime.CoalesceIntOpt(")
+			g.buf.WriteString("runtime.CoalesceOpt(")
 		} else {
-			g.buf.WriteString("runtime.CoalesceInt(")
-		}
-	case "Int64?":
-		if isRightOptional {
-			g.buf.WriteString("runtime.CoalesceInt64Opt(")
-		} else {
-			g.buf.WriteString("runtime.CoalesceInt64(")
-		}
-	case "Float?":
-		if isRightOptional {
-			g.buf.WriteString("runtime.CoalesceFloatOpt(")
-		} else {
-			g.buf.WriteString("runtime.CoalesceFloat(")
+			g.buf.WriteString("runtime.Coalesce(")
 		}
 	case "String?":
 		// Use CoalesceStringAny for safe navigation (which returns any)
 		if isSafeNav {
 			g.buf.WriteString("runtime.CoalesceStringAny(")
 		} else if isRightOptional {
-			g.buf.WriteString("runtime.CoalesceStringOpt(")
+			g.buf.WriteString("runtime.CoalesceOpt(")
 		} else {
-			g.buf.WriteString("runtime.CoalesceString(")
-		}
-	case "Bool?":
-		if isRightOptional {
-			g.buf.WriteString("runtime.CoalesceBoolOpt(")
-		} else {
-			g.buf.WriteString("runtime.CoalesceBool(")
+			g.buf.WriteString("runtime.Coalesce(")
 		}
 	default:
 		varName := fmt.Sprintf("_nc%d", g.tempVarCounter)
 		g.tempVarCounter++
 		g.buf.WriteString("func() ")
-		rightType := g.inferTypeFromExpr(e.Right)
+		// Use rightType already computed above
 		if rightType != "" {
 			g.buf.WriteString(mapType(rightType))
 		} else {

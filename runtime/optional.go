@@ -58,164 +58,89 @@ func FromTuple[T any](v T, ok bool) Option[T] {
 	return Option[T]{Value: v, Ok: ok}
 }
 
-// Legacy pointer-based optional helpers (for backward compatibility)
-// Optional types are now represented as pointers (*T) for storage.
-// Helper functions for creating optionals.
+// Generic pointer-based optional helpers
+// Optional types are represented as pointers (*T) for storage.
 
-// Int helpers
-
-func SomeInt(v int) *int {
+// Some wraps a value in a pointer (creates a present optional).
+// Ruby: equivalent to having a value vs nil
+func Some[T any](v T) *T {
 	return &v
 }
 
-func NoneInt() *int {
-	return nil
+// Coalesce returns the dereferenced value if present, otherwise returns the default.
+// Ruby: value ?? default
+func Coalesce[T any](opt *T, def T) T {
+	if opt != nil {
+		return *opt
+	}
+	return def
 }
 
+// CoalesceOpt returns the first non-nil optional, for chaining optionals.
+// Ruby: a ?? b where both are optional
+func CoalesceOpt[T any](opt *T, def *T) *T {
+	if opt != nil {
+		return opt
+	}
+	return def
+}
+
+// Legacy type-specific helpers (for backward compatibility)
+// New code should use the generic Some and Coalesce functions above.
+
+func SomeInt(v int) *int { return Some(v) }
+func NoneInt() *int      { return nil }
 func ToOptionalInt(v int, ok bool) *int {
-	if !ok {
-		return nil
+	if ok {
+		return Some(v)
 	}
-	return &v
-}
-
-// Int64 helpers
-
-func SomeInt64(v int64) *int64 {
-	return &v
-}
-
-func NoneInt64() *int64 {
 	return nil
 }
-
+func SomeInt64(v int64) *int64 { return Some(v) }
+func NoneInt64() *int64        { return nil }
 func ToOptionalInt64(v int64, ok bool) *int64 {
-	if !ok {
-		return nil
+	if ok {
+		return Some(v)
 	}
-	return &v
-}
-
-// Float helpers
-
-func SomeFloat(v float64) *float64 {
-	return &v
-}
-
-func NoneFloat() *float64 {
 	return nil
 }
-
+func SomeFloat(v float64) *float64 { return Some(v) }
+func NoneFloat() *float64          { return nil }
 func ToOptionalFloat(v float64, ok bool) *float64 {
-	if !ok {
-		return nil
+	if ok {
+		return Some(v)
 	}
-	return &v
-}
-
-// String helpers
-
-func SomeString(v string) *string {
-	return &v
-}
-
-func NoneString() *string {
 	return nil
 }
-
+func SomeString(v string) *string { return Some(v) }
+func NoneString() *string         { return nil }
 func ToOptionalString(v string, ok bool) *string {
-	if !ok {
-		return nil
+	if ok {
+		return Some(v)
 	}
-	return &v
+	return nil
 }
-
-// Bool helpers
-
-func SomeBool(v bool) *bool {
-	return &v
-}
-
-func NoneBool() *bool {
+func SomeBool(v bool) *bool { return Some(v) }
+func NoneBool() *bool       { return nil }
+func ToOptionalBool(v bool, ok bool) *bool {
+	if ok {
+		return Some(v)
+	}
 	return nil
 }
 
-func ToOptionalBool(v bool, ok bool) *bool {
-	if !ok {
-		return nil
-	}
-	return &v
-}
+// Nil coalescing helpers - delegate to generic Coalesce
 
-// Nil coalescing helpers - return the value if present, otherwise return the default
-
-func CoalesceInt(opt *int, def int) int {
-	if opt != nil {
-		return *opt
-	}
-	return def
-}
-
-// CoalesceIntOpt allows chaining: a ?? b where both are Int?
-func CoalesceIntOpt(opt *int, def *int) *int {
-	if opt != nil {
-		return opt
-	}
-	return def
-}
-
-func CoalesceInt64(opt *int64, def int64) int64 {
-	if opt != nil {
-		return *opt
-	}
-	return def
-}
-
-// CoalesceInt64Opt allows chaining: a ?? b where both are Int64?
-func CoalesceInt64Opt(opt *int64, def *int64) *int64 {
-	if opt != nil {
-		return opt
-	}
-	return def
-}
-
-func CoalesceFloat(opt *float64, def float64) float64 {
-	if opt != nil {
-		return *opt
-	}
-	return def
-}
-
-// CoalesceFloatOpt allows chaining: a ?? b where both are Float?
-func CoalesceFloatOpt(opt *float64, def *float64) *float64 {
-	if opt != nil {
-		return opt
-	}
-	return def
-}
-
-func CoalesceString(opt *string, def string) string {
-	if opt != nil {
-		return *opt
-	}
-	return def
-}
-
-// CoalesceStringOpt allows chaining: a ?? b where both are String?
-func CoalesceStringOpt(opt *string, def *string) *string {
-	if opt != nil {
-		return opt
-	}
-	return def
-}
-
-// CoalesceBoolOpt allows chaining: a ?? b where both are Bool?
-func CoalesceBoolOpt(opt *bool, def *bool) *bool {
-	if opt != nil {
-		return opt
-	}
-	return def
-}
+func CoalesceInt(opt *int, def int) int                    { return Coalesce(opt, def) }
+func CoalesceIntOpt(opt *int, def *int) *int               { return CoalesceOpt(opt, def) }
+func CoalesceInt64(opt *int64, def int64) int64            { return Coalesce(opt, def) }
+func CoalesceInt64Opt(opt *int64, def *int64) *int64       { return CoalesceOpt(opt, def) }
+func CoalesceFloat(opt *float64, def float64) float64      { return Coalesce(opt, def) }
+func CoalesceFloatOpt(opt *float64, def *float64) *float64 { return CoalesceOpt(opt, def) }
+func CoalesceString(opt *string, def string) string        { return Coalesce(opt, def) }
+func CoalesceStringOpt(opt *string, def *string) *string   { return CoalesceOpt(opt, def) }
+func CoalesceBool(opt *bool, def bool) bool                { return Coalesce(opt, def) }
+func CoalesceBoolOpt(opt *bool, def *bool) *bool           { return CoalesceOpt(opt, def) }
 
 // CoalesceStringAny handles nil coalescing for safe navigation results (which return any).
 // If opt is nil or is a nil interface, returns def.
@@ -236,13 +161,6 @@ func CoalesceStringAny(opt any, def string) string {
 	default:
 		return def
 	}
-}
-
-func CoalesceBool(opt *bool, def bool) bool {
-	if opt != nil {
-		return *opt
-	}
-	return def
 }
 
 // OptionalResult wraps a result from optional map operations.

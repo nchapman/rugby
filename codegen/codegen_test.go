@@ -2930,8 +2930,8 @@ end`
 
 	output := compile(t, input)
 
-	// Variable with optional type should use NoneInt()
-	assertContains(t, output, "var x *int = runtime.NoneInt()")
+	// Variable with optional type should use nil (type known from declaration)
+	assertContains(t, output, "var x *int = nil")
 }
 
 func TestOptionalValueTypeInCondition(t *testing.T) {
@@ -4094,8 +4094,8 @@ end`
 
 	output := compile(t, input)
 
-	// Should use runtime.CoalesceInt for Int?
-	assertContains(t, output, `runtime.CoalesceInt(opt, 0)`)
+	// Should use generic runtime.Coalesce for Int?
+	assertContains(t, output, `runtime.Coalesce(opt, 0)`)
 }
 
 func TestNilCoalesceStringOptional(t *testing.T) {
@@ -4108,8 +4108,8 @@ end`
 
 	output := compile(t, input)
 
-	// Should use runtime.CoalesceString for String?
-	assertContains(t, output, `runtime.CoalesceString(opt, "default")`)
+	// Should use generic runtime.Coalesce for String?
+	assertContains(t, output, `runtime.Coalesce(opt, "default")`)
 }
 
 func TestNilCoalesceFloatOptional(t *testing.T) {
@@ -4122,8 +4122,8 @@ end`
 
 	output := compile(t, input)
 
-	// Should use runtime.CoalesceFloat for Float?
-	assertContains(t, output, `runtime.CoalesceFloat(opt, 3.14)`)
+	// Should use generic runtime.Coalesce for Float?
+	assertContains(t, output, `runtime.Coalesce(opt, 3.14)`)
 }
 
 func TestNilCoalesceBoolOptional(t *testing.T) {
@@ -4136,8 +4136,8 @@ end`
 
 	output := compile(t, input)
 
-	// Should use runtime.CoalesceBool for Bool?
-	assertContains(t, output, `runtime.CoalesceBool(opt, false)`)
+	// Should use generic runtime.Coalesce for Bool?
+	assertContains(t, output, `runtime.Coalesce(opt, false)`)
 }
 
 func TestSafeNavigation(t *testing.T) {

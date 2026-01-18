@@ -10,9 +10,9 @@ func TestOptionalIntCodeGen(t *testing.T) {
 end`
 	output := compile(t, input)
 
-	// We expect *int usage
+	// We expect *int usage with generic Some
 	assertContains(t, output, `var x *int`)
-	assertContains(t, output, `runtime.SomeInt(5)`)
+	assertContains(t, output, `runtime.Some(5)`)
 }
 
 func TestOptionalStringOrAssign(t *testing.T) {
@@ -24,7 +24,7 @@ end`
 
 	assertContains(t, output, `var x *string`)
 	assertContains(t, output, `if x == nil {`)
-	assertContains(t, output, `x = runtime.SomeString("default")`)
+	assertContains(t, output, `x = runtime.Some("default")`)
 }
 
 func TestReferenceTypeOrAssign(t *testing.T) {
@@ -51,6 +51,6 @@ end`
 	output := compile(t, input)
 
 	assertContains(t, output, `func find(n int) *int`)
-	assertContains(t, output, `return runtime.NoneInt()`)
-	assertContains(t, output, `return runtime.SomeInt(n)`)
+	assertContains(t, output, `return nil`)             // nil for None (type known from return signature)
+	assertContains(t, output, `return runtime.Some(n)`) // generic Some for wrapping value
 }

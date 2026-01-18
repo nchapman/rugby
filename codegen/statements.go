@@ -473,9 +473,9 @@ func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
 				if isValueTypeOptional(targetType) {
 					baseType = strings.TrimSuffix(targetType, "?")
 
-					// If returning nil, use NoneT()
+					// If returning nil, just use nil (type is known from return signature)
 					if _, isNil := val.(*ast.NilLit); isNil {
-						g.buf.WriteString(fmt.Sprintf("runtime.None%s()", baseType))
+						g.buf.WriteString("nil")
 						handled = true
 					} else {
 						// Infer type of val to see if it needs wrapping
@@ -489,7 +489,7 @@ func (g *Generator) genReturnStmt(s *ast.ReturnStmt) {
 
 			if !handled {
 				if needsWrap {
-					g.buf.WriteString(fmt.Sprintf("runtime.Some%s(", baseType))
+					g.buf.WriteString("runtime.Some(")
 					g.genExpr(val)
 					g.buf.WriteString(")")
 				} else {

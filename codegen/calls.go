@@ -958,21 +958,15 @@ func (g *Generator) genCallExpr(call *ast.CallExpr) {
 				_, isSafeNav := fn.X.(*ast.SafeNavExpr)
 				// Generate coalescing code based on the optional type
 				switch receiverType {
-				case "Int?":
-					g.buf.WriteString("runtime.CoalesceInt(")
-				case "Int64?":
-					g.buf.WriteString("runtime.CoalesceInt64(")
-				case "Float?":
-					g.buf.WriteString("runtime.CoalesceFloat(")
+				case "Int?", "Int64?", "Float?", "Bool?":
+					g.buf.WriteString("runtime.Coalesce(")
 				case "String?":
 					// Use CoalesceStringAny for safe navigation (which returns any)
 					if isSafeNav {
 						g.buf.WriteString("runtime.CoalesceStringAny(")
 					} else {
-						g.buf.WriteString("runtime.CoalesceString(")
+						g.buf.WriteString("runtime.Coalesce(")
 					}
-				case "Bool?":
-					g.buf.WriteString("runtime.CoalesceBool(")
 				default:
 					// Generic optional type - use IIFE
 					varName := fmt.Sprintf("_uo%d", g.tempVarCounter)
