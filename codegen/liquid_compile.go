@@ -10,9 +10,11 @@ import (
 	"github.com/nchapman/rugby/stdlib/liquid"
 )
 
-// genCompiledLiquidTemplate generates a CompiledTemplate from a liquid.compile() or liquid.compile_file() call.
-// This is called at compile time to parse the template and generate optimized Go code.
-func (g *Generator) genCompiledLiquidTemplate(name string, call *ast.CallExpr, method string) {
+// liquidCompileHandler handles compile-time processing for liquid.compile() and liquid.compile_file().
+type liquidCompileHandler struct{}
+
+// Generate implements CompileTimeHandler for Liquid templates.
+func (h *liquidCompileHandler) Generate(g *Generator, name string, call *ast.CallExpr, method string) {
 	// Require at least one argument
 	if len(call.Args) == 0 {
 		g.addError(fmt.Errorf("liquid.%s requires a template string argument", method))
