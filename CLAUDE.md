@@ -129,7 +129,7 @@ Single-pass emitter. Entry: `New() → Generate(program) (string, error)`.
 **Name transformations:**
 - `snakeToCamelWithAcronyms()`: `user_id` → `userID` (private methods)
 - `snakeToPascalWithAcronyms()`: `user_id` → `UserID` (exported, Go interop)
-- `mapType()`: `Int` → `int`, `String?` → `runtime.OptionalString`
+- `mapType()`: `Int` → `int`, `String?` → `*string` (pointer-based optionals)
 
 **Kernel functions** (auto-mapped): `puts`, `print`, `p`, `gets`, `exit`, `sleep`, `rand`
 
@@ -141,8 +141,11 @@ Go package providing Ruby-like methods, imported as `rugby/runtime`.
 - **map.go**: `MapEach`, `Keys`, `Values`, `Fetch`, `Merge`
 - **string.go**: `StringToInt`, `StringToFloat`, `Chars`, `StringReverse`
 - **int.go**: `Times`, `Upto`, `Downto`, `Abs`, `Clamp`
+- **float.go**: `FloatAbs`, `FloatRound`, `FloatFloor`, `FloatCeil`
 - **range.go**: `Range` struct, `RangeEach`, `RangeContains`, `RangeToArray`, `RangeSize`
-- **optional.go**: `OptionalInt`, `OptionalString`, etc. with `SomeT()`/`NoneT()` constructors
+- **optional.go**: Generic `Some[T]()`, `Coalesce[T]()` for pointer-based optionals (`*T`); `Option[T]` struct for field storage
+- **set.go**: `Set[T]` generic set type with `Add`, `Contains`, `Remove`, `ToSlice`
+- **task.go**: `Task[T]` for spawn/await concurrency pattern
 - **equal.go**: `Equal()` for deep equality (checks `Equaler` interface first)
 - **io.go**: `Puts`, `Print`, `P`, `Gets`, `Exit`, `Sleep`
 
@@ -188,15 +191,24 @@ puts "Hello"
 ```
 tests/spec/
 ├── literals/          # Integer, string, array, range literals
+├── types/             # Type annotations, generics, type inference
+├── functions/         # Function definitions, multiple returns
 ├── classes/           # Class definitions, inheritance
-├── control_flow/      # If/elsif/else, loops
-├── functions/         # Function definitions
+├── structs/           # Struct definitions, value types
+├── interfaces/        # Interface definitions, structural typing
+├── modules/           # Module definitions, namespacing
+├── enums/             # Enum types
+├── control_flow/      # If/elsif/else, case, loops
 ├── blocks/            # Block iteration (each, map, select)
 ├── optionals/         # Optional types, if-let, nil coalescing
-├── interfaces/        # Interface definitions, structural typing
+├── error_handling/    # Error propagation (!), rescue
+├── generics/          # Generic types and functions
 ├── go_interop/        # Go package imports
-├── modules/           # Module definitions
 ├── concurrency/       # Channels, spawn/await
+├── runtime/           # Runtime library features
+├── stdlib/            # Standard library tests
+├── visibility/        # pub/private visibility
+├── integration/       # Multi-feature integration tests
 └── errors/            # compile-fail tests for known bugs
 ```
 
