@@ -87,6 +87,7 @@ benchmark: build clean-cache
 	@find benchmarks -name "*_rg" -type f -delete 2>/dev/null || true
 	@find benchmarks -name "*_go" -type f -delete 2>/dev/null || true
 	@find benchmarks -name "*_rs" -type f -delete 2>/dev/null || true
+	@find benchmarks -name "*_cr" -type f -delete 2>/dev/null || true
 	@cd benchmarks && ./bench.sh
 
 # Build a Rugby file to binary (use: make build-rugby FILE=main.rg OUTPUT=myapp)

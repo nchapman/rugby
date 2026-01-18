@@ -78,7 +78,21 @@ build_benchmark() {
     # Build Rust version if source is newer than binary
     if [[ -f "${name}.rs" ]]; then
         if [[ ! -x "${name}_rs" ]] || [[ "${name}.rs" -nt "${name}_rs" ]]; then
-            rustc -O -o "${name}_rs" "${name}.rs" 2>/dev/null || echo -e "${YELLOW}  Rust build failed for $name${NC}"
+            if [[ -f "Cargo.toml" ]]; then
+                # Use cargo for projects with dependencies
+                # Cargo converts hyphens to underscores in binary names
+                cargo_name="${name//-/_}_rs"
+                cargo build --release 2>/dev/null && cp "target/release/${cargo_name}" "${name}_rs" 2>/dev/null || echo -e "${YELLOW}  Rust build failed for $name${NC}"
+            else
+                rustc -O -o "${name}_rs" "${name}.rs" 2>/dev/null || echo -e "${YELLOW}  Rust build failed for $name${NC}"
+            fi
+        fi
+    fi
+
+    # Build Crystal version if source is newer than binary
+    if [[ -f "${name}.cr" ]]; then
+        if [[ ! -x "${name}_cr" ]] || [[ "${name}.cr" -nt "${name}_cr" ]]; then
+            crystal build --release -o "${name}_cr" "${name}.cr" 2>/dev/null || echo -e "${YELLOW}  Crystal build failed for $name${NC}"
         fi
     fi
 
@@ -86,15 +100,17 @@ build_benchmark() {
     return 0
 }
 
-# Color a ratio value
+# Color a ratio value (padded to 6 chars before color codes)
+# Lower is better (1.0x = same speed, 2.0x = twice as slow)
 color_ratio() {
     local ratio="$1"
+    local padded=$(printf "%6s" "${ratio}x")
     if perl -e "exit($ratio < 1.5 ? 0 : 1)" 2>/dev/null; then
-        echo -e "${GREEN}${ratio}x${NC}"
+        echo -e "${GREEN}${padded}${NC}"
     elif perl -e "exit($ratio < 3 ? 0 : 1)" 2>/dev/null; then
-        echo -e "${YELLOW}${ratio}x${NC}"
+        echo -e "${YELLOW}${padded}${NC}"
     else
-        echo -e "${RED}${ratio}x${NC}"
+        echo -e "${RED}${padded}${NC}"
     fi
 }
 
@@ -118,8 +134,10 @@ echo ""
 echo -e "${BLUE}Rugby Performance Benchmarks${NC}"
 echo "=============================="
 echo ""
-printf "%-22s %8s %8s %8s %8s  %9s %9s\n" "Benchmark" "Go" "Rugby" "Rust" "Ruby" "Rugby/Go" "Rugby/Rust"
-printf "%-22s %8s %8s %8s %8s  %9s %9s\n" "---------" "--" "-----" "----" "----" "--------" "----------"
+printf "%-18s %8s %8s %8s %8s %8s  %-6s  %-6s\n" \
+    "Benchmark" "Go" "Rugby" "Rust" "Crystal" "Ruby" "vs Go" "vs Rust"
+printf "%-18s %8s %8s %8s %8s %8s  %-6s  %-6s\n" \
+    "---------" "--" "-----" "----" "-------" "----" "-----" "-------"
 
 # Run each benchmark
 for bench in "${BENCHMARKS[@]}"; do
@@ -128,11 +146,12 @@ for bench in "${BENCHMARKS[@]}"; do
     go_bin="$dir/${name}_go"
     rugby_bin="$dir/${name}_rg"
     rust_bin="$dir/${name}_rs"
+    crystal_bin="$dir/${name}_cr"
     ruby_file="$dir/${name}.rb"
 
     # Check if binaries exist
     if [[ ! -x "$rugby_bin" ]]; then
-        printf "%-22s ${GRAY}skipped (build failed)${NC}\n" "$name"
+        printf "%-18s ${GRAY}skipped (build failed)${NC}\n" "$name"
         continue
     fi
 
@@ -140,45 +159,63 @@ for bench in "${BENCHMARKS[@]}"; do
     go_time="N/A"
     rugby_time="N/A"
     rust_time="N/A"
+    crystal_time="N/A"
     ruby_time="N/A"
 
     if [[ -x "$go_bin" ]]; then
-        go_time=$(time_cmd ./$go_bin $input)
+        go_time=$(time_cmd "./$go_bin" "$input")
     fi
 
-    rugby_time=$(time_cmd ./$rugby_bin $input)
+    rugby_time=$(time_cmd "./$rugby_bin" "$input")
 
     if [[ -x "$rust_bin" ]]; then
-        rust_time=$(time_cmd ./$rust_bin $input)
+        rust_time=$(time_cmd "./$rust_bin" "$input")
+    fi
+
+    if [[ -x "$crystal_bin" ]]; then
+        crystal_time=$(time_cmd "./$crystal_bin" "$input")
     fi
 
     if [[ -f "$ruby_file" ]] && command -v ruby &> /dev/null; then
-        ruby_time=$(time_cmd ruby $ruby_file $input)
+        ruby_time=$(time_cmd ruby "$ruby_file" "$input")
     fi
 
     # Format times
-    go_fmt=$([ "$go_time" != "N/A" ] && echo "${go_time}s" || echo "N/A")
-    rugby_fmt="${rugby_time}s"
-    rust_fmt=$([ "$rust_time" != "N/A" ] && echo "${rust_time}s" || echo "N/A")
-    ruby_fmt=$([ "$ruby_time" != "N/A" ] && echo "${ruby_time}s" || echo "N/A")
+    go_fmt=$([ "$go_time" != "N/A" ] && printf "%6.3fs" "$go_time" || echo "   N/A")
+    rugby_fmt=$(printf "%6.3fs" "$rugby_time")
+    rust_fmt=$([ "$rust_time" != "N/A" ] && printf "%6.3fs" "$rust_time" || echo "   N/A")
+    crystal_fmt=$([ "$crystal_time" != "N/A" ] && printf "%6.3fs" "$crystal_time" || echo "   N/A")
+    ruby_fmt=$([ "$ruby_time" != "N/A" ] && printf "%6.3fs" "$ruby_time" || echo "   N/A")
 
-    # Calculate and color ratios
+    # Calculate ratios (uncolored for proper alignment)
     if [[ "$go_time" != "N/A" ]]; then
         rugby_go=$(perl -e "printf '%.1f', $rugby_time / $go_time")
-        rugby_go_colored=$(color_ratio "$rugby_go")
     else
-        rugby_go_colored="${GRAY}N/A${NC}"
+        rugby_go="N/A"
     fi
 
     if [[ "$rust_time" != "N/A" ]]; then
         rugby_rust=$(perl -e "printf '%.1f', $rugby_time / $rust_time")
-        rugby_rust_colored=$(color_ratio "$rugby_rust")
     else
-        rugby_rust_colored="${GRAY}N/A${NC}"
+        rugby_rust="N/A"
     fi
 
-    printf "%-22s %8s %8s %8s %8s  " "$name" "$go_fmt" "$rugby_fmt" "$rust_fmt" "$ruby_fmt"
-    printf "%b %b\n" "$rugby_go_colored" "$rugby_rust_colored"
+    # Format ratios with color (6 chars each for alignment)
+    if [[ "$rugby_go" != "N/A" ]]; then
+        rugby_go_fmt=$(color_ratio "$rugby_go")
+    else
+        rugby_go_fmt="${GRAY}   N/A${NC}"
+    fi
+
+    if [[ "$rugby_rust" != "N/A" ]]; then
+        rugby_rust_fmt=$(color_ratio "$rugby_rust")
+    else
+        rugby_rust_fmt="${GRAY}   N/A${NC}"
+    fi
+
+    printf "%-18s %8s %8s %8s %8s %8s  %b  %b\n" \
+        "$name" "$go_fmt" "$rugby_fmt" "$rust_fmt" "$crystal_fmt" "$ruby_fmt" \
+        "$rugby_go_fmt" "$rugby_rust_fmt"
 done
 
 echo ""

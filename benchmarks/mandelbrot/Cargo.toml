@@ -1,0 +1,15 @@
+[package]
+name = "mandelbrot"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "mandelbrot_rs"
+path = "mandelbrot.rs"
+
+[dependencies]
+md-5 = "0.10"
+
+[profile.release]
+opt-level = 3
+lto = true

@@ -10,9 +10,14 @@ benchmarks/**/25000000_in
 benchmarks/*/*
 !benchmarks/*/*.go
 !benchmarks/*/*.rg
+!benchmarks/*/*.rs
+!benchmarks/*/*.cr
+!benchmarks/*/*.rb
 !benchmarks/*/*.txt
 !benchmarks/*/*.stdout
 !benchmarks/*/*.fasta
+!benchmarks/*/Cargo.toml
+!benchmarks/*/Cargo.lock
 
 # In examples/, only keep .rg and .md files (ignore compiled binaries and generated .go)
 examples/*
@@ -21,3 +26,6 @@ examples/*
 !examples/*_test.go
 !examples/doc.go
 tmp/
+
+# Cargo build artifacts
+benchmarks/*/target/
