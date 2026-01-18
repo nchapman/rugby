@@ -1,25 +1,35 @@
 #@ run-pass
 #@ check-output
 #
-# Test: Basic function definitions and calls
+# Test: Section 10.1 - Basic functions
 
-def greet(name: String): String
-  "Hello, #{name}!"
-end
-
+# Implicit return (last expression)
 def add(a: Int, b: Int): Int
   a + b
 end
 
-def no_return
-  puts "side effect"
+puts add(2, 3)
+
+# Explicit return
+def find_first_positive(arr: Array<Int>): Int
+  for n in arr
+    return n if n > 0
+  end
+  0
 end
 
-puts greet("World")
-puts add(2, 3)
-no_return
+puts find_first_positive([-1, -2, 5, 10])
+puts find_first_positive([-1, -2])
+
+# No return type (inferred)
+def greet(name: String)
+  puts "Hello, #{name}!"
+end
+
+greet("World")
 
 #@ expect:
-# Hello, World!
 # 5
-# side effect
+# 5
+# 0
+# Hello, World!

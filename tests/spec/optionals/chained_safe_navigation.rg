@@ -45,8 +45,18 @@ user4 = User.new(addr4)
 name4 = user4.address&.city&.name ?? "Unknown"
 puts name4
 
+# Test 5: Using in a function
+def get_city_name(u: User): String
+  u.address&.city&.name ?? "default"
+end
+
+puts get_city_name(user1)
+puts get_city_name(user2)
+
 #@ expect:
 # Boston
 # NoAddress
 # NoCity
 # Seattle
+# Boston
+# default
