@@ -5,6 +5,9 @@ import (
 	"testing"
 
 	"github.com/nchapman/rugby/ast"
+	"github.com/nchapman/rugby/lexer"
+	"github.com/nchapman/rugby/parser"
+	"github.com/nchapman/rugby/semantic"
 )
 
 // --- Registry Tests ---
@@ -86,6 +89,50 @@ func TestCompileTimeRegistry_UnknownMethod(t *testing.T) {
 
 	if ok {
 		t.Fatal("expected liquid.parse to NOT be registered as compile-time handler")
+	}
+}
+
+func TestCompileTimeRegistry_LiquidCompileDir(t *testing.T) {
+	call := &ast.CallExpr{
+		Func: &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "liquid"},
+			Sel: "compile_dir",
+		},
+	}
+
+	gen := New()
+	handler, method, ok := gen.getCompileTimeHandler(call)
+
+	if !ok {
+		t.Fatal("expected liquid.compile_dir to be registered")
+	}
+	if method != "compile_dir" {
+		t.Errorf("expected method 'compile_dir', got %q", method)
+	}
+	if handler == nil {
+		t.Fatal("expected non-nil handler")
+	}
+}
+
+func TestCompileTimeRegistry_LiquidCompileGlob(t *testing.T) {
+	call := &ast.CallExpr{
+		Func: &ast.SelectorExpr{
+			X:   &ast.Ident{Name: "liquid"},
+			Sel: "compile_glob",
+		},
+	}
+
+	gen := New()
+	handler, method, ok := gen.getCompileTimeHandler(call)
+
+	if !ok {
+		t.Fatal("expected liquid.compile_glob to be registered")
+	}
+	if method != "compile_glob" {
+		t.Errorf("expected method 'compile_glob', got %q", method)
+	}
+	if handler == nil {
+		t.Fatal("expected non-nil handler")
 	}
 }
 
@@ -357,13 +404,13 @@ const TMPL = liquid.compile()
 
 	found := false
 	for _, err := range errs {
-		if strings.Contains(err.Error(), "requires a template string argument") {
+		if strings.Contains(err.Error(), "requires a string argument") {
 			found = true
 			break
 		}
 	}
 	if !found {
-		t.Errorf("expected 'requires a template string argument' error, got: %v", errs)
+		t.Errorf("expected 'requires a string argument' error, got: %v", errs)
 	}
 }
 
@@ -423,4 +470,190 @@ const TMPL = liquid.compile("{% for i in items %}{{ i }}{% endfor %}")
 	assertContains(t, output, `:= ctx`)     // save outer context
 	assertContains(t, output, `ctx.Push()`) // push new scope
 	assertContains(t, output, `ctx =`)      // restore (appears multiple times)
+}
+
+// --- Liquid compile_dir Tests ---
+
+func TestLiquidCompileDir_GeneratesMap(t *testing.T) {
+	// Uses testdata/liquid_templates/ which contains greeting.liquid and i18n/*.liquid
+	// Tests run from the codegen package directory, so use "." as source dir
+	input := `import "rugby/liquid"
+const TEMPLATES = liquid.compile_dir("testdata/liquid_templates/i18n/")
+`
+	output := compileRelaxedWithSourceDir(t, input, ".")
+
+	// Should generate map type with pointer values (so MustRender pointer receiver works)
+	assertContains(t, output, `var TEMPLATES = map[string]*liquid.CompiledTemplate{`)
+
+	// Should have keys for both templates (sorted alphabetically)
+	assertContains(t, output, `"en.liquid": {`)
+	assertContains(t, output, `"fr.liquid": {`)
+
+	// Each entry should have a Render function
+	assertContains(t, output, `Render: func(data map[string]any) (string, error)`)
+}
+
+func TestLiquidCompileDir_TemplateContent(t *testing.T) {
+	input := `import "rugby/liquid"
+const TEMPLATES = liquid.compile_dir("testdata/liquid_templates/i18n/")
+`
+	output := compileRelaxedWithSourceDir(t, input, ".")
+
+	// en.liquid contains: Hello, {{ name }}!
+	assertContains(t, output, `buf.WriteString("Hello, ")`)
+	assertContains(t, output, `ctx.Get("name")`)
+
+	// fr.liquid contains: Bonjour, {{ name }}!
+	assertContains(t, output, `buf.WriteString("Bonjour, ")`)
+}
+
+func TestLiquidCompileDir_ErrorNotDirectory(t *testing.T) {
+	input := `import "rugby/liquid"
+const TEMPLATES = liquid.compile_dir("testdata/liquid_templates/greeting.liquid")
+`
+	errs := compileWithErrorsAndSourceDir(t, input, ".")
+
+	if len(errs) == 0 {
+		t.Fatal("expected error for non-directory path")
+	}
+
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "is not a directory") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'is not a directory' error, got: %v", errs)
+	}
+}
+
+func TestLiquidCompileDir_ErrorNoFiles(t *testing.T) {
+	// Use testdata/empty_dir which has no .liquid files
+	input := `import "rugby/liquid"
+const TEMPLATES = liquid.compile_dir("testdata/empty_dir/")
+`
+	errs := compileWithErrorsAndSourceDir(t, input, ".")
+
+	if len(errs) == 0 {
+		t.Fatal("expected error for directory with no .liquid files")
+	}
+
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "no .liquid files found") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'no .liquid files found' error, got: %v", errs)
+	}
+}
+
+// --- Liquid compile_glob Tests ---
+
+func TestLiquidCompileGlob_GeneratesMap(t *testing.T) {
+	input := `import "rugby/liquid"
+const TEMPLATES = liquid.compile_glob("testdata/liquid_templates/i18n/*.liquid")
+`
+	output := compileRelaxedWithSourceDir(t, input, ".")
+
+	// Should generate map type with pointer values
+	assertContains(t, output, `var TEMPLATES = map[string]*liquid.CompiledTemplate{`)
+
+	// Should have keys for matched templates
+	assertContains(t, output, `"en.liquid": {`)
+	assertContains(t, output, `"fr.liquid": {`)
+}
+
+func TestLiquidCompileGlob_NestedPattern(t *testing.T) {
+	// Note: Go's filepath.Glob doesn't support ** for recursive matching.
+	// ** matches exactly one directory level, so "templates/**/*.liquid"
+	// matches "templates/SUBDIR/*.liquid" but not "templates/*.liquid"
+	input := `import "rugby/liquid"
+const TEMPLATES = liquid.compile_glob("testdata/liquid_templates/*/*.liquid")
+`
+	output := compileRelaxedWithSourceDir(t, input, ".")
+
+	// Should match .liquid files one level deep (with pointer values)
+	assertContains(t, output, `var TEMPLATES = map[string]*liquid.CompiledTemplate{`)
+
+	// Should include files from subdirectories with relative paths
+	assertContains(t, output, `"i18n/en.liquid": {`)
+	assertContains(t, output, `"i18n/fr.liquid": {`)
+}
+
+func TestLiquidCompileGlob_ErrorNoMatches(t *testing.T) {
+	input := `import "rugby/liquid"
+const TEMPLATES = liquid.compile_glob("testdata/nonexistent/*.liquid")
+`
+	errs := compileWithErrorsAndSourceDir(t, input, ".")
+
+	if len(errs) == 0 {
+		t.Fatal("expected error for no matching files")
+	}
+
+	found := false
+	for _, err := range errs {
+		if strings.Contains(err.Error(), "no files matched pattern") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'no files matched pattern' error, got: %v", errs)
+	}
+}
+
+// --- Test helpers for source directory ---
+
+// compileRelaxedWithSourceDir compiles code with a source directory set.
+// The sourceDir parameter is preserved for flexibility, though current tests use ".".
+func compileRelaxedWithSourceDir(t *testing.T, input string, sourceDir string) string { //nolint:unparam
+	t.Helper()
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) > 0 {
+		t.Fatalf("parser errors: %v", p.Errors())
+	}
+
+	analyzer := semantic.NewAnalyzer()
+	_ = analyzer.Analyze(program) // Ignore semantic errors
+
+	typeInfo := &testTypeInfoAdapter{analyzer: analyzer}
+	// Use sourceDir + "/dummy.rg" to set the source directory
+	gen := New(WithSourceFile(sourceDir+"/dummy.rg"), WithTypeInfo(typeInfo))
+	output, err := gen.Generate(program)
+	if err != nil {
+		t.Fatalf("codegen error: %v", err)
+	}
+
+	return output
+}
+
+// compileWithErrorsAndSourceDir compiles code and returns errors, with a source directory set.
+func compileWithErrorsAndSourceDir(t *testing.T, input string, sourceDir string) []error { //nolint:unparam
+	t.Helper()
+	l := lexer.New(input)
+	p := parser.New(l)
+	program := p.ParseProgram()
+
+	if len(p.Errors()) > 0 {
+		for _, err := range p.Errors() {
+			t.Errorf("parser error: %s", err)
+		}
+		t.FailNow()
+	}
+
+	analyzer := semantic.NewAnalyzer()
+	_ = analyzer.Analyze(program) // Ignore semantic errors
+
+	typeInfo := &testTypeInfoAdapter{analyzer: analyzer}
+	gen := New(WithSourceFile(sourceDir+"/dummy.rg"), WithTypeInfo(typeInfo))
+	_, _ = gen.Generate(program)
+	return gen.Errors()
 }

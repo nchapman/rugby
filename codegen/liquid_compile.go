@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/nchapman/rugby/ast"
 	"github.com/nchapman/rugby/stdlib/liquid"
@@ -17,59 +19,214 @@ type liquidCompileHandler struct{}
 func (h *liquidCompileHandler) Generate(g *Generator, name string, call *ast.CallExpr, method string) {
 	// Require at least one argument
 	if len(call.Args) == 0 {
-		g.addError(fmt.Errorf("liquid.%s requires a template string argument", method))
+		g.addError(fmt.Errorf("liquid.%s requires a string argument", method))
 		return
 	}
 
-	// Get the template string
-	var templateSource string
 	switch method {
 	case "compile":
-		// Argument must be a string literal
-		strLit, ok := call.Args[0].(*ast.StringLit)
-		if !ok {
-			g.addError(fmt.Errorf("liquid.compile requires a string literal argument"))
-			return
-		}
-		templateSource = strLit.Value
-
+		h.generateSingleTemplate(g, name, call)
 	case "compile_file":
-		// Argument must be a string literal (file path)
-		strLit, ok := call.Args[0].(*ast.StringLit)
-		if !ok {
-			g.addError(fmt.Errorf("liquid.compile_file requires a string literal file path"))
-			return
-		}
-		// Read the file at compile time
-		filePath := strLit.Value
-		// If relative path, resolve relative to the source file's directory
-		if !filepath.IsAbs(filePath) && g.sourceDir != "" {
-			filePath = filepath.Join(g.sourceDir, filePath)
-		}
-		content, err := os.ReadFile(filePath)
-		if err != nil {
-			g.addError(fmt.Errorf("liquid.compile_file: cannot read file %q: %v", strLit.Value, err))
-			return
-		}
-		templateSource = string(content)
-
+		h.generateSingleTemplateFromFile(g, name, call)
+	case "compile_dir":
+		h.generateTemplateMap(g, name, call, false)
+	case "compile_glob":
+		h.generateTemplateMap(g, name, call, true)
 	default:
 		g.addError(fmt.Errorf("unknown liquid compile method: %s", method))
+	}
+}
+
+// generateSingleTemplate handles liquid.compile("template string").
+func (h *liquidCompileHandler) generateSingleTemplate(g *Generator, name string, call *ast.CallExpr) {
+	strLit, ok := call.Args[0].(*ast.StringLit)
+	if !ok {
+		g.addError(fmt.Errorf("liquid.compile requires a string literal argument"))
 		return
 	}
 
-	// Parse the template at compile time
-	tmpl, err := liquid.Parse(templateSource)
+	tmpl, err := liquid.Parse(strLit.Value)
 	if err != nil {
 		g.addError(fmt.Errorf("liquid template syntax error: %v", err))
 		return
 	}
 
-	// Mark that we need the liquid import
+	g.genLiquidCompiledTemplate(name, tmpl)
+}
+
+// generateSingleTemplateFromFile handles liquid.compile_file("path").
+func (h *liquidCompileHandler) generateSingleTemplateFromFile(g *Generator, name string, call *ast.CallExpr) {
+	strLit, ok := call.Args[0].(*ast.StringLit)
+	if !ok {
+		g.addError(fmt.Errorf("liquid.compile_file requires a string literal file path"))
+		return
+	}
+
+	filePath := strLit.Value
+	if !filepath.IsAbs(filePath) && g.sourceDir != "" {
+		filePath = filepath.Join(g.sourceDir, filePath)
+	}
+
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		g.addError(fmt.Errorf("liquid.compile_file: cannot read file %q: %v", strLit.Value, err))
+		return
+	}
+
+	tmpl, err := liquid.Parse(string(content))
+	if err != nil {
+		g.addError(fmt.Errorf("liquid template syntax error in %q: %v", strLit.Value, err))
+		return
+	}
+
+	g.genLiquidCompiledTemplate(name, tmpl)
+}
+
+// generateTemplateMap handles liquid.compile_dir("path") and liquid.compile_glob("pattern").
+// compile_dir recursively walks the directory and includes only .liquid files.
+// compile_glob matches files according to the glob pattern with no extension filtering.
+func (h *liquidCompileHandler) generateTemplateMap(g *Generator, name string, call *ast.CallExpr, isGlob bool) {
+	strLit, ok := call.Args[0].(*ast.StringLit)
+	if !ok {
+		methodName := "compile_dir"
+		argType := "directory path"
+		if isGlob {
+			methodName = "compile_glob"
+			argType = "glob pattern"
+		}
+		g.addError(fmt.Errorf("liquid.%s requires a string literal %s", methodName, argType))
+		return
+	}
+
+	pattern := strLit.Value
+	basePath := pattern
+
+	// Resolve relative path
+	if !filepath.IsAbs(basePath) && g.sourceDir != "" {
+		basePath = filepath.Join(g.sourceDir, pattern)
+	}
+
+	// Collect templates
+	templates := make(map[string]*liquid.Template)
+
+	if isGlob {
+		// compile_glob: use filepath.Glob
+		matches, err := filepath.Glob(basePath)
+		if err != nil {
+			g.addError(fmt.Errorf("liquid.compile_glob: invalid pattern %q: %v", pattern, err))
+			return
+		}
+		if len(matches) == 0 {
+			g.addError(fmt.Errorf("liquid.compile_glob: no files matched pattern %q", pattern))
+			return
+		}
+
+		// Determine base directory for relative keys
+		baseDir := extractGlobBase(basePath)
+
+		for _, filePath := range matches {
+			info, err := os.Stat(filePath)
+			if err != nil || info.IsDir() {
+				continue
+			}
+
+			content, err := os.ReadFile(filePath)
+			if err != nil {
+				g.addError(fmt.Errorf("liquid.compile_glob: cannot read file %q: %v", filePath, err))
+				return
+			}
+
+			tmpl, err := liquid.Parse(string(content))
+			if err != nil {
+				relPath, _ := filepath.Rel(baseDir, filePath)
+				g.addError(fmt.Errorf("liquid template syntax error in %q: %v", relPath, err))
+				return
+			}
+
+			// Key is relative path from base directory
+			key, _ := filepath.Rel(baseDir, filePath)
+			templates[key] = tmpl
+		}
+	} else {
+		// compile_dir: walk directory recursively
+		info, err := os.Stat(basePath)
+		if err != nil {
+			g.addError(fmt.Errorf("liquid.compile_dir: cannot access directory %q: %v", pattern, err))
+			return
+		}
+		if !info.IsDir() {
+			g.addError(fmt.Errorf("liquid.compile_dir: %q is not a directory", pattern))
+			return
+		}
+
+		err = filepath.WalkDir(basePath, func(filePath string, d os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			// Filter for .liquid files
+			if !strings.HasSuffix(filePath, ".liquid") {
+				return nil
+			}
+
+			content, err := os.ReadFile(filePath)
+			if err != nil {
+				return fmt.Errorf("cannot read file %q: %v", filePath, err)
+			}
+
+			tmpl, err := liquid.Parse(string(content))
+			if err != nil {
+				relPath, _ := filepath.Rel(basePath, filePath)
+				return fmt.Errorf("template syntax error in %q: %v", relPath, err)
+			}
+
+			// Key is relative path from base directory
+			key, _ := filepath.Rel(basePath, filePath)
+			templates[key] = tmpl
+			return nil
+		})
+
+		if err != nil {
+			g.addError(fmt.Errorf("liquid.compile_dir: %v", err))
+			return
+		}
+
+		if len(templates) == 0 {
+			g.addError(fmt.Errorf("liquid.compile_dir: no .liquid files found in %q", pattern))
+			return
+		}
+	}
+
+	g.genLiquidTemplateMap(name, templates)
+}
+
+// extractGlobBase finds the base directory before any glob wildcards.
+func extractGlobBase(pattern string) string {
+	// Find the first directory component without wildcards
+	dir := filepath.Dir(pattern)
+	for {
+		if !strings.ContainsAny(dir, "*?[") {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			// Reached root
+			return "."
+		}
+		dir = parent
+	}
+}
+
+// genLiquidCompiledTemplate generates a single liquid.CompiledTemplate variable.
+func (g *Generator) genLiquidCompiledTemplate(name string, tmpl *liquid.Template) {
 	g.needsLiquid = true
 	g.needsStrings = true
 
-	// Generate the CompiledTemplate
+	// Register the type in constTypes so inferTypeFromExpr can find it across function boundaries.
+	g.constTypes[name] = "liquid.CompiledTemplate"
+
 	g.writeIndent()
 	g.buf.WriteString("var ")
 	g.buf.WriteString(name)
@@ -79,25 +236,7 @@ func (h *liquidCompileHandler) Generate(g *Generator, name string, call *ast.Cal
 	g.buf.WriteString("Render: func(data map[string]any) (string, error) {\n")
 	g.indent++
 
-	// Generate render function body
-	g.writeIndent()
-	g.buf.WriteString("var buf strings.Builder\n")
-	g.writeIndent()
-	g.buf.WriteString("ctx := liquid.NewContext(data)\n")
-
-	// Generate code for each node
-	nodes := tmpl.AST()
-	for _, node := range nodes {
-		g.genLiquidNode(node)
-	}
-
-	// Suppress unused variable warning for ctx
-	g.writeIndent()
-	g.buf.WriteString("_ = ctx\n")
-
-	// Return the result
-	g.writeIndent()
-	g.buf.WriteString("return buf.String(), nil\n")
+	g.genLiquidRenderBody(tmpl)
 
 	g.indent--
 	g.writeIndent()
@@ -105,6 +244,72 @@ func (h *liquidCompileHandler) Generate(g *Generator, name string, call *ast.Cal
 	g.indent--
 	g.writeIndent()
 	g.buf.WriteString("}\n")
+}
+
+// genLiquidTemplateMap generates a map[string]*liquid.CompiledTemplate variable.
+// Uses pointers so that MustRender (pointer receiver) can be called on map elements.
+func (g *Generator) genLiquidTemplateMap(name string, templates map[string]*liquid.Template) {
+	g.needsLiquid = true
+	g.needsStrings = true
+
+	// Register the type in constTypes so inferTypeFromExpr can find it across function boundaries.
+	// This is necessary because g.vars is cleared for each function, but compile-time generated
+	// constants are module-level and need their types available throughout the entire module.
+	g.constTypes[name] = "map[string]*liquid.CompiledTemplate"
+
+	g.writeIndent()
+	g.buf.WriteString("var ")
+	g.buf.WriteString(name)
+	g.buf.WriteString(" = map[string]*liquid.CompiledTemplate{\n")
+	g.indent++
+
+	// Sort keys for deterministic output
+	keys := make([]string, 0, len(templates))
+	for k := range templates {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		tmpl := templates[key]
+		g.writeIndent()
+		g.buf.WriteString(strconv.Quote(key))
+		g.buf.WriteString(": {\n")
+		g.indent++
+		g.writeIndent()
+		g.buf.WriteString("Render: func(data map[string]any) (string, error) {\n")
+		g.indent++
+
+		g.genLiquidRenderBody(tmpl)
+
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("},\n")
+		g.indent--
+		g.writeIndent()
+		g.buf.WriteString("},\n")
+	}
+
+	g.indent--
+	g.writeIndent()
+	g.buf.WriteString("}\n")
+}
+
+// genLiquidRenderBody generates the body of a Render function for a parsed template.
+func (g *Generator) genLiquidRenderBody(tmpl *liquid.Template) {
+	g.writeIndent()
+	g.buf.WriteString("var buf strings.Builder\n")
+	g.writeIndent()
+	g.buf.WriteString("ctx := liquid.NewContext(data)\n")
+
+	for _, node := range tmpl.AST() {
+		g.genLiquidNode(node)
+	}
+
+	g.writeIndent()
+	g.buf.WriteString("_ = ctx\n")
+	g.writeIndent()
+	g.buf.WriteString("return buf.String(), nil\n")
 }
 
 // genLiquidNode generates Go code for a single Liquid AST node.

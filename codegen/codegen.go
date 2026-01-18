@@ -188,6 +188,7 @@ type Generator struct {
 
 	// Variable tracking
 	vars            map[string]string // declared variables and their types
+	constTypes      map[string]string // module-level constant types (persists across functions)
 	nonNegativeVars map[string]bool   // variables known to be >= 0 (for native indexing)
 	goInteropVars   map[string]bool   // variables holding Go interop types
 
@@ -318,6 +319,7 @@ func WithTypeInfo(ti TypeInfo) Option {
 func New(opts ...Option) *Generator {
 	g := &Generator{
 		vars:               make(map[string]string),
+		constTypes:         make(map[string]string),
 		imports:            make(map[string]bool),
 		modules:            make(map[string]*ast.ModuleDecl),
 		goInteropVars:      make(map[string]bool),
@@ -1004,6 +1006,10 @@ func (g *Generator) inferTypeFromExpr(expr ast.Expression) string {
 	if ident, ok := expr.(*ast.Ident); ok {
 		if varType, ok := g.vars[ident.Name]; ok && varType != "" && !strings.Contains(varType, "unknown") {
 			return varType
+		}
+		// Check module-level const types (set by compile-time handlers, persists across functions)
+		if constType, ok := g.constTypes[ident.Name]; ok && constType != "" {
+			return constType
 		}
 	}
 

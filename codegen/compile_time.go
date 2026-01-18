@@ -19,6 +19,8 @@ type CompileTimeHandler interface {
 var compileTimeRegistry = map[string]CompileTimeHandler{
 	"liquid.compile":      &liquidCompileHandler{},
 	"liquid.compile_file": &liquidCompileHandler{},
+	"liquid.compile_dir":  &liquidCompileHandler{},
+	"liquid.compile_glob": &liquidCompileHandler{},
 }
 
 // getCompileTimeHandler checks if a call expression matches a registered compile-time handler.
