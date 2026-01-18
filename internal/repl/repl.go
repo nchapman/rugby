@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/spinner"
@@ -534,7 +535,78 @@ func (m *Model) isExpression(input string) bool {
 			}
 		}
 	}
+	// Don't wrap expressions containing blocks - p(expr { block }) is invalid syntax
+	if hasBlock(exprStmt.Expr) {
+		return false
+	}
 	return true
+}
+
+// isBlockExpression checks if the input is a value-returning block expression.
+// Returns false for void block methods (each, times, upto, downto).
+func (m *Model) isBlockExpression(input string) bool {
+	stmt := m.parseStatement(input)
+	if stmt == nil {
+		return false
+	}
+	exprStmt, ok := stmt.(*ast.ExprStmt)
+	if !ok {
+		return false
+	}
+	if !hasBlock(exprStmt.Expr) {
+		return false
+	}
+	// Check if it's a void block method
+	if isVoidBlockMethod(exprStmt.Expr) {
+		return false
+	}
+	return true
+}
+
+// isVoidBlockMethod checks if the expression is a call to a void block method.
+func isVoidBlockMethod(expr ast.Expression) bool {
+	call, ok := expr.(*ast.CallExpr)
+	if !ok {
+		return false
+	}
+	sel, ok := call.Func.(*ast.SelectorExpr)
+	if !ok {
+		return false
+	}
+	switch sel.Sel {
+	case "each", "times", "upto", "downto":
+		return true
+	}
+	return false
+}
+
+// hasBlock recursively checks if an expression contains a block.
+func hasBlock(expr ast.Expression) bool {
+	switch e := expr.(type) {
+	case *ast.CallExpr:
+		if e.Block != nil {
+			return true
+		}
+		// Check receiver for method calls
+		if sel, ok := e.Func.(*ast.SelectorExpr); ok {
+			if hasBlock(sel.X) {
+				return true
+			}
+		}
+		// Check arguments
+		if slices.ContainsFunc(e.Args, hasBlock) {
+			return true
+		}
+	case *ast.SelectorExpr:
+		return hasBlock(e.X)
+	case *ast.BinaryExpr:
+		return hasBlock(e.Left) || hasBlock(e.Right)
+	case *ast.UnaryExpr:
+		return hasBlock(e.Expr)
+	case *ast.IndexExpr:
+		return hasBlock(e.Left) || hasBlock(e.Index)
+	}
+	return false
 }
 
 // isImport checks if the input is an import statement.
@@ -818,6 +890,11 @@ func (m *Model) buildProgramFromContext(input string, ctx evalContext) string {
 	// New input - wrap expressions in p() to print
 	if m.isExpression(input) {
 		buf.WriteString("p(" + input + ")\n")
+	} else if m.isBlockExpression(input) {
+		// Block expressions can't be wrapped in p() directly
+		// Assign to temp var first, then print
+		buf.WriteString("__repl_result__ = " + input + "\n")
+		buf.WriteString("p(__repl_result__)\n")
 	} else if varName := m.getAssignmentVar(input); varName != "" {
 		// Assignment - print the value after assigning
 		buf.WriteString(input + "\n")
