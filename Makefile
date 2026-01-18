@@ -1,4 +1,4 @@
-.PHONY: build test test-spec test-spec-bless lint clean clean-cache install run repl help
+.PHONY: build test test-spec test-spec-bless lint clean clean-cache install run repl benchmark help
 
 # Build the rugby compiler
 build:
@@ -81,6 +81,10 @@ run: build
 check: test lint
 	@echo "All checks passed!"
 
+# Run performance benchmarks (cleans caches to ensure fresh builds)
+benchmark: build clean-cache
+	@cd benchmarks && ./bench.sh
+
 # Build a Rugby file to binary (use: make build-rugby FILE=main.rg OUTPUT=myapp)
 build-rugby: build
 	@if [ -z "$(FILE)" ]; then \
@@ -117,3 +121,6 @@ help:
 	@echo "Code Quality:"
 	@echo "  make lint                                 - Run linters"
 	@echo "  make fmt                                  - Format code"
+	@echo ""
+	@echo "Benchmarks:"
+	@echo "  make benchmark                            - Run performance benchmarks"
