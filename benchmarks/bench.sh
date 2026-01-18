@@ -34,8 +34,12 @@ BENCHMARKS=(
 )
 
 # Function to time a command and return seconds
+# Runs a warmup first to ensure binary is in disk cache
 time_cmd() {
     local start end
+    # Warmup run to load binary into disk cache
+    "$@" > /dev/null 2>&1
+    # Timed run
     start=$(perl -MTime::HiRes=time -e 'print time')
     "$@" > /dev/null 2>&1
     end=$(perl -MTime::HiRes=time -e 'print time')

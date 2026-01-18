@@ -81,10 +81,12 @@ run: build
 check: test lint
 	@echo "All checks passed!"
 
-# Run performance benchmarks (rebuilds compiler and all Rugby binaries)
+# Run performance benchmarks (rebuilds compiler and all binaries for fair comparison)
 benchmark: build clean-cache
-	@echo "Cleaning Rugby benchmark binaries..."
+	@echo "Cleaning all benchmark binaries..."
 	@find benchmarks -name "*_rg" -type f -delete 2>/dev/null || true
+	@find benchmarks -name "*_go" -type f -delete 2>/dev/null || true
+	@find benchmarks -name "*_rs" -type f -delete 2>/dev/null || true
 	@cd benchmarks && ./bench.sh
 
 # Build a Rugby file to binary (use: make build-rugby FILE=main.rg OUTPUT=myapp)
