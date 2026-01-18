@@ -200,6 +200,8 @@ type Generator struct {
 	needsConstraints   bool            // needs constraints import (generics)
 	needsTestingImport bool            // needs testing import
 	needsTestImport    bool            // needs rugby/test import
+	needsLiquid        bool            // needs rugby/liquid import (compile-time templates)
+	needsStrings       bool            // needs strings import (liquid codegen)
 
 	// Module state
 	currentModule            string                     // current module being generated
@@ -213,6 +215,7 @@ type Generator struct {
 
 	// Source mapping
 	sourceFile  string // original .rg filename for //line directives
+	sourceDir   string // directory containing the source file (for relative paths)
 	emitLineDir bool   // whether to emit //line directives
 
 	// Type info from semantic analysis
@@ -283,6 +286,14 @@ type Option func(*Generator)
 func WithSourceFile(path string) Option {
 	return func(g *Generator) {
 		g.sourceFile = path
+		// Extract directory for resolving relative paths in liquid.compile_file
+		if idx := strings.LastIndex(path, "/"); idx != -1 {
+			g.sourceDir = path[:idx]
+		} else if idx := strings.LastIndex(path, "\\"); idx != -1 {
+			g.sourceDir = path[:idx]
+		} else {
+			g.sourceDir = "."
+		}
 		g.emitLineDir = true
 	}
 }
@@ -1327,15 +1338,18 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 	// Collect all imports
 	const runtimeImport = "github.com/nchapman/rugby/runtime"
 	const testImport = "github.com/nchapman/rugby/test"
+	const liquidImport = "github.com/nchapman/rugby/stdlib/liquid"
 	const constraintsImport = "golang.org/x/exp/constraints"
 	needsRuntimeImport := g.needsRuntime && !userImports[runtimeImport]
 	needsFmtImport := g.needsFmt && !userImports["fmt"]
 	needsErrorsImport := g.needsErrors && !userImports["errors"]
 	needsRegexpImport := g.needsRegexp && !userImports["regexp"]
+	needsStringsImport := g.needsStrings && !userImports["strings"]
 	needsTestingImport := g.needsTestingImport && !userImports["testing"]
 	needsTestImport := g.needsTestImport && !userImports[testImport]
+	needsLiquidImport := g.needsLiquid && !userImports[liquidImport]
 	needsConstraintsImport := g.needsConstraints && !userImports[constraintsImport]
-	hasImports := len(program.Imports) > 0 || needsRuntimeImport || needsFmtImport || needsErrorsImport || needsRegexpImport || needsTestingImport || needsTestImport || needsConstraintsImport
+	hasImports := len(program.Imports) > 0 || needsRuntimeImport || needsFmtImport || needsErrorsImport || needsRegexpImport || needsStringsImport || needsTestingImport || needsTestImport || needsLiquidImport || needsConstraintsImport
 	if hasImports {
 		out.WriteString("import (\n")
 		// User-specified imports
@@ -1357,6 +1371,9 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 		if needsRegexpImport {
 			out.WriteString("\t\"regexp\"\n")
 		}
+		if needsStringsImport {
+			out.WriteString("\t\"strings\"\n")
+		}
 		if needsTestingImport {
 			out.WriteString("\t\"testing\"\n")
 		}
@@ -1365,6 +1382,9 @@ func (g *Generator) Generate(program *ast.Program) (string, error) {
 		}
 		if needsTestImport {
 			out.WriteString(fmt.Sprintf("\ttest %q\n", testImport))
+		}
+		if needsLiquidImport {
+			out.WriteString(fmt.Sprintf("\t%q\n", liquidImport))
 		}
 		if needsConstraintsImport {
 			out.WriteString(fmt.Sprintf("\t%q\n", constraintsImport))

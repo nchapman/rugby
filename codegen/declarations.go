@@ -1604,7 +1604,16 @@ func (g *Generator) genStructMethod(structDecl *ast.StructDecl, method *ast.Meth
 
 // genConstDecl generates a Go const declaration from a Rugby const declaration
 // e.g., const MAX_SIZE = 1024 becomes const MAX_SIZE = 1024
+// Special handling for liquid.compile() and liquid.compile_file() - generates var with CompiledTemplate
 func (g *Generator) genConstDecl(constDecl *ast.ConstDecl) {
+	// Check for liquid.compile() or liquid.compile_file() calls
+	if call, ok := constDecl.Value.(*ast.CallExpr); ok {
+		if method, isLiquidCompile := g.isLiquidCompileCall(call); isLiquidCompile {
+			g.genCompiledLiquidTemplate(constDecl.Name, call, method)
+			return
+		}
+	}
+
 	g.writeIndent()
 	g.buf.WriteString("const ")
 	g.buf.WriteString(constDecl.Name)

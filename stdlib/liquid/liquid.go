@@ -74,6 +74,15 @@ func MustRender(source string, data any) string {
 	return result
 }
 
+// AST returns the underlying AST for codegen access.
+// This is used by the Rugby compiler for compile-time template processing.
+func (t *Template) AST() []Node {
+	if t.ast == nil {
+		return nil
+	}
+	return t.ast.nodes
+}
+
 // convertToStringAny converts various map types to map[string]any.
 func convertToStringAny(data any) map[string]any {
 	if data == nil {

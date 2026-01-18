@@ -16,6 +16,26 @@ import (
 	"github.com/nchapman/rugby/ast"
 )
 
+// isLiquidCompileCall checks if a call expression is a liquid.compile() or liquid.compile_file() call.
+// Returns the method name ("compile" or "compile_file") and whether it's a liquid compile call.
+func (g *Generator) isLiquidCompileCall(call *ast.CallExpr) (method string, ok bool) {
+	sel, isSel := call.Func.(*ast.SelectorExpr)
+	if !isSel {
+		return "", false
+	}
+
+	// Check for liquid.compile or liquid.compile_file
+	ident, isIdent := sel.X.(*ast.Ident)
+	if !isIdent || ident.Name != "liquid" {
+		return "", false
+	}
+
+	if sel.Sel == "compile" || sel.Sel == "compile_file" {
+		return sel.Sel, true
+	}
+	return "", false
+}
+
 func (g *Generator) genCallExpr(call *ast.CallExpr) {
 	if call.Block != nil {
 		g.genBlockCall(call)
