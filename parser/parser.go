@@ -150,49 +150,42 @@ func (p *Parser) skipNewlines() {
 // peekAheadIsDotAfterNewlines checks if there's a DOT or AMPDOT token after skipping newlines.
 // This is used for multi-line method chaining: expr\n.method()
 func (p *Parser) peekAheadIsDotAfterNewlines() bool {
-	// Save lexer state and parser tokens
+	return p.withLookahead(func() bool {
+		// Advance past the current peek (which should be NEWLINE)
+		p.nextToken()
+
+		// Skip all newlines
+		for p.curTokenIs(token.NEWLINE) {
+			p.nextToken()
+		}
+
+		// Check if we're now at a DOT or AMPDOT
+		return p.curTokenIs(token.DOT) || p.curTokenIs(token.AMPDOT)
+	})
+}
+
+// withLookahead executes fn with lookahead, automatically restoring parser state afterward.
+// Use this for look-ahead patterns where you need to tentatively advance the parser.
+func (p *Parser) withLookahead(fn func() bool) bool {
 	lexerState := p.l.SaveState()
 	savedCur := p.curToken
 	savedPeek := p.peekToken
-
-	// Advance past the current peek (which should be NEWLINE)
-	p.nextToken()
-
-	// Skip all newlines
-	for p.curTokenIs(token.NEWLINE) {
-		p.nextToken()
-	}
-
-	// Check if we're now at a DOT or AMPDOT
-	result := p.curTokenIs(token.DOT) || p.curTokenIs(token.AMPDOT)
-
-	// Restore lexer state and parser tokens
-	p.l.RestoreState(lexerState)
-	p.curToken = savedCur
-	p.peekToken = savedPeek
-
-	return result
+	defer func() {
+		p.l.RestoreState(lexerState)
+		p.curToken = savedCur
+		p.peekToken = savedPeek
+	}()
+	return fn()
 }
 
 // isAssignmentPattern checks if we have a (ident = expr) assignment pattern.
 // This is used to distinguish `if (x = getValue())` from `if (1..10).include?(5)`.
 // Must be called when curToken is LPAREN.
 func (p *Parser) isAssignmentPattern() bool {
-	// Save lexer state and parser tokens
-	lexerState := p.l.SaveState()
-	savedCur := p.curToken
-	savedPeek := p.peekToken
-
-	// Look inside the parens: consume '(' then check for IDENT = pattern
-	p.nextToken() // move past '('
-	result := p.curTokenIs(token.IDENT) && p.peekTokenIs(token.ASSIGN)
-
-	// Restore lexer state and parser tokens
-	p.l.RestoreState(lexerState)
-	p.curToken = savedCur
-	p.peekToken = savedPeek
-
-	return result
+	return p.withLookahead(func() bool {
+		p.nextToken() // move past '('
+		return p.curTokenIs(token.IDENT) && p.peekTokenIs(token.ASSIGN)
+	})
 }
 
 // isFunctionTypeAhead checks if the current position is at a function type.
@@ -200,140 +193,104 @@ func (p *Parser) isAssignmentPattern() bool {
 // Must be called when curToken is LPAREN.
 // This is used to distinguish `(): Int` (function type) from `(Int, String)` (tuple).
 func (p *Parser) isFunctionTypeAhead() bool {
-	// Save lexer state and parser tokens
-	lexerState := p.l.SaveState()
-	savedCur := p.curToken
-	savedPeek := p.peekToken
-
-	// Consume '(' and scan to matching ')'
-	p.nextToken() // consume '('
-	depth := 1
-	for depth > 0 && !p.curTokenIs(token.EOF) {
-		if p.curTokenIs(token.LPAREN) {
-			depth++
-		} else if p.curTokenIs(token.RPAREN) {
-			depth--
+	return p.withLookahead(func() bool {
+		// Consume '(' and scan to matching ')'
+		p.nextToken() // consume '('
+		depth := 1
+		for depth > 0 && !p.curTokenIs(token.EOF) {
+			if p.curTokenIs(token.LPAREN) {
+				depth++
+			} else if p.curTokenIs(token.RPAREN) {
+				depth--
+			}
+			if depth > 0 {
+				p.nextToken()
+			}
 		}
-		if depth > 0 {
-			p.nextToken()
+
+		// Now curToken should be ')'. Check if next is ':'
+		if p.curTokenIs(token.RPAREN) {
+			p.nextToken() // consume ')'
+			return p.curTokenIs(token.COLON)
 		}
-	}
-
-	// Now curToken should be ')'. Check if next is ':'
-	var result bool
-	if p.curTokenIs(token.RPAREN) {
-		p.nextToken() // consume ')'
-		result = p.curTokenIs(token.COLON)
-	}
-
-	// Restore lexer state and parser tokens
-	p.l.RestoreState(lexerState)
-	p.curToken = savedCur
-	p.peekToken = savedPeek
-
-	return result
+		return false
+	})
 }
 
 // isMultiAssignPattern checks if we have (ident, ident, ... = expr) pattern.
 // Also handles splat patterns like (ident, *rest = expr) or (*head, ident = expr).
 // This is used to distinguish multi-assignment from tuple literals.
 // Must be called when curToken is IDENT and peekToken is COMMA.
+//
+// Pattern examples:
+//   - ident, ident, ... = expr  -> true
+//   - ident, *rest = expr       -> true
+//   - *head, ident = expr       -> true (handled by isSplatMultiAssignPattern)
+//   - ident, expr               -> false (tuple literal)
 func (p *Parser) isMultiAssignPattern() bool {
-	// Save lexer state and parser tokens
-	lexerState := p.l.SaveState()
-	savedCur := p.curToken
-	savedPeek := p.peekToken
-
-	// Scan through comma-separated identifiers (and splat patterns) looking for '='
-	// ident, ident, ... = expr  -> true
-	// ident, *rest = expr       -> true
-	// *head, ident = expr       -> true (but handled by different entry point)
-	// ident, expr               -> false
-	for {
-		// Handle splat: *ident
-		if p.curTokenIs(token.STAR) {
-			p.nextToken() // move past '*'
-			if !p.curTokenIs(token.IDENT) {
-				break // not a valid pattern
+	return p.withLookahead(func() bool {
+		// Scan through comma-separated identifiers (and splat patterns) looking for '='
+		for {
+			// Handle splat: *ident
+			if p.curTokenIs(token.STAR) {
+				p.nextToken() // move past '*'
+				if !p.curTokenIs(token.IDENT) {
+					return false
+				}
 			}
-		}
 
-		if !p.curTokenIs(token.IDENT) {
-			break // not a valid pattern
-		}
-		p.nextToken() // move past ident
+			if !p.curTokenIs(token.IDENT) {
+				return false
+			}
+			p.nextToken() // move past ident
 
-		// After ident, we should see either COMMA or ASSIGN
-		if p.curTokenIs(token.ASSIGN) {
-			// Found the = sign, this is a multi-assignment
-			p.l.RestoreState(lexerState)
-			p.curToken = savedCur
-			p.peekToken = savedPeek
-			return true
+			// After ident, we should see either COMMA or ASSIGN
+			if p.curTokenIs(token.ASSIGN) {
+				return true
+			}
+			if p.curTokenIs(token.COMMA) {
+				p.nextToken() // move past comma
+				continue
+			}
+			return false
 		}
-		if p.curTokenIs(token.COMMA) {
-			p.nextToken() // move past comma
-			continue
-		}
-		// Something else (not comma or assign) after ident - not a multi-assign
-		break
-	}
-
-	// Didn't find '=' after all identifiers
-	p.l.RestoreState(lexerState)
-	p.curToken = savedCur
-	p.peekToken = savedPeek
-	return false
+	})
 }
 
 // isSplatMultiAssignPattern checks if we have (*ident, ident, ... = expr) pattern.
 // Must be called when curToken is STAR and peekToken is IDENT.
 func (p *Parser) isSplatMultiAssignPattern() bool {
-	// Save lexer state and parser tokens
-	lexerState := p.l.SaveState()
-	savedCur := p.curToken
-	savedPeek := p.peekToken
-
-	// Start by consuming * and first ident
-	p.nextToken() // consume '*'
-	if !p.curTokenIs(token.IDENT) {
-		p.l.RestoreState(lexerState)
-		p.curToken = savedCur
-		p.peekToken = savedPeek
-		return false
-	}
-
-	// Now use the same logic as isMultiAssignPattern
-	for {
-		if p.curTokenIs(token.STAR) {
-			p.nextToken() // move past '*'
-			if !p.curTokenIs(token.IDENT) {
-				break
-			}
-		}
-
+	return p.withLookahead(func() bool {
+		// Start by consuming * and first ident
+		p.nextToken() // consume '*'
 		if !p.curTokenIs(token.IDENT) {
-			break
+			return false
 		}
-		p.nextToken() // move past ident
 
-		if p.curTokenIs(token.ASSIGN) {
-			p.l.RestoreState(lexerState)
-			p.curToken = savedCur
-			p.peekToken = savedPeek
-			return true
-		}
-		if p.curTokenIs(token.COMMA) {
-			p.nextToken() // move past comma
-			continue
-		}
-		break
-	}
+		// Now use the same logic as isMultiAssignPattern
+		for {
+			if p.curTokenIs(token.STAR) {
+				p.nextToken() // move past '*'
+				if !p.curTokenIs(token.IDENT) {
+					return false
+				}
+			}
 
-	p.l.RestoreState(lexerState)
-	p.curToken = savedCur
-	p.peekToken = savedPeek
-	return false
+			if !p.curTokenIs(token.IDENT) {
+				return false
+			}
+			p.nextToken() // move past ident
+
+			if p.curTokenIs(token.ASSIGN) {
+				return true
+			}
+			if p.curTokenIs(token.COMMA) {
+				p.nextToken() // move past comma
+				continue
+			}
+			return false
+		}
+	})
 }
 
 // isMapDestructuringPattern checks if we have ({key:, key:} = expr) or ({key: var, key: var} = expr) pattern.
@@ -341,73 +298,51 @@ func (p *Parser) isSplatMultiAssignPattern() bool {
 // Map destructuring: {name:, age:} = data OR {name: n, age: a} = data
 // Map literal: {name: "Alice", age: 30}
 func (p *Parser) isMapDestructuringPattern() bool {
-	// Save lexer state and parser tokens
-	lexerState := p.l.SaveState()
-	savedCur := p.curToken
-	savedPeek := p.peekToken
+	return p.withLookahead(func() bool {
+		// Consume opening brace
+		p.nextToken() // move past '{'
 
-	// Consume opening brace
-	p.nextToken() // move past '{'
-
-	// Need at least one key: pattern
-	if !p.curTokenIs(token.IDENT) {
-		p.l.RestoreState(lexerState)
-		p.curToken = savedCur
-		p.peekToken = savedPeek
-		return false
-	}
-
-	// Look for: IDENT COLON (COMMA | RBRACE | IDENT (COMMA | RBRACE))
-	for p.curTokenIs(token.IDENT) {
-		p.nextToken() // move past ident (key)
-
-		if !p.curTokenIs(token.COLON) {
-			break
+		// Need at least one key: pattern
+		if !p.curTokenIs(token.IDENT) {
+			return false
 		}
-		p.nextToken() // move past ':'
 
-		// After key:, we should see:
-		// - COMMA or RBRACE (shorthand: {name:, age:})
-		// - IDENT followed by COMMA or RBRACE (rename: {name: n, age: a})
-		if p.curTokenIs(token.COMMA) {
-			p.nextToken() // move past ','
-			continue
-		}
-		if p.curTokenIs(token.RBRACE) {
-			// Check if next token is ASSIGN
-			p.nextToken() // move past '}'
-			if p.curTokenIs(token.ASSIGN) {
-				p.l.RestoreState(lexerState)
-				p.curToken = savedCur
-				p.peekToken = savedPeek
-				return true
+		// Look for: IDENT COLON (COMMA | RBRACE | IDENT (COMMA | RBRACE))
+		for p.curTokenIs(token.IDENT) {
+			p.nextToken() // move past ident (key)
+
+			if !p.curTokenIs(token.COLON) {
+				return false
 			}
-			break
-		}
-		// Check for rename pattern: key: var
-		if p.curTokenIs(token.IDENT) {
-			p.nextToken() // move past var
+			p.nextToken() // move past ':'
+
+			// After key:, we should see:
+			// - COMMA or RBRACE (shorthand: {name:, age:})
+			// - IDENT followed by COMMA or RBRACE (rename: {name: n, age: a})
 			if p.curTokenIs(token.COMMA) {
 				p.nextToken() // move past ','
 				continue
 			}
 			if p.curTokenIs(token.RBRACE) {
 				p.nextToken() // move past '}'
-				if p.curTokenIs(token.ASSIGN) {
-					p.l.RestoreState(lexerState)
-					p.curToken = savedCur
-					p.peekToken = savedPeek
-					return true
+				return p.curTokenIs(token.ASSIGN)
+			}
+			// Check for rename pattern: key: var
+			if p.curTokenIs(token.IDENT) {
+				p.nextToken() // move past var
+				if p.curTokenIs(token.COMMA) {
+					p.nextToken() // move past ','
+					continue
+				}
+				if p.curTokenIs(token.RBRACE) {
+					p.nextToken() // move past '}'
+					return p.curTokenIs(token.ASSIGN)
 				}
 			}
+			return false
 		}
-		break // something else - not a destructuring pattern
-	}
-
-	p.l.RestoreState(lexerState)
-	p.curToken = savedCur
-	p.peekToken = savedPeek
-	return false
+		return false
+	})
 }
 
 // parseBlocksAndChaining handles blocks and method chaining after an expression.

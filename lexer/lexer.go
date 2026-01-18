@@ -124,266 +124,272 @@ func (l *Lexer) peekChar() byte {
 func (l *Lexer) NextToken() token.Token {
 	var tok token.Token
 
-	spaceBefore := l.skipWhitespace()
+	// Loop to handle comments without recursion
+	for {
+		spaceBefore := l.skipWhitespace()
 
-	tok.Line = l.line
-	tok.Column = l.column
-
-	switch l.ch {
-	case '\n':
-		tok = l.newToken(token.NEWLINE, string(l.ch))
-		tok.SpaceBefore = spaceBefore
-		l.line++
-		l.column = 0
-	case '"':
-		tok.Type = token.STRING
-		tok.Literal = l.readString()
 		tok.Line = l.line
 		tok.Column = l.column
-		tok.SpaceBefore = spaceBefore
-		l.prevTokenType = tok.Type
-		return tok
-	case '\'':
-		tok.Type = token.STRINGLITERAL
-		tok.Literal = l.readSingleQuoteString()
-		tok.Line = l.line
-		tok.Column = l.column
-		tok.SpaceBefore = spaceBefore
-		l.prevTokenType = tok.Type
-		return tok
-	case '#':
-		l.readComment()
-		return l.NextToken()
-	case '+':
-		if l.peekChar() == '=' {
-			l.readChar()
-			tok = l.newToken(token.PLUSASSIGN, "+=")
-		} else {
-			tok = l.newToken(token.PLUS, "+")
+
+		// Handle comments by continuing the loop instead of recursing
+		if l.ch == '#' {
+			l.readComment()
+			continue
 		}
-	case '-':
-		if l.peekChar() == '>' {
-			l.readChar()
-			tok = l.newToken(token.ARROW, "->")
-		} else if l.peekChar() == '=' {
-			l.readChar()
-			tok = l.newToken(token.MINUSASSIGN, "-=")
-		} else {
-			tok = l.newToken(token.MINUS, "-")
-		}
-	case '*':
-		if l.peekChar() == '*' {
-			l.readChar()
-			tok = l.newToken(token.DOUBLESTAR, "**")
-		} else if l.peekChar() == '=' {
-			l.readChar()
-			tok = l.newToken(token.STARASSIGN, "*=")
-		} else {
-			tok = l.newToken(token.STAR, "*")
-		}
-	case '/':
-		if l.peekChar() == '=' {
-			l.readChar()
-			tok = l.newToken(token.SLASHASSIGN, "/=")
-		} else if l.isRegexContext() && l.looksLikeRegex() {
-			tok = l.readRegex()
+
+		switch l.ch {
+		case '\n':
+			tok = l.newToken(token.NEWLINE, string(l.ch))
+			tok.SpaceBefore = spaceBefore
+			l.line++
+			l.column = 0
+		case '"':
+			tok.Type = token.STRING
+			tok.Literal = l.readString()
+			tok.Line = l.line
+			tok.Column = l.column
 			tok.SpaceBefore = spaceBefore
 			l.prevTokenType = tok.Type
 			return tok
-		} else {
-			tok = l.newToken(token.SLASH, "/")
-		}
-	case '%':
-		// Check for word array literals: %w{...} or %W{...}
-		if l.peekChar() == 'w' || l.peekChar() == 'W' {
-			isInterpolated := l.peekChar() == 'W'
-			l.readChar() // consume 'w' or 'W'
-			l.readChar() // consume delimiter opening
-			tok = l.readWordArray(isInterpolated)
+		case '\'':
+			tok.Type = token.STRINGLITERAL
+			tok.Literal = l.readSingleQuoteString()
+			tok.Line = l.line
+			tok.Column = l.column
 			tok.SpaceBefore = spaceBefore
 			l.prevTokenType = tok.Type
 			return tok
-		}
-		tok = l.newToken(token.PERCENT, "%")
-	case '(':
-		tok = l.newToken(token.LPAREN, "(")
-	case ')':
-		tok = l.newToken(token.RPAREN, ")")
-	case '[':
-		tok = l.newToken(token.LBRACKET, "[")
-	case ']':
-		tok = l.newToken(token.RBRACKET, "]")
-	case ',':
-		tok = l.newToken(token.COMMA, ",")
-	case '.':
-		if l.peekChar() == '.' {
-			l.readChar()
+		case '+':
+			if l.peekChar() == '=' {
+				l.readChar()
+				tok = l.newToken(token.PLUSASSIGN, "+=")
+			} else {
+				tok = l.newToken(token.PLUS, "+")
+			}
+		case '-':
+			if l.peekChar() == '>' {
+				l.readChar()
+				tok = l.newToken(token.ARROW, "->")
+			} else if l.peekChar() == '=' {
+				l.readChar()
+				tok = l.newToken(token.MINUSASSIGN, "-=")
+			} else {
+				tok = l.newToken(token.MINUS, "-")
+			}
+		case '*':
+			if l.peekChar() == '*' {
+				l.readChar()
+				tok = l.newToken(token.DOUBLESTAR, "**")
+			} else if l.peekChar() == '=' {
+				l.readChar()
+				tok = l.newToken(token.STARASSIGN, "*=")
+			} else {
+				tok = l.newToken(token.STAR, "*")
+			}
+		case '/':
+			if l.peekChar() == '=' {
+				l.readChar()
+				tok = l.newToken(token.SLASHASSIGN, "/=")
+			} else if l.isRegexContext() && l.looksLikeRegex() {
+				tok = l.readRegex()
+				tok.SpaceBefore = spaceBefore
+				l.prevTokenType = tok.Type
+				return tok
+			} else {
+				tok = l.newToken(token.SLASH, "/")
+			}
+		case '%':
+			// Check for word array literals: %w{...} or %W{...}
+			if l.peekChar() == 'w' || l.peekChar() == 'W' {
+				isInterpolated := l.peekChar() == 'W'
+				l.readChar() // consume 'w' or 'W'
+				l.readChar() // consume delimiter opening
+				tok = l.readWordArray(isInterpolated)
+				tok.SpaceBefore = spaceBefore
+				l.prevTokenType = tok.Type
+				return tok
+			}
+			tok = l.newToken(token.PERCENT, "%")
+		case '(':
+			tok = l.newToken(token.LPAREN, "(")
+		case ')':
+			tok = l.newToken(token.RPAREN, ")")
+		case '[':
+			tok = l.newToken(token.LBRACKET, "[")
+		case ']':
+			tok = l.newToken(token.RBRACKET, "]")
+		case ',':
+			tok = l.newToken(token.COMMA, ",")
+		case '.':
 			if l.peekChar() == '.' {
 				l.readChar()
-				tok = l.newToken(token.TRIPLEDOT, "...")
-			} else {
-				tok = l.newToken(token.DOTDOT, "..")
-			}
-		} else {
-			tok = l.newToken(token.DOT, ".")
-		}
-	case '{':
-		tok = l.newToken(token.LBRACE, "{")
-	case '}':
-		tok = l.newToken(token.RBRACE, "}")
-	case '|':
-		// Check for ||= (or-assignment) or || (logical or)
-		if l.peekChar() == '|' {
-			l.readChar() // consume second |
-			// Check for ||=
-			if l.peekChar() == '=' {
-				l.readChar() // consume =
-				tok = l.newToken(token.ORASSIGN, "||=")
-			} else {
-				// It's || (logical or)
-				tok = l.newToken(token.PIPEPIPE, "||")
-			}
-		} else {
-			tok = l.newToken(token.PIPE, "|")
-		}
-	case '@':
-		if l.peekChar() == '@' {
-			l.readChar()
-			tok = l.newToken(token.ATAT, "@@")
-		} else {
-			tok = l.newToken(token.AT, "@")
-		}
-	case ':':
-		// Check for :: (scope resolution)
-		if l.peekChar() == ':' {
-			l.readChar()
-			tok = l.newToken(token.COLONCOLON, "::")
-		} else if isLetter(l.peekChar()) {
-			// Check if this is a symbol (:identifier)
-			l.readChar() // consume the ':'
-			tok.Type = token.SYMBOL
-			tok.Literal = l.readIdentifier()
-			tok.SpaceBefore = spaceBefore
-			l.prevTokenType = tok.Type
-			return tok
-		} else {
-			tok = l.newToken(token.COLON, ":")
-		}
-	case '?':
-		if l.peekChar() == '?' {
-			l.readChar()
-			tok = l.newToken(token.QUESTIONQUESTION, "??")
-		} else {
-			tok = l.newToken(token.QUESTION, "?")
-		}
-	case '&':
-		if l.peekChar() == '.' {
-			l.readChar()
-			tok = l.newToken(token.AMPDOT, "&.")
-		} else if l.peekChar() == '&' {
-			l.readChar()
-			tok = l.newToken(token.AMPAMP, "&&")
-		} else {
-			tok = l.newToken(token.AMP, "&")
-		}
-	case '^':
-		tok = l.newToken(token.CARET, "^")
-	case '=':
-		if l.peekChar() == '=' {
-			l.readChar()
-			tok = l.newToken(token.EQ, "==")
-		} else if l.peekChar() == '>' {
-			l.readChar()
-			tok = l.newToken(token.HASHROCKET, "=>")
-		} else if l.peekChar() == '~' {
-			l.readChar()
-			tok = l.newToken(token.MATCH, "=~")
-		} else {
-			tok = l.newToken(token.ASSIGN, "=")
-		}
-	case '!':
-		if l.peekChar() == '=' {
-			l.readChar()
-			tok = l.newToken(token.NE, "!=")
-		} else if l.peekChar() == '~' {
-			l.readChar()
-			tok = l.newToken(token.NOTMATCH, "!~")
-		} else {
-			tok = l.newToken(token.BANG, "!")
-		}
-	case '<':
-		if l.peekChar() == '=' {
-			l.readChar()
-			tok = l.newToken(token.LE, "<=")
-		} else if l.peekChar() == '<' {
-			l.readChar()
-			// Check for heredoc: <<IDENT, <<-IDENT, <<~IDENT, or <<'IDENT'
-			nextChar := l.peekChar()
-			if isLetter(nextChar) || nextChar == '_' {
-				tok = l.readHeredoc(false, false, false)
-				l.prevTokenType = tok.Type
-				return tok
-			} else if nextChar == '\'' {
-				// Single-quoted heredoc: <<'DELIM' - no interpolation
-				tok = l.readHeredoc(false, false, true)
-				l.prevTokenType = tok.Type
-				return tok
-			} else if nextChar == '-' || nextChar == '~' {
-				stripIndent := nextChar == '~'
-				l.readChar() // consume - or ~
-				if isLetter(l.peekChar()) || l.peekChar() == '_' {
-					tok = l.readHeredoc(true, stripIndent, false)
-					l.prevTokenType = tok.Type
-					return tok
-				} else if l.peekChar() == '\'' {
-					// <<-'DELIM' or <<~'DELIM'
-					tok = l.readHeredoc(true, stripIndent, true)
-					l.prevTokenType = tok.Type
-					return tok
+				if l.peekChar() == '.' {
+					l.readChar()
+					tok = l.newToken(token.TRIPLEDOT, "...")
+				} else {
+					tok = l.newToken(token.DOTDOT, "..")
 				}
-				// Not a heredoc, was just <<- or <<~ without identifier
-				// This is an error case, but we'll let parser handle it
-				tok = l.newToken(token.SHOVELLEFT, "<<")
 			} else {
-				tok = l.newToken(token.SHOVELLEFT, "<<")
+				tok = l.newToken(token.DOT, ".")
 			}
-		} else {
-			tok = l.newToken(token.LT, "<")
+		case '{':
+			tok = l.newToken(token.LBRACE, "{")
+		case '}':
+			tok = l.newToken(token.RBRACE, "}")
+		case '|':
+			// Check for ||= (or-assignment) or || (logical or)
+			if l.peekChar() == '|' {
+				l.readChar() // consume second |
+				// Check for ||=
+				if l.peekChar() == '=' {
+					l.readChar() // consume =
+					tok = l.newToken(token.ORASSIGN, "||=")
+				} else {
+					// It's || (logical or)
+					tok = l.newToken(token.PIPEPIPE, "||")
+				}
+			} else {
+				tok = l.newToken(token.PIPE, "|")
+			}
+		case '@':
+			if l.peekChar() == '@' {
+				l.readChar()
+				tok = l.newToken(token.ATAT, "@@")
+			} else {
+				tok = l.newToken(token.AT, "@")
+			}
+		case ':':
+			// Check for :: (scope resolution)
+			if l.peekChar() == ':' {
+				l.readChar()
+				tok = l.newToken(token.COLONCOLON, "::")
+			} else if isLetter(l.peekChar()) {
+				// Check if this is a symbol (:identifier)
+				l.readChar() // consume the ':'
+				tok.Type = token.SYMBOL
+				tok.Literal = l.readIdentifier()
+				tok.SpaceBefore = spaceBefore
+				l.prevTokenType = tok.Type
+				return tok
+			} else {
+				tok = l.newToken(token.COLON, ":")
+			}
+		case '?':
+			if l.peekChar() == '?' {
+				l.readChar()
+				tok = l.newToken(token.QUESTIONQUESTION, "??")
+			} else {
+				tok = l.newToken(token.QUESTION, "?")
+			}
+		case '&':
+			if l.peekChar() == '.' {
+				l.readChar()
+				tok = l.newToken(token.AMPDOT, "&.")
+			} else if l.peekChar() == '&' {
+				l.readChar()
+				tok = l.newToken(token.AMPAMP, "&&")
+			} else {
+				tok = l.newToken(token.AMP, "&")
+			}
+		case '^':
+			tok = l.newToken(token.CARET, "^")
+		case '=':
+			if l.peekChar() == '=' {
+				l.readChar()
+				tok = l.newToken(token.EQ, "==")
+			} else if l.peekChar() == '>' {
+				l.readChar()
+				tok = l.newToken(token.HASHROCKET, "=>")
+			} else if l.peekChar() == '~' {
+				l.readChar()
+				tok = l.newToken(token.MATCH, "=~")
+			} else {
+				tok = l.newToken(token.ASSIGN, "=")
+			}
+		case '!':
+			if l.peekChar() == '=' {
+				l.readChar()
+				tok = l.newToken(token.NE, "!=")
+			} else if l.peekChar() == '~' {
+				l.readChar()
+				tok = l.newToken(token.NOTMATCH, "!~")
+			} else {
+				tok = l.newToken(token.BANG, "!")
+			}
+		case '<':
+			if l.peekChar() == '=' {
+				l.readChar()
+				tok = l.newToken(token.LE, "<=")
+			} else if l.peekChar() == '<' {
+				l.readChar()
+				// Check for heredoc: <<IDENT, <<-IDENT, <<~IDENT, or <<'IDENT'
+				nextChar := l.peekChar()
+				if isLetter(nextChar) || nextChar == '_' {
+					tok = l.readHeredoc(false, false, false)
+					l.prevTokenType = tok.Type
+					return tok
+				} else if nextChar == '\'' {
+					// Single-quoted heredoc: <<'DELIM' - no interpolation
+					tok = l.readHeredoc(false, false, true)
+					l.prevTokenType = tok.Type
+					return tok
+				} else if nextChar == '-' || nextChar == '~' {
+					stripIndent := nextChar == '~'
+					l.readChar() // consume - or ~
+					if isLetter(l.peekChar()) || l.peekChar() == '_' {
+						tok = l.readHeredoc(true, stripIndent, false)
+						l.prevTokenType = tok.Type
+						return tok
+					} else if l.peekChar() == '\'' {
+						// <<-'DELIM' or <<~'DELIM'
+						tok = l.readHeredoc(true, stripIndent, true)
+						l.prevTokenType = tok.Type
+						return tok
+					}
+					// Not a heredoc, was just <<- or <<~ without identifier
+					// This is an error case, but we'll let parser handle it
+					tok = l.newToken(token.SHOVELLEFT, "<<")
+				} else {
+					tok = l.newToken(token.SHOVELLEFT, "<<")
+				}
+			} else {
+				tok = l.newToken(token.LT, "<")
+			}
+		case '>':
+			if l.peekChar() == '=' {
+				l.readChar()
+				tok = l.newToken(token.GE, ">=")
+			} else if l.peekChar() == '>' {
+				l.readChar()
+				tok = l.newToken(token.SHOVELRIGHT, ">>")
+			} else {
+				tok = l.newToken(token.GT, ">")
+			}
+		case 0:
+			tok.Literal = ""
+			tok.Type = token.EOF
+		default:
+			if isLetter(l.ch) || l.ch == '_' {
+				tok.Literal = l.readIdentifier()
+				tok.Type = token.LookupIdent(tok.Literal)
+				tok.SpaceBefore = spaceBefore
+				l.prevTokenType = tok.Type
+				return tok
+			}
+			if isDigit(l.ch) {
+				tok = l.readNumber()
+				tok.SpaceBefore = spaceBefore
+				l.prevTokenType = tok.Type
+				return tok
+			}
+			tok = l.newToken(token.ILLEGAL, string(l.ch))
 		}
-	case '>':
-		if l.peekChar() == '=' {
-			l.readChar()
-			tok = l.newToken(token.GE, ">=")
-		} else if l.peekChar() == '>' {
-			l.readChar()
-			tok = l.newToken(token.SHOVELRIGHT, ">>")
-		} else {
-			tok = l.newToken(token.GT, ">")
-		}
-	case 0:
-		tok.Literal = ""
-		tok.Type = token.EOF
-	default:
-		if isLetter(l.ch) || l.ch == '_' {
-			tok.Literal = l.readIdentifier()
-			tok.Type = token.LookupIdent(tok.Literal)
-			tok.SpaceBefore = spaceBefore
-			l.prevTokenType = tok.Type
-			return tok
-		}
-		if isDigit(l.ch) {
-			tok = l.readNumber()
-			tok.SpaceBefore = spaceBefore
-			l.prevTokenType = tok.Type
-			return tok
-		}
-		tok = l.newToken(token.ILLEGAL, string(l.ch))
-	}
 
-	l.readChar()
-	tok.SpaceBefore = spaceBefore
-	l.prevTokenType = tok.Type
-	return tok
+		l.readChar()
+		tok.SpaceBefore = spaceBefore
+		l.prevTokenType = tok.Type
+		return tok
+	}
 }
 
 func (l *Lexer) newToken(tokenType token.TokenType, literal string) token.Token {

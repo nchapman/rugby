@@ -285,59 +285,91 @@ func TestTokenType_UniqueValues(t *testing.T) {
 }
 
 func TestKeywordsMap_Complete(t *testing.T) {
+	// Test all keywords via LookupIdent - this ensures every keyword
+	// in the package's keywords map is verified without duplication
 	expectedKeywords := map[string]TokenType{
-		"import":       IMPORT,
-		"def":          DEF,
-		"end":          END,
-		"getter":       GETTER,
-		"setter":       SETTER,
-		"property":     PROPERTY,
-		"super":        SUPER,
+		// Core definitions
+		"import":    IMPORT,
+		"def":       DEF,
+		"end":       END,
+		"class":     CLASS,
+		"module":    MODULE,
+		"interface": INTERFACE,
+		"struct":    STRUCT,
+		"enum":      ENUM,
+		"type":      TYPE,
+		"const":     CONST,
+
+		// Accessors
+		"getter":   GETTER,
+		"setter":   SETTER,
+		"property": PROPERTY,
+
+		// Visibility
+		"pub":     PUB,
+		"private": PRIVATE,
+
+		// OOP
+		"self":       SELF,
+		"super":      SUPER,
+		"implements": IMPLEMENTS,
+		"include":    INCLUDE,
+		"any":        ANY,
+
+		// Control flow
+		"if":        IF,
+		"elsif":     ELSIF,
+		"else":      ELSE,
+		"unless":    UNLESS,
+		"case":      CASE,
+		"case_type": CASETYPE,
+		"when":      WHEN,
+		"while":     WHILE,
+		"until":     UNTIL,
+		"for":       FOR,
+		"loop":      LOOP,
+		"in":        IN,
+
+		// Jump statements
+		"break":    BREAK,
+		"next":     NEXT,
+		"continue": NEXT, // alias for next
+		"return":   RETURN,
+		"panic":    PANIC,
+		"rescue":   RESCUE,
+
+		// Literals
+		"true":  TRUE,
+		"false": FALSE,
+		"nil":   NIL,
+
+		// Logical operators
+		"and": AND,
+		"or":  OR,
+		"not": NOT,
+
+		// Type system
+		"as":  AS,
+		"let": LET,
+
+		// Concurrency
 		"go":           GO,
 		"spawn":        SPAWN,
 		"await":        AWAIT,
 		"concurrently": CONCURRENTLY,
-		"module":       MODULE,
-		"include":      INCLUDE,
 		"select":       SELECT,
-		"if":           IF,
-		"elsif":        ELSIF,
-		"else":         ELSE,
-		"unless":       UNLESS,
-		"case":         CASE,
-		"case_type":    CASETYPE,
-		"when":         WHEN,
-		"while":        WHILE,
-		"until":        UNTIL,
-		"for":          FOR,
-		"in":           IN,
-		"break":        BREAK,
-		"next":         NEXT,
-		"return":       RETURN,
-		"panic":        PANIC,
-		"rescue":       RESCUE,
-		"true":         TRUE,
-		"false":        FALSE,
-		"nil":          NIL,
-		"and":          AND,
-		"or":           OR,
-		"not":          NOT,
-		"as":           AS,
-		"let":          LET,
 		"defer":        DEFER,
-		"do":           DO,
-		"class":        CLASS,
-		"self":         SELF,
-		"interface":    INTERFACE,
-		"implements":   IMPLEMENTS,
-		"any":          ANY,
-		"pub":          PUB,
-		"describe":     DESCRIBE,
-		"it":           IT,
-		"test":         TEST,
-		"table":        TABLE,
-		"before":       BEFORE,
-		"after":        AFTER,
+
+		// Blocks
+		"do": DO,
+
+		// Testing keywords
+		"describe": DESCRIBE,
+		"it":       IT,
+		"test":     TEST,
+		"table":    TABLE,
+		"before":   BEFORE,
+		"after":    AFTER,
 	}
 
 	// Check all expected keywords are in the map
@@ -346,10 +378,5 @@ func TestKeywordsMap_Complete(t *testing.T) {
 		if got != expected {
 			t.Errorf("keyword %q: got %v, want %v", kw, got, expected)
 		}
-	}
-
-	// Count should match
-	if len(expectedKeywords) != 52 {
-		t.Errorf("expected 52 keywords, got %d", len(expectedKeywords))
 	}
 }

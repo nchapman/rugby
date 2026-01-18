@@ -6,6 +6,30 @@ import (
 	"github.com/nchapman/rugby/token"
 )
 
+// isCompoundAssignToken returns true if the token is a compound assignment operator.
+func isCompoundAssignToken(t token.TokenType) bool {
+	switch t {
+	case token.PLUSASSIGN, token.MINUSASSIGN, token.STARASSIGN, token.SLASHASSIGN:
+		return true
+	}
+	return false
+}
+
+// compoundOpSymbol returns the binary operator symbol for a compound assignment token.
+func compoundOpSymbol(t token.TokenType) string {
+	switch t {
+	case token.PLUSASSIGN:
+		return "+"
+	case token.MINUSASSIGN:
+		return "-"
+	case token.STARASSIGN:
+		return "*"
+	case token.SLASHASSIGN:
+		return "/"
+	}
+	return ""
+}
+
 func (p *Parser) parseStatement() ast.Statement {
 	line := p.curToken.Line
 	switch p.curToken.Type {
@@ -58,8 +82,7 @@ func (p *Parser) parseStatement() ast.Statement {
 			return p.parseOrAssignStmt()
 		}
 		// Check for compound assignment: ident += expr, ident -= expr, etc.
-		if p.peekTokenIs(token.PLUSASSIGN) || p.peekTokenIs(token.MINUSASSIGN) ||
-			p.peekTokenIs(token.STARASSIGN) || p.peekTokenIs(token.SLASHASSIGN) {
+		if isCompoundAssignToken(p.peekToken.Type) {
 			return p.parseCompoundAssignStmt()
 		}
 	case token.STAR:
@@ -137,21 +160,12 @@ func (p *Parser) parseStatement() ast.Statement {
 
 		// Check for selector compound assignment: obj.field += value, obj.field -= value, etc.
 		if selExpr, ok := expr.(*ast.SelectorExpr); ok {
-			if p.peekTokenIs(token.PLUSASSIGN) || p.peekTokenIs(token.MINUSASSIGN) ||
-				p.peekTokenIs(token.STARASSIGN) || p.peekTokenIs(token.SLASHASSIGN) {
+			if isCompoundAssignToken(p.peekToken.Type) {
 				p.nextToken() // move to compound operator
-
-				// Determine the operator
-				var op string
-				switch p.curToken.Type {
-				case token.PLUSASSIGN:
-					op = "+"
-				case token.MINUSASSIGN:
-					op = "-"
-				case token.STARASSIGN:
-					op = "*"
-				case token.SLASHASSIGN:
-					op = "/"
+				op := compoundOpSymbol(p.curToken.Type)
+				if op == "" {
+					p.errorAt(p.curToken.Line, p.curToken.Column, "expected compound assignment operator")
+					return nil
 				}
 				p.nextToken() // move past operator to value
 
@@ -193,21 +207,12 @@ func (p *Parser) parseStatement() ast.Statement {
 
 		// Check for index compound assignment: arr[idx] += value, arr[idx] -= value, etc.
 		if indexExpr, ok := expr.(*ast.IndexExpr); ok {
-			if p.peekTokenIs(token.PLUSASSIGN) || p.peekTokenIs(token.MINUSASSIGN) ||
-				p.peekTokenIs(token.STARASSIGN) || p.peekTokenIs(token.SLASHASSIGN) {
+			if isCompoundAssignToken(p.peekToken.Type) {
 				p.nextToken() // move to compound operator
-
-				// Determine the operator
-				var op string
-				switch p.curToken.Type {
-				case token.PLUSASSIGN:
-					op = "+"
-				case token.MINUSASSIGN:
-					op = "-"
-				case token.STARASSIGN:
-					op = "*"
-				case token.SLASHASSIGN:
-					op = "/"
+				op := compoundOpSymbol(p.curToken.Type)
+				if op == "" {
+					p.errorAt(p.curToken.Line, p.curToken.Column, "expected compound assignment operator")
+					return nil
 				}
 				p.nextToken() // move past operator to value
 
@@ -1164,17 +1169,8 @@ func (p *Parser) parseCompoundAssignStmt() ast.Statement {
 	p.nextToken() // consume ident
 
 	// Determine the operator
-	var op string
-	switch p.curToken.Type {
-	case token.PLUSASSIGN:
-		op = "+"
-	case token.MINUSASSIGN:
-		op = "-"
-	case token.STARASSIGN:
-		op = "*"
-	case token.SLASHASSIGN:
-		op = "/"
-	default:
+	op := compoundOpSymbol(p.curToken.Type)
+	if op == "" {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected compound assignment operator")
 		return nil
 	}
@@ -1237,17 +1233,8 @@ func (p *Parser) parseInstanceVarCompoundAssign() *ast.InstanceVarCompoundAssign
 	p.nextToken() // consume identifier
 
 	// Determine the operator
-	var op string
-	switch p.curToken.Type {
-	case token.PLUSASSIGN:
-		op = "+"
-	case token.MINUSASSIGN:
-		op = "-"
-	case token.STARASSIGN:
-		op = "*"
-	case token.SLASHASSIGN:
-		op = "/"
-	default:
+	op := compoundOpSymbol(p.curToken.Type)
+	if op == "" {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected compound assignment operator")
 		return nil
 	}
@@ -1302,17 +1289,8 @@ func (p *Parser) parseClassVarCompoundAssign() *ast.ClassVarCompoundAssign {
 	p.nextToken() // consume identifier
 
 	// Determine the operator
-	var op string
-	switch p.curToken.Type {
-	case token.PLUSASSIGN:
-		op = "+"
-	case token.MINUSASSIGN:
-		op = "-"
-	case token.STARASSIGN:
-		op = "*"
-	case token.SLASHASSIGN:
-		op = "/"
-	default:
+	op := compoundOpSymbol(p.curToken.Type)
+	if op == "" {
 		p.errorAt(p.curToken.Line, p.curToken.Column, "expected compound assignment operator")
 		return nil
 	}
